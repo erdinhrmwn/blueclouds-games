@@ -26,11 +26,12 @@ export const playerAuth = (sql: SQL) =>
 		const secret = bearer(c.req.header("authorization"));
 		if (!secret || !SECRET_PATTERN.test(secret)) throw new ApiError("unauthenticated", 401, "Sign in as a player first.");
 		const [row] = (await sql`
-			SELECT p.id, p.display_name, p.created_at, p.disabled_at
+			SELECT p.id, p.display_name, p.created_at, p.disabled_at, s.revoked_at
 			FROM player_secrets s JOIN players p ON p.id = s.player_id
-			WHERE s.secret_hash = ${hashSecret(secret)} AND s.revoked_at IS NULL`) as PlayerRow[];
-		if (!row) throw new ApiError("unauthenticated", 401, "Sign in as a player first.");
-		if (row.disabled_at) throw new ApiError("forbidden", 403, "This player has been disabled.");
+			WHERE s.secret_hash = ${hashSecret(secret)}`) as (PlayerRow & { revoked_at: Date | null })[];
+		// Disabled first: the backoffice revokes a disabled player's secrets too, and they should be told why.
+		if (row?.disabled_at) throw new ApiError("forbidden", 403, "This player has been disabled.");
+		if (!row || row.revoked_at) throw new ApiError("unauthenticated", 401, "Sign in as a player first.");
 		c.set("player", toPlayer(row));
 		await next();
 	});

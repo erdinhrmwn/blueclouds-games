@@ -72,6 +72,9 @@ describe("me", () => {
 		const disabled = await call(t.app, "GET", "/v1/players/me", { token: a.secret });
 		expect(disabled.status).toBe(403);
 		expect(disabled.json.error.code).toBe("forbidden");
+		// The backoffice also revokes their secrets; they still learn they were disabled.
+		await t.sql`UPDATE player_secrets SET revoked_at = now() WHERE player_id = ${a.player.id}`;
+		expect((await call(t.app, "GET", "/v1/players/me", { token: a.secret })).status).toBe(403);
 
 		const b = await guest(t.app);
 		await t.sql`UPDATE player_secrets SET revoked_at = now() WHERE player_id = ${b.player.id}`;
