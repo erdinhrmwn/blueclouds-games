@@ -263,7 +263,7 @@ Trade-off of skipping an admin API: the backoffice depends on the table layout, 
 
 ## Locking the room list
 
-Browsers never reach the room list actor. The game's server issues each browser an engine token for one room only (`POST /api/rooms/:code/token`, a grant on that actor's id), and it reads the list itself for `GET /api/rooms`. Rooms update the list over `c.client()` with the actor server's admin token. Rivet doesn't tell an actor who is calling, so this per-room token is what keeps browsers off `report` / `remove`.
+Browsers never reach the room list actor. The game's server issues each browser an engine token for one room only (`POST /api/:game/rooms/:code/token`, a grant on that actor's id), and it reads the list itself for `GET /api/:game/rooms`. Rooms update the list over `c.client()` with the actor server's admin token. Rivet doesn't tell an actor who is calling, so this per-room token is what keeps browsers off `report` / `remove`.
 
 ## Data store
 
@@ -406,7 +406,7 @@ deploy/
 | `apps/server/src/platform.ts` (new) | `verifyPlayToken`, `reportMatch` + outbox retry |
 | `bust-31/schema.ts` | `ConnParams` → `{ playToken }` |
 | `bust-31/actor.ts` | Verify in `onBeforeConnect`, `conn.id → playerId` map, `matchId` at start, outbox on finish, drop stored secrets |
-| `bust-31/directory.ts` | Unreachable from browsers: per-room engine tokens |
+| `shared/directory.ts` | Unreachable from browsers: per-room engine tokens |
 | `apps/web/vite.config.ts` + `package.json` | `adapter-vercel` → `adapter-node`, plus a Dockerfile |
 | `apps/web/src/lib/guest.ts` | Calls `/v1/players/guest` and `/v1/play-tokens`, keeps the player secret |
 | `apps/web/src/lib/games/bust-31/connection.svelte.ts` | Gets a play token before connecting |

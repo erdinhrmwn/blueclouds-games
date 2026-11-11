@@ -6,7 +6,7 @@
 	import { LIMIT } from 'server/games/bust-31/rules';
 	import { onMount } from 'svelte';
 	import PlayingCard from './PlayingCard.svelte';
-	import { RoomList } from './rooms.svelte.ts';
+	import { RoomList } from '#lib/rooms.svelte.ts';
 
 	let { game }: { game: GameEntry } = $props();
 
@@ -16,7 +16,7 @@
 	let list = $state<RoomList | null>(null);
 
 	onMount(() => {
-		const rooms = new RoomList();
+		const rooms = new RoomList(game.slug);
 		list = rooms;
 		return () => rooms.dispose();
 	});

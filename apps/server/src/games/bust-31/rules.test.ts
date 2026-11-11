@@ -10,14 +10,11 @@ import {
 	type Game,
 	LIMIT,
 	playCard,
-	removePlayer,
 	resetToLobby,
-	RuleError,
 	START_LIVES,
-	setAway,
 	startGame,
-	takeSeat,
 } from "./rules";
+import { removePlayer, RuleError, setAway, takeSeat } from "../shared/table";
 
 const rng = () => 0.42;
 const card = (kind: Card["kind"], value: number, id = `${kind}${value}`): Card => ({ id, kind, value });

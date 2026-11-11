@@ -34,7 +34,7 @@ export class RoomConnection {
 	}
 
 	async #open(code: string) {
-		const { client, actorId } = await roomClient(code);
+		const { client, actorId } = await roomClient('bust-31', code);
 		this.#client = client;
 		// A fresh play token on every (re)connect: they only last 15 minutes.
 		const getParams = async () => {

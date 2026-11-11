@@ -2,7 +2,7 @@ import { PUBLIC_RIVET_ENDPOINT } from '$app/env/public';
 import { RIVET_ENDPOINT, RIVET_TOKEN } from '$app/env/private';
 import { createClient } from 'rivetkit/client';
 import type { registry } from 'server';
-import type { RoomSummary } from 'server/games/bust-31/schema';
+import type { RoomSummary } from 'server/games/shared/schema';
 
 /** How long a browser's engine token lasts; the Rivet client asks for a new one when it expires. */
 const TOKEN_SECONDS = 15 * 60;
@@ -16,12 +16,18 @@ const admin = createClient<typeof registry>({
 	devtools: false
 });
 
+/** Each game's room actor, by game slug. */
+const ROOMS = new Map([['bust-31', (code: string) => admin.bust31Room.getOrCreate([code])]]);
+
+export const hasRooms = (game: string) => ROOMS.has(game);
+
 /**
  * Creates the room if needed and returns a token that reaches only that room's actor.
  * Browsers can't reach other rooms, the room list, or anything else in the engine.
+ * `game` must pass `hasRooms` first.
  */
-export async function issueRoomToken(code: string): Promise<{ actorId: string; token: string }> {
-	const room = admin.bust31Room.getOrCreate([code]);
+export async function issueRoomToken(game: string, code: string): Promise<{ actorId: string; token: string }> {
+	const room = ROOMS.get(game)!(code);
 	const actorId = await room.resolve();
 	const { token } = await room.issueToken({
 		subject: 'browser',
@@ -31,4 +37,4 @@ export async function issueRoomToken(code: string): Promise<{ actorId: string; t
 	return { actorId, token };
 }
 
-export const listRooms = (): Promise<RoomSummary[]> => admin.bust31Rooms.getOrCreate(['main']).list();
+export const listRooms = (game: string): Promise<RoomSummary[]> => admin.roomList.getOrCreate([game]).list();

@@ -4,8 +4,8 @@ import type { registry } from 'server';
 
 type RoomAccess = { actorId: string; token: string };
 
-async function roomAccess(code: string): Promise<RoomAccess> {
-	const res = await fetch(`/api/rooms/${encodeURIComponent(code)}/token`, { method: 'POST', cache: 'no-store' });
+async function roomAccess(game: string, code: string): Promise<RoomAccess> {
+	const res = await fetch(`/api/${encodeURIComponent(game)}/rooms/${encodeURIComponent(code)}/token`, { method: 'POST', cache: 'no-store' });
 	if (!res.ok) throw new Error('Could not reach the game server. Try again.');
 	return (await res.json()) as RoomAccess;
 }
@@ -14,11 +14,11 @@ async function roomAccess(code: string): Promise<RoomAccess> {
  * A Rivet client for one room. Our server issues its engine tokens, and each one reaches only
  * that room's actor; the engine's admin token never reaches the browser.
  */
-export async function roomClient(code: string) {
-	const first = await roomAccess(code);
+export async function roomClient(game: string, code: string) {
+	const first = await roomAccess(game, code);
 	let unused: string | null = first.token;
 	const getToken = async () => {
-		const token = unused ?? (await roomAccess(code)).token;
+		const token = unused ?? (await roomAccess(game, code)).token;
 		unused = null;
 		return token;
 	};

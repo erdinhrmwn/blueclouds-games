@@ -6,11 +6,11 @@ import { RoomCode, RoomSummary } from "./schema";
 const STALE_MS = 2 * 60 * 60 * 1000;
 
 /**
- * The list of open Bust 31 tables, for the "Open tables" section. One instance (key ["main"]).
+ * The list of open tables of one game, for its "Open tables" section. One instance per game, keyed by slug.
  * Rooms report themselves whenever they change and remove themselves when nobody is connected.
  * Browsers can't reach it: their engine tokens only reach one room. The game's server reads the list.
  */
-export const bust31Rooms = actor({
+export const roomList = actor({
 	db: db({
 		onMigrate: async (d) => {
 			await d.execute("CREATE TABLE IF NOT EXISTS rooms (code TEXT PRIMARY KEY, data TEXT NOT NULL, updated_at INTEGER NOT NULL)");

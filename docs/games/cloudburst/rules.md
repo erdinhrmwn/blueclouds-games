@@ -118,8 +118,8 @@ The earlier plan was to extract shared parts once a second game exists; this is 
 | Seats (add, take seat, remove, free seats, next seat in a direction) | `rules.ts` | Move to `apps/server/src/games/shared/seats.ts`, pure functions over `{ id, seat, bot }` players. |
 | Turn clock, bot think time, away autoplay, leave after 15 s | `actor.ts` (`scheduleTurn`, `dropIfGone`) | Move to `shared/turns.ts`; each actor passes its own "move for this player" function. |
 | Match result outbox and retry (`match_reports`, `sendReports`) | `actor.ts` | Move to `shared/reports.ts`. |
-| Room list | `directory.ts` (actor `bust31Rooms`) | One directory actor for every game, keyed by slug (`rooms.getOrCreate([slug])`). |
-| Room tokens and room list on the web server | `apps/web/src/lib/server/rivet.ts` (hard-codes `bust31Room`) | Pick the room actor by game slug, so `/api/rooms` and `/api/rooms/:code/token` take the game. |
+| Room list | `directory.ts` (actor `bust31Rooms`) | One directory actor for every game, keyed by slug (`roomList.getOrCreate([slug])`). |
+| Room tokens and room list on the web server | `apps/web/src/lib/server/rivet.ts` (hard-codes `bust31Room`) | Pick the room actor by game slug, so `/api/:game/rooms` and `/api/:game/rooms/:code/token` take the game. |
 | Web: lobby seats, connection wrapper, room list, dealer, felt, seat | `lib/games/bust-31/` and `lib/components/` | Move the game-agnostic parts to `lib/components/` and `lib/rooms/`; Bust 31 keeps its gauge, stamp and cards. |
 
 New for Cloudburst: `apps/server/src/games/cloudburst/{rules,bots,match,schema,actor}.ts` (actor `cloudburstRoom`, one action `play({ cardId, suit?, giveId? })` plus `draw` and `pass`), rule tests in `rules.test.ts`, the web components in `lib/games/cloudburst/`, a catalog entry, and `cloudburst` in the platform's `GAMES` list.
