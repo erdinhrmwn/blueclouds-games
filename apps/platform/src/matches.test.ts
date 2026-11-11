@@ -25,8 +25,14 @@ const report = (over: Record<string, unknown> = {}) => ({
 		{ seat: 2, playerId: bob.player.id, bot: false, placement: 3, livesLeft: 0 },
 		{ seat: 3, playerId: null, bot: true, botName: "Bot Rain", placement: 2, livesLeft: 0 },
 	],
+	log: { logVersion: 1, events: events() },
 	...over,
 });
+const events = () => [
+	{ seq: 0, t: 0, type: "deal", data: { round: 1, hands: { 0: ["n7-1"] } } },
+	{ seq: 1, t: 4120, type: "play", seat: 0, data: { card: "n7-1", total: 7, by: "player" } },
+	{ seq: 2, t: 4120, type: "finished", data: { winner: 0 } },
+];
 const post = (body: unknown, token = SERVER_KEY) => call(t.app, "POST", "/v1/matches", { body, token });
 
 describe("match reports", () => {
@@ -92,6 +98,47 @@ describe("match reports", () => {
 		expect((await post(report({ game: "chess" }))).json.error.fields.game).toBe("Unknown game.");
 		expect((await post(report({ matchId: crypto.randomUUID() }))).status).toBe(400); // not v7
 		expect((await post(report({ endedAt: "2026-11-11T07:00:00Z" }))).json.error.fields.endedAt).toBeTruthy();
+	});
+});
+
+describe("match logs", () => {
+	test("are stored with the match, as sent", async () => {
+		const body = report();
+		expect((await post(body)).status).toBe(201);
+		const [row] = await t.sql`SELECT log_version, event_count, events FROM match_logs WHERE match_id = ${body.matchId}`;
+		expect(row).toEqual({ log_version: 1, event_count: 3, events: events() });
+	});
+
+	test("a changed log is a conflict", async () => {
+		const body = report();
+		expect((await post(body)).status).toBe(201);
+		const changed = events();
+		changed[1]!.data.card = "n9-0";
+		expect((await post({ ...body, log: { logVersion: 1, events: changed } })).status).toBe(409);
+	});
+
+	test("rejects a missing log, gaps in seq, unknown seats and bad types", async () => {
+		const field = async (over: Record<string, unknown>) => (await post(report(over))).json.error?.fields;
+		const { log: _, ...noLog } = report();
+		expect((await post(noLog)).status).toBe(400);
+		const [a, b, c] = events();
+		expect((await field({ log: { logVersion: 1, events: [a, c] } })).log).toBe("Event 1 must have seq 1 and a seat from players.");
+		expect((await field({ log: { logVersion: 1, events: [a, { ...b, seat: 5 }, c] } })).log).toBeTruthy();
+		expect(await field({ log: { logVersion: 1, events: [{ ...a, type: "Deal!" }] } })).toHaveProperty(["log.events.0.type"]);
+		expect(await field({ log: { logVersion: 1, events: [{ ...a, t: -1 }] } })).toHaveProperty(["log.events.0.t"]);
+		expect(await field({ log: { logVersion: 1, events: [{ ...a, data: { pad: "x".repeat(5000) } }] } })).toHaveProperty(["log.events.0.data"]);
+	});
+
+	test("a big log fits the larger body limit; other routes keep 16 KB", async () => {
+		// About 120 KB: far more than a real 6-player match.
+		const big = Array.from({ length: 1500 }, (_, i) => ({ seq: i, t: i * 900, type: "play", seat: 0, data: { card: "n7-1", total: 7, drew: "n9-0", by: "player" } }));
+		const body = report({ log: { logVersion: 1, events: big } });
+		expect(JSON.stringify(body).length).toBeGreaterThan(100_000);
+		expect((await post(body)).status).toBe(201);
+		const huge = await call(t.app, "POST", "/v1/matches", { body: "x".repeat(600 * 1024), token: SERVER_KEY });
+		expect(huge.status).toBe(413);
+		const guestBody = await call(t.app, "POST", "/v1/players/guest", { body: "x".repeat(20 * 1024) });
+		expect(guestBody.status).toBe(413);
 	});
 });
 

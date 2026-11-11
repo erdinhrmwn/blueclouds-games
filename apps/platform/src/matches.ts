@@ -16,6 +16,27 @@ const Seat = z
 	})
 	.refine((s) => s.bot === (s.playerId === null), { message: "A seat has a playerId exactly when it is not a bot." });
 
+/** Limits of a match's move log. The request body limit for reports is in app.ts. */
+export const MAX_LOG_EVENTS = 5_000;
+const MAX_EVENT_DATA_BYTES = 4 * 1024;
+
+/** The envelope every game's log event shares; `data` is the game's own and stored as is. */
+const LogEvent = z.object({
+	seq: z.number().int().min(0),
+	t: z.number().int().min(0),
+	type: z.string().regex(/^[a-z_]{1,32}$/),
+	seat: z.number().int().min(0).max(31).optional(),
+	data: z
+		.record(z.string(), z.unknown())
+		.refine((d) => JSON.stringify(d).length <= MAX_EVENT_DATA_BYTES, `Must be at most ${MAX_EVENT_DATA_BYTES} bytes.`)
+		.optional(),
+});
+
+const MatchLog = z.object({
+	logVersion: z.number().int().min(1),
+	events: z.array(LogEvent).min(1).max(MAX_LOG_EVENTS),
+});
+
 const MatchReport = z
 	.object({
 		matchId: z.uuidv7(),
@@ -25,6 +46,7 @@ const MatchReport = z
 		startedAt: z.iso.datetime({ offset: true }),
 		endedAt: z.iso.datetime({ offset: true }),
 		players: z.array(Seat).min(1).max(32),
+		log: MatchLog,
 	})
 	.superRefine((m, ctx) => {
 		const issue = (message: string, path: string) => ctx.addIssue({ code: "custom", message, path: [path] });
@@ -37,6 +59,9 @@ const MatchReport = z
 		if (new Set(ids).size !== ids.length) issue("A player can only sit once.", "players");
 		if (m.players.filter((p) => p.placement === 1).length !== 1) issue("Exactly one player must place first.", "players");
 		if (Date.parse(m.endedAt) < Date.parse(m.startedAt)) issue("Must not be before startedAt.", "endedAt");
+		const seats = new Set(m.players.map((p) => p.seat));
+		const bad = m.log.events.findIndex((e, i) => e.seq !== i || (e.seat !== undefined && !seats.has(e.seat)));
+		if (bad >= 0) issue(`Event ${bad} must have seq ${bad} and a seat from players.`, "log");
 	});
 type MatchReport = z.output<typeof MatchReport>;
 
@@ -53,7 +78,7 @@ export function matchRoutes(sql: SQL, serverKey: string) {
 	const app = new Hono<{ Variables: PlayerVariables }>();
 
 	/**
-	 * A room reports a finished game. Idempotent by matchId: a retry with the same body returns
+	 * A room reports a finished game with its move log. Idempotent by matchId: a retry with the same body returns
 	 * the stored match (created: false); the same id with a different body is a conflict.
 	 */
 	app.post("/matches", serverAuth(serverKey), async (c) => {
@@ -85,6 +110,9 @@ export function matchRoutes(sql: SQL, serverKey: string) {
 				lives_left: p.livesLeft,
 			}));
 			await tx`INSERT INTO match_players ${tx(rows)}`;
+			await tx`
+				INSERT INTO match_logs (match_id, log_version, event_count, events)
+				VALUES (${m.matchId}, ${m.log.logVersion}, ${m.log.events.length}, ${JSON.stringify(m.log.events)}::text::jsonb)`;
 			return true;
 		});
 		return ok(c, { match: { id: m.matchId, created } }, created ? 201 : 200);
