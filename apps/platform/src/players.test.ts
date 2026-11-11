@@ -23,6 +23,18 @@ describe("guest players", () => {
 		expect(row.n).toBe(1);
 	});
 
+	test("without a name, makes up \"Guest 123456\" with username guest_123456", async () => {
+		const res = await call(t.app, "POST", "/v1/players/guest", { body: {}, headers: { "x-forwarded-for": "10.0.0.10" } });
+		expect(res.status).toBe(201);
+		const { name, username, guest } = res.json.data.player;
+		expect(name).toMatch(/^Guest \d{6}$/);
+		expect(username).toBe(`guest_${name.slice(6)}`);
+		expect(guest).toBe(true);
+		// a guest has no password, so its username can't be used to log in
+		const login = await call(t.app, "POST", "/v1/players/login", { body: { username, password: "anything1" }, headers: { "x-forwarded-for": "10.0.0.10" } });
+		expect(login.status).toBe(401);
+	});
+
 	test("rejects a bad name with field errors", async () => {
 		const res = await call(t.app, "POST", "/v1/players/guest", { body: { name: "" }, headers: { "x-forwarded-for": "10.0.0.9" } });
 		expect(res.status).toBe(400);
@@ -120,7 +132,7 @@ describe("accounts", () => {
 		const g = await guest(t.app, "Gina");
 		const res = await register({ name: "Gina", username: "Gina_01", password: "long enough" }, g.secret);
 		expect(res.status).toBe(200);
-		expect(res.json.data.player).toMatchObject({ id: g.player.id, username: "gina_01" });
+		expect(res.json.data.player).toMatchObject({ id: g.player.id, username: "gina_01", guest: false });
 		expect(res.json.data.playerSecret).toBeUndefined();
 		expect((await call(t.app, "GET", "/v1/players/me", { token: g.secret })).json.data.player.username).toBe("gina_01");
 		expect((await register({ name: "Gina", username: "gina_02", password: "long enough" }, g.secret)).status).toBe(409);
@@ -135,6 +147,8 @@ describe("accounts", () => {
 		expect(res.json.data.playerSecret).toMatch(/^[A-Za-z0-9_-]{43}$/);
 		const taken = await register({ name: "Other", username: "HANA", password: "long enough" });
 		expect([taken.status, taken.json.error.fields]).toEqual([409, { username: "That username is taken." }]);
+		const reserved = await register({ name: "Y", username: "Guest_1", password: "long enough" });
+		expect(reserved.json.error.fields).toEqual({ username: 'Usernames starting with "guest" are kept for guests.' });
 		const bad = await register({ name: "X", username: "a b", password: "short" });
 		expect(Object.keys(bad.json.error.fields).sort()).toEqual(["password", "username"]);
 	});

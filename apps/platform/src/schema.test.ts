@@ -110,8 +110,12 @@ describe("player names", () => {
 		await refused(sql`INSERT INTO players (display_name) VALUES (' Rina')`, /display_name_check/);
 	});
 
-	test("an account needs both a username and a password hash; is_active can't be written", async () => {
-		await refused(sql`INSERT INTO players (display_name, username) VALUES ('Lu', 'lu')`, /players_account_check/);
+	test("guests (no password) have guest_ usernames, accounts don't; is_active and is_guest can't be written", async () => {
+		await refused(sql`INSERT INTO players (display_name, username) VALUES ('Lu', 'lu')`, /players_guest_username_check/);
+		await refused(sql`INSERT INTO players (display_name, username, password_hash) VALUES ('Lu', 'guest_lu', '$argon2id$x')`, /players_guest_username_check/);
+		const [g] = await sql`INSERT INTO players (display_name, username) VALUES ('Guest 1', 'guest_000001') RETURNING is_guest`;
+		expect(g.is_guest).toBe(true);
+		await refused(sql`UPDATE players SET is_guest = false WHERE id = ${player}`, /is_guest/);
 		await refused(sql`INSERT INTO players (display_name, username, password_hash) VALUES ('Lu', 'Lu', '$argon2id$x')`, /players_username_check/);
 		await refused(sql`UPDATE players SET is_active = false WHERE id = ${player}`, /is_active/);
 	});

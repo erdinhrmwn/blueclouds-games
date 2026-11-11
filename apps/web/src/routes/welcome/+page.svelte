@@ -2,7 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { nextPath } from '#lib/guest.ts';
-	import { createAccount, type FormErrors, logIn, NAME_MAX, setPlayerName } from '#lib/player.svelte.ts';
+	import { createAccount, type FormErrors, logIn, NAME_MAX, playAsGuest } from '#lib/player.svelte.ts';
 
 	/** First stop for anyone without a player: log in, sign up, or play as a guest under a display name. */
 	let tab = $state<'login' | 'signup'>('login');
@@ -13,7 +13,6 @@
 	let name = $state('');
 	let errors = $state<FormErrors | null>(null);
 
-	let guestName = $state('');
 	let guestError = $state<string | null>(null);
 
 	const enter = () => goto(nextPath(page.url), { invalidateAll: true });
@@ -38,13 +37,12 @@
 			return !errors;
 		})
 	);
-	const guest = (e: SubmitEvent) => (
-		e.preventDefault(),
+	const guest = () =>
 		run(async () => {
-			guestError = await setPlayerName(guestName);
-			return !guestError;
-		})
-	);
+			const failed = await playAsGuest();
+			guestError = failed && (failed.form ?? Object.values(failed.fields)[0]);
+			return !failed;
+		});
 </script>
 
 <svelte:head><title>Welcome · BlueClouds Games</title></svelte:head>
@@ -101,15 +99,10 @@
 			<span class="h-px flex-1 bg-paper/15"></span>or<span class="h-px flex-1 bg-paper/15"></span>
 		</div>
 
-		<form class="space-y-3" onsubmit={guest} aria-labelledby="guest-title">
-			<h2 id="guest-title" class="font-semibold">Play as a guest</h2>
-			<label class="block">
-				<span class="label mb-1.5 block">Display name</span>
-				<input class="field" bind:value={guestName} maxlength={NAME_MAX} autocomplete="nickname" placeholder="e.g. Rina" required />
-			</label>
+		<div class="space-y-3">
+			<button class="btn-ghost w-full" onclick={guest} disabled={busy}>Play as guest</button>
 			{#if guestError}<p class="text-sm text-ember" role="alert">{guestError}</p>{/if}
-			<button class="btn-ghost w-full" type="submit" disabled={busy}>Play as guest</button>
-			<p class="text-sm text-paper/75">A guest lives in this browser only. Link an account later from your profile to keep your games.</p>
-		</form>
+			<p class="text-sm text-paper/75">You get a name like Guest 482193. Change it, or link an account to keep your games, from your profile.</p>
+		</div>
 	</div>
 </section>

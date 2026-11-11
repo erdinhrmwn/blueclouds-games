@@ -34,7 +34,8 @@ const post = <T>(path: string, body: unknown) => request<T>('POST', path, body);
 
 export const saveName = (name: string) => post<{ name: string }>('/api/player', { name });
 export const fetchPlayToken = (name: string) => post<{ token: string }>('/api/play-token', { name });
-type AccountPlayer = { player: { name: string; username: string | null } };
+type AccountPlayer = { player: { name: string; username: string | null; guest: boolean } };
+export const startGuest = () => post<AccountPlayer>('/api/player/guest', {});
 export const registerAccount = (body: { name: string; username: string; password: string }) => post<AccountPlayer>('/api/account/register', body);
 export const signIn = (body: { username: string; password: string }) => post<AccountPlayer>('/api/account/login', body);
 export const signOut = () => post<{ signedOut: true }>('/api/account/logout', {});

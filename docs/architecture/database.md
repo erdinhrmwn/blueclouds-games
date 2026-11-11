@@ -59,7 +59,7 @@ Storage estimate: the move log is the big one, about 25 KB per match before comp
 |---|---|
 | `display_name` must be trimmed and contain no control characters | Today a name like `"Rina\n"` passes Zod (it only trims and counts). Names show up in the backoffice and in rooms; a newline or a zero-width trick shouldn't be storable. Zod gets the same rule so the API answers 400 instead of hitting the constraint. |
 | `disabled_at` and `disabled_reason` are set together, reason 1–200 characters | The backoffice always writes both; the database should refuse half a state. 200 = `REASON_MAX` in the backoffice. |
-| `username` (unique, lowercase, `^[a-z0-9_.-]{3,32}$`) and `password_hash` (argon2id), both set or both null (`011`) | Player accounts (Erdin, 2026-11-11). Null = a guest. Registering upgrades the guest in place, so their history stays theirs; signing in gives each device its own `player_secrets` row. |
+| `username` (unique, lowercase, `^[a-z0-9_.-]{3,32}$`) and `password_hash` (argon2id), both set or both null (`011`) | Player accounts (Erdin, 2026-11-11). Since `012` a guest has a generated `guest_…` username and no password; `is_guest` (generated: no password, not a bot) tells them apart, and `players_guest_username_check` keeps the `guest` prefix for guests only. Registering upgrades the guest in place, so their history stays theirs; signing in gives each device its own `player_secrets` row. |
 | `is_active` generated as `disabled_at IS NULL`; `is_bot` and `is_vip` plain flags, default false (`011`) | Erdin asked for the three booleans. `is_active` can't be written, so it never disagrees with `disabled_at`. `is_bot` marks an account the system runs (bots at a table are still seats with a `bot_name`, not players). `is_vip` is set in the backoffice and audited (`player.vip_grant`, `player.vip_revoke`). |
 
 ### `player_secrets`
@@ -517,6 +517,7 @@ Four migrations, each applied by the runner in one transaction, so if any existi
 | `009_rooms.sql` | `rooms`; one open room per distinct `room_code` already in `matches` (no known creator), `matches.room_id` filled from it, `room_code` dropped. The only edit of append-only rows, done openly with `DISABLE TRIGGER`. |
 | `010_tournaments.sql` | `tournaments`, `tournament_players`, `room_assignments`, the tournament columns on `rooms`, and the audit columns and actions. |
 | `011_player_accounts.sql` | `username`, `password_hash`, `is_active`, `is_bot`, `is_vip` on `players`, and the VIP audit actions. |
+| `012_guest_usernames.sql` | Guests get a `guest_…` username (existing ones backfilled), `is_guest`, and the guest-prefix check. |
 
 Before deploying, run these on the live database. Each must return 0 (or the listed rows must be fixed first):
 

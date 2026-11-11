@@ -177,9 +177,9 @@ Server-to-server calls (actor → platform) use `Authorization: Bearer <PLATFORM
 
 ### `POST /v1/players/guest`
 
-Request: `{ "name": "Rina" }`, trimmed, 1–20 chars.
+Request: `{}` (the game's "Play as guest" button) or `{ "name": "Rina" }` (trimmed, 1–20 chars). Without a name the platform makes one up: `Guest 482193`, with username `guest_482193` (a random 6-digit number, drawn again on a clash). The username is always generated; a guest has no password, so it can't log in with it.
 
-`201`, `data: { "player": { "id": "uuidv7", "name": "Rina", "createdAt": "…" }, "playerSecret": "…" }`. The secret is shown only in this response.
+`201`, `data: { "player": { "id": "uuidv7", "name": "Guest 482193", "username": "guest_482193", "guest": true, "createdAt": "…" }, "playerSecret": "…" }`. The secret is shown only in this response.
 
 Errors: `400 bad_input`, `429 rate_limited` (5/min per IP).
 
@@ -197,7 +197,7 @@ Bearer player secret, no body. `200`, `data: { "token": "eyJ…", "expiresAt": "
 
 ### `POST /v1/players/register`, `POST /v1/players/login`, `POST /v1/players/logout`
 
-Player accounts (migration `011`). Register takes `{ "name", "username", "password" }`: with a guest's bearer secret it turns that guest into the account (same id and secret, `200`); without one it makes a new player and returns its secret (`201`). Login takes `{ "username", "password" }` and returns a new secret for this device. Logout revokes the bearer secret. Usernames are stored lowercase. Errors: `400 bad_input` per field, `409 conflict` (username taken, or already an account), `401` wrong username or password (same answer for an unknown username), `403` disabled, `429` rate limited or 5 wrong passwords in 15 minutes.
+Player accounts (migration `011`). Register takes `{ "name", "username", "password" }`: with a guest's bearer secret it turns that guest into the account (same id and secret, `200`); without one it makes a new player and returns its secret (`201`). Login takes `{ "username", "password" }` and returns a new secret for this device. Logout revokes the bearer secret. Usernames are stored lowercase, and ones starting with `guest` are kept for guests (migration `012`). Errors: `400 bad_input` per field, `409 conflict` (username taken, or already an account), `401` wrong username or password (same answer for an unknown username), `403` disabled, `429` rate limited or 5 wrong passwords in 15 minutes.
 
 ### Rooms and tournaments
 

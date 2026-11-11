@@ -50,16 +50,24 @@ const secretOf = (cookies: Cookies) => cookies.get(SECRET_COOKIE);
 const saveSecret = (cookies: Cookies, secret: string) =>
 	cookies.set(SECRET_COOKIE, secret, { path: '/', httpOnly: true, secure: !dev, sameSite: 'lax', maxAge: SECRET_MAX_AGE });
 
-async function newGuest(event: RequestEvent, name: string): Promise<string> {
-	const { playerSecret } = await call<{ playerSecret: string }>(event, '/players/guest', { method: 'POST', body: { name } });
-	saveSecret(event.cookies, playerSecret);
-	return playerSecret;
+/** A new guest for this browser; without a name the platform makes one up ("Guest 482193"). */
+async function createGuest(event: RequestEvent, name?: string): Promise<{ player: Me; playerSecret: string }> {
+	const res = await call<{ player: Me; playerSecret: string }>(event, '/players/guest', { method: 'POST', body: name ? { name } : {} });
+	saveSecret(event.cookies, res.playerSecret);
+	return res;
+}
+const newGuest = async (event: RequestEvent, name: string) => (await createGuest(event, name)).playerSecret;
+
+/** "Play as guest": the platform picks the name and username. */
+export async function startGuest(event: RequestEvent): Promise<Me> {
+	const { player } = await createGuest(event);
+	return { name: player.name, username: player.username, guest: player.guest };
 }
 
 // A secret the platform no longer knows (e.g. a reset database): start a fresh guest.
 const lost = (e: unknown) => e instanceof PlatformError && e.code === 'unauthenticated';
 
-export type Me = { name: string; username: string | null };
+export type Me = { name: string; username: string | null; guest: boolean };
 
 /**
  * Who this browser plays as, asked from the platform on every page load so the page never trusts a stale copy.
@@ -70,7 +78,7 @@ export async function whoAmI(event: RequestEvent): Promise<Me | null> {
 	if (!secret) return null;
 	try {
 		const { player } = await call<{ player: Me }>(event, '/players/me', { method: 'GET', secret });
-		return { name: player.name, username: player.username };
+		return { name: player.name, username: player.username, guest: player.guest };
 	} catch (e) {
 		if (lost(e)) event.cookies.delete(SECRET_COOKIE, { path: '/' });
 		if (lost(e) || (e instanceof PlatformError && e.status === 403)) return null;
@@ -78,7 +86,7 @@ export async function whoAmI(event: RequestEvent): Promise<Me | null> {
 	}
 }
 
-type Account = { player: { name: string; username: string | null }; playerSecret?: string };
+type Account = { player: Me; playerSecret?: string };
 
 /**
  * Registers a username and password. A guest in this browser becomes the account (keeping their history);

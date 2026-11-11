@@ -16,8 +16,10 @@ export type PlayerRow = {
 	lastSeenAt: Date;
 	disabledAt: Date | null;
 	disabledReason: string | null;
-	/** Null for a guest. */
+	/** A guest's is generated (guest_123456); null only for players from before guest usernames. */
 	username: string | null;
+	/** No password: lives in one browser until it links an account. */
+	isGuest: boolean;
 	isActive: boolean;
 	isBot: boolean;
 	isVip: boolean;
@@ -25,7 +27,7 @@ export type PlayerRow = {
 
 const PLAYER_COLUMNS = (sql: SQL) =>
 	sql`id, display_name AS name, created_at AS "createdAt", last_seen_at AS "lastSeenAt", disabled_at AS "disabledAt", disabled_reason AS "disabledReason",
-	    username, is_active AS "isActive", is_bot AS "isBot", is_vip AS "isVip"`;
+	    username, is_guest AS "isGuest", is_active AS "isActive", is_bot AS "isBot", is_vip AS "isVip"`;
 
 /**
  * Newest players first. `q` matches an exact id, or part of a name or username. `before` is the last id of the

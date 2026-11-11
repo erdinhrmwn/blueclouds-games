@@ -25,21 +25,21 @@
 	{#if player.ready}
 		<div class="mt-6 rounded-xl border border-paper/15 bg-[#1b1611] p-6">
 			<p class="label">Display name</p>
-			<div class="mt-1 flex items-center justify-between gap-3">
-				<p class="min-w-0 truncate font-display text-2xl font-bold">{player.name}</p>
+			<div class="mt-1 flex flex-wrap items-center justify-between gap-3">
+				<p class="min-w-0 font-display text-2xl font-bold break-words">{player.name}</p>
 				<button class="btn-ghost shrink-0 px-4" onclick={() => (player.editing = true)}>Change name</button>
 			</div>
 			<p class="mt-4 text-sm text-paper/75">
-				{#if player.username}
-					Account <b class="font-semibold text-paper">@{player.username}</b>. Log in with it on any device to keep playing there.
+				{#if player.guest}
+					Guest <b class="font-semibold text-paper">@{player.username}</b>, saved in this browser only.
 				{:else}
-					Guest, saved in this browser only.
+					Account <b class="font-semibold text-paper">@{player.username}</b>. Log in with it on any device to keep playing there.
 				{/if}
 			</p>
 			{#if linked}<p class="mt-2 text-sm text-brass" role="status">Account linked. Your games are saved to it.</p>{/if}
 		</div>
 
-		{#if !player.username}
+		{#if player.guest}
 			<form class="mt-6 space-y-3 rounded-xl border border-paper/15 bg-[#1b1611] p-6" onsubmit={link} aria-labelledby="link-title">
 				<h2 id="link-title" class="font-display text-2xl font-bold">Link an account</h2>
 				<p class="text-sm text-paper/75">Turn this guest into an account. Your name and game history stay, and you can log in from any device.</p>
