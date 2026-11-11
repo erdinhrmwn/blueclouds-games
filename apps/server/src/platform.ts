@@ -1,4 +1,3 @@
-import { timingSafeEqual } from "node:crypto";
 import { importJWK, jwtVerify } from "jose";
 import { z } from "zod";
 
@@ -17,8 +16,6 @@ const Env = z.object({
 	PLATFORM_URL: z.url().default("http://127.0.0.1:3000").transform((u) => u.replace(/\/+$/, "")),
 	/** Bearer key for match reports; same value as the platform's. */
 	PLATFORM_SERVER_KEY: z.string().min(32, "must be at least 32 characters"),
-	/** Shared by actors only: lets a room write to the room list. Never sent to browsers. */
-	INTERNAL_ACTOR_KEY: z.string().min(32, "must be at least 32 characters"),
 });
 type Env = z.output<typeof Env>;
 
@@ -83,16 +80,4 @@ export async function reportMatch(report: { matchId: string }): Promise<{ result
 	} catch (err) {
 		return { result: "retry", detail: String(err) };
 	}
-}
-
-/** Connection params an actor uses when it calls another actor's internal actions. */
-export const internalParams = () => ({ internalKey: (config ?? loadPlatformConfig()).INTERNAL_ACTOR_KEY });
-
-/** True when connection params carry the internal actor key (constant-time compare). */
-export function isInternal(params: unknown): boolean {
-	const given = (params as { internalKey?: unknown } | null)?.internalKey;
-	if (typeof given !== "string") return false;
-	const a = Buffer.from(given);
-	const b = Buffer.from((config ?? loadPlatformConfig()).INTERNAL_ACTOR_KEY);
-	return a.length === b.length && timingSafeEqual(a, b);
 }

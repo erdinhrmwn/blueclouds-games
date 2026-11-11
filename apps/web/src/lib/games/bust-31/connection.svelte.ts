@@ -1,8 +1,10 @@
 import type { Card, PublicView } from 'server/games/bust-31/rules';
 import { playToken } from '#lib/player.svelte.ts';
-import { client } from '#lib/rivet/client.ts';
+import { roomClient } from '#lib/rivet/client.ts';
 
 type Status = 'connecting' | 'connected' | 'reconnecting' | 'error';
+type RoomClient = Awaited<ReturnType<typeof roomClient>>['client'];
+type Conn = ReturnType<ReturnType<RoomClient['bust31Room']['getForId']>['connect']>;
 
 /** The only place the web app talks to the room actor. Components read its reactive fields. */
 export class RoomConnection {
@@ -17,12 +19,23 @@ export class RoomConnection {
 	error = $state<string | null>(null);
 	busy = $state(false);
 
-	#conn;
+	#client: RoomClient | null = null;
+	#conn: Conn | null = null;
 	#stop: (() => void)[] = [];
+	#disposed = false;
 	/** Why the last play token couldn't be fetched (e.g. a disabled player), shown instead of the client's wrapper text. */
 	#tokenError: string | null = null;
 
 	constructor(code: string) {
+		this.#open(code).catch((e) => {
+			this.status = 'error';
+			this.error = message(e);
+		});
+	}
+
+	async #open(code: string) {
+		const { client, actorId } = await roomClient(code);
+		this.#client = client;
 		// A fresh play token on every (re)connect: they only last 15 minutes.
 		const getParams = async () => {
 			try {
@@ -33,20 +46,21 @@ export class RoomConnection {
 				throw e;
 			}
 		};
-		this.#conn = client.bust31Room.getOrCreate([code], { getParams }).connect();
+		const conn = (this.#conn = client.bust31Room.getForId(actorId, { getParams }).connect());
 		this.#stop.push(
-			this.#conn.on('view', (v: PublicView) => this.#setView(v)),
-			this.#conn.on('hand', (h: Card[]) => (this.hand = h)),
-			this.#conn.onOpen(() => {
+			conn.on('view', (v: PublicView) => this.#setView(v)),
+			conn.on('hand', (h: Card[]) => (this.hand = h)),
+			conn.onOpen(() => {
 				this.status = 'connected';
 				void this.#join();
 			}),
-			this.#conn.onClose(() => (this.status = 'reconnecting')),
-			this.#conn.onError((e) => {
+			conn.onClose(() => (this.status = 'reconnecting')),
+			conn.onError((e) => {
 				this.status = 'error';
 				this.error = this.#tokenError ?? message(e);
 			})
 		);
+		if (this.#disposed) await this.dispose(); // the page closed while we were fetching the token
 	}
 
 	get me() {
@@ -62,7 +76,7 @@ export class RoomConnection {
 	// Rejoining as the same player is idempotent, so it is safe on every reconnect.
 	#join = () =>
 		this.#run(async () => {
-			const res = await this.#conn.join();
+			const res = await this.#c.join();
 			this.playerId = res.playerId;
 			this.#setView(res.view);
 			this.hand = res.hand;
@@ -75,13 +89,13 @@ export class RoomConnection {
 		if (v.turn) this.turnTotal = v.turn.total;
 	}
 
-	start = () => this.#run(() => this.#conn.start());
-	addBot = (seat: number) => this.#run(() => this.#conn.addBot(seat));
-	takeSeat = (seat: number) => this.#run(() => this.#conn.takeSeat(seat));
-	removeBot = (id: string) => this.#run(() => this.#conn.removeBot(id));
-	play = (cardId: string) => this.#run(() => this.#conn.play({ cardId }));
-	reset = () => this.#run(() => this.#conn.reset());
-	leave = () => this.#run(() => this.#conn.leave());
+	start = () => this.#run(() => this.#c.start());
+	addBot = (seat: number) => this.#run(() => this.#c.addBot(seat));
+	takeSeat = (seat: number) => this.#run(() => this.#c.takeSeat(seat));
+	removeBot = (id: string) => this.#run(() => this.#c.removeBot(id));
+	play = (cardId: string) => this.#run(() => this.#c.play({ cardId }));
+	reset = () => this.#run(() => this.#c.reset());
+	leave = () => this.#run(() => this.#c.leave());
 
 	async #run(fn: () => Promise<unknown>): Promise<void> {
 		this.busy = true;
@@ -95,9 +109,17 @@ export class RoomConnection {
 		}
 	}
 
+	get #c(): Conn {
+		if (!this.#conn) throw new Error('Still connecting. Try again in a moment.');
+		return this.#conn;
+	}
+
 	async dispose(): Promise<void> {
+		this.#disposed = true;
 		this.#stop.forEach((off) => off());
-		await this.#conn.dispose();
+		this.#stop = [];
+		await this.#conn?.dispose();
+		await this.#client?.dispose();
 	}
 }
 

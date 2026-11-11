@@ -8,8 +8,12 @@ SvelteKit app the players use. Started with `bun run dev:web` on http://localhos
 |---|---|
 | `PUBLIC_RIVET_ENDPOINT` | `http://127.0.0.1:6420` |
 | `PLATFORM_URL` | `http://127.0.0.1:3000` (server side only: the browser never calls the platform) |
+| `RIVET_TOKEN` | Engine admin token, 32+ chars. Server side only: `POST /api/rooms/:code/token` gives the browser a 15-minute engine token for that one room |
+| `RIVET_ENDPOINT` | Engine as this server reaches it (defaults to `PUBLIC_RIVET_ENDPOINT`) |
 
 Set in the root `.env` (template: `.env.example`; `vite.config.ts` points SvelteKit at the repo root). Optional for local dev.
+
+Production: `bun run build`, then `bun run start` (adapter-node output, run on Bun). It also needs `ORIGIN` (the public URL) and, behind Caddy, `ADDRESS_HEADER=X-Forwarded-For` so the player's IP reaches the platform's rate limit.
 
 ## Structure
 
@@ -18,11 +22,11 @@ apps/web/src/
   lib/games/catalog.ts # list of games: slug, name, player counts, Home + Room components
   lib/games/bust-31/   # game UI: Home, Room, Lobby, Table, cards, connection to its actor
   lib/components/      # shared table pieces: Felt, Seat
-  lib/rivet/client.ts  # typed Rivet client
+  lib/rivet/client.ts  # typed Rivet client for one room, with tokens from our server
   lib/platform.ts      # browser side: calls our /api routes
   lib/server/platform.ts # server side: calls the platform, keeps the player secret in an httpOnly cookie
   lib/guest.ts         # display name in localStorage
   lib/player.svelte.ts # player name shared by the name dialog; play tokens for rooms
   lib/motion.ts        # shared animations
-  routes/              # / (pick a game), /[game], /[game]/room/[code], api/player, api/play-token
+  routes/              # / (pick a game), /[game], /[game]/room/[code], api/player, api/play-token, api/rooms, api/rooms/[code]/token
 ```

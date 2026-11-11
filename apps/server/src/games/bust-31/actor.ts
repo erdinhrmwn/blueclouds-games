@@ -18,7 +18,7 @@ import {
 	takeSeat,
 	TURN_MS,
 } from "./rules";
-import { type Identity, internalParams, reportMatch, verifyPlayToken } from "../../platform";
+import { type Identity, reportMatch, verifyPlayToken } from "../../platform";
 import { buildReport, type MatchState, noteMove, uuidv7 } from "./match";
 import { BotIdInput, ConnParams, PlayInput, SeatInput } from "./schema";
 
@@ -281,7 +281,7 @@ async function trackMatch(c: Ctx): Promise<boolean> {
  */
 async function reportToDirectory(c: Ctx, leaving?: string): Promise<void> {
 	const code = c.key[0] as string;
-	const directory = c.client().bust31Rooms.getOrCreate(["main"], { params: internalParams() });
+	const directory = c.client().bust31Rooms.getOrCreate(["main"]);
 	const connected = [...c.conns.values()].filter((conn: { id: string }) => conn.id !== leaving).length;
 	const { game } = c.vars as Saved;
 	try {
