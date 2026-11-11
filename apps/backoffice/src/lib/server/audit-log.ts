@@ -1,0 +1,26 @@
+import type { SQL } from 'bun';
+import { isUuid, PAGE_SIZE } from './players.ts';
+
+export type AuditRow = {
+	id: string;
+	createdAt: Date;
+	admin: string | null;
+	action: string;
+	targetId: string | null;
+	targetName: string | null;
+	detail: Record<string, unknown>;
+	ip: string | null;
+};
+
+/** Newest first. `before` is the last id of the previous page (UUIDv7). */
+export async function listAudit(sql: SQL, before: string | null): Promise<AuditRow[]> {
+	const page = before && isUuid(before) ? sql`WHERE a.id < ${before}` : sql``;
+	return (await sql`
+		SELECT a.id, a.created_at AS "createdAt", ad.username AS admin, a.action, a.target_id AS "targetId",
+		       p.display_name AS "targetName", a.detail, host(a.ip) AS ip
+		FROM admin_audit a
+		LEFT JOIN admins ad ON ad.id = a.admin_id
+		LEFT JOIN players p ON p.id = a.target_id
+		${page}
+		ORDER BY a.id DESC LIMIT ${PAGE_SIZE}`) as AuditRow[];
+}

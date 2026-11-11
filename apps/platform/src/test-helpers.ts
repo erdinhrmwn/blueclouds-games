@@ -20,16 +20,15 @@ export async function guest(app: App, name = "Rina") {
 }
 
 export const SERVER_KEY = "test-server-key-0123456789abcdef0123";
-export const ORIGIN = "http://game.test";
 
 /**
- * Fresh schema + app for one test file. Uses the PLATFORM_DB_* settings with PLATFORM_TEST_DB_NAME as the
- * database, which must be a throwaway one: its public schema is dropped.
+ * Empties the test database and runs every migration. Also used by the backoffice tests.
+ * DATABASE_TEST_NAME must be a throwaway database: its public schema is dropped.
  */
-export async function setupTestApp() {
-	const name = process.env.PLATFORM_TEST_DB_NAME;
-	if (!name) throw new Error("Set PLATFORM_TEST_DB_NAME to a throwaway Postgres database to run platform tests.");
-	if (name === process.env.PLATFORM_DB_NAME) throw new Error("PLATFORM_TEST_DB_NAME must differ from PLATFORM_DB_NAME: tests drop its schema.");
+export async function resetTestDatabase() {
+	const name = process.env.DATABASE_TEST_NAME;
+	if (!name) throw new Error("Set DATABASE_TEST_NAME to a throwaway Postgres database to run tests.");
+	if (name === process.env.DATABASE_NAME) throw new Error("DATABASE_TEST_NAME must differ from DATABASE_NAME: tests drop its schema.");
 	const db = { ...loadDbConfig(), database: name };
 	const sql = new SQL(db);
 	await sql.unsafe("DROP SCHEMA public CASCADE; CREATE SCHEMA public;");
@@ -37,13 +36,21 @@ export async function setupTestApp() {
 	const [{ builtin }] = await sql`SELECT EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'uuidv7' AND pronamespace = 'pg_catalog'::regnamespace) AS builtin`;
 	if (!builtin) await sql.unsafe(UUIDV7_POLYFILL);
 	await migrate(sql);
+	return { sql, db };
+}
+
+/**
+ * Fresh schema + app for one test file. Uses the DATABASE_* settings with DATABASE_TEST_NAME as the
+ * database, which must be a throwaway one: its public schema is dropped.
+ */
+export async function setupTestApp() {
+	const { sql, db } = await resetTestDatabase();
 
 	const { privateKey, publicKey } = await generateKeyPair("EdDSA", { crv: "Ed25519", extractable: true });
 	const config: Config = {
 		db,
 		playTokenPrivateKey: JSON.stringify(await exportJWK(privateKey)),
 		serverKey: SERVER_KEY,
-		allowedOrigins: [ORIGIN],
 		host: "127.0.0.1",
 		port: 0,
 	};

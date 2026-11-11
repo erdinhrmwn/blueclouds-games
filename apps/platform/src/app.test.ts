@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { call, ORIGIN, setupTestApp } from "./test-helpers";
+import { call, setupTestApp } from "./test-helpers";
 
 let t: Awaited<ReturnType<typeof setupTestApp>>;
 beforeAll(async () => {
@@ -29,10 +29,8 @@ describe("envelope", () => {
 		expect(res.json.error.code).toBe("payload_too_large");
 	});
 
-	test("CORS only allows configured origins", async () => {
-		const allowed = await call(t.app, "GET", "/v1/health", { headers: { origin: ORIGIN } });
-		expect(allowed.headers.get("access-control-allow-origin")).toBe(ORIGIN);
-		const other = await call(t.app, "GET", "/v1/health", { headers: { origin: "http://evil.test" } });
-		expect(other.headers.get("access-control-allow-origin")).toBeNull();
+	test("sends no CORS headers: browsers never call the platform", async () => {
+		const res = await call(t.app, "GET", "/v1/health", { headers: { origin: "http://evil.test" } });
+		expect(res.headers.get("access-control-allow-origin")).toBeNull();
 	});
 });

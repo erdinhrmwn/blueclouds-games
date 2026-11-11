@@ -5,10 +5,10 @@ services:
     image: postgres:18.6-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${PLATFORM_DB_USER:-platform}
-      POSTGRES_PASSWORD: ${PLATFORM_DB_PASSWORD:-platform}
-      POSTGRES_DB: ${PLATFORM_DB_NAME:-platform}
-      POSTGRES_TEST_DB: ${PLATFORM_TEST_DB_NAME:-platform_test}
+      POSTGRES_USER: ${DATABASE_USER:-platform}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-platform}
+      POSTGRES_DB: ${DATABASE_NAME:-platform}
+      POSTGRES_TEST_DB: ${DATABASE_TEST_NAME:-platform_test}
     ports:
       - "5432:5432"
     volumes:

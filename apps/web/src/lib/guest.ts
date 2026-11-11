@@ -1,5 +1,4 @@
-// Guest identity kept in this browser: the platform's player secret + display name.
-const SECRET_KEY = 'player-secret';
+// The guest's display name, kept in this browser. Who they are (the player secret) is an httpOnly cookie.
 const NAME_KEY = 'guest-name';
 
 // Storage can be blocked (private mode): then the identity lives in this tab only.
@@ -22,8 +21,6 @@ function write(key: string, value: string): void {
 	}
 }
 
-export const playerSecret = () => read(SECRET_KEY);
-export const savePlayerSecret = (secret: string) => write(SECRET_KEY, secret);
 export const guestName = () => read(NAME_KEY) ?? '';
 export const saveGuestName = (name: string) => write(NAME_KEY, name.trim());
 

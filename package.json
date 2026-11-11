@@ -8,7 +8,8 @@
     "dev:server": "bun run --filter server dev",
     "dev:web": "bun run --filter web dev",
     "dev:platform": "bun run --filter platform dev",
-    "test": "bun run --filter server --filter platform test",
+    "dev:backoffice": "bun run --filter backoffice dev",
+    "test": "bun run --filter server test && bun run --filter platform test && bun run --filter backoffice test",
     "check": "bun run --filter '*' check"
   }
 }
