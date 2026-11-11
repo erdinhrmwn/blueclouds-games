@@ -1,0 +1,16 @@
+# DOMAIN comes from .env (e.g. nblueclouds.online). Caddy gets and renews the certificates.
+{$DOMAIN} {
+	reverse_proxy web:3000
+}
+
+backoffice.{$DOMAIN} {
+	reverse_proxy backoffice:3000
+}
+
+# Rivet engine: browsers' game websockets. Caddy keeps websockets open with no timeout;
+# on a config reload it gives open ones 5 minutes before closing them.
+engine.{$DOMAIN} {
+	reverse_proxy rivet-engine:6420 {
+		stream_close_delay 5m
+	}
+}

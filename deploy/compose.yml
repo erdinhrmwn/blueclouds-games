@@ -1,0 +1,144 @@
+# Production stack on one VPS. Run from the repo root:
+#   deploy/deploy.sh   (builds, then starts; see docs/deploy.md)
+# Only Caddy is reachable from outside (80/443). Each service gets only the env it needs.
+name: blueclouds
+
+x-app: &app
+  restart: unless-stopped
+  # Lets in-flight requests and actor shutdown finish on deploys.
+  stop_grace_period: 30s
+
+x-db-env: &db-env
+  DATABASE_HOST: postgres
+  DATABASE_PORT: 5432
+  DATABASE_USER: ${DATABASE_USER:?}
+  DATABASE_PASSWORD: ${DATABASE_PASSWORD:?}
+  DATABASE_NAME: ${DATABASE_NAME:?}
+
+# Behind Caddy: client IP and https come from its X-Forwarded-* headers.
+x-proxied: &proxied
+  ADDRESS_HEADER: x-forwarded-for
+  XFF_DEPTH: 1
+  PROTOCOL_HEADER: x-forwarded-proto
+  PORT: 3000
+
+services:
+  caddy:
+    image: caddy:2.11.9-alpine
+    restart: unless-stopped
+    ports: ["80:80", "443:443", "443:443/udp"]
+    environment:
+      DOMAIN: ${DOMAIN:?}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on: [web, backoffice, rivet-engine]
+
+  web:
+    <<: *app
+    build: { context: .., dockerfile: Dockerfile, target: web }
+    environment:
+      <<: *proxied
+      PUBLIC_RIVET_ENDPOINT: https://engine.${DOMAIN:?}
+      RIVET_ENDPOINT: http://rivet-engine:6420
+      RIVET_TOKEN: ${RIVET_TOKEN:?}
+      PLATFORM_URL: http://platform:3000
+    depends_on:
+      platform: { condition: service_healthy }
+      rivet-engine: { condition: service_healthy }
+
+  backoffice:
+    <<: *app
+    build: { context: .., dockerfile: Dockerfile, target: backoffice }
+    environment:
+      <<: [*proxied, *db-env]
+    depends_on:
+      platform: { condition: service_healthy } # it runs the migrations
+
+  platform:
+    <<: *app
+    build: { context: .., dockerfile: Dockerfile, target: platform }
+    environment:
+      <<: *db-env
+      PLAY_TOKEN_PRIVATE_KEY: ${PLAY_TOKEN_PRIVATE_KEY:?}
+      PLATFORM_SERVER_KEY: ${PLATFORM_SERVER_KEY:?}
+    healthcheck:
+      test: ["CMD", "bun", "-e", "fetch('http://127.0.0.1:3000/v1/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  actors:
+    <<: *app
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      target: actors
+      args:
+        RIVET_NODE_VERSION: ${RIVET_NODE_VERSION:-} # set by deploy/deploy.sh
+    # Rivet waits up to 120s for rooms to hand over to the new actor server.
+    stop_grace_period: 130s
+    environment:
+      RIVET_ENDPOINT: http://rivet-engine:6420
+      RIVET_TOKEN: ${RIVET_TOKEN:?}
+      PLAY_TOKEN_PUBLIC_KEY: ${PLAY_TOKEN_PUBLIC_KEY:?}
+      PLATFORM_URL: http://platform:3000
+      PLATFORM_SERVER_KEY: ${PLATFORM_SERVER_KEY:?}
+    depends_on:
+      platform: { condition: service_healthy }
+      rivet-init: { condition: service_completed_successfully }
+
+  # One-shot: makes sure the engine has the node pool actor servers join. Safe to repeat.
+  rivet-init:
+    image: rivetdev/engine:3.0.7
+    restart: "no"
+    environment:
+      RIVET_TOKEN: ${RIVET_TOKEN:?}
+    entrypoint: ["sh", "-c", "curl -fsS -X PUT -H \"Authorization: Bearer $$RIVET_TOKEN\" -H 'Content-Type: application/json' -d '{}' 'http://rivet-engine:6420/pools/default?namespace=default'"]
+    depends_on:
+      rivet-engine: { condition: service_healthy }
+
+  rivet-engine:
+    image: rivetdev/engine:3.0.7
+    restart: unless-stopped
+    stop_grace_period: 30s
+    environment:
+      RIVET__AUTH__ADMIN_TOKEN: ${RIVET_TOKEN:?}
+      RIVET__TELEMETRY__ENABLED: "false"
+      RIVET__GUARD__HOST: 0.0.0.0 # 6420: public API + gateway, through Caddy only
+      RIVET__API_PEER__HOST: 127.0.0.1
+      RIVET__METRICS__HOST: 127.0.0.1
+    volumes:
+      - ./rivet/config.json:/etc/rivet/config.json:ro
+      - rivet-log:/var/lib/rivet/log
+      - rivet-objects:/var/lib/rivet/objects
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:6420/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  postgres:
+    image: postgres:18.6-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DATABASE_USER:?}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:?}
+      POSTGRES_DB: ${DATABASE_NAME:?}
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  caddy-data:
+  caddy-config:
+  postgres-data:
+  rivet-log:
+  rivet-objects:
