@@ -14,7 +14,7 @@ Admin UI for staff: SvelteKit (`adapter-node`) running on Bun. It has no API of 
 
 ```sh
 bun run --filter platform db:migrate            # creates the admin tables too
-bun run --filter backoffice admin:create root   # asks for the password (12+ characters)
+(cd apps/backoffice && bun run admin:create root)   # needs a TTY, so not --filter; asks for the password (12+ characters)
 bun run dev:backoffice                          # http://localhost:5174
 ```
 
