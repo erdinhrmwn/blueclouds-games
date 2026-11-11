@@ -10,6 +10,8 @@ Rivet Actors: one actor type per game, one actor per room (keyed by the room cod
 | `PLATFORM_URL` | Platform API as the actors reach it (default `http://127.0.0.1:3000`) |
 | `PLATFORM_SERVER_KEY` | Bearer key for match reports, same as the platform's |
 | `INTERNAL_ACTOR_KEY` | Lets rooms write to the room list (32+ chars, actors only) |
+| `RIVET_TOKEN` | Engine admin token. In dev, `bun run dev` also gives it to the local engine RivetKit starts, so dev checks tokens like production |
+| `RIVET_ENDPOINT` | Engine to connect to as a runner. Unset in dev: RivetKit starts a local engine |
 
 Set in the root `.env`; checked at startup.
 

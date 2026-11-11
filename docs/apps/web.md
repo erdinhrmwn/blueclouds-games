@@ -8,6 +8,8 @@ SvelteKit app the players use. Started with `bun run dev:web` on http://localhos
 |---|---|
 | `PUBLIC_RIVET_ENDPOINT` | `http://127.0.0.1:6420` |
 | `PLATFORM_URL` | `http://127.0.0.1:3000` (server side only: the browser never calls the platform) |
+| `RIVET_TOKEN` | Engine admin token, 32+ chars. Server side only: `POST /api/rivet-token` uses it to give the browser a 15-minute engine token |
+| `RIVET_ENDPOINT` | Engine as this server reaches it (defaults to `PUBLIC_RIVET_ENDPOINT`) |
 
 Set in the root `.env` (template: `.env.example`; `vite.config.ts` points SvelteKit at the repo root). Optional for local dev.
 
