@@ -4,6 +4,8 @@ import {
 	addPlayer,
 	buildDeck,
 	createGame,
+	DEAL,
+	dealPauseMs,
 	type Card,
 	type Game,
 	LIMIT,
@@ -12,7 +14,9 @@ import {
 	resetToLobby,
 	RuleError,
 	START_LIVES,
+	setAway,
 	startGame,
+	takeSeat,
 } from "./rules";
 
 const rng = () => 0.42;
@@ -47,6 +51,32 @@ describe("lobby", () => {
 
 	test("no joining once the game started", () => {
 		expect(() => addPlayer(twoPlayerGame(), "c", "Cleo")).toThrow(RuleError);
+	});
+});
+
+describe("seats", () => {
+	test("players fill the first free seat, a bot can take a chosen one", () => {
+		let g = addPlayer(createGame(), "a", "Ann");
+		g = addPlayer(g, "bot", "Bot", true, 4);
+		g = addPlayer(g, "b", "Bob");
+		expect(g.players.map((p) => [p.id, p.seat])).toEqual([["a", 0], ["b", 1], ["bot", 4]]);
+		expect(() => addPlayer(g, "c", "Cleo", false, 4)).toThrow("taken");
+		expect(() => addPlayer(g, "c", "Cleo", false, 6)).toThrow("does not exist");
+	});
+
+	test("moving seats keeps players in seat order, so turns follow the table", () => {
+		let g = addPlayer(addPlayer(addPlayer(createGame(), "a", "Ann"), "b", "Bob"), "c", "Cleo");
+		g = takeSeat(g, "a", 5);
+		expect(g.players.map((p) => p.id)).toEqual(["b", "c", "a"]);
+		const started = startGame(g, "a", rng);
+		expect(started.players[started.turn]!.id).toBe("b");
+		expect(() => takeSeat(started, "b", 3)).toThrow("locked");
+	});
+
+	test("a full table has no free seat", () => {
+		let g = createGame();
+		for (const id of ["a", "b", "c", "d", "e", "f"]) g = addPlayer(g, id, id);
+		expect(() => addPlayer(g, "g", "g")).toThrow("full");
 	});
 });
 
@@ -91,8 +121,8 @@ describe("playing", () => {
 		const base = withHand(twoPlayerGame(), [card("number", 1)], 0);
 		const g = { ...base, deck: [], discard: [card("number", 2, "x"), card("number", 3, "y")] };
 		const next = playCard(g, g.players[g.turn]!.id, "number1", rng);
-		expect(next.deck.length + 1).toBe(3); // 3 cards shuffled back, 1 drawn
-		expect(next.discard).toHaveLength(0);
+		expect(next.deck).toHaveLength(1); // 2 cards shuffled back, 1 drawn
+		expect(next.discard.map((c) => c.id)).toEqual(["number1"]); // the played card stays on the pile
 	});
 
 	test(`going over ${LIMIT} costs a life and starts a new round`, () => {
@@ -117,6 +147,28 @@ describe("playing", () => {
 		const lobby = resetToLobby(done, "a");
 		expect(lobby.phase).toBe("lobby");
 		expect(lobby.players.every((p) => p.lives === START_LIVES)).toBe(true);
+	});
+});
+
+describe("away players", () => {
+	test("a player who left mid-game keeps the seat, then is not taken back to the lobby", () => {
+		const g = setAway(twoPlayerGame(), "b", true);
+		expect(g.players.find((p) => p.id === "b")?.away).toBe(true);
+		const done = { ...g, phase: "finished" as const };
+		expect(resetToLobby(done, "a").players.map((p) => p.id)).toEqual(["a"]);
+		expect(setAway(g, "b", false).players.find((p) => p.id === "b")?.away).toBe(false);
+	});
+});
+
+describe("deal pause", () => {
+	test("holds the first turn of a round for the dealing animation, longer after a bust", () => {
+		const g = twoPlayerGame();
+		const dealing = 2 * 3 * DEAL.stepMs + DEAL.flightMs + 100;
+		expect(dealPauseMs(g)).toBe(dealing);
+		const played = playCard(withHand(g, [card("number", 1)], 0), g.players[g.turn]!.id, "number1", rng);
+		expect(dealPauseMs(played)).toBe(0);
+		const bust = playCard(withHand(g, [card("number", 9)], 30), g.players[g.turn]!.id, "number9", rng);
+		expect(dealPauseMs(bust)).toBe(DEAL.afterBustMs + dealing);
 	});
 });
 
