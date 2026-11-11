@@ -7,11 +7,14 @@ Games so far: **Bust 31**.
 ## Bust 31 rules
 
 - 2–6 players (bots allowed). Everyone has 3 lives and holds 3 cards.
+- The table has 6 fixed seats around a dealer. In the lobby you can move to any empty seat ("Sit here"), and the host puts a bot in a seat with its "+" button. Turns go clockwise by seat number.
+- The dealer deals every round; the first turn's clock starts once the deal is done.
+- Closing the tab: in the lobby you leave the table after 15 seconds (a refresh is fine); mid-game your seat is marked "away" and played for you until you come back.
 - Take turns playing 1 card. Its value is added to the shared total, then you draw a new card.
 - Whoever pushes the total **over 31** loses a life, and a new round is dealt.
 - Cards: numbers 1–9, **0** (skip), **−5** (lower the total, never below 0), **⇄** (reverse the turn order).
 - The last player with lives left wins.
-- Each human turn is limited to 20 seconds (`TURN_MS` in `rules.ts`). When it runs out, the server plays a card for you using the bot strategy.
+- Each human turn is limited to 20 seconds (`TURN_MS` in `rules.ts`). When it runs out, the server plays a card for you using the bot strategy. Bots get the same 20-second clock but decide within 1.5–4 seconds; every turn shows a countdown ring on that seat.
 
 ## Running
 
@@ -40,6 +43,7 @@ apps/server/src/
   registry.ts          # registers one actor type per game
   games/bust-31/
     actor.ts           # room actor: state (SQLite), actions, broadcast, turn/bot timers
+    directory.ts       # room list ("Open tables"): rooms report themselves while someone is connected
     rules.ts           # pure game rules
     bots.ts            # rule-based bot strategy
     schema.ts          # Zod validation for player input
@@ -63,3 +67,4 @@ apps/web/src/
 
 - No login. Guest identity is a random token in localStorage; whoever holds that token can play as that player.
 - A hand is only sent to its owner; the deck and other players' hands never reach the browser.
+- The room list's `report` action is not authenticated, so any client could add a fake listing (it cannot affect a real room). Add a shared secret once the platform has server auth.
