@@ -11,8 +11,9 @@ export async function listMatches(sql: SQL, f: MatchFilter): Promise<MatchRow[]>
 	const where = [sql`TRUE`];
 	if (f.game) where.push(sql`m.game_slug = ${f.game}`);
 	if (isUuid(f.player)) where.push(sql`EXISTS (SELECT 1 FROM match_players x WHERE x.match_id = m.id AND x.player_id = ${f.player})`);
-	if (DATE.test(f.from)) where.push(sql`m.ended_at >= ${f.from}::date`);
-	if (DATE.test(f.to)) where.push(sql`m.ended_at < ${f.to}::date + 1`);
+	// AT TIME ZONE 'UTC': a bare ::date compares in the session's TimeZone, not UTC
+	if (DATE.test(f.from)) where.push(sql`m.ended_at >= ${f.from}::date::timestamp AT TIME ZONE 'UTC'`);
+	if (DATE.test(f.to)) where.push(sql`m.ended_at < (${f.to}::date + 1)::timestamp AT TIME ZONE 'UTC'`);
 	if (isUuid(f.before)) where.push(sql`m.id < ${f.before}`);
 	const filter = where.reduce((a, b) => sql`${a} AND ${b}`);
 	return (await sql`
