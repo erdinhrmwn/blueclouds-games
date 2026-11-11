@@ -22,6 +22,7 @@ The **platform** is a separate service that owns **who a player is** and **what 
 | First admin | Username `root` |
 | Responsibility | Platform = player + match API only. Backoffice = separate app, no admin API on the platform |
 | Bot matches | Recorded in history like any other match |
+| Move log | Every match records every move for replay and audit: see [match-log.md](match-log.md) (proposal) |
 | Ids | UUIDv7 everywhere |
 | Responses | One envelope for every response (see below) |
 
