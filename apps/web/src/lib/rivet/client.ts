@@ -6,7 +6,11 @@ type RoomAccess = { actorId: string; token: string };
 
 async function roomAccess(game: string, code: string): Promise<RoomAccess> {
 	const res = await fetch(`/api/${encodeURIComponent(game)}/rooms/${encodeURIComponent(code)}/token`, { method: 'POST', cache: 'no-store' });
-	if (!res.ok) throw new Error('Could not reach the game server. Try again.');
+	if (!res.ok) {
+		// Our route answers { error: { message } } for known cases (unknown code, no name yet).
+		const body = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
+		throw new Error(body?.error?.message ?? 'Could not reach the game server. Try again.');
+	}
 	return (await res.json()) as RoomAccess;
 }
 

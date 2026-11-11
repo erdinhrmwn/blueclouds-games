@@ -82,6 +82,32 @@ export async function playToken(event: RequestEvent, name: string): Promise<stri
 	}
 }
 
+type Room = { id: string; code: string; game: string };
+
+/** Opens a new table: the platform picks the code. `name` is only used if the guest has to be (re)created. */
+export async function createRoom(event: RequestEvent, game: string, name: string): Promise<Room> {
+	const open = (s: string) => call<{ room: Room }>(event, '/rooms', { method: 'POST', secret: s, body: { game } });
+	const secret = secretOf(event.cookies) ?? (await newGuest(event, name));
+	try {
+		return (await open(secret)).room;
+	} catch (e) {
+		if (!lost(e)) throw e;
+		return (await open(await newGuest(event, name))).room;
+	}
+}
+
+/**
+ * The room behind a code, if this player may enter it. Asked before every room token, so a code typed into
+ * the URL can't create a room, and a room of another game is not found.
+ */
+export async function roomFor(event: RequestEvent, game: string, code: string): Promise<Room> {
+	const secret = secretOf(event.cookies);
+	if (!secret) throw new PlatformError(401, 'unauthenticated', 'Choose a name first.');
+	const { room } = await call<{ room: Room }>(event, `/rooms/${encodeURIComponent(code)}`, { method: 'GET', secret });
+	if (room.game !== game) throw new PlatformError(404, 'not_found', 'There is no table with that code.');
+	return room;
+}
+
 /** Reads a JSON `{ name }` body, or stops with 400. */
 export async function readName(request: Request): Promise<string> {
 	const body = (await request.json().catch(() => null)) as { name?: unknown } | null;

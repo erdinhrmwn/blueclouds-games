@@ -43,9 +43,9 @@ export async function playerDetail(sql: SQL, id: string): Promise<{ player: Play
 	const [player] = (await sql`SELECT ${PLAYER_COLUMNS(sql)} FROM players WHERE id = ${id}`) as PlayerRow[];
 	if (!player) return null;
 	const matches = (await sql`
-		SELECT m.id, m.game_slug AS game, g.name AS "gameName", m.room_code AS "roomCode", m.ended_at AS "endedAt", mp.placement,
+		SELECT m.id, m.game_slug AS game, g.name AS "gameName", r.code AS "roomCode", m.ended_at AS "endedAt", mp.placement,
 		       (SELECT count(*)::int FROM match_players x WHERE x.match_id = m.id) AS players
-		FROM match_players mp JOIN matches m ON m.id = mp.match_id JOIN games g ON g.slug = m.game_slug
+		FROM match_players mp JOIN matches m ON m.id = mp.match_id JOIN games g ON g.slug = m.game_slug JOIN rooms r ON r.id = m.room_id
 		WHERE mp.player_id = ${id}
 		ORDER BY m.id DESC LIMIT 20`) as PlayerMatch[];
 	return { player, matches };

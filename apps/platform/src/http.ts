@@ -10,6 +10,7 @@ export type ErrorCode =
 	| "conflict"
 	| "payload_too_large"
 	| "unknown_player"
+	| "unknown_room"
 	| "rate_limited"
 	| "internal";
 

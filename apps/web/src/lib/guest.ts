@@ -24,10 +24,4 @@ function write(key: string, value: string): void {
 export const guestName = () => read(NAME_KEY) ?? '';
 export const saveGuestName = (name: string) => write(NAME_KEY, name.trim());
 
-const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O or 1/I
-export function newRoomCode(): string {
-	const bytes = crypto.getRandomValues(new Uint8Array(5));
-	return Array.from(bytes, (b) => CODE_CHARS[b % CODE_CHARS.length]).join('');
-}
-
 export const isRoomCode = (code: string) => /^[A-Z0-9]{4,8}$/.test(code);

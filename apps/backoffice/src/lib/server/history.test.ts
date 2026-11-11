@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import type { SQL } from 'bun';
-import { resetTestDatabase } from '../../../../platform/src/test-helpers';
+import { resetTestDatabase, room } from '../../../../platform/src/test-helpers';
 import { createAdmin } from './auth';
 import { listAudit } from './audit-log';
 import { listMatches, matchDetail, matchGames, matchLog } from './matches';
@@ -13,8 +13,9 @@ beforeAll(async () => {
 	sql = (await resetTestDatabase()).sql;
 	[{ id: rina }] = await sql`INSERT INTO players (display_name) VALUES ('Rina') RETURNING id`;
 	const match = async (id: string, ended: string, humanWins: boolean) => {
-		await sql`INSERT INTO matches (id, game_slug, room_code, rules_version, started_at, ended_at, body_hash)
-		          VALUES (${id}, 'bust-31', 'ABCD', 1, ${ended}::timestamptz - interval '5 min', ${ended}, ${new Uint8Array(32)})`;
+		const roomId = await room(sql, 'bust-31', 'ABCD');
+		await sql`INSERT INTO matches (id, game_slug, room_id, rules_version, started_at, ended_at, body_hash)
+		          VALUES (${id}, 'bust-31', ${roomId}, 1, ${ended}::timestamptz - interval '5 min', ${ended}, ${new Uint8Array(32)})`;
 		await sql`INSERT INTO match_players (match_id, seat, player_id, bot_name, placement, score) VALUES
 		          (${id}, 0, ${rina}, NULL, ${humanWins ? 1 : 2}, ${humanWins ? 2 : 0}),
 		          (${id}, 1, NULL, 'Bot Rain', ${humanWins ? 2 : 1}, ${humanWins ? 0 : 1})`;

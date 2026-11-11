@@ -18,11 +18,11 @@ export async function listMatches(sql: SQL, f: MatchFilter): Promise<MatchRow[]>
 	if (isUuid(f.before)) where.push(sql`m.id < ${f.before}`);
 	const filter = where.reduce((a, b) => sql`${a} AND ${b}`);
 	return (await sql`
-		SELECT m.id, m.game_slug AS game, g.name AS "gameName", m.room_code AS "roomCode", m.ended_at AS "endedAt",
+		SELECT m.id, m.game_slug AS game, g.name AS "gameName", r.code AS "roomCode", m.ended_at AS "endedAt",
 		       (SELECT count(*)::int FROM match_players x WHERE x.match_id = m.id) AS players,
 		       (SELECT coalesce(p.display_name, w.bot_name) FROM match_players w LEFT JOIN players p ON p.id = w.player_id
 		        WHERE w.match_id = m.id AND w.placement = 1 LIMIT 1) AS winner
-		FROM matches m JOIN games g ON g.slug = m.game_slug WHERE ${filter}
+		FROM matches m JOIN games g ON g.slug = m.game_slug JOIN rooms r ON r.id = m.room_id WHERE ${filter}
 		ORDER BY m.id DESC LIMIT ${PAGE_SIZE}`) as MatchRow[];
 }
 
@@ -37,9 +37,9 @@ export type MatchDetail = Omit<MatchRow, 'players' | 'winner'> & { rulesVersion:
 export async function matchDetail(sql: SQL, id: string): Promise<MatchDetail | null> {
 	if (!isUuid(id)) return null;
 	const [m] = await sql`
-		SELECT m.id, m.game_slug AS game, g.name AS "gameName", g.score_label AS "scoreLabel", m.room_code AS "roomCode",
+		SELECT m.id, m.game_slug AS game, g.name AS "gameName", g.score_label AS "scoreLabel", r.code AS "roomCode",
 		       m.rules_version AS "rulesVersion", m.started_at AS "startedAt", m.ended_at AS "endedAt"
-		FROM matches m JOIN games g ON g.slug = m.game_slug WHERE m.id = ${id}`;
+		FROM matches m JOIN games g ON g.slug = m.game_slug JOIN rooms r ON r.id = m.room_id WHERE m.id = ${id}`;
 	if (!m) return null;
 	const seats = (await sql`
 		SELECT mp.seat, mp.player_id AS "playerId", coalesce(p.display_name, mp.bot_name) AS name, mp.player_id IS NULL AS bot,

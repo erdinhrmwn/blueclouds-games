@@ -89,17 +89,21 @@ export function matchRoutes(sql: SQL, serverKey: string) {
 		}
 		const hash = hashReport(m);
 		const created = await sql.begin(async (tx) => {
-			const inserted = await tx`
-				INSERT INTO matches (id, game_slug, room_code, rules_version, started_at, ended_at, body_hash)
-				VALUES (${m.matchId}, ${m.game}, ${m.roomCode}, ${m.rulesVersion}, ${m.startedAt}, ${m.endedAt}, ${hash})
-				ON CONFLICT (id) DO NOTHING RETURNING id`;
-			if (inserted.length === 0) {
-				const [existing] = await tx`SELECT body_hash FROM matches WHERE id = ${m.matchId}`;
-				if (!Buffer.from(existing.body_hash).equals(hash)) {
-					throw new ApiError("conflict", 409, "This match was already reported with different results.");
-				}
+			// A retry of a stored match is answered from the stored hash, before anything else is looked up.
+			const stored = async () => (await tx`SELECT body_hash FROM matches WHERE id = ${m.matchId}`)[0]?.body_hash as Uint8Array | undefined;
+			const retry = (existing: Uint8Array) => {
+				if (!Buffer.from(existing).equals(hash)) throw new ApiError("conflict", 409, "This match was already reported with different results.");
 				return false;
-			}
+			};
+			const before = await stored();
+			if (before) return retry(before);
+			const [room] = await tx`SELECT id FROM rooms WHERE code = ${m.roomCode} AND game_slug = ${m.game}`;
+			if (!room) throw new ApiError("unknown_room", 422, "The match names a room that does not exist.");
+			const inserted = await tx`
+				INSERT INTO matches (id, game_slug, room_id, rules_version, started_at, ended_at, body_hash)
+				VALUES (${m.matchId}, ${m.game}, ${room.id}, ${m.rulesVersion}, ${m.startedAt}, ${m.endedAt}, ${hash})
+				ON CONFLICT (id) DO NOTHING RETURNING id`;
+			if (inserted.length === 0) return retry((await stored())!); // a concurrent retry got there first
 			const ids = m.players.flatMap((p) => (p.playerId ? [p.playerId] : []));
 			if (ids.length) {
 				const [{ n }] = await tx`SELECT count(*)::int AS n FROM players WHERE id IN ${tx(ids)}`;
@@ -127,9 +131,9 @@ export function matchRoutes(sql: SQL, serverKey: string) {
 		const { cursor } = parse(HistoryQuery, c.req.query());
 		const me = c.get("player").id;
 		const rows = await sql`
-			SELECT m.id, m.game_slug, m.room_code, m.started_at, m.ended_at, mp.seat, mp.placement, mp.score,
+			SELECT m.id, m.game_slug, r.code AS room_code, m.started_at, m.ended_at, mp.seat, mp.placement, mp.score,
 			       (SELECT count(*)::int FROM match_players x WHERE x.match_id = m.id) AS players
-			FROM match_players mp JOIN matches m ON m.id = mp.match_id
+			FROM match_players mp JOIN matches m ON m.id = mp.match_id JOIN rooms r ON r.id = m.room_id
 			WHERE mp.player_id = ${me} ${cursor ? sql`AND mp.match_id < ${cursor}` : sql``}
 			ORDER BY mp.match_id DESC
 			LIMIT ${HISTORY_PAGE + 1}`;

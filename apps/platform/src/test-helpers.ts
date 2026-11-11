@@ -21,6 +21,12 @@ export async function guest(app: App, name = "Rina") {
 
 export const SERVER_KEY = "test-server-key-0123456789abcdef0123";
 
+/** A room row for tests that report matches or insert them directly. Returns its id. */
+export async function room(sql: SQL, game: string, code: string): Promise<string> {
+	const [row] = await sql`INSERT INTO rooms (game_slug, code) VALUES (${game}, ${code}) ON CONFLICT (code) DO UPDATE SET code = EXCLUDED.code RETURNING id`;
+	return row.id;
+}
+
 /**
  * Empties the test database and runs every migration. Also used by the backoffice tests.
  * DATABASE_TEST_NAME must be a throwaway database: its public schema is dropped.

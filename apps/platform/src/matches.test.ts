@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { call, guest, SERVER_KEY, setupTestApp } from "./test-helpers";
+import { call, guest, room, SERVER_KEY, setupTestApp } from "./test-helpers";
 
 let t: Awaited<ReturnType<typeof setupTestApp>>;
 let ann: Awaited<ReturnType<typeof guest>>;
@@ -8,6 +8,7 @@ beforeAll(async () => {
 	t = await setupTestApp();
 	ann = await guest(t.app, "Ann");
 	bob = await guest(t.app, "Bob");
+	await room(t.sql, "bust-31", "K7PQX");
 });
 afterAll(async () => {
 	await t.sql.close();
@@ -60,6 +61,12 @@ describe("match reports", () => {
 		expect(n).toBe(3);
 	});
 
+	test("a room code the platform never made → 422, a retry of a stored match still → 200", async () => {
+		const res = await post(report({ roomCode: "NOPE9" }));
+		expect(res.status).toBe(422);
+		expect(res.json.error.code).toBe("unknown_room");
+	});
+
 	test("unknown player → 422 and nothing is stored", async () => {
 		const body = report({
 			players: [
@@ -106,13 +113,14 @@ describe("match reports", () => {
 describe("any game in the catalog", () => {
 	test("a new game only needs its row in games; score means what the game says", async () => {
 		const seat = (s: number, placement: number, score: number) => ({ seat: s, playerId: null, bot: true, botName: `Bot ${s}`, placement, score });
-		const twoSeats = report({ game: "test-game", players: [seat(0, 1, 3), seat(1, 2, 12)] });
+		const twoSeats = report({ game: "test-game", roomCode: "TGAME", players: [seat(0, 1, 3), seat(1, 2, 12)] });
 		expect((await post(twoSeats)).json.error.fields.game).toBe("Unknown game.");
 
 		await t.sql`INSERT INTO games (slug, name, min_players, max_players, score_label) VALUES ('test-game', 'Test Game', 3, 4, 'Points')`;
+		await room(t.sql, "test-game", "TGAME");
 		expect((await post(twoSeats)).json.error.fields.players).toBe("Needs 3–4 players.");
 		// Lower is better here, places 2 and 3 tie, and a score may be negative: all up to the game.
-		const body = report({ game: "test-game", players: [seat(0, 1, -2), seat(1, 2, 12), seat(2, 2, 12)] });
+		const body = report({ game: "test-game", roomCode: "TGAME", players: [seat(0, 1, -2), seat(1, 2, 12), seat(2, 2, 12)] });
 		expect((await post(body)).status).toBe(201);
 		const rows = await t.sql`SELECT seat, placement, score FROM match_players WHERE match_id = ${body.matchId} ORDER BY seat`;
 		expect(rows.map((r: { score: number }) => r.score)).toEqual([-2, 12, 12]);
