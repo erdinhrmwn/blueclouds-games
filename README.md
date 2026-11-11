@@ -20,7 +20,7 @@ Every match records every move for replay and audit in the backoffice: [docs/arc
 | Game | Rules | Design |
 |---|---|---|
 | Bust 31 | [rules](docs/games/bust-31/rules.md) | [UI design](docs/games/bust-31/design.md) |
-| Cloudburst (proposal) | [rules](docs/games/cloudburst/rules.md) | [UI design](docs/games/cloudburst/design.md) |
+| Cloudburst | [rules](docs/games/cloudburst/rules.md) | [UI design](docs/games/cloudburst/design.md) |
 
 New game: [docs/adding-a-game.md](docs/adding-a-game.md).
 

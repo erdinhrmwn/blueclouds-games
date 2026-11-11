@@ -2,6 +2,9 @@ import type { Component } from 'svelte';
 import * as bust31 from 'server/games/bust-31/rules';
 import Bust31Home from './bust-31/Home.svelte';
 import Bust31Room from './bust-31/Room.svelte';
+import * as cloudburst from 'server/games/cloudburst/rules';
+import CloudburstHome from './cloudburst/Home.svelte';
+import CloudburstRoom from './cloudburst/Room.svelte';
 
 export type GameEntry = {
 	slug: string;
@@ -26,6 +29,15 @@ export const GAMES: GameEntry[] = [
 		maxPlayers: bust31.MAX_PLAYERS,
 		Home: Bust31Home,
 		Room: Bust31Room
+	},
+	{
+		slug: 'cloudburst',
+		name: 'Cloudburst',
+		tagline: 'Match the weather, shed your hand first, and keep your cloud from bursting.',
+		minPlayers: cloudburst.MIN_PLAYERS,
+		maxPlayers: cloudburst.MAX_PLAYERS,
+		Home: CloudburstHome,
+		Room: CloudburstRoom
 	}
 ];
 

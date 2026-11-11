@@ -1,6 +1,6 @@
 # Cloudburst rules
 
-> Proposal, not built yet. Slug `cloudburst`.
+Slug `cloudburst`.
 
 A race to empty your hand, over several rounds. Play a card that matches the sky on the pile, use weather cards to get in each other's way, and go out first. Every card still in your hand when someone goes out is a drop of rain in your cloud; when a cloud bursts, the match is over and the driest cloud wins.
 
@@ -109,21 +109,19 @@ Choices checked in the same simulation:
 
 Each seat's final points go in the report's per-seat `score` (game-defined, see [match-schema.md](../../architecture/match-schema.md)). Rankings always use `placement`; the backoffice labels the column from the game's row in `games` ("Points").
 
-## Building it (what is reused)
+## Where the code lives
 
-The earlier plan was to extract shared parts once a second game exists; this is that point. Only things both games already do the same way get shared, with no generic game engine:
+Only what both games do the same way is shared, with no generic game engine:
 
-| Shared piece | Today in Bust 31 | Proposal |
-|---|---|---|
-| Seats (add, take seat, remove, free seats, next seat in a direction) | `rules.ts` | Move to `apps/server/src/games/shared/seats.ts`, pure functions over `{ id, seat, bot }` players. |
-| Turn clock, bot think time, away autoplay, leave after 15 s | `actor.ts` (`scheduleTurn`, `dropIfGone`) | Move to `shared/turns.ts`; each actor passes its own "move for this player" function. |
-| Match result outbox and retry (`match_reports`, `sendReports`) | `actor.ts` | Move to `shared/reports.ts`. |
-| Room list | `directory.ts` (actor `bust31Rooms`) | One directory actor for every game, keyed by slug (`roomList.getOrCreate([slug])`). |
-| Room tokens and room list on the web server | `apps/web/src/lib/server/rivet.ts` (hard-codes `bust31Room`) | Pick the room actor by game slug, so `/api/:game/rooms` and `/api/:game/rooms/:code/token` take the game. |
-| Web: lobby seats, connection wrapper, room list, dealer, felt, seat | `lib/games/bust-31/` and `lib/components/` | Move the game-agnostic parts to `lib/components/` and `lib/rooms/`; Bust 31 keeps its gauge, stamp and cards. |
+| Shared piece | Where |
+|---|---|
+| Seats (add, take seat, remove, free seats, next seat in a direction) | `apps/server/src/games/shared/table.ts` |
+| Turn clock, bot think time, away autoplay, leave after 15 s, commit + broadcast, match result outbox | `apps/server/src/games/shared/room.ts` |
+| Match id, move log stamping, report shape | `apps/server/src/games/shared/match.ts` |
+| Room list (one actor per game, `roomList.getOrCreate([slug])`) | `apps/server/src/games/shared/directory.ts` |
+| Room tokens and room list on the web server, by game slug | `apps/web/src/lib/server/rivet.ts`, `/api/:game/rooms`, `/api/:game/rooms/:code/token` |
+| Web: connection, lobby, room frame, felt, seat, dealer, join panel, open tables | `apps/web/src/lib/rivet/room.svelte.ts`, `apps/web/src/lib/components/` |
 
-New for Cloudburst: `apps/server/src/games/cloudburst/{rules,bots,match,schema,actor}.ts` (actor `cloudburstRoom`, one action `play({ cardId, suit?, giveId? })` plus `draw` and `pass`), rule tests in `rules.test.ts`, the web components in `lib/games/cloudburst/`, a catalog entry, and `cloudburst` in the platform's `GAMES` list.
-
-Suggested order (one commit each): 1) extract the shared server parts with Bust 31 tests still green, 2) Cloudburst rules + bots + tests, 3) actor, 4) web table, 5) the game's row in the platform `games` table (a migration).
+Cloudburst itself: `apps/server/src/games/cloudburst/{rules,bots,match,schema,actor}.ts` (actor `cloudburstRoom`: `play({ cardId, suit?, giveId? })`, `draw`, `pass`), tests in `rules.test.ts`, the web table in `apps/web/src/lib/games/cloudburst/`, its catalog entry, and its `games` row (`apps/platform/migrations/007_cloudburst.sql`).
 
 UI design reasoning: [design.md](design.md).

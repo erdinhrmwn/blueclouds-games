@@ -48,7 +48,7 @@ describe('matches', () => {
 		const m = await matchDetail(sql, '01900000-0000-7000-8000-000000000001');
 		expect(m).toMatchObject({ gameName: 'Bust 31', scoreLabel: 'Lives left' });
 		expect(m?.seats[0]?.score).toBe(2);
-		expect(await matchGames(sql)).toEqual([{ slug: 'bust-31', name: 'Bust 31' }]);
+		expect(await matchGames(sql)).toEqual([{ slug: 'bust-31', name: 'Bust 31' }, { slug: 'cloudburst', name: 'Cloudburst' }]);
 		expect(m?.seats.map((s) => [s.name, s.bot, s.placement])).toEqual([
 			['Rina', false, 1],
 			['Bot Rain', true, 2]

@@ -16,8 +16,14 @@ const admin = createClient<typeof registry>({
 	devtools: false
 });
 
+/** The parts of a room handle this file uses; the same for every game. */
+type RoomHandle = Pick<ReturnType<typeof admin.bust31Room.getOrCreate>, 'resolve' | 'issueToken'>;
+
 /** Each game's room actor, by game slug. */
-const ROOMS = new Map([['bust-31', (code: string) => admin.bust31Room.getOrCreate([code])]]);
+const ROOMS = new Map<string, (code: string) => RoomHandle>([
+	['bust-31', (code: string) => admin.bust31Room.getOrCreate([code])],
+	['cloudburst', (code: string) => admin.cloudburstRoom.getOrCreate([code])]
+]);
 
 export const hasRooms = (game: string) => ROOMS.has(game);
 

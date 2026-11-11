@@ -1,7 +1,5 @@
 # Cloudburst design
 
-> Proposal, not built yet.
-
 **Design read:** the same dim card room as Bust 31, so the two games feel like tables in one club, but the felt now holds a pile, a deck and a big hand of cards instead of a running total. Desktop and phone, friends playing together. Dials: ENERGY 3, RHYTHM 3, MOTION 2. Turns are quicker than in Bust 31 (most moves are one tap), so the table should read at a glance.
 
 There is still no BlueClouds brand guide; replace anything that clashes with it.
@@ -58,8 +56,8 @@ Every animation reports a table event, as in Bust 31. All of it is off under `pr
 | Swirl | The direction arrow turns over. |
 | Gust | A face-down card slides from the giver's seat to the receiver's seat. |
 | Rainbow | The suit ring fades to the chosen suit. |
-| Round end | The last card lands, the other hands fan open face up, and each hand's cards fly as drops into that seat's cloud meter while a "+N" counts up. Then the dealer collects and deals the next round. |
-| Burst | The cloud that reached 10 shakes once and its meter flashes ember. |
+| Round end | The last card lands and the round summary (below) shows over the felt with each seat's "+N". Then the dealer deals the next round. |
+| Burst | No separate animation: the meter is already ember from 8 points, and the match ends with the win screen. |
 | Win | The winner's name rises (Bust 31's `WinCascade`), with the final points table below it. |
 
 ## Between rounds
@@ -70,9 +68,9 @@ Every animation reports a table event, as in Bust 31. All of it is off under `pr
 
 ## Phones (360px wide)
 
-- The seats shrink to name, card count and points as a number (the cloud meter is dropped below 400px), as in Bust 31.
+- The seats keep name, card count and the cloud meter; it fits at 360px.
 - The hand overlaps cards but always shows at least 44px of each, so every card is a real tap target; past that it scrolls sideways (no card is ever hidden off screen without a scroll hint at the edge).
-- The turn bar stays fixed above the bottom edge.
+- Draw and Pass sit right under the turn prompt, above the hand, so the move is on screen before the hand is.
 
 ## Keyboard
 

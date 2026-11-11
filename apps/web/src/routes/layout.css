@@ -15,6 +15,11 @@
 	--color-brass: #d2a54c;
 	--color-brass-dim: #8a6b2e;
 	--color-ember: #d9643f; /* AA (5:1) as text on the dark room */
+	/* Cloudburst suits: ink on the cream card face, all 5:1 or more */
+	--color-sun: #8c5400;
+	--color-rain: #2c5f8a;
+	--color-wind: #2f6e4f;
+	--color-storm: #6a3d78;
 }
 
 @layer base {
