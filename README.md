@@ -1,24 +1,28 @@
 # BlueClouds Games
 
-Multiplayer, turn-based browser games. The game server runs on Rivet Actors (one actor type per game, one actor per room); the frontend is SvelteKit.
+Multiplayer, turn-based browser games. The game server runs on Rivet Actors (one actor type per game, one actor per room); the frontend is SvelteKit; the platform API keeps players and match history.
 
-Games so far: **Bust 31**.
+## Apps
 
-## Bust 31 rules
+| App | What | Docs |
+|---|---|---|
+| `apps/web` | Game frontend (SvelteKit) | [docs/apps/web.md](docs/apps/web.md) |
+| `apps/server` | Game server: Rivet actors per game | [docs/apps/server.md](docs/apps/server.md) |
+| `apps/platform` | Platform API: players, play tokens, match results (Hono, Postgres) | [docs/apps/platform.md](docs/apps/platform.md) |
 
-- 2–6 players (bots allowed). Everyone has 3 lives and holds 3 cards.
-- The table has 6 fixed seats around a dealer. In the lobby you can move to any empty seat ("Sit here"), and the host puts a bot in a seat with its "+" button. Turns go clockwise by seat number.
-- The dealer deals every round; the first turn's clock starts once the deal is done.
-- Closing the tab: in the lobby you leave the table after 15 seconds (a refresh is fine); mid-game your seat is marked "away" and played for you until you come back.
-- Take turns playing 1 card. Its value is added to the shared total, then you draw a new card.
-- Whoever pushes the total **over 31** loses a life, and a new round is dealt.
-- Cards: numbers 1–9, **0** (skip), **−5** (lower the total, never below 0), **⇄** (reverse the turn order).
-- The last player with lives left wins.
-- Each human turn is limited to 20 seconds (`TURN_MS` in `rules.ts`). When it runs out, the server plays a card for you using the bot strategy. Bots get the same 20-second clock but decide within 1.5–4 seconds; every turn shows a countdown ring on that seat.
+Planned: `apps/backoffice` (admin UI) and a self-hosted deploy. See [the platform API design](docs/architecture/platform-api.md).
+
+## Games
+
+| Game | Rules | Design |
+|---|---|---|
+| Bust 31 | [rules](docs/games/bust-31/rules.md) | [UI design](docs/games/bust-31/design.md) |
+
+New game: [docs/adding-a-game.md](docs/adding-a-game.md).
 
 ## Running
 
-Needs [Bun](https://bun.sh) 1.3+. See `DESIGN.md` for the UI design reasoning.
+Needs [Bun](https://bun.sh) 1.3+.
 
 ```sh
 bun install
@@ -27,57 +31,14 @@ bun run test       # game rule tests + platform API tests
 bun run check      # type-check every app
 ```
 
-### Platform API
+The platform API needs Postgres; see [docs/apps/platform.md](docs/apps/platform.md).
 
-`apps/platform` is the player + match API (Hono on Bun, Postgres). Design: `docs/platform-api.md`.
-
-```sh
-# Postgres 18 (16+ works for tests). Put the platform keys from .env.example into apps/platform/.env.
-bun run --filter platform keys:generate   # prints PLAY_TOKEN_PRIVATE_KEY / PLAY_TOKEN_PUBLIC_KEY
-bun run --filter platform db:migrate
-bun run dev:platform                      # http://localhost:3000/v1/health
-```
-
-Platform tests need `TEST_DATABASE_URL` pointing at a throwaway database (its schema is dropped on every run).
-
-Open http://localhost:5173, pick a game, enter a name, open a table and share its code. The host can add bots to play alone.
-
-## Configuration
-
-| Variable | Used in | Default |
-|---|---|---|
-| `PUBLIC_RIVET_ENDPOINT` | `apps/web` | `http://127.0.0.1:6420` |
-
-## Structure
+## Docs layout
 
 ```
-apps/server/src/
-  index.ts
-  registry.ts          # registers one actor type per game
-  games/bust-31/
-    actor.ts           # room actor: state (SQLite), actions, broadcast, turn/bot timers
-    directory.ts       # room list ("Open tables"): rooms report themselves while someone is connected
-    rules.ts           # pure game rules
-    bots.ts            # rule-based bot strategy
-    schema.ts          # Zod validation for player input
-    rules.test.ts
-apps/web/src/
-  lib/games/catalog.ts # list of games: slug, name, player counts, Home + Room components
-  lib/games/bust-31/   # game UI: Home, Room, Lobby, Table, cards, connection to its actor
-  lib/components/      # shared table pieces: Felt, Seat
-  lib/rivet/client.ts  # typed Rivet client
-  lib/guest.ts         # guest identity (token + name in localStorage)
-  lib/motion.ts        # shared animations
-  routes/              # / (pick a game), /[game], /[game]/room/[code]
+docs/
+  apps/             # one page per app: how to run, config, structure
+  games/<slug>/     # rules.md, design.md per game
+  architecture/     # designs that span several apps
+  adding-a-game.md
 ```
-
-### Adding a game
-
-1. Server: add `apps/server/src/games/<slug>/` with its actor and rules, and register the actor in `registry.ts`.
-2. Web: add `apps/web/src/lib/games/<slug>/` with a `Home` and `Room` component, and add an entry to `catalog.ts`.
-
-## Security notes (prototype)
-
-- No login. Guest identity is a random token in localStorage; whoever holds that token can play as that player.
-- A hand is only sent to its owner; the deck and other players' hands never reach the browser.
-- The room list's `report` action is not authenticated, so any client could add a fake listing (it cannot affect a real room). Add a shared secret once the platform has server auth.
