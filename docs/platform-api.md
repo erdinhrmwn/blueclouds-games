@@ -135,6 +135,7 @@ Rules:
 | `not_found` | 404 | Unknown resource |
 | `conflict` | 409 | Same `matchId`, different body |
 | `unknown_player` | 422 | Match references a player that does not exist |
+| `payload_too_large` | 413 | Body over 16 KB |
 | `rate_limited` | 429 | Too many requests |
 | `internal` | 500 | Anything unexpected (generic message) |
 

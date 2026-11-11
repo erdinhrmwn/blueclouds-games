@@ -1,0 +1,56 @@
+import { SQL } from "bun";
+import { exportJWK, generateKeyPair } from "jose";
+import { createApp } from "./app";
+import type { Config } from "./config";
+import { migrate } from "./migrate";
+
+// Postgres 18 has uuidv7() built in. Older test databases get this stand-in (tests only).
+const UUIDV7_POLYFILL = `
+CREATE FUNCTION uuidv7() RETURNS uuid LANGUAGE sql VOLATILE AS $$
+  SELECT encode(set_bit(set_bit(overlay(uuid_send(gen_random_uuid()) PLACING
+    substring(int8send(floor(extract(epoch FROM clock_timestamp()) * 1000)::bigint) FROM 3) FROM 1 FOR 6),
+    52, 1), 53, 1), 'hex')::uuid
+$$`;
+
+export const SERVER_KEY = "test-server-key-0123456789abcdef0123";
+export const ORIGIN = "http://game.test";
+
+/**
+ * Fresh schema + app for one test file. Needs TEST_DATABASE_URL pointing at a throwaway
+ * database: its public schema is dropped.
+ */
+export async function setupTestApp() {
+	const url = process.env.TEST_DATABASE_URL;
+	if (!url) throw new Error("Set TEST_DATABASE_URL to a throwaway Postgres database to run platform tests.");
+	const sql = new SQL(url);
+	await sql.unsafe("DROP SCHEMA public CASCADE; CREATE SCHEMA public;");
+	const [{ builtin }] = await sql`SELECT to_regproc('pg_catalog.uuidv7') IS NOT NULL AS builtin`;
+	if (!builtin) await sql.unsafe(UUIDV7_POLYFILL);
+	await migrate(sql);
+
+	const { privateKey, publicKey } = await generateKeyPair("EdDSA", { crv: "Ed25519", extractable: true });
+	const config: Config = {
+		databaseUrl: url,
+		playTokenPrivateKey: JSON.stringify(await exportJWK(privateKey)),
+		serverKey: SERVER_KEY,
+		allowedOrigins: [ORIGIN],
+		port: 0,
+	};
+	const app = createApp({ sql, config });
+	return { sql, app, publicKey };
+}
+
+type App = Awaited<ReturnType<typeof setupTestApp>>["app"];
+
+/** Sends a JSON request and returns the status plus the parsed envelope. */
+export async function call(app: App, method: string, path: string, opts: { body?: unknown; token?: string; headers?: Record<string, string> } = {}) {
+	const headers: Record<string, string> = { ...opts.headers };
+	if (opts.body !== undefined) headers["content-type"] = "application/json";
+	if (opts.token) headers.authorization = `Bearer ${opts.token}`;
+	const res = await app.request(path, {
+		method,
+		headers,
+		body: opts.body === undefined ? undefined : typeof opts.body === "string" ? opts.body : JSON.stringify(opts.body),
+	});
+	return { status: res.status, headers: res.headers, json: (await res.json()) as any };
+}

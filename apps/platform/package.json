@@ -1,0 +1,23 @@
+{
+	"name": "platform",
+	"version": "0.0.1",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "bun --watch src/index.ts",
+		"start": "bun src/index.ts",
+		"test": "bun test",
+		"check": "tsc --noEmit",
+		"db:migrate": "bun scripts/migrate.ts",
+		"keys:generate": "bun scripts/keys-generate.ts"
+	},
+	"dependencies": {
+		"hono": "^4.13.18",
+		"jose": "^6.2.17",
+		"zod": "^4.1.0"
+	},
+	"devDependencies": {
+		"@types/bun": "latest",
+		"typescript": "^6.0.3"
+	}
+}

@@ -23,9 +23,22 @@ Needs [Bun](https://bun.sh) 1.3+. See `DESIGN.md` for the UI design reasoning.
 ```sh
 bun install
 bun run dev        # server (local Rivet engine on :6420) + web (:5173)
-bun run test       # game rule tests
-bun run check      # type-check server + web
+bun run test       # game rule tests + platform API tests
+bun run check      # type-check every app
 ```
+
+### Platform API
+
+`apps/platform` is the player + match API (Hono on Bun, Postgres). Design: `docs/platform-api.md`.
+
+```sh
+# Postgres 18 (16+ works for tests). Put the platform keys from .env.example into apps/platform/.env.
+bun run --filter platform keys:generate   # prints PLAY_TOKEN_PRIVATE_KEY / PLAY_TOKEN_PUBLIC_KEY
+bun run --filter platform db:migrate
+bun run dev:platform                      # http://localhost:3000/v1/health
+```
+
+Platform tests need `TEST_DATABASE_URL` pointing at a throwaway database (its schema is dropped on every run).
 
 Open http://localhost:5173, pick a game, enter a name, open a table and share its code. The host can add bots to play alone.
 
