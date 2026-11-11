@@ -1,31 +1,29 @@
-// Guest identity: a random secret token + display name kept in this browser.
-const TOKEN_KEY = 'guest-token';
+// Guest identity kept in this browser: the platform's player secret + display name.
+const SECRET_KEY = 'player-secret';
 const NAME_KEY = 'guest-name';
+
+// Storage can be blocked (private mode): then the identity lives in this tab only.
+const memory = new Map<string, string>();
 
 function read(key: string): string | null {
 	try {
-		return localStorage.getItem(key);
+		return localStorage.getItem(key) ?? memory.get(key) ?? null;
 	} catch {
-		return null; // storage blocked (private mode): fall back to a per-tab identity
+		return memory.get(key) ?? null;
 	}
 }
 
 function write(key: string, value: string): void {
+	memory.set(key, value);
 	try {
 		localStorage.setItem(key, value);
 	} catch {
-		// Same reason as above; the session just won't survive a reload.
+		// Kept in memory above; it just won't survive a reload.
 	}
 }
 
-export function guestToken(): string {
-	const existing = read(TOKEN_KEY);
-	if (existing && /^[A-Za-z0-9_-]{16,64}$/.test(existing)) return existing;
-	const token = crypto.randomUUID().replaceAll('-', '');
-	write(TOKEN_KEY, token);
-	return token;
-}
-
+export const playerSecret = () => read(SECRET_KEY);
+export const savePlayerSecret = (secret: string) => write(SECRET_KEY, secret);
 export const guestName = () => read(NAME_KEY) ?? '';
 export const saveGuestName = (name: string) => write(NAME_KEY, name.trim());
 

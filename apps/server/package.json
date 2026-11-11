@@ -8,12 +8,13 @@
 		"./games/*": "./src/games/*.ts"
 	},
 	"scripts": {
-		"dev": "bun --watch src/index.ts",
-		"start": "bun src/index.ts",
+		"dev": "bun --env-file=../../.env --watch src/index.ts",
+		"start": "bun --env-file=../../.env src/index.ts",
 		"test": "bun test",
 		"check": "tsc --noEmit"
 	},
 	"dependencies": {
+		"jose": "^6.2.17",
 		"rivetkit": "3.0.7",
 		"zod": "^4.1.0"
 	},

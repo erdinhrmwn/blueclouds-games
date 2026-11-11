@@ -6,6 +6,7 @@
 	let dialog = $state<HTMLDialogElement>();
 	let draft = $state('');
 	let error = $state<string | null>(null);
+	let saving = $state(false);
 	const open = $derived(player.ready && (!player.name || player.editing));
 	const required = $derived(!player.name);
 
@@ -18,9 +19,12 @@
 		} else if (!open && dialog.open) dialog.close();
 	});
 
-	function submit(e: SubmitEvent) {
+	async function submit(e: SubmitEvent) {
 		e.preventDefault();
-		error = setPlayerName(draft);
+		if (saving) return;
+		saving = true;
+		error = await setPlayerName(draft);
+		saving = false;
 	}
 
 	function cancel(e: Event) {
@@ -48,7 +52,7 @@
 			{#if !required}
 				<button type="button" class="btn-ghost" onclick={() => (player.editing = false)}>Cancel</button>
 			{/if}
-			<button type="submit" class="btn-brass">{required ? 'Continue' : 'Save'}</button>
+			<button type="submit" class="btn-brass" disabled={saving}>{saving ? 'Saving…' : required ? 'Continue' : 'Save'}</button>
 		</div>
 	</form>
 </dialog>

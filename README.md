@@ -26,9 +26,10 @@ Needs [Bun](https://bun.sh) 1.3+.
 
 ```sh
 bun install
-bun run dev        # server (local Rivet engine on :6420) + web (:5173)
-bun run test       # game rule tests + platform API tests
-bun run check      # type-check every app
+bun run dev:platform  # platform API (:3000), needs Postgres, see below
+bun run dev           # server (local Rivet engine on :6420) + web (:5173)
+bun run test          # game rule tests + platform API tests
+bun run check         # type-check every app
 ```
 
 The platform API needs Postgres: `docker compose up -d` starts Postgres 18 and DragonflyDB locally. See [docs/apps/platform.md](docs/apps/platform.md).

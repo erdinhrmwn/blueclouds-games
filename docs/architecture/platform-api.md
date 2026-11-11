@@ -147,7 +147,7 @@ The platform lives on its own host, separate from the game frontend, so the game
 
 | Credential | Stored where | Lifetime | Used for |
 |---|---|---|---|
-| **Player secret** (32 random bytes, base64url) | Browser `localStorage` (as `guest-token` is today); platform stores only its SHA-256 | Until revoked | `Authorization: Bearer` to the player API |
+| **Player secret** (32 random bytes, base64url) | Browser `localStorage` (`player-secret`); platform stores only its SHA-256 | Until revoked | `Authorization: Bearer` to the player API |
 | **Play token** (EdDSA JWT) | Browser memory only | 15 minutes | Connecting to a room actor |
 
 ```

@@ -1,4 +1,5 @@
 import type { Card, PublicView } from 'server/games/bust-31/rules';
+import { playToken } from '#lib/player.svelte.ts';
 import { client } from '#lib/rivet/client.ts';
 
 type Status = 'connecting' | 'connected' | 'reconnecting' | 'error';
@@ -19,8 +20,10 @@ export class RoomConnection {
 	#conn;
 	#stop: (() => void)[] = [];
 
-	constructor(code: string, token: string, name: string) {
-		this.#conn = client.bust31Room.getOrCreate([code]).connect({ token, name });
+	constructor(code: string) {
+		// A fresh play token on every (re)connect: they only last 15 minutes.
+		const getParams = async () => ({ playToken: await playToken() });
+		this.#conn = client.bust31Room.getOrCreate([code], { getParams }).connect();
 		this.#stop.push(
 			this.#conn.on('view', (v: PublicView) => this.#setView(v)),
 			this.#conn.on('hand', (h: Card[]) => (this.hand = h)),
@@ -46,7 +49,7 @@ export class RoomConnection {
 		return !!this.playerId && this.view?.turnPlayerId === this.playerId;
 	}
 
-	// Rejoining with the same token is idempotent, so it is safe on every reconnect.
+	// Rejoining as the same player is idempotent, so it is safe on every reconnect.
 	#join = () =>
 		this.#run(async () => {
 			const res = await this.#conn.join();

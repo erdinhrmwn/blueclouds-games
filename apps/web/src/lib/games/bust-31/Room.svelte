@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import type { GameEntry } from '#lib/games/catalog.ts';
-	import { guestToken } from '#lib/guest.ts';
 	import { player } from '#lib/player.svelte.ts';
 	import { RoomConnection } from './connection.svelte.ts';
 	import Lobby from './Lobby.svelte';
@@ -16,7 +15,7 @@
 	$effect(() => {
 		if (!player.name || connected) return;
 		connected = true;
-		room = new RoomConnection(code, guestToken(), player.name);
+		room = new RoomConnection(code);
 	});
 	$effect(() => () => void room?.dispose());
 

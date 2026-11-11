@@ -18,6 +18,7 @@ import {
 	takeSeat,
 	TURN_MS,
 } from "./rules";
+import { type Identity, verifyPlayToken } from "../../platform";
 import { BotIdInput, ConnParams, PlayInput, SeatInput } from "./schema";
 
 /** How long a closed tab has to come back (a refresh) before its player leaves the table. */
@@ -28,10 +29,11 @@ const BOT_NAMES = ["Bot Cloud", "Bot Rain", "Bot Thunder", "Bot Rainbow", "Bot W
 
 type Saved = {
 	game: Game;
-	tokens: Record<string, string>;
 	/** Game position the current turn timer belongs to, when it runs out (epoch ms), and its full length. */
 	timer: { moves: number; endsAt: number; total: number } | null;
 };
+/** Not saved: who each open connection is, from its play token. Connections close when the actor sleeps. */
+type Vars = Saved & { who: Record<string, Identity> };
 
 const rng = () => Math.random();
 
@@ -52,35 +54,43 @@ export const bust31Room = actor({
 			await d.execute("CREATE TABLE IF NOT EXISTS room (id INTEGER PRIMARY KEY CHECK (id = 1), data TEXT NOT NULL)");
 		},
 	}),
-	createVars: (): Saved => ({ game: createGame(), tokens: {}, timer: null }),
+	createVars: (): Vars => ({ game: createGame(), who: {}, timer: null }),
 	onWake: async (c) => {
 		const rows = await c.db.execute<{ data: string }>("SELECT data FROM room WHERE id = 1");
 		if (rows[0]) Object.assign(c.vars, JSON.parse(rows[0].data) as Saved);
 		c.vars.game.moves ??= 0; // rooms saved before move counting existed
 		c.vars.timer ??= null;
+		delete (c.vars as { tokens?: unknown }).tokens; // rooms saved before platform sign-in
 		c.vars.game.players.forEach((p, i) => (p.seat ??= i)); // rooms saved before fixed seats
 		await scheduleTurn(c, true);
 	},
-	onBeforeConnect: (_c, params: unknown) => {
-		if (!ConnParams.safeParse(params).success) throw new UserError("Invalid name or session.", { code: "bad_params" });
+	onBeforeConnect: async (_c, params: unknown) => {
+		const parsed = ConnParams.safeParse(params);
+		if (!parsed.success || !(await verifyPlayToken(parsed.data.playToken))) {
+			throw new UserError("Your session expired. Reload the page.", { code: "unauthenticated" });
+		}
 	},
-	onConnect: async (c) => {
+	onConnect: async (c, conn) => {
+		// Checked again here because onBeforeConnect can't hand its result over.
+		const who = await verifyPlayToken(ConnParams.parse(conn.params).playToken);
+		if (!who) return void conn.disconnect("unauthenticated");
+		c.vars.who[conn.id] = who;
 		await reportToDirectory(c);
 	},
 	onDisconnect: async (c, conn) => {
-		await reportToDirectory(c, conn.id);
 		const id = playerOf(c, conn);
+		delete c.vars.who[conn.id];
+		await reportToDirectory(c, conn.id);
 		if (id) await c.schedule.after(GONE_AFTER_MS, "dropIfGone", id);
 	},
 	actions: {
 		/** Joins (or rejoins) the room; returns your player id and the current view. */
 		join: async (c) => {
-			const { token, name } = ConnParams.parse(c.conn.params);
-			let playerId = c.vars.tokens[token];
-			if (!playerId) {
-				playerId = crypto.randomUUID();
-				c.vars.game = apply(() => addPlayer(c.vars.game, playerId!, name));
-				c.vars.tokens[token] = playerId;
+			const who = c.vars.who[c.conn.id] as Identity | undefined;
+			if (!who) throw new UserError("Your session expired. Reload the page.", { code: "unauthenticated" });
+			const playerId = who.id;
+			if (!c.vars.game.players.some((p) => p.id === playerId)) {
+				c.vars.game = apply(() => addPlayer(c.vars.game, playerId, who.name));
 				await commit(c);
 			} else if (c.vars.game.players.find((p) => p.id === playerId)?.away) {
 				c.vars.game = setAway(c.vars.game, playerId, false); // back from a closed tab
@@ -91,10 +101,6 @@ export const bust31Room = actor({
 		leave: async (c) => {
 			const me = requirePlayer(c);
 			c.vars.game = removePlayer(c.vars.game, me);
-			if (!c.vars.game.players.some((p) => p.id === me)) {
-				const token = ConnParams.parse(c.conn.params).token;
-				delete c.vars.tokens[token];
-			}
 			await commit(c);
 		},
 		/** Host only: seats a bot in the given empty chair. */
@@ -148,7 +154,6 @@ export const bust31Room = actor({
 			if (!player || [...c.conns.values()].some((conn) => playerOf(c, conn) === id)) return;
 			if (game.phase === "lobby") {
 				c.vars.game = removePlayer(game, player.id);
-				for (const [token, pid] of Object.entries(c.vars.tokens)) if (pid === player.id) delete c.vars.tokens[token];
 			} else {
 				c.vars.game = setAway(game, player.id, true);
 				// Their turn may be running on the full human clock: play it at bot speed instead.
@@ -186,14 +191,14 @@ function parseSeat(input: unknown): number {
 	return parsed.data;
 }
 
-function playerOf(c: Ctx, conn: { params: unknown }): string | undefined {
-	const parsed = ConnParams.safeParse(conn.params);
-	return parsed.success ? c.vars.tokens[parsed.data.token] : undefined;
+/** The player a connection sits as, if they joined the table. */
+function playerOf(c: Ctx, conn: { id: string }): string | undefined {
+	const id = (c.vars.who[conn.id] as Identity | undefined)?.id;
+	return id && c.vars.game.players.some((p: { id: string }) => p.id === id) ? id : undefined;
 }
 
 function requirePlayer(c: Ctx): string {
-	const token = ConnParams.parse(c.conn.params).token;
-	const id = c.vars.tokens[token] as string | undefined;
+	const id = playerOf(c, c.conn);
 	if (!id) throw new UserError("Join the table first.", { code: "not_joined" });
 	return id;
 }
@@ -205,15 +210,14 @@ function requireHost(c: Ctx): void {
 /** Persist, then push the public view to everyone and each hand to its owner. */
 async function commit(c: Ctx): Promise<void> {
 	await scheduleTurn(c, false);
-	const saved: Saved = { game: c.vars.game, tokens: c.vars.tokens, timer: c.vars.timer };
+	const saved: Saved = { game: c.vars.game, timer: c.vars.timer };
 	await c.db.execute(
 		"INSERT INTO room (id, data) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET data = excluded.data",
 		JSON.stringify(saved),
 	);
 	c.broadcast("view", viewOf(c));
 	for (const conn of c.conns.values()) {
-		const parsed = ConnParams.safeParse(conn.params);
-		const id = parsed.success ? c.vars.tokens[parsed.data.token] : undefined;
+		const id = playerOf(c, conn);
 		if (id) conn.send("hand", handOf(c.vars.game, id));
 	}
 	await reportToDirectory(c); // after the players got their update, so the list never slows a move
