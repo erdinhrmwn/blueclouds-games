@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import type { GameEntry } from '#lib/games/catalog.ts';
-	import { guestName, guestToken } from '#lib/guest.ts';
-	import { onMount } from 'svelte';
+	import { guestToken } from '#lib/guest.ts';
+	import { player } from '#lib/player.svelte.ts';
 	import { RoomConnection } from './connection.svelte.ts';
 	import Lobby from './Lobby.svelte';
 	import Table from './Table.svelte';
@@ -10,16 +10,15 @@
 	let { game, code }: { game: GameEntry; code: string } = $props();
 	let room = $state<RoomConnection | null>(null);
 
-	onMount(() => {
-		const name = guestName();
-		if (!name) {
-			goto(`/${game.slug}`);
-			return;
-		}
-		const conn = new RoomConnection(code, guestToken(), name);
-		room = conn;
-		return () => void conn.dispose();
+	// Connect once there is a name; someone opening an invite link first fills in the name dialog.
+	// The name is read once: changing it later applies to the next table you join.
+	let connected = false;
+	$effect(() => {
+		if (!player.name || connected) return;
+		connected = true;
+		room = new RoomConnection(code, guestToken(), player.name);
 	});
+	$effect(() => () => void room?.dispose());
 
 	async function leave() {
 		await room?.leave();
