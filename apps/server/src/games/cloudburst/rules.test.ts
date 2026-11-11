@@ -151,6 +151,8 @@ describe("rounds and points", () => {
 		g = playCard(g, "a", { cardId: "sun-6-0" }, rng);
 		expect(g.players.map((p) => p.points)).toEqual([0, 2, 1]);
 		expect(g.lastEvent).toMatchObject({ type: "roundEnd", outId: "a", gained: { a: 0, b: 2, c: 1 }, next: "round" });
+		// The leftover hands are revealed with the event, not the freshly dealt ones.
+		expect(g.lastEvent).toMatchObject({ left: { a: [], b: [num("rain", 1), num("rain", 2)], c: [num("wind", 3)] } });
 		expect(g.round).toBe(2);
 		expect(g.turn).toBe(1); // the first turn moves one seat each round
 		expect(g.players.every((p) => p.hand.length === HAND_SIZE)).toBe(true);

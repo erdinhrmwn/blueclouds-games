@@ -3,7 +3,7 @@
 	import Felt from '#lib/components/Felt.svelte';
 	import Seat from '#lib/components/Seat.svelte';
 	import WinCascade from '#lib/components/WinCascade.svelte';
-	import { dealCards, placeCard, seatRect } from '#lib/motion.ts';
+	import { dealCards, placeCard, seatRect, shake } from '#lib/motion.ts';
 	import { type Card, DEAL, fits, HAND_SIZE, MAX_PLAYERS, type Suit, SUITS } from 'server/games/cloudburst/rules';
 	import { prefersReducedMotion } from 'svelte/motion';
 	import { fly } from 'svelte/transition';
@@ -60,6 +60,55 @@
 	const flightFrom = (id: string) => (placing?.id === id ? placing.rect : seatRect(lastPlayer));
 	const tiltOf = (id: string) => ([...id].reduce((h, ch) => h * 31 + ch.charCodeAt(0), 7) % 13) - 6;
 
+	// Round end: each seat's leftover cards fan open face up over it, then drip one by one into its
+	// cloud meter, filling a segment as each lands. A seat that reaches the burst limit shakes once.
+	// Done well inside DEAL.roundEndMs, before the next deal.
+	const REVEAL = { fanMs: 250, holdMs: 700, spreadMs: 1800, stepMs: 180, fallMs: 380, clearMs: 3600 };
+	/** Width of an `xs` card, and of the whole fan so it stays inside a phone seat. */
+	const FAN = { cardPx: 28, maxPx: 88, stepPx: 14 };
+	const overlap = (n: number) => FAN.cardPx - Math.min(FAN.stepPx, (FAN.maxPx - FAN.cardPx) / Math.max(1, n - 1));
+	let reveal = $state<{ moves: number; left: Record<string, Card[]>; landed: Record<string, number> } | null>(null);
+	let bursting = $state<string[]>([]);
+	/** The points a seat's meter shows: during the reveal, the old total plus the drops landed so far. */
+	const shownPoints = (p: (typeof view.players)[number]) =>
+		reveal ? p.points - (reveal.left[p.id]?.length ?? 0) + (reveal.landed[p.id] ?? 0) : p.points;
+
+	function land(playerId: string) {
+		if (!reveal) return;
+		const landed = (reveal.landed[playerId] ?? 0) + 1;
+		reveal.landed[playerId] = landed;
+		const p = view.players.find((q) => q.id === playerId);
+		if (!p || landed < (reveal.left[playerId]?.length ?? 0) || p.points < view.burstAt) return;
+		shake(document.querySelector<HTMLElement>(`[data-seat="${CSS.escape(playerId)}"]`) ?? undefined);
+		bursting = [...bursting, playerId];
+		setTimeout(() => (bursting = bursting.filter((id) => id !== playerId)), 900);
+	}
+
+	/** One revealed card: fans out from the seat, waits, then falls into its meter segment. */
+	function drip(node: HTMLElement, { playerId, i, n, from }: { playerId: string; i: number; n: number; from: number }) {
+		const meter = node.closest('[data-meter]');
+		const seg = meter?.querySelector(`[data-seg="${Math.min(from + i, view.burstAt - 1)}"]`) ?? meter;
+		if (!seg) return;
+		const a = node.getBoundingClientRect();
+		const b = seg.getBoundingClientRect();
+		const dx = b.left + b.width / 2 - (a.left + a.width / 2);
+		const dy = b.top + b.height / 2 - (a.top + a.height / 2);
+		const fallAt = REVEAL.holdMs + i * Math.min(REVEAL.stepMs, REVEAL.spreadMs / n);
+		const total = fallAt + REVEAL.fallMs;
+		const spread = (i - (n - 1) / 2) * 6;
+		const anim = node.animate(
+			[
+				{ offset: 0, transform: `translateX(${-spread}px) scale(0.6)`, opacity: 0, easing: 'ease-out' },
+				{ offset: REVEAL.fanMs / total, transform: 'none', opacity: 1 },
+				{ offset: fallAt / total, transform: 'none', opacity: 1, easing: 'cubic-bezier(0.55, 0, 0.9, 0.45)' },
+				{ offset: 1, transform: `translate(${dx}px, ${dy}px) scale(0.25)`, opacity: 0 }
+			],
+			{ duration: total, fill: 'both' }
+		);
+		anim.onfinish = () => land(playerId);
+		return { destroy: () => anim.cancel() };
+	}
+
 	// Table events, each handled once (by `moves`): deals, draws, gusts, skips and the round summary.
 	let skipped = $state<string | null>(null);
 	let summary = $state<Extract<NonNullable<typeof view.lastEvent>, { type: 'roundEnd' }> | null>(null);
@@ -82,6 +131,11 @@
 			setTimeout(() => (dealing = false), wait + seats.length * HAND_SIZE * DEAL.stepMs + DEAL.flightMs);
 		}
 		if (still) return;
+		if (e.type === 'roundEnd' && e.left) {
+			const moves = view.moves;
+			reveal = { moves, left: e.left, landed: {} };
+			setTimeout(() => reveal?.moves === moves && (reveal = null), REVEAL.clearMs);
+		}
 		if (e.type === 'drew' && e.got) dealCards(deck(), [seatRect(e.playerId)], { passes: 1, stepMs: 0, flightMs: 450 });
 		if (e.type === 'played' && e.gaveTo) dealCards(seatRect(e.playerId), [seatRect(e.gaveTo)], { passes: 1, stepMs: 0, flightMs: 550 });
 		if (e.type === 'played' && e.skipped) {
@@ -161,17 +215,41 @@
 				{@const p = inSeat(k - 1)}
 				{#snippet status()}
 					{#if p}
+						{@const shown = shownPoints(p)}
+						{@const left = reveal?.left[p.id] ?? []}
+						{@const cards = reveal ? left.length - (reveal.landed[p.id] ?? 0) : p.cards}
 						<span class="flex flex-col items-center gap-0.5">
-							<span class="text-[11px] tabular-nums {p.cards === 1 ? 'font-semibold text-ember' : 'text-paper/80'}">
-								{skipped === p.id ? 'Skipped' : p.cards === 1 ? '1 card' : `${p.cards} cards`}
+							<span class="text-[11px] tabular-nums {cards === 1 ? 'font-semibold text-ember' : 'text-paper/80'}">
+								{skipped === p.id ? 'Skipped' : cards === 1 ? '1 card' : `${cards} cards`}
 							</span>
-							<span class="flex items-center gap-px" role="img" aria-label="{p.points} of {view.burstAt} points">
+							<span
+								class="relative flex items-center gap-px"
+								class:burst={bursting.includes(p.id)}
+								data-meter
+								role="img"
+								aria-label="{p.points} of {view.burstAt} points"
+							>
 								{#each Array(view.burstAt) as _, i (i)}
 									<span
-										class="h-1.5 w-1 rounded-[1px] {i < p.points ? (p.points >= view.burstAt - 2 ? 'bg-ember' : 'bg-paper/85') : 'bg-paper/20'}"
+										data-seg={i}
+										class="h-1.5 w-1 rounded-[1px] {i < shown ? (shown >= view.burstAt - 2 ? 'bg-ember' : 'bg-paper/85') : 'bg-paper/20'}"
 									></span>
 								{/each}
-								<span class="ml-1 text-[10px] text-paper/75 tabular-nums">{p.points}</span>
+								<span class="ml-1 text-[10px] text-paper/75 tabular-nums">{shown}</span>
+								{#if left.length}
+									<!-- The hand left at the end of the round, face up; each card drips into the meter. -->
+									<span class="pointer-events-none absolute bottom-full left-1/2 mb-11 flex -translate-x-1/2" aria-hidden="true">
+										{#each left as card, i (i)}
+											<span
+												class="shrink-0"
+												style={i ? `margin-left: -${overlap(left.length)}px` : ''}
+												use:drip={{ playerId: p.id, i, n: left.length, from: p.points - left.length }}
+											>
+												<CloudCard {card} size="xs" />
+											</span>
+										{/each}
+									</span>
+								{/if}
 							</span>
 						</span>
 					{/if}
@@ -363,7 +441,19 @@
 			text-shadow: 0 0 24px rgb(210 165 76 / 0.55);
 		}
 	}
+	/* The meter that reached the limit flashes ember twice. */
+	.burst {
+		animation: flash 450ms ease-in-out 2;
+	}
+	@keyframes flash {
+		50% {
+			filter: brightness(1.5) drop-shadow(0 0 3px var(--color-ember));
+		}
+	}
 	@media (prefers-reduced-motion: reduce) {
+		.burst {
+			animation: none;
+		}
 		.direction,
 		.suit-ring {
 			transition: none;

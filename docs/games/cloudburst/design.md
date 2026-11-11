@@ -56,8 +56,8 @@ Every animation reports a table event, as in Bust 31. All of it is off under `pr
 | Swirl | The direction arrow turns over. |
 | Gust | A face-down card slides from the giver's seat to the receiver's seat. |
 | Rainbow | The suit ring fades to the chosen suit. |
-| Round end | The last card lands and the round summary (below) shows over the felt with each seat's "+N". Then the dealer deals the next round. |
-| Burst | No separate animation: the meter is already ember from 8 points, and the match ends with the win screen. |
+| Round end | The round summary (below) shows over the felt. Each seat's leftover cards fan open face up over it, then drip one by one into its cloud meter, each filling a segment, while the card count runs down. Then the dealer deals the next round. |
+| Burst | When the last drop lands, a seat that reached 10 points shakes once and its meter flashes ember. |
 | Win | The winner's name rises (Bust 31's `WinCascade`), with the final points table below it. |
 
 ## Between rounds
