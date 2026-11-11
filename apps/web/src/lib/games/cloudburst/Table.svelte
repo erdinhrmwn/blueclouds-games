@@ -192,14 +192,15 @@
 
 		{#if view.phase === 'finished'}
 			<WinCascade />
-			<div class="relative flex flex-col items-center gap-2 text-center">
+			<div class="relative flex flex-col items-center gap-1 text-center sm:gap-2">
 				<p class="label" in:fly={{ y: 10, duration: prefersReducedMotion.current ? 0 : 300, delay: 200 }}>
 					{iWon ? 'You win' : room.me ? 'You lost this one' : 'Winner'}
 				</p>
-				<p class="winner font-display text-4xl font-black text-brass sm:text-5xl" class:still={prefersReducedMotion.current}>
+				<p class="winner font-display text-3xl font-black text-brass sm:text-5xl" class:still={prefersReducedMotion.current}>
 					{nameOf(view.winnerId)}
 				</p>
-				<ol class="mt-1 text-sm tabular-nums" aria-label="Final points">
+				<!-- Two columns on phones, so six players still fit inside the felt. -->
+				<ol class="mt-1 grid grid-cols-2 gap-x-4 text-xs tabular-nums sm:block sm:text-sm" aria-label="Final points">
 					{#each standings as p (p.id)}
 						<li class={p.id === view.winnerId ? 'text-brass' : 'text-paper/80'}>{p.name}: {p.points}</li>
 					{/each}
@@ -223,10 +224,11 @@
 				{#if summary.tie}<p class="text-xs text-brass">Tie for fewest points: one more round.</p>{/if}
 			</div>
 		{:else}
-			<div class="flex items-center gap-4 sm:gap-6">
+			<div class="flex items-center gap-2 sm:gap-6">
 				<div class="flex flex-col items-center gap-1 text-[11px] text-paper/75">
 					<span class="direction text-2xl leading-none text-paper/80" class:ccw={view.direction === -1} aria-hidden="true">↻</span>
-					<span>{view.direction === 1 ? 'Clockwise' : 'Counter-clockwise'}</span>
+					<!-- Phones show only the arrow, so the pile stays clear of the side seats. -->
+					<span class="sr-only sm:not-sr-only">{view.direction === 1 ? 'Clockwise' : 'Counter-clockwise'}</span>
 				</div>
 				<div class="flex flex-col items-center gap-2">
 					<div class="grid h-[6.75rem] w-[4.75rem] place-items-center">
@@ -241,7 +243,7 @@
 							{/if}
 						{/key}
 					</div>
-					<p class="suit-ring flex items-center gap-1.5 rounded-full bg-paper px-3 py-1 text-sm font-semibold {SUIT_TEXT[view.suit]}" aria-live="polite">
+					<p class="suit-ring flex items-center gap-1.5 rounded-full bg-paper px-2.5 py-1 text-xs font-semibold whitespace-nowrap sm:px-3 sm:text-sm {SUIT_TEXT[view.suit]}" aria-live="polite">
 						<SuitGlyph suit={view.suit} class="size-4" />{SUIT_NAME[view.suit]} to follow
 					</p>
 				</div>
