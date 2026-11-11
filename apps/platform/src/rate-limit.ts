@@ -27,8 +27,9 @@ export function rateLimit(limit: number, windowMs: number): MiddlewareHandler {
 }
 
 /**
- * Caddy replaces X-Forwarded-For with the real client IP, and the platform port is never
- * published, so the header can be trusted. Without it (local dev) use the socket address.
+ * Only the game's server and the actors can reach the platform (internal network, port never
+ * published), and the game's server puts the player's IP in X-Forwarded-For, so the header can
+ * be trusted. Without it use the socket address.
  */
 function clientIp(c: Context): string {
 	const forwarded = c.req.header("x-forwarded-for")?.split(",")[0]?.trim();

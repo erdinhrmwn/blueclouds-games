@@ -10,12 +10,11 @@ export const variables = defineEnvVars({
 			return url;
 		}
 	},
-	PUBLIC_PLATFORM_URL: {
-		public: true,
-		description: 'URL the browser uses to reach the BlueClouds Platform API.',
+	PLATFORM_URL: {
+		description: 'Platform API as this server reaches it (internal network). Browsers never call it.',
 		schema: (value) => {
 			const url = value || 'http://127.0.0.1:3000';
-			if (!URL.canParse(url)) throw new Error('PUBLIC_PLATFORM_URL must be a URL');
+			if (!URL.canParse(url)) throw new Error('PLATFORM_URL must be a URL');
 			return url.replace(/\/+$/, '');
 		}
 	}

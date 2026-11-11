@@ -1,6 +1,6 @@
 # Platform API (`apps/platform`)
 
-The player + match API: Hono on Bun, Postgres. It has no UI and no admin API. Full design: [architecture/platform-api.md](../architecture/platform-api.md).
+The player + match API: Hono on Bun, Postgres. It has no UI and no admin API, and only the game's server and the actors call it (private network, no CORS). Full design: [architecture/platform-api.md](../architecture/platform-api.md).
 
 ## Running
 
@@ -24,7 +24,6 @@ Platform tests use the same `DATABASE_*` server with `DATABASE_TEST_NAME` as the
 | `DATABASE_TEST_NAME` | Tests only: throwaway database on the same server |
 | `PLAY_TOKEN_PRIVATE_KEY` | Ed25519 private JWK that signs play tokens |
 | `PLATFORM_SERVER_KEY` | Bearer key the actor server sends with match reports (32+ chars) |
-| `PLATFORM_ALLOWED_ORIGINS` | Comma-separated browser origins allowed by CORS |
 | `PLATFORM_HOST` | Listen interface (default `127.0.0.1`; `0.0.0.0` inside a container) |
 | `PLATFORM_PORT` | Listen port (default `3000`) |
 

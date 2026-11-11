@@ -20,7 +20,6 @@ export async function guest(app: App, name = "Rina") {
 }
 
 export const SERVER_KEY = "test-server-key-0123456789abcdef0123";
-export const ORIGIN = "http://game.test";
 
 /**
  * Empties the test database and runs every migration. Also used by the backoffice tests.
@@ -52,7 +51,6 @@ export async function setupTestApp() {
 		db,
 		playTokenPrivateKey: JSON.stringify(await exportJWK(privateKey)),
 		serverKey: SERVER_KEY,
-		allowedOrigins: [ORIGIN],
 		host: "127.0.0.1",
 		port: 0,
 	};

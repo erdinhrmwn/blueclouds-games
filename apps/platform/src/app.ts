@@ -1,7 +1,6 @@
 import type { SQL } from "bun";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
-import { cors } from "hono/cors";
 import { requestId, type RequestIdVariables } from "hono/request-id";
 import { secureHeaders } from "hono/secure-headers";
 import type { Config } from "./config";
@@ -21,15 +20,6 @@ export function createApp(deps: Deps) {
 
 	app.use(requestId());
 	app.use(secureHeaders());
-	app.use(
-		cors({
-			origin: deps.config.allowedOrigins,
-			allowMethods: ["GET", "POST", "PATCH"],
-			allowHeaders: ["Authorization", "Content-Type"],
-			exposeHeaders: ["X-Request-Id"],
-			maxAge: 600,
-		}),
-	);
 	app.use(
 		bodyLimit({
 			maxSize: MAX_BODY_BYTES,

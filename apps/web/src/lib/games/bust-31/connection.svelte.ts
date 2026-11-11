@@ -19,10 +19,20 @@ export class RoomConnection {
 
 	#conn;
 	#stop: (() => void)[] = [];
+	/** Why the last play token couldn't be fetched (e.g. a disabled player), shown instead of the client's wrapper text. */
+	#tokenError: string | null = null;
 
 	constructor(code: string) {
 		// A fresh play token on every (re)connect: they only last 15 minutes.
-		const getParams = async () => ({ playToken: await playToken() });
+		const getParams = async () => {
+			try {
+				this.#tokenError = null;
+				return { playToken: await playToken() };
+			} catch (e) {
+				this.#tokenError = message(e);
+				throw e;
+			}
+		};
 		this.#conn = client.bust31Room.getOrCreate([code], { getParams }).connect();
 		this.#stop.push(
 			this.#conn.on('view', (v: PublicView) => this.#setView(v)),
@@ -34,7 +44,7 @@ export class RoomConnection {
 			this.#conn.onClose(() => (this.status = 'reconnecting')),
 			this.#conn.onError((e) => {
 				this.status = 'error';
-				this.error = message(e);
+				this.error = this.#tokenError ?? message(e);
 			})
 		);
 	}

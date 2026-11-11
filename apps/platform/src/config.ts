@@ -14,11 +14,6 @@ const Env = DbEnv.extend({
 	PLAY_TOKEN_PRIVATE_KEY: z.string().min(1),
 	/** Bearer key the actor server sends with match reports. */
 	PLATFORM_SERVER_KEY: z.string().min(32, "must be at least 32 characters"),
-	/** Comma-separated browser origins allowed by CORS. */
-	PLATFORM_ALLOWED_ORIGINS: z
-		.string()
-		.transform((s) => s.split(",").map((o) => o.trim()).filter(Boolean))
-		.pipe(z.array(z.url()).min(1)),
 	/** Interface to listen on. 127.0.0.1 = this machine only; use 0.0.0.0 inside a container. */
 	PLATFORM_HOST: z.string().min(1).default("127.0.0.1"),
 	PLATFORM_PORT: z.coerce.number().int().min(1).max(65535).default(3000),
@@ -31,7 +26,6 @@ export type Config = {
 	db: DbConfig;
 	playTokenPrivateKey: string;
 	serverKey: string;
-	allowedOrigins: string[];
 	host: string;
 	port: number;
 };
@@ -63,7 +57,6 @@ export function loadConfig(env: RawEnv = process.env): Config {
 		db: toDb(e),
 		playTokenPrivateKey: e.PLAY_TOKEN_PRIVATE_KEY,
 		serverKey: e.PLATFORM_SERVER_KEY,
-		allowedOrigins: e.PLATFORM_ALLOWED_ORIGINS,
 		host: e.PLATFORM_HOST,
 		port: e.PLATFORM_PORT,
 	};

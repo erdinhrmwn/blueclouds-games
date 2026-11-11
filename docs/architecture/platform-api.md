@@ -18,7 +18,7 @@ The **platform** is a separate service that owns **who a player is** and **what 
 | Question | Answer |
 |---|---|
 | Hosting | Everything self-hosted on a VPS: game frontend, Rivet engine + actors, platform, backoffice |
-| Hostnames | Game `nblueclouds.online`, platform `api.nblueclouds.online`, backoffice `backoffice.nblueclouds.online` |
+| Hostnames | Game `nblueclouds.online`, backoffice `backoffice.nblueclouds.online`, engine `engine.nblueclouds.online`. The platform has no public hostname (Erdin, 2026-11-11): the game's SvelteKit server calls it on the internal network |
 | First admin | Username `root` |
 | Responsibility | Platform = player + match API only. Backoffice = separate app, no admin API on the platform |
 | Bot matches | Recorded in history like any other match |
@@ -44,13 +44,12 @@ One VPS, one Docker Compose project. Caddy is the only thing listening on the in
                          VPS (Docker Compose)
   Internet ──▶ Caddy (TLS, :443)
                 ├─ <domain>                 → web         (game frontend, SvelteKit adapter-node)
-                ├─ api.<domain>/v1/*        → platform    (Bun, :3000)
                 ├─ backoffice.<domain>      → backoffice  (SvelteKit adapter-node)
                 └─ engine.<domain>          → rivet-engine (rooms: HTTP + WebSocket)
                                                  ▲
                               actors (apps/server) ── runner connection
                                 │
-                                └──▶ http://platform:3000  (private network)
+               web, actors ─────┴──▶ http://platform:3000  (private network, never published)
                platform ──▶ postgres (private network)
                backoffice ──▶ postgres (same user as platform)
 ```
@@ -61,12 +60,12 @@ One VPS, one Docker Compose project. Caddy is the only thing listening on the in
 | `web` | Game frontend (today's `apps/web`, switched from `adapter-vercel` to `adapter-node`) | Caddy |
 | `rivet-engine` | Self-hosted Rivet Engine (single node) | Caddy, actors |
 | `actors` | `apps/server`: room + directory actors, connected to the engine as a runner | Engine only |
-| `platform` | `apps/platform`: `/v1` public + server API | Caddy, actors |
+| `platform` | `apps/platform`: `/v1` player + server API | web, actors (private network only) |
 | `backoffice` | `apps/backoffice`: admin UI + its own server code, reads Postgres directly | Caddy |
 | `postgres` | Postgres 18, platform data | platform, backoffice (same user) |
 | `backup` | Nightly `pg_dump` + engine data snapshot to off-VPS storage | — |
 
-- **platform** serves only the public and server API. It has no admin routes at all, so there is no admin surface on `api.`.
+- **platform** serves only the player and server API, and only on the private network. It has no admin routes and no public hostname. Browsers talk to the game's own `/api/*` routes; the `web` container calls the platform for them.
 - **backoffice** uses SvelteKit server code (`+page.server.ts` loads and form actions) that queries Postgres directly with the same database user as the platform (Erdin's call, 2026-11-11: one user is simpler to run).
 - **Migrations have one owner:** the platform. The backoffice never changes the schema; it reads the same tables.
 - **Actors → platform** go over the private network (`http://platform:3000`), so match reports never leave the VPS. The server key is still checked.
@@ -77,7 +76,6 @@ One VPS, one Docker Compose project. Caddy is the only thing listening on the in
 | Host | Serves |
 |---|---|
 | `nblueclouds.online` | Game frontend |
-| `api.nblueclouds.online` | Platform public + server API (`/v1`) |
 | `backoffice.nblueclouds.online` | Backoffice |
 | `engine.nblueclouds.online` | Rivet engine: room actions over HTTP and live updates over WebSocket |
 
@@ -88,7 +86,7 @@ One VPS, one Docker Compose project. Caddy is the only thing listening on the in
 | Part | Choice | Notes |
 |---|---|---|
 | Platform runtime | Bun 1.3 | |
-| HTTP framework | Hono 4 (`hono/bun`) | Built-in middleware covers CORS, body limit, request id and secure headers; `app.onError` / `app.notFound` force the envelope; `app.request()` makes route tests easy. Zero transitive deps. |
+| HTTP framework | Hono 4 (`hono/bun`) | Built-in middleware covers body limit, request id and secure headers; `app.onError` / `app.notFound` force the envelope; `app.request()` makes route tests easy. Zero transitive deps. |
 | Language | TypeScript | Same as the rest of the repo |
 | Validation | Zod 4 | Already used by the actor server |
 | Database | Postgres 18 | Built-in `uuidv7()` |
@@ -143,32 +141,33 @@ The examples below show only `data`; the envelope around it is implied.
 
 ## Player auth flow
 
-The platform lives on its own host, separate from the game frontend, so the game uses **bearer credentials**, not cookies. This works for any future frontend (another web game, a mobile app) and needs no cross-site cookie setup.
+Browsers never reach the platform. The game's SvelteKit server (`web`) holds the player secret in a cookie and calls the platform over the private network with it as a bearer credential.
 
 | Credential | Stored where | Lifetime | Used for |
 |---|---|---|---|
-| **Player secret** (32 random bytes, base64url) | Browser `localStorage` (`player-secret`); platform stores only its SHA-256 | Until revoked | `Authorization: Bearer` to the player API |
+| **Player secret** (32 random bytes, base64url) | `player_secret` cookie on the game domain: `httpOnly`, `Secure`, `SameSite=Lax`. Page scripts can't read it. The platform stores only its SHA-256 | Until revoked | `web` → platform `Authorization: Bearer` |
 | **Play token** (EdDSA JWT) | Browser memory only | 15 minutes | Connecting to a room actor |
 
 ```
-Browser                          Platform (VPS)                      Room actor (Rivet)
-  | POST /v1/players/guest {name}    |                                      |
-  |--------------------------------->| create player + secret               |
-  |<-- {player, playerSecret} -------|                                      |
-  | POST /v1/play-tokens (Bearer)    |                                      |
-  |--------------------------------->| check secret, player not disabled,   |
-  |<-- {token, expiresAt} -----------| sign {sub, name, aud, exp}           |
-  | connect(params: {playToken})                                            |
-  |------------------------------------------------------------------------>| onBeforeConnect: verify with
-  |                                                                         | PUBLIC key, read playerId + name
+Browser                    web (SvelteKit server)          Platform (private)          Room actor (Rivet)
+  | POST /api/player {name}     |                                |                             |
+  |---------------------------->| POST /v1/players/guest         |                             |
+  |                             |------------------------------->| create player + secret      |
+  |<-- Set-Cookie player_secret |<-- {player, playerSecret} -----|                             |
+  | POST /api/play-token        |                                |                             |
+  |---------------------------->| POST /v1/play-tokens (Bearer)  |                             |
+  |                             |------------------------------->| check secret, not disabled, |
+  |<-- {token} -----------------|<-- {token, expiresAt} ---------| sign {sub, name, aud, exp}  |
+  | connect(params: {playToken}) via engine.<domain>                                           |
+  |------------------------------------------------------------------------------------------->| verify with PUBLIC key
 ```
 
 - Actors verify play tokens **locally** with the public key: no network call per connection, and a platform outage does not break running games.
 - Only the platform holds the private key. A leaked actor env cannot mint tokens.
 - A room maps `conn.id → playerId` in `c.vars`; actions use that map. The name comes from the token, not the client.
-- Rooms stop storing secrets: `tokens: Record<secret, playerId>` becomes plain player ids.
-- Disabling a player revokes their secrets, so they cannot get a new play token. A connection that is already open stays until it closes (at most one game); the 15-minute token limits reconnects.
-- CORS: the platform only answers browser requests from origins in `PLATFORM_ALLOWED_ORIGINS`.
+- Disabling a player revokes their secrets. The platform answers a disabled player's secret with `403`, so the game can say why. A connection that is already open stays until it closes (at most one game); the 15-minute token limits reconnects.
+- No CORS: the platform never answers browsers. `web` puts the player's IP in `X-Forwarded-For`, which the platform trusts for the guest rate limit because nothing else can reach it.
+- The game's `/api/*` routes take JSON only; a cross-site page can't send that with the cookie (`SameSite=Lax` plus the CORS preflight it would need).
 
 Server-to-server calls (actor → platform) use `Authorization: Bearer <PLATFORM_SERVER_KEY>`, compared in constant time.
 
@@ -368,14 +367,11 @@ Backups: nightly `pg_dump` from a cron container to off-VPS storage, kept 14 day
 | `DATABASE_HOST`, `DATABASE_PORT`, `DATABASE_USER`, `DATABASE_PASSWORD`, `DATABASE_NAME` | platform + backoffice | Postgres connection |
 | `PLAY_TOKEN_PRIVATE_KEY` | platform | Ed25519 private key (JWK) that signs play tokens |
 | `PLATFORM_SERVER_KEY` | platform + actor server | Bearer key for actor → platform calls |
-| `PLATFORM_ALLOWED_ORIGINS` | platform | Comma-separated origins allowed by CORS (game frontend) |
 | `PLAY_TOKEN_PUBLIC_KEY` | actor server | Public key that verifies play tokens |
-| `PLATFORM_URL` | actor server | `http://platform:3000` (private network) |
+| `PLATFORM_URL` | game frontend (server side) + actor server | `http://platform:3000` (private network) |
 | `INTERNAL_ACTOR_KEY` | actor server | Guards the room list's `report` / `remove` |
-| `PUBLIC_PLATFORM_URL` | game frontend | `https://api.nblueclouds.online` |
 | `PUBLIC_RIVET_ENDPOINT` | game frontend | `https://engine.nblueclouds.online` (already exists) |
 | `DOMAIN` | Caddy | `nblueclouds.online`; hostnames are built from it |
-| `PLATFORM_ALLOWED_ORIGINS` value | platform | `https://nblueclouds.online` |
 
 Each app validates its variables at startup and exits if one is missing. `bun run keys:generate` prints a fresh Ed25519 key pair. All apps read one root `.env` (template `.env.example`). Keys used by one app carry its prefix (`PLATFORM_`); keys several apps share (`DATABASE_*`, `PLAY_TOKEN_*`, `PLATFORM_SERVER_KEY`) have no app prefix.
 
@@ -385,7 +381,7 @@ Each app validates its variables at startup and exits if one is missing. `bun ru
 apps/
   platform/            # new: Bun API
     src/
-      index.ts         # Hono app: cors, requestId, bodyLimit, secureHeaders, onError, route mounting
+      index.ts         # Hono app: requestId, bodyLimit, secureHeaders, onError, route mounting
       http.ts          # ok() / fail() envelope helpers
       config.ts        # env validation
       players/         # routes + service + queries
@@ -417,7 +413,7 @@ The web app's name modal and leave-on-close work is already committed, so these 
 
 ## Security notes
 
-- A guest is only as safe as the browser's `localStorage`: clearing it loses the player, and an XSS bug on the game site could read the secret. Phase 3 accounts fix the first; a strict CSP on the game site limits the second.
+- A guest is only as safe as the browser's cookie: clearing site data loses the player. Phase 3 accounts fix that. The cookie is `httpOnly`, so an XSS bug can't read the secret (it could still act as the player while the page is open).
 - Secrets, tokens and passwords are never logged; only hashes are stored.
 - Request bodies capped at 16 KB (Hono `bodyLimit`). Actor → platform calls time out after 5 s.
 - Rate limits are in-process (one platform instance). ponytail: move them to DragonflyDB if the platform ever runs more than one instance.

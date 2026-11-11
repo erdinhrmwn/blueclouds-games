@@ -7,7 +7,7 @@ SvelteKit app the players use. Started with `bun run dev:web` on http://localhos
 | Variable | Default |
 |---|---|
 | `PUBLIC_RIVET_ENDPOINT` | `http://127.0.0.1:6420` |
-| `PUBLIC_PLATFORM_URL` | `http://127.0.0.1:3000` |
+| `PLATFORM_URL` | `http://127.0.0.1:3000` (server side only: the browser never calls the platform) |
 
 Set in the root `.env` (template: `.env.example`; `vite.config.ts` points SvelteKit at the repo root). Optional for local dev.
 
@@ -19,9 +19,10 @@ apps/web/src/
   lib/games/bust-31/   # game UI: Home, Room, Lobby, Table, cards, connection to its actor
   lib/components/      # shared table pieces: Felt, Seat
   lib/rivet/client.ts  # typed Rivet client
-  lib/platform.ts      # the platform API calls: guest, rename, play token
-  lib/guest.ts         # guest identity (player secret + name in localStorage)
+  lib/platform.ts      # browser side: calls our /api routes
+  lib/server/platform.ts # server side: calls the platform, keeps the player secret in an httpOnly cookie
+  lib/guest.ts         # display name in localStorage
   lib/player.svelte.ts # player name shared by the name dialog; play tokens for rooms
   lib/motion.ts        # shared animations
-  routes/              # / (pick a game), /[game], /[game]/room/[code]
+  routes/              # / (pick a game), /[game], /[game]/room/[code], api/player, api/play-token
 ```
