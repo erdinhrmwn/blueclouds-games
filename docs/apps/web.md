@@ -8,7 +8,7 @@ SvelteKit app the players use. Started with `bun run dev:web` on http://localhos
 |---|---|
 | `PUBLIC_RIVET_ENDPOINT` | `http://127.0.0.1:6420` |
 
-Template: `apps/web/.env.example` (copy to `apps/web/.env`; optional for local dev).
+Set in the root `.env` (template: `.env.example`; `vite.config.ts` points SvelteKit at the repo root). Optional for local dev.
 
 ## Structure
 

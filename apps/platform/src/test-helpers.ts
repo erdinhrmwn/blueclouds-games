@@ -23,13 +23,13 @@ export const SERVER_KEY = "test-server-key-0123456789abcdef0123";
 export const ORIGIN = "http://game.test";
 
 /**
- * Fresh schema + app for one test file. Uses the DB_* settings with TEST_DB_NAME as the
+ * Fresh schema + app for one test file. Uses the PLATFORM_DB_* settings with PLATFORM_TEST_DB_NAME as the
  * database, which must be a throwaway one: its public schema is dropped.
  */
 export async function setupTestApp() {
-	const name = process.env.TEST_DB_NAME;
-	if (!name) throw new Error("Set TEST_DB_NAME to a throwaway Postgres database to run platform tests.");
-	if (name === process.env.DB_NAME) throw new Error("TEST_DB_NAME must differ from DB_NAME: tests drop its schema.");
+	const name = process.env.PLATFORM_TEST_DB_NAME;
+	if (!name) throw new Error("Set PLATFORM_TEST_DB_NAME to a throwaway Postgres database to run platform tests.");
+	if (name === process.env.PLATFORM_DB_NAME) throw new Error("PLATFORM_TEST_DB_NAME must differ from PLATFORM_DB_NAME: tests drop its schema.");
 	const db = { ...loadDbConfig(), database: name };
 	const sql = new SQL(db);
 	await sql.unsafe("DROP SCHEMA public CASCADE; CREATE SCHEMA public;");

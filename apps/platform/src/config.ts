@@ -1,12 +1,12 @@
 import { z } from "zod";
 
 const DbEnv = z.object({
-	DB_HOST: z.string().min(1),
-	DB_PORT: z.coerce.number().int().min(1).max(65535).default(5432),
-	DB_USER: z.string().min(1),
+	PLATFORM_DB_HOST: z.string().min(1),
+	PLATFORM_DB_PORT: z.coerce.number().int().min(1).max(65535).default(5432),
+	PLATFORM_DB_USER: z.string().min(1),
 	/** Empty is allowed for local servers that trust local connections. */
-	DB_PASSWORD: z.string().default(""),
-	DB_NAME: z.string().min(1),
+	PLATFORM_DB_PASSWORD: z.string().default(""),
+	PLATFORM_DB_NAME: z.string().min(1),
 });
 
 const Env = DbEnv.extend({
@@ -15,11 +15,11 @@ const Env = DbEnv.extend({
 	/** Bearer key the actor server sends with match reports. */
 	PLATFORM_SERVER_KEY: z.string().min(32, "must be at least 32 characters"),
 	/** Comma-separated browser origins allowed by CORS. */
-	ALLOWED_ORIGINS: z
+	PLATFORM_ALLOWED_ORIGINS: z
 		.string()
 		.transform((s) => s.split(",").map((o) => o.trim()).filter(Boolean))
 		.pipe(z.array(z.url()).min(1)),
-	PORT: z.coerce.number().int().min(1).max(65535).default(3000),
+	PLATFORM_PORT: z.coerce.number().int().min(1).max(65535).default(3000),
 });
 
 /** Connection options in the shape `new SQL(...)` takes. */
@@ -43,11 +43,11 @@ function check<S extends z.ZodType>(schema: S, env: RawEnv, what: string): z.out
 }
 
 const toDb = (e: z.output<typeof DbEnv>): DbConfig => ({
-	hostname: e.DB_HOST,
-	port: e.DB_PORT,
-	username: e.DB_USER,
-	password: e.DB_PASSWORD,
-	database: e.DB_NAME,
+	hostname: e.PLATFORM_DB_HOST,
+	port: e.PLATFORM_DB_PORT,
+	username: e.PLATFORM_DB_USER,
+	password: e.PLATFORM_DB_PASSWORD,
+	database: e.PLATFORM_DB_NAME,
 });
 
 /** Only the database settings, for scripts such as `db:migrate`. */
@@ -60,7 +60,7 @@ export function loadConfig(env: RawEnv = process.env): Config {
 		db: toDb(e),
 		playTokenPrivateKey: e.PLAY_TOKEN_PRIVATE_KEY,
 		serverKey: e.PLATFORM_SERVER_KEY,
-		allowedOrigins: e.ALLOWED_ORIGINS,
-		port: e.PORT,
+		allowedOrigins: e.PLATFORM_ALLOWED_ORIGINS,
+		port: e.PLATFORM_PORT,
 	};
 }

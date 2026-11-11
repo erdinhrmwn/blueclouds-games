@@ -6,13 +6,13 @@ The player + match API: Hono on Bun, Postgres. It has no UI and no admin API. Fu
 
 ```sh
 docker compose up -d                      # Postgres 18 + DragonflyDB on 127.0.0.1 (compose.yaml)
-cp apps/platform/.env.example apps/platform/.env   # then fill in the empty values
+cp .env.example .env                      # one .env at the repo root; fill in the empty values
 bun run --filter platform keys:generate   # prints PLAY_TOKEN_PRIVATE_KEY / PLAY_TOKEN_PUBLIC_KEY
 bun run --filter platform db:migrate
 bun run dev:platform                      # http://localhost:3000/v1/health
 ```
 
-Platform tests use the same `DB_*` server with `TEST_DB_NAME` as the database. It must be a throwaway database (its schema is dropped on every run) and differ from `DB_NAME`. The dev Postgres in `compose.yaml` creates one, `platform_test`, on first start. Docker is optional: any Postgres 18 works.
+Platform tests use the same `PLATFORM_DB_*` server with `PLATFORM_TEST_DB_NAME` as the database. It must be a throwaway database (its schema is dropped on every run) and differ from `PLATFORM_DB_NAME`. The dev Postgres in `compose.yaml` creates one, `platform_test`, on first start. Docker is optional: any Postgres 18 works.
 
 `docker compose down` stops the services; add `-v` to also delete their data.
 
@@ -20,14 +20,14 @@ Platform tests use the same `DB_*` server with `TEST_DB_NAME` as the database. I
 
 | Variable | Purpose |
 |---|---|
-| `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` | Postgres 18 connection (`DB_PORT` defaults to 5432; `DB_PASSWORD` may be empty) |
-| `TEST_DB_NAME` | Tests only: throwaway database on the same server |
+| `PLATFORM_DB_HOST`, `PLATFORM_DB_PORT`, `PLATFORM_DB_USER`, `PLATFORM_DB_PASSWORD`, `PLATFORM_DB_NAME` | Postgres 18 connection (port defaults to 5432; password may be empty) |
+| `PLATFORM_TEST_DB_NAME` | Tests only: throwaway database on the same server |
 | `PLAY_TOKEN_PRIVATE_KEY` | Ed25519 private JWK that signs play tokens |
 | `PLATFORM_SERVER_KEY` | Bearer key the actor server sends with match reports (32+ chars) |
-| `ALLOWED_ORIGINS` | Comma-separated browser origins allowed by CORS |
-| `PORT` | Listen port (default `3000`) |
+| `PLATFORM_ALLOWED_ORIGINS` | Comma-separated browser origins allowed by CORS |
+| `PLATFORM_PORT` | Listen port (default `3000`) |
 
-The app refuses to start if one is missing or invalid.
+All keys live in the root `.env` (template: `.env.example`); the package scripts load it with `--env-file`. The app refuses to start if one is missing or invalid.
 
 ## Endpoints
 

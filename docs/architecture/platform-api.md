@@ -168,7 +168,7 @@ Browser                          Platform (VPS)                      Room actor 
 - A room maps `conn.id → playerId` in `c.vars`; actions use that map. The name comes from the token, not the client.
 - Rooms stop storing secrets: `tokens: Record<secret, playerId>` becomes plain player ids.
 - Disabling a player revokes their secrets, so they cannot get a new play token. A connection that is already open stays until it closes (at most one game); the 15-minute token limits reconnects.
-- CORS: the platform only answers browser requests from origins in `ALLOWED_ORIGINS`.
+- CORS: the platform only answers browser requests from origins in `PLATFORM_ALLOWED_ORIGINS`.
 
 Server-to-server calls (actor → platform) use `Authorization: Bearer <PLATFORM_SERVER_KEY>`, compared in constant time.
 
@@ -372,20 +372,20 @@ Backups: nightly `pg_dump` from a cron container to off-VPS storage, kept 14 day
 
 | Variable | Where | Purpose |
 |---|---|---|
-| `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` | platform | Postgres connection |
+| `PLATFORM_DB_HOST`, `PLATFORM_DB_PORT`, `PLATFORM_DB_USER`, `PLATFORM_DB_PASSWORD`, `PLATFORM_DB_NAME` | platform | Postgres connection |
 | `PLAY_TOKEN_PRIVATE_KEY` | platform | Ed25519 private key (JWK) that signs play tokens |
 | `PLATFORM_SERVER_KEY` | platform + actor server | Bearer key for actor → platform calls |
-| `ALLOWED_ORIGINS` | platform | Comma-separated origins allowed by CORS (game frontend) |
+| `PLATFORM_ALLOWED_ORIGINS` | platform | Comma-separated origins allowed by CORS (game frontend) |
 | `PLAY_TOKEN_PUBLIC_KEY` | actor server | Public key that verifies play tokens |
 | `PLATFORM_URL` | actor server | `http://platform:3000` (private network) |
 | `INTERNAL_ACTOR_KEY` | actor server | Guards the room list's `report` / `remove` |
-| `DB_*` (backoffice) | backoffice | Same keys, connecting as the `backoffice` role |
+| `BACKOFFICE_DB_*` | backoffice | Same shape as `PLATFORM_DB_*`, connecting as the `backoffice` role |
 | `PUBLIC_PLATFORM_URL` | game frontend | `https://api.nblueclouds.online` |
 | `PUBLIC_RIVET_ENDPOINT` | game frontend | `https://engine.nblueclouds.online` (already exists) |
 | `DOMAIN` | Caddy | `nblueclouds.online`; hostnames are built from it |
-| `ALLOWED_ORIGINS` value | platform | `https://nblueclouds.online` |
+| `PLATFORM_ALLOWED_ORIGINS` value | platform | `https://nblueclouds.online` |
 
-Each app validates its variables at startup and exits if one is missing. `bun run keys:generate` prints a fresh Ed25519 key pair. Each app has its own `.env.example` (e.g. `apps/platform/.env.example`) listing only the keys it reads.
+Each app validates its variables at startup and exits if one is missing. `bun run keys:generate` prints a fresh Ed25519 key pair. All apps read one root `.env` (template `.env.example`). Keys used by one app carry its prefix (`PLATFORM_`, `BACKOFFICE_`); keys several apps share (`PLAY_TOKEN_*`, `PLATFORM_SERVER_KEY`) have one name.
 
 ## Repo changes (MVP)
 
