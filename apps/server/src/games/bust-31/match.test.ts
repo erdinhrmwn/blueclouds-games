@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { z } from "zod";
-import { buildReport, type MatchState, noteMove, uuidv7 } from "./match";
+import { buildReport, type MatchState, noteMove } from "./match";
+import { uuidv7 } from "../shared/match";
 import { addPlayer, createGame, type Game } from "./rules";
 
 function table(lives: Record<string, number>, winnerId: string | null): Game {

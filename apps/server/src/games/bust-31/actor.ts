@@ -2,7 +2,8 @@ import { actor, UserError } from "rivetkit";
 import { db } from "rivetkit/db";
 import { chooseBotCard } from "./bots";
 import { createGame, dealPauseMs, type Game, handOf, playCard, publicView, resetToLobby, startGame, TURN_MS, addPlayer } from "./rules";
-import { buildReport, type MatchState, noteMove, uuidv7 } from "./match";
+import { buildReport, type MatchState, noteMove } from "./match";
+import { uuidv7 } from "../shared/match";
 import { PlayInput } from "./schema";
 import {
 	apply,
@@ -132,7 +133,7 @@ export const bust31Room = actor({
 		dropIfGone: async (c, id: unknown) => {
 			requireScheduler(c);
 			const { game } = c.vars;
-			if (await dropIfGone(c, id, game.players[game.turn]?.id ?? null)) await commit(c);
+			if (await dropIfGone(c, id, { playerId: game.players[game.turn]?.id ?? null, key: game.moves })) await commit(c);
 		},
 		/** Internal (scheduler only): sends queued match results to the platform. */
 		sendReports: async (c) => {
@@ -190,5 +191,5 @@ const viewOf = (c: Ctx) => publicView(c.vars.game, turnClock(c.vars.timer));
 function scheduleTurn(c: Ctx, resume: boolean): Promise<void> {
 	const game = c.vars.game as Game;
 	const current = game.phase === "playing" ? game.players[game.turn] : undefined;
-	return armTurn(c, current, { turnMs: TURN_MS, pause: dealPauseMs(game), resume, rng });
+	return armTurn(c, current, { key: game.moves, turnMs: TURN_MS, pause: dealPauseMs(game), resume, rng });
 }

@@ -13,7 +13,7 @@ const BOT_NAMES = ["Bot Cloud", "Bot Rain", "Bot Thunder", "Bot Rainbow", "Bot W
 /** Wait before each retry of an unsent match result; the last one repeats forever. */
 const REPORT_RETRY_MS = [10_000, 60_000, 5 * 60_000, 30 * 60_000, 6 * 60 * 60_000];
 
-/** Game position the current turn timer belongs to, when it runs out (epoch ms), and its full length. */
+/** The turn the timer belongs to (`moves` = the turn key), when it runs out (epoch ms), and its full length. */
 export type TurnTimer = { moves: number; endsAt: number; total: number } | null;
 
 /** What every room keeps in `c.vars` besides its game-specific fields. */
@@ -101,7 +101,7 @@ export function requireScheduler(c: Ctx): void {
  * In the lobby they leave the table; mid-game their seat stays and is played for them at bot speed.
  * Returns false when nothing changed (they came back, or are gone already).
  */
-export async function dropIfGone(c: Ctx, id: unknown, turnPlayerId: string | null): Promise<boolean> {
+export async function dropIfGone(c: Ctx, id: unknown, turn: { playerId: string | null; key: number }): Promise<boolean> {
 	const game = c.vars.game as Table;
 	const player = game.players.find((p) => p.id === id);
 	if (!player || [...c.conns.values()].some((conn: { id: string }) => playerOf(c, conn) === id)) return false;
@@ -110,37 +110,38 @@ export async function dropIfGone(c: Ctx, id: unknown, turnPlayerId: string | nul
 	} else {
 		c.vars.game = setAway(game, player.id, true);
 		// Their turn may be running on the full human clock: play it at bot speed instead.
-		if (game.phase === "playing" && turnPlayerId === player.id) await c.schedule.after(BOT_THINK_MS[0], "autoPlay", game.moves);
+		if (game.phase === "playing" && turn.playerId === player.id) await c.schedule.after(BOT_THINK_MS[0], "autoPlay", turn.key);
 	}
 	return true;
 }
 
 /**
- * Arms the timer for the current turn and schedules `autoPlay` for it: a short think time for bots
- * and away players, the full `turnMs` for humans. Runs on every commit but only arms once per game
- * position (`game.moves`); `resume` re-arms after a wake. `pause` holds the clock for an animation.
+ * Arms the timer for the current turn and schedules `autoPlay(key)` for it: a short think time for bots
+ * and away players, the full `turnMs` for humans. Runs on every commit but only arms once per `key`
+ * (a number that changes whenever a new turn starts); `resume` re-arms after a wake.
+ * `pause` holds the clock for an animation.
  */
 export async function armTurn(
 	c: Ctx,
 	current: { bot: boolean; away?: boolean } | undefined,
-	opts: { turnMs: number; pause: number; resume: boolean; rng: () => number },
+	opts: { key: number; turnMs: number; pause: number; resume: boolean; rng: () => number },
 ): Promise<void> {
-	const { game, timer } = c.vars as RoomVars<Table>;
+	const { timer } = c.vars as RoomVars<Table>;
 	if (!current) {
 		c.vars.timer = null;
 		return;
 	}
-	const same = timer?.moves === game.moves;
+	const same = timer?.moves === opts.key;
 	if (same && !opts.resume) return;
 	// Resuming after a wake keeps the deadline players already saw.
-	const next: NonNullable<TurnTimer> = same ? { ...timer!, total: timer!.total ?? opts.turnMs } : { moves: game.moves, endsAt: Date.now() + opts.pause + opts.turnMs, total: opts.turnMs };
+	const next: NonNullable<TurnTimer> = same ? { ...timer!, total: timer!.total ?? opts.turnMs } : { moves: opts.key, endsAt: Date.now() + opts.pause + opts.turnMs, total: opts.turnMs };
 	c.vars.timer = next;
 	const pause = same ? 0 : opts.pause;
 	const untilTimeout = Math.max(0, next.endsAt - Date.now());
 	const [min, max] = BOT_THINK_MS;
 	// A bot plays once it has "decided", which stops its clock early, like a quick human.
 	const delay = current.bot || current.away ? Math.min(untilTimeout, pause + min + Math.round(opts.rng() * (max - min))) : untilTimeout;
-	await c.schedule.after(delay, "autoPlay", game.moves);
+	await c.schedule.after(delay, "autoPlay", opts.key);
 }
 
 /** The turn clock as clients get it: relative, so a wrong device clock still counts down correctly. */
