@@ -1,25 +1,25 @@
-import { client } from '#lib/rivet/client.ts';
 import type { RoomSummary } from 'server/games/bust-31/schema';
 
-/** Live list of open Bust 31 tables. Create it in the browser only (it opens a WebSocket). */
+// ponytail: polling, because browsers can't reach the room list actor. Fine for a lobby list;
+// if it needs to be instant, stream it from our server (SSE) instead.
+const REFRESH_MS = 5000;
+
+/** The open Bust 31 tables, refreshed every few seconds. Create it in the browser only. */
 export class RoomList {
 	rooms = $state<RoomSummary[]>([]);
 	status = $state<'loading' | 'ready' | 'error'>('loading');
 
-	#conn = client.bust31Rooms.getOrCreate(['main']).connect();
-	#stop: (() => void)[] = [];
+	#timer = setInterval(() => void this.#load(), REFRESH_MS);
 
 	constructor() {
-		this.#stop.push(
-			this.#conn.on('rooms', (rooms: RoomSummary[]) => (this.rooms = rooms)),
-			this.#conn.onOpen(() => void this.#load()),
-			this.#conn.onError(() => (this.status = 'error'))
-		);
+		void this.#load();
 	}
 
 	async #load() {
 		try {
-			this.rooms = await this.#conn.list();
+			const res = await fetch('/api/rooms', { cache: 'no-store' });
+			if (!res.ok) throw new Error(`room list ${res.status}`);
+			this.rooms = ((await res.json()) as { rooms: RoomSummary[] }).rooms;
 			this.status = 'ready';
 		} catch (e) {
 			console.error('room list failed', e);
@@ -28,7 +28,6 @@ export class RoomList {
 	}
 
 	dispose() {
-		for (const stop of this.#stop) stop();
-		void this.#conn.dispose();
+		clearInterval(this.#timer);
 	}
 }
