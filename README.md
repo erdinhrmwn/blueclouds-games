@@ -31,7 +31,7 @@ bun run test       # game rule tests + platform API tests
 bun run check      # type-check every app
 ```
 
-The platform API needs Postgres; see [docs/apps/platform.md](docs/apps/platform.md).
+The platform API needs Postgres: `docker compose up -d` starts Postgres 18 and DragonflyDB locally. See [docs/apps/platform.md](docs/apps/platform.md).
 
 ## Docs layout
 
