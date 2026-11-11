@@ -1,8 +1,8 @@
 # Cloudburst rules
 
-> Proposal, not built yet. Working name "Cloudburst", slug `cloudburst`.
+> Proposal, not built yet. Slug `cloudburst`.
 
-A race to empty your hand. Play a card that matches the sky on the pile, use weather cards to get in each other's way, and be the first with no cards left.
+A race to empty your hand, over several rounds. Play a card that matches the sky on the pile, use weather cards to get in each other's way, and go out first. Every card still in your hand when someone goes out is a drop of rain in your cloud; when a cloud bursts, the match is over and the driest cloud wins.
 
 ## Players and table
 
@@ -41,14 +41,17 @@ When the deck runs out, everything under the top card is shuffled into a new dec
 
 - **Calm**: the player after you is skipped. With 2 players you go again.
 - **Swirl**: play now goes the other way. With 2 players it changes nothing (the other player is next either way).
-- **Gust**: after the Gust lands, you pick one card from your hand and it goes face down to the next player in the (current) direction. If the Gust was your last card, you have won and nothing is given. Only you and the receiver see which card it was.
+- **Gust**: after the Gust lands, you pick one card from your hand and it goes face down to the next player in the (current) direction. If the Gust was your last card, you went out and nothing is given. Only you and the receiver see which card it was.
 - **Rainbow**: pick Sun, Rain, Wind or Storm. The next player follows that suit (or plays another Rainbow). Nothing fits a Rainbow "by number".
 
-## Winning
+## Rounds and points
 
-- The first player to empty their hand wins the match. One deal is one match.
-- Everyone else is ranked by **cards left** (fewer is better). Players with the same number of cards share a place (e.g. 1st, 2nd, 2nd, 4th).
-- Seats show how many cards each player holds. A seat with **1 card** left is marked for everyone; there is no "call" to make.
+- A **round** ends the moment one player empties their hand. Everyone else takes **1 point per card** still in their hand (a "drop" in their cloud). The player who went out takes 0.
+- Every round is a fresh deal from the full deck. The first turn moves one seat clockwise each round (round 1: the first seat on the dealer's left), so nobody always starts.
+- The **match** ends after the round in which anyone reaches **10 points** (`BURST_AT`). The player with the **fewest points wins**.
+- Tie for fewest: one more round is played by everyone, until a single player has the fewest.
+- Placement: by points, fewest first. Players with the same points share a place (e.g. 1st, 2nd, 2nd, 4th); 1st is never shared because of the tie round.
+- Seats show how many cards each player holds and their points so far. A seat with **1 card** left is marked for everyone; there is no "call" to make.
 
 ## Turn timer
 
@@ -68,32 +71,61 @@ Rule-based, like Bust 31 (`bots.ts`, pure functions, decide within 1.5–4 s on 
 
 ## How long a match takes
 
-Simulated with a simpler version of these bots (2,000 games per row, 7 cards each):
+Simulated with a simpler version of these bots (1,000–2,000 matches per row, 7 cards, points = cards left, match ends at 10):
 
-| Players | Turns (average) | 95% of games within | Draws per game |
-|---|---|---|---|
-| 2 | 21 | 45 | 6 |
-| 4 | 30 | 46 | 6 |
-| 6 | 40 | 57 | 7 |
+| Players | Turns per round | Rounds per match (average, 95%) | Turns per match | Rough time |
+|---|---|---|---|---|
+| 2 | 21 | 5.8, 9 | 120 | 6–8 min |
+| 3 | 25 | 4.5, 6 | 110 | 6–8 min |
+| 4 | 30 | 3.9, 6 | 116 | 6–9 min |
+| 6 | 40 | 3.6, 5 | 143 | 8–11 min |
 
-At a few seconds per move that is roughly 2–5 minutes per match. The deck never ran out in these runs, and no hand grew past 12 cards. For comparison, matching on the same number instead made games 10–20% longer, and allowing "same or one away" made them 10–15% shorter with almost no drawing (about 4 draws per game).
+Tie rounds add 0.1–0.3 rounds per match on average. The deck never ran out, no hand grew past 12 cards, and no final total went past 22.
+
+Choices checked in the same simulation:
+- **Matching:** "same number" instead of "one step" made rounds 10–20% longer; "same or one step" made them 10–15% shorter with almost no drawing (about 4 draws per round).
+- **Points:** counting card values (numbers at face value, actions 5, Rainbow 10) with a 50-point limit plays about the same length and has fewer tie rounds, but you have to add up your hand. Counting cards keeps it readable: the number on a seat is exactly what that player would take.
+- **Limit:** 8 points gives 3–5 rounds, 12 gives 4–7. 10 sits between.
 
 ## Match report and move log
 
-- **Report** (`POST /v1/matches`, same as Bust 31): placement as above. The report's per-seat number is `livesLeft` today, which only makes sense for Bust 31; the proposal is to rename it to a game-defined `score` (Bust 31: lives left, Cloudburst: cards left). Nothing is deployed, so this is one migration plus a rename in Bust 31's `match.ts`.
+- **Report** (`POST /v1/matches`, same as Bust 31): placement as above, and each seat's final points. See "Score in the match report" below for how that number is stored.
 - **Move log** (once the [match log](../../architecture/match-log.md) design lands): events built by `logEvents(before, after)` in `match.ts`.
 
 | Type | Seat | Data |
 |---|---|---|
-| `deal` | — | `hands` (seat → card ids), `deck` (top first), `start` (first pile card), `starter` (seat) |
+| `deal` | — | `round`, `hands` (seat → card ids), `deck` (top first), `start` (first pile card), `starter` (seat) |
 | `play` | player | `card`, `suit` (chosen, Rainbow only), `gave` (card id, Gust only), `left` (cards in hand after), `by` |
 | `draw` | player | `card` (id or null when the deck was empty), `by` |
 | `pass` | player | `by` |
 | `reshuffle` | — | `deck` (new order, top first) |
 | `away` / `back` | player | — |
-| `finished` | — | `winner` (seat), `left` (seat → cards left) |
+| `round_end` | — | `out` (seat that went out), `left` (seat → cards left), `points` (seat → total after this round) |
+| `finished` | — | `winner` (seat), `points` (seat → final total) |
 
 `by` is `player`, `timeout`, `away` or `bot`, as in Bust 31. Card ids say what the card is (`sun-5-1` = Sun 5, copy 1; `rain-calm-0`; `rainbow-2`).
+
+## Score in the match report
+
+Checked every place that uses the per-seat `livesLeft` today:
+
+| Where | What it does with it |
+|---|---|
+| `apps/platform/migrations/003_matches.sql` | `match_players.lives_left smallint NOT NULL` |
+| `apps/platform/src/matches.ts` | Accepts `livesLeft` (0–99) in `POST /v1/matches`, stores it, returns it in `GET /v1/players/me/matches` |
+| `apps/backoffice/src/lib/server/matches.ts`, `routes/matches/[id]/+page.svelte` | Shows a "Lives left" column on the match page |
+| `apps/server/src/games/bust-31/match.ts` | Sends `lives` as `livesLeft` |
+| Tests | `platform/src/matches.test.ts`, `backoffice/src/lib/server/history.test.ts`, `bust-31/match.test.ts` |
+
+The game web app doesn't read it. Ranking never depends on it either: `placement` already says who came where.
+
+Options:
+
+1. **Rename to `score`, meaning defined by each game** (proposed). Bust 31 sends lives left, Cloudburst sends points. The backoffice column takes its label from a small per-game map (`Lives left`, `Points`), next to the per-game move log renderer. One migration (`006_match_score.sql`, after the match log's `005`), a rename in the files above, nothing else. The range stays `smallint`, 0–999.
+2. Keep `lives_left` and add a nullable `points` column. No rename, but every future game adds another column that is empty for the others.
+3. Drop the column: placement is enough, and the move log's `finished` event holds the final numbers. Smallest, but the backoffice match page loses the number for any match whose log isn't shown.
+
+With option 1, "higher is better" for Bust 31 and "lower is better" for Cloudburst. That is fine because the number is only displayed; anything that ranks uses `placement`.
 
 ## Building it (what is reused)
 
@@ -110,6 +142,6 @@ The earlier plan was to extract shared parts once a second game exists; this is 
 
 New for Cloudburst: `apps/server/src/games/cloudburst/{rules,bots,match,schema,actor}.ts` (actor `cloudburstRoom`, one action `play({ cardId, suit?, giveId? })` plus `draw` and `pass`), rule tests in `rules.test.ts`, the web components in `lib/games/cloudburst/`, a catalog entry, and `cloudburst` in the platform's `GAMES` list.
 
-Suggested order (one commit each): 1) extract the shared server parts with Bust 31 tests still green, 2) Cloudburst rules + bots + tests, 3) actor, 4) web table, 5) platform `score` rename and game entry.
+Suggested order (one commit each): 1) extract the shared server parts with Bust 31 tests still green, 2) Cloudburst rules + bots + tests, 3) actor, 4) web table, 5) platform `score` rename and game entry, after the match log has landed (both touch `POST /v1/matches`).
 
 UI design reasoning: [design.md](design.md).

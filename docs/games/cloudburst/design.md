@@ -11,6 +11,8 @@ There is still no BlueClouds brand guide; replace anything that clashes with it.
 - **Table:** Bust 31's oval felt, dealer at the head, 6 fixed seats, everyone sees the same seating. Shared components (`Felt`, `Seat`, `Dealer`, lobby seats) are reused as is.
 - **Centre:** the deck (face down, with its count) on the left and the pile on the right. The pile's top card is the focal point of the game screen. Around the pile sits a thin ring in the **current suit's colour with its glyph and name** ("Rain"), so after a Rainbow everyone sees what to follow. A small arrow under the pile shows the turn direction.
 - **Seats:** name, card count as a number on a small face-down stack, turn ring with the countdown. At 1 card the count turns ember and reads "1 card".
+- **Points:** under each name, a cloud meter of 10 small segments filling with the player's points, plus the number ("6 of 10"). It replaces Bust 31's life dots in the same spot of the shared `Seat`. The segments are slate, and turn ember from 8 points (close to bursting).
+- **Round counter** next to the dealer: "Round 3".
 - **Your hand:** a fan along the bottom, sorted by suit then number. Cards that fit are raised and fully bright; cards that don't are lowered and dimmed, and say so to screen readers ("Wind 3, does not fit"). The hand is disabled when it isn't your turn.
 - **Turn bar** under the hand on your turn: "Your turn" (brass), **Draw** button, and after a draw, **Pass**.
 
@@ -18,7 +20,8 @@ There is still no BlueClouds brand guide; replace anything that clashes with it.
 |---|---|
 | Lobby | The table code (same as Bust 31) |
 | Game | The top card of the pile and its suit ring |
-| Finished | The winner's name, with every seat's cards left |
+| Round end | The round summary: who went out, and each seat's "+N" |
+| Finished | The winner's name, with the final points of every seat |
 
 ## Cards
 
@@ -55,11 +58,19 @@ Every animation reports a table event, as in Bust 31. All of it is off under `pr
 | Swirl | The direction arrow turns over. |
 | Gust | A face-down card slides from the giver's seat to the receiver's seat. |
 | Rainbow | The suit ring fades to the chosen suit. |
-| Win | The winner's last card lands, the other hands fan open face up, and the winner's name rises (Bust 31's `WinCascade`). |
+| Round end | The last card lands, the other hands fan open face up, and each hand's cards fly as drops into that seat's cloud meter while a "+N" counts up. Then the dealer collects and deals the next round. |
+| Burst | The cloud that reached 10 shakes once and its meter flashes ember. |
+| Win | The winner's name rises (Bust 31's `WinCascade`), with the final points table below it. |
+
+## Between rounds
+
+- A short summary over the felt for about 4 seconds: "Bot Rain went out", then every seat with "+N" and its new total, sorted by total. No button to press, so a table with bots never waits; the server holds the next deal for that time, like the deal pause in Bust 31.
+- A tie round is announced as "Tie for fewest points: one more round".
+- Finished: the summary stays, with the winner on top, and the host gets "Play again" as in Bust 31.
 
 ## Phones (360px wide)
 
-- The seats shrink to name + count, as in Bust 31.
+- The seats shrink to name, card count and points as a number (the cloud meter is dropped below 400px), as in Bust 31.
 - The hand overlaps cards but always shows at least 44px of each, so every card is a real tap target; past that it scrolls sideways (no card is ever hidden off screen without a scroll hint at the edge).
 - The turn bar stays fixed above the bottom edge.
 
