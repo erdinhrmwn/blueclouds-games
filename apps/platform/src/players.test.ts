@@ -68,7 +68,7 @@ describe("me", () => {
 
 	test("disabled player and revoked secret are refused", async () => {
 		const a = await guest(t.app);
-		await t.sql`UPDATE players SET disabled_at = now() WHERE id = ${a.player.id}`;
+		await t.sql`UPDATE players SET disabled_at = now(), disabled_reason = 'Test' WHERE id = ${a.player.id}`;
 		const disabled = await call(t.app, "GET", "/v1/players/me", { token: a.secret });
 		expect(disabled.status).toBe(403);
 		expect(disabled.json.error.code).toBe("forbidden");
@@ -105,7 +105,64 @@ describe("play tokens", () => {
 
 	test("disabled player cannot get a token", async () => {
 		const { player, secret } = await guest(t.app);
-		await t.sql`UPDATE players SET disabled_at = now() WHERE id = ${player.id}`;
+		await t.sql`UPDATE players SET disabled_at = now(), disabled_reason = 'Test' WHERE id = ${player.id}`;
 		expect((await call(t.app, "POST", "/v1/play-tokens", { token: secret })).status).toBe(403);
+	});
+});
+
+describe("accounts", () => {
+	const ip = () => ({ "x-forwarded-for": crypto.randomUUID() });
+	const register = (body: unknown, token?: string) => call(t.app, "POST", "/v1/players/register", { body, token, headers: ip() });
+	const login = (username: string, password: string) =>
+		call(t.app, "POST", "/v1/players/login", { body: { username, password }, headers: ip() });
+
+	test("a guest registers in place: same id, same secret, history kept", async () => {
+		const g = await guest(t.app, "Gina");
+		const res = await register({ name: "Gina", username: "Gina_01", password: "long enough" }, g.secret);
+		expect(res.status).toBe(200);
+		expect(res.json.data.player).toMatchObject({ id: g.player.id, username: "gina_01" });
+		expect(res.json.data.playerSecret).toBeUndefined();
+		expect((await call(t.app, "GET", "/v1/players/me", { token: g.secret })).json.data.player.username).toBe("gina_01");
+		expect((await register({ name: "Gina", username: "gina_02", password: "long enough" }, g.secret)).status).toBe(409);
+		const [row] = await t.sql`SELECT password_hash, is_active, is_bot, is_vip FROM players WHERE id = ${g.player.id}`;
+		expect(row.password_hash).toStartWith("$argon2id$");
+		expect([row.is_active, row.is_bot, row.is_vip]).toEqual([true, false, false]);
+	});
+
+	test("without a guest, register makes a new player; a taken or bad username is refused", async () => {
+		const res = await register({ name: "Hana", username: "hana", password: "long enough" });
+		expect(res.status).toBe(201);
+		expect(res.json.data.playerSecret).toMatch(/^[A-Za-z0-9_-]{43}$/);
+		const taken = await register({ name: "Other", username: "HANA", password: "long enough" });
+		expect([taken.status, taken.json.error.fields]).toEqual([409, { username: "That username is taken." }]);
+		const bad = await register({ name: "X", username: "a b", password: "short" });
+		expect(Object.keys(bad.json.error.fields).sort()).toEqual(["password", "username"]);
+	});
+
+	test("login gives this device its own secret; logout revokes only that one", async () => {
+		const first = (await register({ name: "Ira", username: "ira", password: "correct horse" })).json.data;
+		expect((await login("IRA", "wrong horse")).status).toBe(401);
+		const res = await login("ira", "correct horse");
+		expect(res.json.data.player).toMatchObject({ id: first.player.id, name: "Ira", username: "ira" });
+		const second = res.json.data.playerSecret;
+		expect(second).not.toBe(first.playerSecret);
+		expect((await call(t.app, "POST", "/v1/players/logout", { token: second })).status).toBe(200);
+		expect((await call(t.app, "GET", "/v1/players/me", { token: second })).status).toBe(401);
+		expect((await call(t.app, "GET", "/v1/players/me", { token: first.playerSecret })).status).toBe(200);
+	});
+
+	test("an unknown username answers like a wrong password; 5 wrong ones lock the username", async () => {
+		expect((await login("nobody", "whatever1")).json.error.message).toBe("Wrong username or password.");
+		await register({ name: "Jo", username: "jo", password: "right password" });
+		for (let i = 0; i < 5; i++) await login("jo", "wrong password");
+		const locked = await login("jo", "right password");
+		expect([locked.status, locked.json.error.message]).toEqual([429, "Too many wrong passwords. Try again in 15 minutes."]);
+	});
+
+	test("a disabled player can't sign in; is_active follows disabled_at", async () => {
+		const { player } = (await register({ name: "Kai", username: "kai", password: "right password" })).json.data;
+		await t.sql`UPDATE players SET disabled_at = now(), disabled_reason = 'Test' WHERE id = ${player.id}`;
+		expect((await login("kai", "right password")).status).toBe(403);
+		expect((await t.sql`SELECT is_active FROM players WHERE id = ${player.id}`)[0].is_active).toBe(false);
 	});
 });

@@ -195,6 +195,14 @@ Bearer player secret. Request `{ "name": "Rina K" }`. `200`, `data: { "player": 
 
 Bearer player secret, no body. `200`, `data: { "token": "eyJ…", "expiresAt": "…" }`. Claims: `sub` (player id), `name`, `aud: "blueclouds-rooms"`, `iat`, `exp`.
 
+### `POST /v1/players/register`, `POST /v1/players/login`, `POST /v1/players/logout`
+
+Player accounts (migration `011`). Register takes `{ "name", "username", "password" }`: with a guest's bearer secret it turns that guest into the account (same id and secret, `200`); without one it makes a new player and returns its secret (`201`). Login takes `{ "username", "password" }` and returns a new secret for this device. Logout revokes the bearer secret. Usernames are stored lowercase. Errors: `400 bad_input` per field, `409 conflict` (username taken, or already an account), `401` wrong username or password (same answer for an unknown username), `403` disabled, `429` rate limited or 5 wrong passwords in 15 minutes.
+
+### Rooms and tournaments
+
+`POST /v1/rooms`, `GET /v1/rooms/:code`, `GET /v1/tournaments?game=`, `POST`/`DELETE /v1/tournaments/:id/registration` and `GET /v1/players/me/rooms` take the player secret; the room actor uses `GET /v1/rooms/:code/seats`, `POST /v1/rooms/:code/start` and `POST /v1/rooms/:code/close` with the server key. What each does is in [database.md](database.md#where-it-lives-in-the-code).
+
 ### `GET /v1/players/me/matches?cursor=…`
 
 Bearer player secret. The player's own history, newest first, 20 per page: `data: { "matches": [...], "nextCursor": "…" | null }`. Cheap to add because the table already exists, and it lets the game show "your last games".
@@ -255,7 +263,7 @@ Screens:
 - **Disable a player** = in one transaction: set `players.disabled_at` + reason, set `revoked_at` on all their `player_secrets`, write an audit row. The platform then refuses that player's secret (`403`) on the next play-token request. **Enable** clears `disabled_at`; old secrets stay revoked, so the player starts a new guest session.
 - Admins are created from the command line, never from a page: `docker compose exec backoffice bun run admin:create root` asks for the password on the terminal (never as an argument, so it stays out of shell history). The first admin is `root`.
 - `root` cannot be disabled from the backoffice, so the team can never lock itself out.
-- Every admin write (login, failed login, logout, disable, enable) writes one `admin_audit` row: who, what, target, reason, time, IP.
+- Every admin write (login, failed login, logout, disable, enable, VIP, tournament changes) writes one `admin_audit_events` row: who, what, which player, tournament or room, detail, time, IP.
 - One role in MVP (`admin`). Viewer/admin roles and TOTP 2FA come in Phase 2.
 
 ### Database access
@@ -270,122 +278,7 @@ Browsers never reach the room list actor. The game's server issues each browser 
 
 ## Data store
 
-```sql
-CREATE TABLE players (
-  id            uuid PRIMARY KEY DEFAULT uuidv7(),
-  display_name  text NOT NULL CHECK (char_length(display_name) BETWEEN 1 AND 20),
-  disabled_at   timestamptz,
-  disabled_reason text,
-  last_seen_at  timestamptz NOT NULL DEFAULT now(),
-  created_at    timestamptz NOT NULL DEFAULT now(),
-  updated_at    timestamptz NOT NULL DEFAULT now()
-);
-
-CREATE TABLE player_secrets (
-  secret_hash   bytea PRIMARY KEY,            -- sha256(secret); 32 random bytes, so no slow hash needed
-  player_id     uuid NOT NULL REFERENCES players(id),
-  revoked_at    timestamptz,
-  created_at    timestamptz NOT NULL DEFAULT now(),
-  updated_at    timestamptz NOT NULL DEFAULT now()
-);
-
--- The game catalog: a new game is one INSERT (match-schema.md).
-CREATE TABLE games (
-  slug          text PRIMARY KEY,             -- "bust-31"
-  name          text NOT NULL,
-  min_players   smallint NOT NULL,
-  max_players   smallint NOT NULL,
-  score_label   text NOT NULL,                -- what match_players.score means: "Lives left", "Points"
-  created_at    timestamptz NOT NULL DEFAULT now(),
-  updated_at    timestamptz NOT NULL DEFAULT now()
-);
-
-CREATE TABLE matches (
-  id            uuid PRIMARY KEY,             -- UUIDv7 chosen by the room: the idempotency key
-  game_slug     text NOT NULL REFERENCES games(slug),
-  room_code     text NOT NULL,
-  rules_version int  NOT NULL,
-  started_at    timestamptz NOT NULL,
-  ended_at      timestamptz NOT NULL,
-  body_hash     bytea NOT NULL,
-  created_at    timestamptz NOT NULL DEFAULT now(),
-  updated_at    timestamptz NOT NULL DEFAULT now()
-);
-CREATE INDEX matches_game_ended ON matches (game_slug, ended_at DESC);
-
-CREATE TABLE match_players (
-  match_id      uuid NOT NULL REFERENCES matches(id),
-  seat          smallint NOT NULL,
-  player_id     uuid REFERENCES players(id),  -- null for bots
-  bot_name      text,                         -- set exactly when player_id is null
-  placement     smallint NOT NULL,            -- 1 = winner (exactly one); ranking always uses this
-  score         int NOT NULL,                 -- game-defined, labelled by games.score_label
-  created_at    timestamptz NOT NULL DEFAULT now(),
-  updated_at    timestamptz NOT NULL DEFAULT now(),
-  PRIMARY KEY (match_id, seat),
-  CHECK ((player_id IS NULL) = (bot_name IS NOT NULL))
-);
-CREATE INDEX match_players_player ON match_players (player_id, match_id DESC) WHERE player_id IS NOT NULL;
-
--- Every move of the match (match-log.md), holds hidden cards: backoffice only.
-CREATE TABLE match_logs (
-  match_id      uuid PRIMARY KEY REFERENCES matches(id),
-  log_version   int NOT NULL,
-  event_count   int NOT NULL,
-  events        jsonb NOT NULL,
-  created_at    timestamptz NOT NULL DEFAULT now(),
-  updated_at    timestamptz NOT NULL DEFAULT now()
-);
-
-CREATE TABLE admins (
-  id            uuid PRIMARY KEY DEFAULT uuidv7(),
-  username      text NOT NULL UNIQUE CHECK (username ~ '^[a-z0-9_.-]{3,32}$'),
-  password_hash text NOT NULL,                -- Bun.password (argon2id)
-  disabled_at   timestamptz,
-  created_at    timestamptz NOT NULL DEFAULT now(),
-  updated_at    timestamptz NOT NULL DEFAULT now()
-);
-
-CREATE TABLE admin_sessions (
-  token_hash    bytea PRIMARY KEY,            -- sha256(token)
-  admin_id      uuid NOT NULL REFERENCES admins(id),
-  expires_at    timestamptz NOT NULL,
-  created_at    timestamptz NOT NULL DEFAULT now(),
-  updated_at    timestamptz NOT NULL DEFAULT now()
-);
-
-CREATE TABLE admin_audit (
-  id            uuid PRIMARY KEY DEFAULT uuidv7(),
-  admin_id      uuid REFERENCES admins(id),   -- null for a failed login
-  action        text NOT NULL,                -- 'login', 'login_failed', 'player.disable', …
-  target_id     uuid,
-  detail        jsonb NOT NULL DEFAULT '{}',
-  ip            inet,
-  created_at    timestamptz NOT NULL DEFAULT now(),
-  updated_at    timestamptz NOT NULL DEFAULT now()
-);
-
--- updated_at is kept current by the database, so no query can forget it.
-CREATE FUNCTION set_updated_at() RETURNS trigger LANGUAGE plpgsql AS $$
-BEGIN
-  NEW.updated_at := now();
-  RETURN NEW;
-END $$;
-
-DO $$
-DECLARE t text;
-BEGIN
-  FOREACH t IN ARRAY ARRAY['players','player_secrets','matches','match_players','admins','admin_sessions','admin_audit'] LOOP
-    EXECUTE format('CREATE TRIGGER %I_updated_at BEFORE UPDATE ON %I FOR EACH ROW EXECUTE FUNCTION set_updated_at()', t, t);
-  END LOOP;
-END $$;
-```
-
-Every table has `created_at` and `updated_at` (`timestamptz`, UTC). New tables follow the same rule: add both columns and the trigger in the same migration.
-
-Match history is never deleted. Bot matches are stored like the rest; Phase 2 stats can show "all games" and "vs humans" from the same rows.
-
-Backups: nightly `pg_dump` from a cron container to off-VPS storage, kept 14 days. Restoring one is tested before launch.
+The full schema, its rules and the migration path are in [database.md](database.md).
 
 ## Configuration
 

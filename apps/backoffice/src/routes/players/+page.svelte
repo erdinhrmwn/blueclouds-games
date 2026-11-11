@@ -12,7 +12,7 @@
 
 <form method="GET" class="mt-4 flex max-w-xl gap-2" role="search">
 	<label class="sr-only" for="q">Search players</label>
-	<input class="field" id="q" name="q" value={data.q} placeholder="Name or player id" maxlength="64" />
+	<input class="field" id="q" name="q" value={data.q} placeholder="Name, username or player id" maxlength="64" />
 	<button class="btn-primary">Search</button>
 </form>
 
@@ -22,10 +22,11 @@
 	</p>
 {:else}
 	<div class="mt-6 overflow-x-auto rounded-lg border border-line bg-surface">
-		<table class="w-full min-w-[40rem] text-left text-sm">
+		<table class="w-full min-w-[48rem] text-left text-sm">
 			<thead class="border-b border-line text-muted">
 				<tr>
 					<th class="px-3 py-2 font-medium">Name</th>
+					<th class="px-3 py-2 font-medium">Account</th>
 					<th class="px-3 py-2 font-medium">Player id</th>
 					<th class="px-3 py-2 font-medium">Joined</th>
 					<th class="px-3 py-2 font-medium">Last seen</th>
@@ -36,10 +37,13 @@
 				{#each data.players as p (p.id)}
 					<tr class="border-b border-line last:border-0 hover:bg-page">
 						<td class="px-3 py-2"><a class="font-medium underline decoration-line underline-offset-2 hover:decoration-ink" href="/players/{p.id}">{p.name}</a></td>
+						<td class="px-3 py-2">
+							{p.isBot ? 'Bot' : p.username ? `@${p.username}` : 'Guest'}{#if p.isVip}<span class="ml-2 rounded border border-line px-1.5 text-xs font-medium">VIP</span>{/if}
+						</td>
 						<td class="px-3 py-2 font-mono text-xs text-muted">{p.id}</td>
 						<td class="px-3 py-2 whitespace-nowrap">{utc(p.createdAt)}</td>
 						<td class="px-3 py-2 whitespace-nowrap">{utc(p.lastSeenAt)}</td>
-						<td class="px-3 py-2">{#if p.disabledAt}<span class="font-medium text-danger">Disabled</span>{:else}Active{/if}</td>
+						<td class="px-3 py-2">{#if !p.isActive}<span class="font-medium text-danger">Disabled</span>{:else}Active{/if}</td>
 					</tr>
 				{/each}
 			</tbody>

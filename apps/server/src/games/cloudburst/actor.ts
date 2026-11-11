@@ -21,12 +21,17 @@ import {
 	playerOf,
 	reportToDirectory,
 	requireHost,
+	requireOpenTable,
 	requirePlayer,
 	requireScheduler,
 	resumeReports,
 	roomVars,
+	seatFor,
 	sendReports,
+	tournamentTick,
+	tournamentView,
 	turnClock,
+	wakeTournament,
 } from "../shared/room";
 import { type MatchState, newMatch } from "../shared/match";
 import { BotIdInput } from "../shared/schema";
@@ -45,6 +50,7 @@ export const cloudburstRoom = actor({
 		await loadRoom(c);
 		await scheduleTurn(c, true);
 		await resumeReports(c);
+		await wakeTournament(c);
 	},
 	onBeforeConnect: async (_c, params: unknown) => checkConnect(params),
 	onConnect: async (c, conn) => {
@@ -62,8 +68,10 @@ export const cloudburstRoom = actor({
 			const who = caller(c);
 			const seated = c.vars.game.players.find((p) => p.id === who.id);
 			if (!seated) {
-				c.vars.game = apply(() => addPlayer(c.vars.game, who.id, who.name));
+				const seat = await seatFor(c, who);
+				c.vars.game = apply(() => addPlayer(c.vars.game, who.id, who.name, false, seat));
 				await commit(c);
+				await tournamentTick(c, tournament(c)); // the last one in starts a tournament table
 			} else if (seated.away) {
 				c.vars.game = setAway(c.vars.game, who.id, false); // back from a closed tab
 				await commit(c);
@@ -76,6 +84,7 @@ export const cloudburstRoom = actor({
 		},
 		/** Host only: seats a bot in the given empty chair. */
 		addBot: async (c, seatInput: unknown) => {
+			requireOpenTable(c);
 			requireHost(c);
 			const seat = parseSeat(seatInput);
 			c.vars.game = apply(() => addPlayer(c.vars.game, `bot-${crypto.randomUUID()}`, botName(c.vars.game.players), true, seat));
@@ -83,12 +92,14 @@ export const cloudburstRoom = actor({
 		},
 		/** Moves you to an empty chair (lobby only). */
 		takeSeat: async (c, seatInput: unknown) => {
+			requireOpenTable(c);
 			const me = requirePlayer(c);
 			const seat = parseSeat(seatInput);
 			c.vars.game = apply(() => takeSeat(c.vars.game, me, seat));
 			await commit(c);
 		},
 		removeBot: async (c, botId: unknown) => {
+			requireOpenTable(c);
 			requireHost(c);
 			const id = BotIdInput.parse(botId);
 			if (!c.vars.game.players.find((p) => p.id === id)?.bot) throw new UserError("Bot not found.", { code: "rule" });
@@ -96,9 +107,8 @@ export const cloudburstRoom = actor({
 			await commit(c);
 		},
 		start: async (c) => {
-			const me = requirePlayer(c);
-			c.vars.game = apply(() => startGame(c.vars.game, me, rng));
-			c.vars.match = newMatch();
+			requireOpenTable(c);
+			begin(c, requirePlayer(c));
 			await commit(c);
 		},
 		/** Plays a card: `suit` for a Rainbow, `giveId` (the card to hand on) for a Gust. */
@@ -120,6 +130,7 @@ export const cloudburstRoom = actor({
 			await commit(c);
 		},
 		reset: async (c) => {
+			requireOpenTable(c);
 			const me = requirePlayer(c);
 			c.vars.game = apply(() => resetToLobby(c.vars.game, me));
 			await commit(c);
@@ -129,6 +140,11 @@ export const cloudburstRoom = actor({
 			requireScheduler(c);
 			const { game } = c.vars;
 			if (await dropIfGone(c, id, { playerId: game.players[game.turn]?.id ?? null, key: game.turnKey })) await commit(c);
+		},
+		/** Internal (scheduler only): a tournament table's start time, or the end of its wait for late players. */
+		tournamentStart: async (c) => {
+			requireScheduler(c);
+			await tournamentTick(c, tournament(c));
 		},
 		/** Internal (scheduler only): sends queued match results to the platform. */
 		sendReports: async (c) => {
@@ -169,7 +185,16 @@ const commit = (c: Ctx, auto = false) =>
 		auto,
 	);
 
-const viewOf = (c: Ctx) => publicView(c.vars.game, turnClock(c.vars.timer));
+const viewOf = (c: Ctx) => ({ ...publicView(c.vars.game, turnClock(c.vars.timer)), tournament: tournamentView(c) });
+
+/** Starts the match; `by` must be the host. */
+function begin(c: Ctx, by: string): void {
+	c.vars.game = apply(() => startGame(c.vars.game, by, rng));
+	c.vars.match = newMatch();
+}
+
+/** How a tournament table starts itself: as its host would. */
+const tournament = (c: Ctx) => ({ start: () => begin(c, c.vars.game.hostId), commit: () => commit(c) });
 
 /** Everyone gets TURN_MS; a fresh round's clock starts after the round summary and the deal. */
 function scheduleTurn(c: Ctx, resume: boolean): Promise<void> {

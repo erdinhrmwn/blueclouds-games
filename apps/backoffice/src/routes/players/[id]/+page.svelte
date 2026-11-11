@@ -25,6 +25,10 @@
 <dl class="mt-4 grid max-w-2xl grid-cols-[auto_1fr] gap-x-6 gap-y-1 text-sm">
 	<dt class="text-muted">Player id</dt>
 	<dd class="font-mono text-xs leading-5 break-all">{p.id}</dd>
+	<dt class="text-muted">Account</dt>
+	<dd>
+		{p.isBot ? 'Bot (run by the system)' : p.username ? `@${p.username}` : 'Guest (no username yet)'}{#if p.isVip}<span class="ml-2 rounded border border-line px-1.5 text-xs font-medium">VIP</span>{/if}
+	</dd>
 	<dt class="text-muted">Joined</dt>
 	<dd>{utc(p.createdAt)}</dd>
 	<dt class="text-muted">Last seen</dt>
@@ -39,10 +43,11 @@
 	</dd>
 </dl>
 
+{#if form?.message}<p class="mt-4 text-sm" role="status">{form.message}</p>{/if}
+{#if form?.error}<p class="mt-4 text-sm text-danger" role="alert">{form.error}</p>{/if}
+
 <section class="mt-6 max-w-2xl rounded-lg border border-line bg-surface p-4" aria-labelledby="access">
 	<h2 id="access" class="font-semibold">Access</h2>
-	{#if form?.message}<p class="mt-2 text-sm" role="status">{form.message}</p>{/if}
-	{#if form?.error}<p class="mt-2 text-sm text-danger" role="alert">{form.error}</p>{/if}
 	{#if p.disabledAt}
 		<p class="mt-1 text-sm text-muted">Enabling lets them play again. Their old browser session stays signed out.</p>
 		<form method="POST" action="?/enable" class="mt-3" use:enhance={submit}>
@@ -58,6 +63,15 @@
 			<button class="btn-danger" disabled={busy}>Disable player</button>
 		</form>
 	{/if}
+</section>
+
+<section class="mt-6 max-w-2xl rounded-lg border border-line bg-surface p-4" aria-labelledby="vip">
+	<h2 id="vip" class="font-semibold">VIP</h2>
+	<p class="mt-1 text-sm text-muted">{p.isVip ? 'This player is a VIP.' : 'Mark a player as VIP. The change is kept in the audit log.'}</p>
+	<form method="POST" action="?/vip" class="mt-3" use:enhance={submit}>
+		<input type="hidden" name="vip" value={p.isVip ? 'false' : 'true'} />
+		<button class={p.isVip ? 'btn-quiet' : 'btn-primary'} disabled={busy}>{p.isVip ? 'Take VIP away' : 'Make VIP'}</button>
+	</form>
 </section>
 
 <div class="mt-8 flex items-baseline justify-between gap-4">

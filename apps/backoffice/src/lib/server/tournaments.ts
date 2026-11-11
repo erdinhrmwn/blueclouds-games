@@ -1,0 +1,216 @@
+import type { SQL } from 'bun';
+import { z } from 'zod';
+import { DistributeError, distributeIn } from '../../../../platform/src/tournaments.ts';
+import type { Admin } from './auth.ts';
+import { audit } from './auth.ts';
+import { isUuid } from './players.ts';
+
+/** Most player ids one paste may register. */
+export const REGISTER_MAX = 500;
+const LIST_LIMIT = 100;
+
+/** A rule an admin broke; the message is shown on the form. */
+export class TournamentError extends Error {}
+
+export type TournamentRow = {
+	id: string;
+	game: string;
+	gameName: string;
+	name: string;
+	playersPerRoom: number;
+	startsAt: Date;
+	registrationOpensAt: Date;
+	registrationClosesAt: Date;
+	distributedAt: Date | null;
+	distributeError: string | null;
+	cancelledAt: Date | null;
+	endedAt: Date | null;
+	registered: number;
+	rooms: number;
+};
+
+const COLUMNS = (sql: SQL) => sql`
+	t.id, t.game_slug AS game, g.name AS "gameName", t.name, t.players_per_room AS "playersPerRoom", t.starts_at AS "startsAt",
+	t.registration_opens_at AS "registrationOpensAt", t.registration_closes_at AS "registrationClosesAt",
+	t.distributed_at AS "distributedAt", t.distribute_error AS "distributeError", t.cancelled_at AS "cancelledAt", t.ended_at AS "endedAt",
+	(SELECT count(*)::int FROM tournament_players tp WHERE tp.tournament_id = t.id) AS registered,
+	(SELECT count(*)::int FROM rooms r WHERE r.tournament_id = t.id) AS rooms`;
+
+/** Newest start first. */
+export async function listTournaments(sql: SQL): Promise<TournamentRow[]> {
+	return (await sql`SELECT ${COLUMNS(sql)} FROM tournaments t JOIN games g ON g.slug = t.game_slug ORDER BY t.starts_at DESC LIMIT ${LIST_LIMIT}`) as TournamentRow[];
+}
+
+/** A `datetime-local` value, read as UTC like every time in the backoffice. */
+const UtcTime = z
+	.string()
+	.regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/, 'Pick a date and time.')
+	.transform((v) => new Date(`${v}:00Z`));
+
+export const NewTournament = z.object({
+	game: z.string().min(1, 'Pick a game.'),
+	name: z.string().trim().min(1, 'Give it a name of 1-80 characters.').max(80, 'Give it a name of 1-80 characters.'),
+	playersPerRoom: z.coerce.number().int('Must be a whole number.'),
+	startsAt: UtcTime,
+	registrationOpensAt: UtcTime.optional(),
+	registrationClosesAt: UtcTime.optional()
+});
+
+/** Sign-up closes this long before the start unless the admin picks a time. */
+const CLOSE_BEFORE_START_MS = 10 * 60_000;
+
+export async function createTournament(sql: SQL, admin: Admin, input: z.output<typeof NewTournament>, ip: string | null): Promise<string> {
+	const [game] = await sql`SELECT min_players, max_players FROM games WHERE slug = ${input.game}`;
+	if (!game) throw new TournamentError('Pick a game.');
+	if (input.playersPerRoom < game.min_players || input.playersPerRoom > game.max_players) {
+		throw new TournamentError(`Players per table must be ${game.min_players}-${game.max_players} for this game.`);
+	}
+	const now = new Date();
+	const opens = input.registrationOpensAt ?? now;
+	const closes = input.registrationClosesAt ?? new Date(input.startsAt.getTime() - CLOSE_BEFORE_START_MS);
+	if (input.startsAt <= now) throw new TournamentError('The start must be in the future.');
+	if (!(opens < closes && closes <= input.startsAt)) throw new TournamentError('Sign-up must open before it closes, and close no later than the start.');
+	return sql.begin(async (tx) => {
+		const [row] = await tx`
+			INSERT INTO tournaments (game_slug, name, players_per_room, starts_at, registration_opens_at, registration_closes_at, created_by_admin_id)
+			VALUES (${input.game}, ${input.name}, ${input.playersPerRoom}, ${input.startsAt}, ${opens}, ${closes}, ${admin.id}) RETURNING id`;
+		await audit(tx, { adminId: admin.id, action: 'tournament.create', tournamentId: row.id, detail: { name: input.name, game: input.game }, ip });
+		return row.id as string;
+	});
+}
+
+export type Registered = { playerId: string; name: string; disabled: boolean; byAdmin: boolean; roomCode: string | null; seat: number | null };
+export type TournamentRoom = { id: string; code: string; startedAt: Date | null; closedAt: Date | null; closeReason: string | null; players: number };
+
+export async function tournamentDetail(sql: SQL, id: string) {
+	if (!isUuid(id)) return null;
+	const [tournament] = (await sql`SELECT ${COLUMNS(sql)} FROM tournaments t JOIN games g ON g.slug = t.game_slug WHERE t.id = ${id}`) as TournamentRow[];
+	if (!tournament) return null;
+	const [players, rooms] = await Promise.all([
+		sql`
+			SELECT tp.player_id AS "playerId", p.display_name AS name, p.disabled_at IS NOT NULL AS disabled,
+			       tp.registered_by_admin_id IS NOT NULL AS "byAdmin", r.code AS "roomCode", ra.seat
+			FROM tournament_players tp JOIN players p ON p.id = tp.player_id
+			LEFT JOIN room_assignments ra ON ra.tournament_id = tp.tournament_id AND ra.player_id = tp.player_id
+			LEFT JOIN rooms r ON r.id = ra.room_id
+			WHERE tp.tournament_id = ${id}
+			ORDER BY r.code NULLS LAST, ra.seat, p.display_name`,
+		sql`
+			SELECT r.id, r.code, r.started_at AS "startedAt", r.closed_at AS "closedAt", r.close_reason AS "closeReason",
+			       (SELECT count(*)::int FROM room_assignments ra WHERE ra.room_id = r.id) AS players
+			FROM rooms r WHERE r.tournament_id = ${id} ORDER BY r.code`
+	]);
+	return { tournament, players: [...players] as Registered[], rooms: [...rooms] as TournamentRoom[] };
+}
+
+/** Player ids from a paste: one per line, or separated by commas or spaces. */
+export function parseIds(text: string): { ids: string[]; invalid: string[] } {
+	const parts = [...new Set(text.split(/[\s,]+/).filter(Boolean))];
+	return { ids: parts.filter(isUuid).map((s) => s.toLowerCase()), invalid: parts.filter((s) => !isUuid(s)) };
+}
+
+/** Locks the tournament for a change and refuses one that is cancelled or already handed out its tables. */
+async function lockOpen(tx: SQL, id: string) {
+	const [t] = await tx`SELECT name, distributed_at, cancelled_at, players_per_room FROM tournaments WHERE id = ${id} FOR UPDATE`;
+	if (!t) throw new TournamentError('This tournament no longer exists.');
+	if (t.cancelled_at) throw new TournamentError('This tournament was cancelled.');
+	return t;
+}
+
+/**
+ * Registers players by id until the tables are handed out (admins aren't held to the sign-up window).
+ * Returns how many were added; ids already in are skipped, unknown ones refuse the whole paste.
+ */
+export async function registerPlayers(sql: SQL, admin: Admin, id: string, ids: string[], ip: string | null): Promise<{ added: number; already: number }> {
+	if (ids.length === 0) throw new TournamentError('Paste at least one player id.');
+	if (ids.length > REGISTER_MAX) throw new TournamentError(`Paste at most ${REGISTER_MAX} ids at a time.`);
+	return sql.begin(async (tx) => {
+		const t = await lockOpen(tx, id);
+		if (t.distributed_at) throw new TournamentError('Tables are already handed out. Add a player to a table below instead.');
+		const known = new Set((await tx`SELECT id FROM players WHERE id IN ${tx(ids)}`).map((r: { id: string }) => r.id));
+		const unknown = ids.filter((x) => !known.has(x));
+		if (unknown.length) throw new TournamentError(`Unknown player ids: ${unknown.slice(0, 5).join(', ')}${unknown.length > 5 ? ', …' : ''}`);
+		const rows = ids.map((player_id) => ({ tournament_id: id, player_id, registered_by_admin_id: admin.id }));
+		const added = await tx`INSERT INTO tournament_players ${tx(rows)} ON CONFLICT DO NOTHING RETURNING player_id`;
+		if (added.length) await audit(tx, { adminId: admin.id, action: 'tournament.register', tournamentId: id, detail: { players: added.length }, ip });
+		return { added: added.length, already: ids.length - added.length };
+	});
+}
+
+/** Takes a player out, and off their table first. Refused once their table started. */
+export async function unregisterPlayer(sql: SQL, admin: Admin, id: string, playerId: string, ip: string | null): Promise<void> {
+	await sql.begin(async (tx) => {
+		await lockOpen(tx, id);
+		const [seat] = await tx`
+			SELECT r.started_at FROM room_assignments ra JOIN rooms r ON r.id = ra.room_id WHERE ra.tournament_id = ${id} AND ra.player_id = ${playerId}`;
+		if (seat?.started_at) throw new TournamentError('Their table already started.');
+		await tx`DELETE FROM room_assignments WHERE tournament_id = ${id} AND player_id = ${playerId}`;
+		const [gone] = await tx`DELETE FROM tournament_players WHERE tournament_id = ${id} AND player_id = ${playerId} RETURNING player_id`;
+		if (!gone) throw new TournamentError('That player is not registered.');
+		await audit(tx, { adminId: admin.id, action: 'tournament.unregister', tournamentId: id, playerId, ip });
+	});
+}
+
+/** "Distribute now": closes sign-up at once and hands out the tables, the same way the platform's job does. */
+export async function distributeNow(sql: SQL, admin: Admin, id: string, ip: string | null): Promise<{ rooms: number; players: number }> {
+	try {
+		return await sql.begin(async (tx) => {
+			await tx`
+				UPDATE tournaments SET registration_opens_at = least(registration_opens_at, now() - interval '1 second'),
+				       registration_closes_at = least(registration_closes_at, now())
+				WHERE id = ${id} AND distributed_at IS NULL AND cancelled_at IS NULL`;
+			return distributeIn(tx, id, { adminId: admin.id, ip });
+		});
+	} catch (err) {
+		if (err instanceof DistributeError) throw new TournamentError(err.message);
+		throw err;
+	}
+}
+
+export async function cancelTournament(sql: SQL, admin: Admin, id: string, ip: string | null): Promise<void> {
+	await sql.begin(async (tx) => {
+		const [row] = await tx`UPDATE tournaments SET cancelled_at = now() WHERE id = ${id} AND cancelled_at IS NULL AND ended_at IS NULL RETURNING id`;
+		if (!row) throw new TournamentError('This tournament already ended or was cancelled.');
+		await audit(tx, { adminId: admin.id, action: 'tournament.cancel', tournamentId: id, ip });
+	});
+}
+
+/**
+ * Seats a player at a table that hasn't started, on its first free seat. Registers them too if needed.
+ * Nobody already seated is moved: a player at another table must be taken off it first.
+ */
+export async function assignPlayer(sql: SQL, admin: Admin, id: string, roomCode: string, playerId: string, ip: string | null): Promise<number> {
+	return sql.begin(async (tx) => {
+		const t = await lockOpen(tx, id);
+		const [room] = await tx`SELECT id, started_at, closed_at FROM rooms WHERE code = ${roomCode} AND tournament_id = ${id}`;
+		if (!room) throw new TournamentError('That table is not part of this tournament.');
+		if (room.started_at || room.closed_at) throw new TournamentError('That table already started.');
+		const [player] = await tx`SELECT 1 FROM players WHERE id = ${playerId}`;
+		if (!player) throw new TournamentError('Unknown player id.');
+		const [other] = await tx`SELECT r.code FROM room_assignments ra JOIN rooms r ON r.id = ra.room_id WHERE ra.tournament_id = ${id} AND ra.player_id = ${playerId}`;
+		if (other) throw new TournamentError(`They already sit at table ${other.code}. Take them off it first.`);
+		const taken = new Set((await tx`SELECT seat FROM room_assignments WHERE room_id = ${room.id}`).map((r: { seat: number | null }) => r.seat));
+		const seat = Array.from({ length: t.players_per_room }, (_, s) => s).find((s) => !taken.has(s));
+		if (seat === undefined) throw new TournamentError('That table is full.');
+		await tx`INSERT INTO tournament_players (tournament_id, player_id, registered_by_admin_id) VALUES (${id}, ${playerId}, ${admin.id}) ON CONFLICT DO NOTHING`;
+		await tx`
+			INSERT INTO room_assignments (room_id, tournament_id, player_id, seat, assigned_by_admin_id)
+			VALUES (${room.id}, ${id}, ${playerId}, ${seat}, ${admin.id})`;
+		await audit(tx, { adminId: admin.id, action: 'room.assign', tournamentId: id, roomId: room.id, playerId, detail: { seat }, ip });
+		return seat;
+	});
+}
+
+/** Takes a player off a table that hasn't started. They stay registered. */
+export async function unassignPlayer(sql: SQL, admin: Admin, id: string, playerId: string, ip: string | null): Promise<void> {
+	await sql.begin(async (tx) => {
+		await lockOpen(tx, id);
+		const [seat] = await tx`
+			SELECT ra.room_id, r.started_at FROM room_assignments ra JOIN rooms r ON r.id = ra.room_id
+			WHERE ra.tournament_id = ${id} AND ra.player_id = ${playerId}`;
+		if (!seat) throw new TournamentError('That player has no table.');
+		if (seat.started_at) throw new TournamentError('Their table already started.');
+		await tx`DELETE FROM room_assignments WHERE tournament_id = ${id} AND player_id = ${playerId}`;
+		await audit(tx, { adminId: admin.id, action: 'room.unassign', tournamentId: id, roomId: seat.room_id, playerId, ip });
+	});
+}

@@ -205,7 +205,9 @@
 						<li class={p.id === view.winnerId ? 'text-brass' : 'text-paper/80'}>{p.name}: {p.points}</li>
 					{/each}
 				</ol>
-				{#if room.isHost}
+				{#if view.tournament}
+					<p class="text-sm text-paper/75">This {view.tournament.name} table is done.</p>
+				{:else if room.isHost}
 					<button class="btn-brass mt-2" onclick={room.reset} disabled={room.busy}>Shuffle &amp; play again</button>
 				{:else}
 					<p class="text-sm text-paper/75">Waiting for the host to open a new table…</p>

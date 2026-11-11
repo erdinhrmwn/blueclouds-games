@@ -2,6 +2,7 @@
 	import type { GameEntry } from '#lib/games/catalog.ts';
 	import JoinPanel from '#lib/components/JoinPanel.svelte';
 	import OpenTables from '#lib/components/OpenTables.svelte';
+	import Tournaments from '#lib/components/Tournaments.svelte';
 	import { BURST_AT, type Card, HAND_SIZE } from 'server/games/cloudburst/rules';
 	import CloudCard from './CloudCard.svelte';
 
@@ -32,6 +33,8 @@
 
 	<JoinPanel game={game.slug} />
 </div>
+
+<Tournaments game={game.slug} />
 
 <OpenTables game={game.slug} />
 

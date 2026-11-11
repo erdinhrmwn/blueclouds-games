@@ -33,7 +33,7 @@ Behind a proxy, adapter-node also needs `ORIGIN` (e.g. `https://backoffice.nblue
 - Sign-in: username + password (argon2id via `Bun.password`). 5 failed tries for a username within 15 minutes lock it for the rest of the window. An unknown username takes as long as a wrong password.
 - Session: random 32-byte token in an `httpOnly`, `SameSite=Strict` cookie (`Secure` outside dev), 8 hours. Only its SHA-256 is stored. Disabling an admin ends their sessions at once.
 - Form actions are covered by SvelteKit's CSRF origin check.
-- Every sign-in, failed sign-in, sign-out, disable and enable writes an `admin_audit` row with the IP.
+- Every sign-in, failed sign-in, sign-out and change (players, VIP, tournaments) writes an `admin_audit_events` row with the IP.
 - Disabling a player revokes all their secrets in the same transaction. The platform answers their old secret with `403` ("disabled"), so the game can tell them why. Enabling clears the flag; the old secrets stay revoked, so they come back as a new guest session.
 - Admins are only created with `admin:create`, which reads the password from the terminal so it never lands in shell history.
 

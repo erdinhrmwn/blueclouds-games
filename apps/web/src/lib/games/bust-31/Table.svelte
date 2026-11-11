@@ -161,7 +161,9 @@
 				>
 					{nameOf(view.winnerId)}
 				</p>
-				{#if room.isHost}
+				{#if view.tournament}
+					<p class="text-sm text-paper/75">This {view.tournament.name} table is done.</p>
+				{:else if room.isHost}
 					<button class="btn-brass mt-2" onclick={room.reset} disabled={room.busy}>Shuffle &amp; play again</button>
 				{:else}
 					<p class="text-sm text-paper/75">Waiting for the host to open a new table…</p>

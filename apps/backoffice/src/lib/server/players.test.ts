@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import type { SQL } from 'bun';
 import { resetTestDatabase } from '../../../../platform/src/test-helpers';
 import { type Admin, createAdmin } from './auth';
-import { disablePlayer, enablePlayer, playerDetail, searchPlayers } from './players';
+import { disablePlayer, enablePlayer, playerDetail, searchPlayers, setVip } from './players';
 
 let sql: SQL;
 let admin: Admin;
@@ -33,7 +33,7 @@ describe('players', () => {
 		expect(await disablePlayer(sql, admin, id, 'Abuse in chat', '10.0.0.2')).toBe(true);
 		const [secret] = await sql`SELECT revoked_at FROM player_secrets WHERE player_id = ${id}`;
 		expect(secret.revoked_at).not.toBeNull();
-		const rows = await sql`SELECT action, detail, host(ip) AS ip FROM admin_audit WHERE target_id = ${id}`;
+		const rows = await sql`SELECT action, detail, host(ip) AS ip FROM admin_audit_events WHERE player_id = ${id}`;
 		expect(rows).toEqual([{ action: 'player.disable', detail: { reason: 'Abuse in chat', secretsRevoked: 1 }, ip: '10.0.0.2' }]);
 		expect(await disablePlayer(sql, admin, id, 'again', null)).toBe(false); // already disabled
 	});
@@ -47,5 +47,19 @@ describe('players', () => {
 		const [secret] = await sql`SELECT revoked_at FROM player_secrets WHERE player_id = ${id}`;
 		expect(secret.revoked_at).not.toBeNull();
 		expect(await enablePlayer(sql, admin, id, null)).toBe(false);
+	});
+});
+
+describe('accounts and VIP', () => {
+	test('search finds a username; VIP can be granted and taken back, each audited once', async () => {
+		const id = await newPlayer('Nia');
+		await sql`UPDATE players SET username = 'nia_plays', password_hash = '$argon2id$v=19$test' WHERE id = ${id}`;
+		expect((await searchPlayers(sql, 'PLAYS', null)).map((p) => p.id)).toEqual([id]);
+		expect(await setVip(sql, admin, id, true, null)).toBe(true);
+		expect(await setVip(sql, admin, id, true, null)).toBe(false);
+		expect((await playerDetail(sql, id))!.player).toMatchObject({ username: 'nia_plays', isVip: true, isBot: false, isActive: true });
+		expect(await setVip(sql, admin, id, false, null)).toBe(true);
+		const actions = await sql`SELECT action FROM admin_audit_events WHERE player_id = ${id} ORDER BY id`;
+		expect(actions.map((a: { action: string }) => a.action)).toEqual(['player.vip_grant', 'player.vip_revoke']);
 	});
 });

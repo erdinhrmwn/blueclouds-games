@@ -21,6 +21,7 @@
 		<p class="flex min-w-0 items-center text-sm text-paper/75">
 			<span class="truncate">Playing as <b class="font-semibold text-paper">{player.name}</b></span>
 			<button class="link-btn shrink-0" onclick={() => (player.editing = true)}>Change</button>
+			<a class="link-btn shrink-0" href="/account">{player.username ? 'Account' : 'Sign in'}</a>
 		</p>
 	{/if}
 </header>

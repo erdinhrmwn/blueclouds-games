@@ -1,7 +1,7 @@
 // Actor-side helpers every game room shares: who is connected, the turn clock, leaving,
 // the room list and the match result outbox. Each game keeps its own actor and actions.
 import { UserError } from "rivetkit";
-import { type Identity, reportMatch, verifyPlayToken } from "../../platform";
+import { fetchRoomSeats, type Identity, markRoom, reportMatch, verifyPlayToken } from "../../platform";
 import { type LogEntry, type LogEvent, type MatchReport, type MatchState, stamp } from "./match";
 import { ConnParams, SeatInput } from "./schema";
 import { removePlayer, RuleError, SEATS, setAway, type Table } from "./table";
@@ -17,8 +17,17 @@ const REPORT_RETRY_MS = [10_000, 60_000, 5 * 60_000, 30 * 60_000, 6 * 60 * 60_00
 /** The turn the timer belongs to (`moves` = the turn key), when it runs out (epoch ms), and its full length. */
 export type TurnTimer = { moves: number; endsAt: number; total: number } | null;
 
-/** What a room saves: the game, its turn timer, and the match being played (null in the lobby). */
-export type Saved<G extends Table, M extends MatchState = MatchState> = { game: G; timer: TurnTimer; match: M | null };
+/** How long a tournament room waits past its start time for late players (Erdin, 2026-11-11). */
+export const LATE_GRACE_MS = 3 * 60_000;
+
+/** A tournament room as the actor knows it from the platform. `seats` maps each assigned player to their seat (null = any). */
+export type TournamentRoom = { name: string; startsAt: number; cancelled: boolean; minPlayers: number; seats: Record<string, number | null>; closed: boolean };
+
+/**
+ * What a room saves: the game, its turn timer, the match being played (null in the lobby), and its
+ * tournament (null = an open room, undefined = not asked yet).
+ */
+export type Saved<G extends Table, M extends MatchState = MatchState> = { game: G; timer: TurnTimer; match: M | null; tournament?: TournamentRoom | null };
 
 /**
  * What every room keeps in `c.vars`. Not saved: who each open connection is (connections close when
@@ -77,7 +86,7 @@ export async function commitRoom<G extends Table, M extends MatchState>(
 	if (match) ({ match, events } = stamp(game.noteMove ? game.noteMove(match, vars.game) : match, entries, Date.now()));
 	const finished = !!match && vars.game.phase === "finished";
 	vars.match = finished ? null : match;
-	const saved: Saved<G, M> = { game: vars.game, timer: vars.timer, match: vars.match };
+	const saved: Saved<G, M> = { game: vars.game, timer: vars.timer, match: vars.match, tournament: vars.tournament };
 	await c.db.transaction(
 		async (tx: Ctx) => {
 			for (const e of events) await tx.execute("INSERT INTO match_events (match_id, seq, body) VALUES (?, ?, ?)", match!.id, e.seq, JSON.stringify(e));
@@ -234,6 +243,8 @@ export function turnClock(timer: TurnTimer): { left: number; total: number } | n
  * The list is a convenience, so a failure is logged and the game carries on.
  */
 export async function reportToDirectory(c: Ctx, slug: string, leaving?: string): Promise<void> {
+	// Only rooms known to be open are listed: tournament tables are for their players only.
+	if ((await loadTournament(c).catch(() => undefined)) !== null) return;
 	const code = c.key[0] as string;
 	const directory = c.client().roomList.getOrCreate([slug]);
 	const connected = [...c.conns.values()].filter((conn: { id: string }) => conn.id !== leaving).length;
@@ -273,4 +284,92 @@ export async function sendReports(c: Ctx): Promise<void> {
 		await c.db.execute("DELETE FROM match_reports WHERE match_id = ?", row.match_id);
 	}
 	if (retryIn !== null) await c.schedule.after(retryIn, "sendReports");
+}
+
+/**
+ * The room's tournament, read from the platform once and again on every wake (to see a cancel).
+ * If the platform can't be reached, the last known answer stands; with none yet, joining is refused.
+ */
+export async function loadTournament(c: Ctx, refresh = false): Promise<TournamentRoom | null> {
+	const known = c.vars.tournament as TournamentRoom | null | undefined;
+	if (known !== undefined && !refresh) return known;
+	let room: Awaited<ReturnType<typeof fetchRoomSeats>>;
+	try {
+		room = await fetchRoomSeats(c.key[0] as string);
+	} catch (err) {
+		c.log.warn({ msg: "room seats unavailable", code: c.key[0], err: String(err) });
+		if (known !== undefined) return known;
+		throw new UserError("The table can't be reached right now. Try again shortly.", { code: "unavailable" });
+	}
+	const t = room?.tournament;
+	c.vars.tournament = t
+		? {
+				name: t.name,
+				startsAt: Date.parse(t.startsAt),
+				cancelled: t.cancelled,
+				minPlayers: room!.minPlayers,
+				seats: Object.fromEntries(room!.seats.map((s) => [s.playerId, s.seat])),
+				closed: !!known?.closed || !!room!.closedAt,
+			}
+		: null;
+	return c.vars.tournament;
+}
+
+/** onWake: refreshes the tournament and arms its start and the end of the wait for late players. */
+export async function wakeTournament(c: Ctx): Promise<void> {
+	const t = await loadTournament(c, true).catch(() => null);
+	if (!t || t.closed || t.cancelled || (c.vars.game as Table).phase !== "lobby") return;
+	const now = Date.now();
+	if (t.startsAt > now) await c.schedule.at(t.startsAt, "tournamentStart");
+	await c.schedule.at(Math.max(now, t.startsAt + LATE_GRACE_MS), "tournamentStart");
+}
+
+/**
+ * The seat a joining player must take (undefined = any free one). Throws if they may not sit here.
+ * Asks the platform again first, since an admin may have seated or removed someone by hand.
+ */
+export async function seatFor(c: Ctx, who: Identity): Promise<number | undefined> {
+	const t = c.vars.tournament === null ? null : await loadTournament(c, true);
+	if (!t) return undefined;
+	if (t.cancelled) throw new UserError(`${t.name} was cancelled.`, { code: "forbidden" });
+	if (t.closed) throw new UserError("This table has finished.", { code: "forbidden" });
+	if (!(who.id in t.seats)) throw new UserError(`This table is for players of ${t.name}.`, { code: "forbidden" });
+	return t.seats[who.id] ?? undefined;
+}
+
+/** Host controls (bots, seats, start, play again) are for open tables; a tournament table runs itself. */
+export function requireOpenTable(c: Ctx): void {
+	if (c.vars.tournament) throw new UserError("A tournament table starts on its own.", { code: "rule" });
+}
+
+/**
+ * Starts a tournament room's match: at the start time once every assigned player sits, otherwise when
+ * the wait for late players ends, with whoever came. Fewer than the game's minimum then closes the table.
+ * Runs when scheduled and after each join; does nothing before the start time or once the match began.
+ */
+export async function tournamentTick(c: Ctx, game: { start: () => void; commit: () => Promise<void> }): Promise<void> {
+	const t = c.vars.tournament as TournamentRoom | null | undefined;
+	const table = c.vars.game as Table;
+	const now = Date.now();
+	if (!t || t.closed || t.cancelled || table.phase !== "lobby" || now < t.startsAt) return;
+	const present = table.players.filter((p) => !p.bot).length;
+	const everyone = present >= Object.keys(t.seats).length;
+	if (!everyone && now < t.startsAt + LATE_GRACE_MS) return;
+	const code = c.key[0] as string;
+	if (present >= t.minPlayers) {
+		game.start();
+		await game.commit();
+		if (!(await markRoom(code, "start"))) c.log.warn({ msg: "room start not recorded", code });
+		return;
+	}
+	c.vars.tournament = { ...t, closed: true };
+	await game.commit();
+	if (!(await markRoom(code, "close"))) c.log.warn({ msg: "room close not recorded", code });
+}
+
+/** The tournament part of the view. Times are relative, like the turn clock, so a wrong device clock still counts right. */
+export function tournamentView(c: Ctx) {
+	const t = c.vars.tournament as TournamentRoom | null | undefined;
+	if (!t) return null;
+	return { name: t.name, startsIn: t.startsAt - Date.now(), waitEndsIn: t.startsAt + LATE_GRACE_MS - Date.now(), seats: Object.keys(t.seats).length, closed: t.closed };
 }

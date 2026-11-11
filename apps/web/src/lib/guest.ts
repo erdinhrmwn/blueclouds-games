@@ -1,5 +1,7 @@
 // The guest's display name, kept in this browser. Who they are (the player secret) is an httpOnly cookie.
 const NAME_KEY = 'guest-name';
+/** Set while this browser is signed in to an account; only for showing it, the cookie is what counts. */
+const USERNAME_KEY = 'account-username';
 
 // Storage can be blocked (private mode): then the identity lives in this tab only.
 const memory = new Map<string, string>();
@@ -12,10 +14,12 @@ function read(key: string): string | null {
 	}
 }
 
-function write(key: string, value: string): void {
-	memory.set(key, value);
+function write(key: string, value: string | null): void {
+	if (value === null) memory.delete(key);
+	else memory.set(key, value);
 	try {
-		localStorage.setItem(key, value);
+		if (value === null) localStorage.removeItem(key);
+		else localStorage.setItem(key, value);
 	} catch {
 		// Kept in memory above; it just won't survive a reload.
 	}
@@ -23,11 +27,7 @@ function write(key: string, value: string): void {
 
 export const guestName = () => read(NAME_KEY) ?? '';
 export const saveGuestName = (name: string) => write(NAME_KEY, name.trim());
-
-const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O or 1/I
-export function newRoomCode(): string {
-	const bytes = crypto.getRandomValues(new Uint8Array(5));
-	return Array.from(bytes, (b) => CODE_CHARS[b % CODE_CHARS.length]).join('');
-}
+export const savedUsername = () => read(USERNAME_KEY) ?? '';
+export const saveUsername = (username: string | null) => write(USERNAME_KEY, username);
 
 export const isRoomCode = (code: string) => /^[A-Z0-9]{4,8}$/.test(code);
