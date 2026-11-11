@@ -9,8 +9,9 @@ Multiplayer, turn-based browser games. The game server runs on Rivet Actors (one
 | `apps/web` | Game frontend (SvelteKit) | [docs/apps/web.md](docs/apps/web.md) |
 | `apps/server` | Game server: Rivet actors per game | [docs/apps/server.md](docs/apps/server.md) |
 | `apps/platform` | Platform API: players, play tokens, match results (Hono, Postgres) | [docs/apps/platform.md](docs/apps/platform.md) |
+| `apps/backoffice` | Admin UI for staff (SvelteKit, talks to Postgres directly) | [docs/apps/backoffice.md](docs/apps/backoffice.md) |
 
-Planned: `apps/backoffice` (admin UI) and a self-hosted deploy. See [the platform API design](docs/architecture/platform-api.md).
+Planned: a self-hosted deploy. See [the platform API design](docs/architecture/platform-api.md).
 
 ## Games
 

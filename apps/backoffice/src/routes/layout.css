@@ -1,0 +1,51 @@
+@import 'tailwindcss';
+
+/*
+ * Design read: internal admin tool for a few operators, dense tables, used in daytime.
+ * Dials ENERGY 1 / RHYTHM 1 / MOTION 1. Light on purpose, so staff never mistake it for the dark game.
+ * Accent: the table felt green from the game, only on primary actions and the current nav item.
+ */
+@theme {
+	--font-sans: 'IBM Plex Sans', system-ui, sans-serif;
+	--font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+
+	--color-page: #f7f4ec;
+	--color-surface: #ffffff;
+	--color-line: #ddd6c8;
+	--color-ink: #221c16;
+	--color-muted: #5c534a; /* 6.8:1 on page */
+	--color-felt: #1d4a3a; /* accent */
+	--color-danger: #b3261e;
+}
+
+@layer base {
+	body {
+		@apply min-h-dvh bg-page font-sans text-ink antialiased;
+	}
+	button:not(:disabled),
+	[role='button'] {
+		cursor: pointer;
+	}
+	:focus-visible {
+		@apply outline-2 outline-offset-2 outline-felt;
+	}
+}
+
+@utility btn {
+	@apply inline-flex min-h-11 items-center justify-center rounded-md px-4 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50;
+}
+@utility btn-primary {
+	@apply btn bg-felt text-white hover:bg-[#153a2d] active:bg-[#10301f];
+}
+@utility btn-quiet {
+	@apply btn border border-line bg-surface hover:bg-page active:bg-line;
+}
+@utility btn-danger {
+	@apply btn bg-danger text-white hover:bg-[#962019] active:bg-[#7d1a14];
+}
+@utility field {
+	@apply min-h-11 w-full rounded-md border border-line bg-surface px-3 text-base;
+}
+@utility label {
+	@apply mb-1 block text-sm font-medium;
+}

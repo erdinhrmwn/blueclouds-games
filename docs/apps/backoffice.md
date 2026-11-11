@@ -1,0 +1,45 @@
+# Backoffice (`apps/backoffice`)
+
+Admin UI for staff: SvelteKit (`adapter-node`) running on Bun. It has no API of its own and the platform has no admin API: pages read Postgres in `+page.server.ts` and change it through form actions, connected as the limited `backoffice` role. Design: [architecture/platform-api.md](../architecture/platform-api.md#backoffice-mvp).
+
+## Running
+
+```sh
+bun run --filter platform db:migrate            # creates the admin tables and the backoffice role
+psql -c "ALTER ROLE backoffice LOGIN PASSWORD 'backoffice';"   # once per database server
+bun run --filter backoffice admin:create root   # asks for the password (12+ characters)
+bun run dev:backoffice                          # http://localhost:5174
+```
+
+`bun --bun` runs Vite on Bun, because the server code uses `Bun.sql` and `Bun.password`. Production: `bun run build`, then `bun run start` (serves `build/`).
+
+## Configuration
+
+| Variable | Purpose |
+|---|---|
+| `BACKOFFICE_DB_HOST`, `BACKOFFICE_DB_PORT`, `BACKOFFICE_DB_USER`, `BACKOFFICE_DB_PASSWORD`, `BACKOFFICE_DB_NAME` | Postgres connection as the `backoffice` role (port defaults to 5432) |
+
+Behind a proxy, adapter-node also needs `ORIGIN` (e.g. `https://backoffice.nblueclouds.online`) and `ADDRESS_HEADER=X-Forwarded-For` so form actions and the audit log see the real origin and IP.
+
+## Security
+
+- Sign-in: username + password (argon2id via `Bun.password`). 5 failed tries for a username within 15 minutes lock it for the rest of the window. An unknown username takes as long as a wrong password.
+- Session: random 32-byte token in an `httpOnly`, `SameSite=Strict` cookie (`Secure` outside dev), 8 hours. Only its SHA-256 is stored. Disabling an admin ends their sessions at once.
+- Form actions are covered by SvelteKit's CSRF origin check.
+- Every sign-in, failed sign-in and sign-out writes an `admin_audit` row with the IP.
+- Admins are only created with `admin:create`, which reads the password from the terminal so it never lands in shell history.
+
+## Structure
+
+```
+apps/backoffice/
+  src/
+    env.ts               # BACKOFFICE_DB_* validation
+    hooks.server.ts      # loads the admin from the session cookie, sends everyone else to /login
+    lib/server/db.ts     # Bun.sql connection
+    lib/server/auth.ts   # login, sessions, audit, createAdmin (+ auth.test.ts)
+    routes/              # login, logout, pages
+  scripts/admin-create.ts
+```
+
+Tests (`bun run test`) use the platform's test database (`PLATFORM_TEST_DB_NAME`), migrated fresh.
