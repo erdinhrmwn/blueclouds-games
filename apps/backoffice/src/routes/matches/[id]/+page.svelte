@@ -26,6 +26,23 @@
 <h1 class="mt-1 text-2xl font-semibold">{m.gameName} at table {m.roomCode}</h1>
 
 <dl class="mt-4 grid max-w-2xl grid-cols-[auto_1fr] gap-x-6 gap-y-1 text-sm">
+	<dt class="text-muted">Table</dt>
+	<dd><span class="font-mono">{m.roomCode}</span>, {m.tournamentId ? 'tournament table' : 'open table'}</dd>
+	{#if m.tournamentId}
+		<dt class="text-muted">Tournament</dt>
+		<dd><a class="underline decoration-line underline-offset-2 hover:decoration-ink" href="/tournaments/{m.tournamentId}">{m.tournamentName}</a></dd>
+	{:else}
+		<dt class="text-muted">Opened by</dt>
+		<dd>
+			{#if m.openedByPlayerId}
+				<a class="underline decoration-line underline-offset-2 hover:decoration-ink" href="/players/{m.openedByPlayerId}">{m.openedByPlayer}</a>
+			{:else if m.openedByAdmin}
+				{m.openedByAdmin} <span class="text-muted">(admin)</span>
+			{:else}
+				<span class="text-muted">Not recorded</span>
+			{/if}
+		</dd>
+	{/if}
 	<dt class="text-muted">Match id</dt>
 	<dd class="font-mono text-xs leading-5 break-all">{m.id}</dd>
 	<dt class="text-muted">Played</dt>

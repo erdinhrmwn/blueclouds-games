@@ -543,14 +543,13 @@ Codes are unique across games now, so the second-to-last query must show no code
   - Creating and changing tournaments has no platform API: only the backoffice does that.
 - **Room actors** (`apps/server/src/games/shared/room.ts`, one place for both games): read the room's seats from the platform, let only assigned players sit (on their seat), turn off host controls, start by themselves at `starts_at` (early once everyone is in, otherwise after the 3-minute wait with whoever came), close the table when fewer than the game's minimum came, and stay off the public room list.
 - **Game web**: the tournaments panel on each game's home page (sign up, "Go to your table"), the countdown in a tournament table's lobby, and the account page (`/account`: create account, sign in, sign out).
-- **Backoffice**: Tournaments list and create form; a tournament's page registers players by pasted ids, hands out tables now, seats a player by hand or takes them off, and cancels; players show their account, bot and VIP flags, and VIP can be granted or taken back. Every change is an audit event.
+- **Backoffice**: Tournaments list and create form; a tournament's page registers players by pasted ids, hands out tables now, seats a player by hand or takes them off, and cancels; players show their account, bot and VIP flags, and VIP can be granted or taken back. Every change is an audit event. A match's page shows its table: the code, and the tournament it belongs to or who opened it.
 
 Decisions made while building, on top of the design above:
 
 - Admins can register players any time until the tables are handed out; only players are held to the sign-up window.
 - "Hand out tables now" closes sign-up at that moment, so nobody can sign up after the tables exist.
 - Players log in with a username that is stored lowercase, so `Ann` and `ann` are one account.
-- Not built yet: showing the tournament and room on the backoffice's match detail page.
 
 ## Left out on purpose
 
