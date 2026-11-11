@@ -90,7 +90,7 @@ Choices checked in the same simulation:
 ## Match report and move log
 
 - **Report** (`POST /v1/matches`, same as Bust 31): placement as above, and each seat's final points. See "Score in the match report" below for how that number is stored.
-- **Move log** (once the [match log](../../architecture/match-log.md) design lands): events built by `logEvents(before, after)` in `match.ts`.
+- **Move log** ([match log](../../architecture/match-log.md)): events built by `logEvents(before, after, auto)` in `match.ts`.
 
 | Type | Seat | Data |
 |---|---|---|
@@ -107,7 +107,7 @@ Choices checked in the same simulation:
 
 ## Score in the match report
 
-Each seat's final points go in the report's per-seat `score`. That field used to be Bust 31's `livesLeft`; it was renamed so every game can use it (Bust 31 sends lives left, Cloudburst points). Rankings always use `placement`; the backoffice labels the column per game ("Lives left", "Points").
+Each seat's final points go in the report's per-seat `score` (game-defined, see [match-schema.md](../../architecture/match-schema.md)). Rankings always use `placement`; the backoffice labels the column from the game's row in `games` ("Points").
 
 ## Building it (what is reused)
 
@@ -124,6 +124,6 @@ The earlier plan was to extract shared parts once a second game exists; this is 
 
 New for Cloudburst: `apps/server/src/games/cloudburst/{rules,bots,match,schema,actor}.ts` (actor `cloudburstRoom`, one action `play({ cardId, suit?, giveId? })` plus `draw` and `pass`), rule tests in `rules.test.ts`, the web components in `lib/games/cloudburst/`, a catalog entry, and `cloudburst` in the platform's `GAMES` list.
 
-Suggested order (one commit each): 1) extract the shared server parts with Bust 31 tests still green, 2) Cloudburst rules + bots + tests, 3) actor, 4) web table, 5) the platform game entry.
+Suggested order (one commit each): 1) extract the shared server parts with Bust 31 tests still green, 2) Cloudburst rules + bots + tests, 3) actor, 4) web table, 5) the game's row in the platform `games` table (a migration).
 
 UI design reasoning: [design.md](design.md).

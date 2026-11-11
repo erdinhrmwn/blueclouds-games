@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { chooseBotMove } from "./bots";
-import { buildReport } from "./match";
+import { buildReport, logEvents } from "./match";
+import type { LogEntry } from "../shared/match";
 import {
 	addPlayer,
 	BURST_AT,
@@ -162,7 +163,7 @@ describe("rounds and points", () => {
 		expect(g.phase).toBe("finished");
 		expect(g.winnerId).toBe("a");
 		expect([...placements(g).values()]).toEqual([1, 3, 2]);
-		const report = buildReport({ id: "m", startedAt: "2026-11-11T00:00:00.000Z" }, g, "ABCD", "2026-11-11T00:10:00.000Z");
+		const report = buildReport({ id: "m", startedAt: "2026-11-11T00:00:00.000Z", seq: 0 }, g, "ABCD", "2026-11-11T00:10:00.000Z", []);
 		expect(report.players.map((p) => [p.placement, p.score])).toEqual([[1, 3], [3, BURST_AT], [2, 4]]);
 	});
 
@@ -202,21 +203,32 @@ describe("bots", () => {
 		expect(chooseBotMove(g)).toEqual({ type: "play", input: { cardId: "sun-gust-0", giveId: "wind-7-0" } });
 	});
 
-	test("bots finish whole matches with valid results", () => {
+	test("bots finish whole matches with valid results and a complete move log", () => {
 		let seed = 7;
 		const random = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
 		for (let run = 0; run < 50; run++) {
 			let g = createGame();
 			const n = 2 + (run % 5);
 			for (let i = 0; i < n; i++) g = addPlayer(g, `p${i}`, `P${i}`, i > 0);
+			const lobby = g;
 			g = startGame(g, "p0", random);
+			const log: LogEntry[] = logEvents(lobby, g);
 			let steps = 0;
 			while (g.phase === "playing" && steps++ < 5000) {
 				const id = g.players[g.turn]!.id;
 				const move = chooseBotMove(g);
-				g = move.type === "play" ? playCard(g, id, move.input, random) : move.type === "draw" ? drawCard(g, id, random) : pass(g, id);
+				const next = move.type === "play" ? playCard(g, id, move.input, random) : move.type === "draw" ? drawCard(g, id, random) : pass(g, id);
+				log.push(...logEvents(g, next, true));
+				g = next;
 			}
 			expect(g.phase).toBe("finished");
+			// Every move is logged once, rounds open with a deal, and the log ends with the final points.
+			expect(log[0]!.type).toBe("deal");
+			expect(log.filter((e) => e.type === "deal")).toHaveLength(g.round);
+			expect(log.filter((e) => e.type === "round_end")).toHaveLength(g.round);
+			expect(log.filter((e) => ["play", "draw", "pass"].includes(e.type))).toHaveLength(steps);
+			expect(log.every((e) => !("by" in (e.data ?? {})) || e.data!.by === (e.seat === 0 ? "timeout" : "bot"))).toBe(true);
+			expect(log.at(-1)).toEqual({ type: "finished", data: { winner: g.players.find((p) => p.id === g.winnerId)!.seat, points: Object.fromEntries(g.players.map((p) => [p.seat, p.points])) } });
 			expect([...placements(g).values()].filter((p) => p === 1)).toHaveLength(1);
 			expect(Math.max(...g.players.map((p) => p.points))).toBeGreaterThanOrEqual(BURST_AT);
 		}

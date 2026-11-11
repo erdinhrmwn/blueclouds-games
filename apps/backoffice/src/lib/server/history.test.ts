@@ -3,7 +3,7 @@ import type { SQL } from 'bun';
 import { resetTestDatabase } from '../../../../platform/src/test-helpers';
 import { createAdmin } from './auth';
 import { listAudit } from './audit-log';
-import { listMatches, matchDetail } from './matches';
+import { listMatches, matchDetail, matchGames, matchLog } from './matches';
 import { disablePlayer } from './players';
 
 let sql: SQL;
@@ -35,8 +35,20 @@ describe('matches', () => {
 		expect(await listMatches(sql, { ...empty, from: 'garbage' })).toHaveLength(2);
 	});
 
+	test('move log: as stored, or null for an old match', async () => {
+		const id = '01900000-0000-7000-8000-000000000001';
+		const events = [{ seq: 0, t: 0, type: 'finished', data: { winner: 0 } }];
+		await sql`INSERT INTO match_logs (match_id, log_version, event_count, events) VALUES (${id}, 1, 1, ${JSON.stringify(events)}::text::jsonb)`;
+		expect(await matchLog(sql, id)).toEqual({ logVersion: 1, events });
+		expect(await matchLog(sql, '01900000-0000-7000-8000-000000000002')).toBeNull();
+		expect(await matchLog(sql, 'nope')).toBeNull();
+	});
+
 	test('detail lists seats by placement', async () => {
 		const m = await matchDetail(sql, '01900000-0000-7000-8000-000000000001');
+		expect(m).toMatchObject({ gameName: 'Bust 31', scoreLabel: 'Lives left' });
+		expect(m?.seats[0]?.score).toBe(2);
+		expect(await matchGames(sql)).toEqual([{ slug: 'bust-31', name: 'Bust 31' }]);
 		expect(m?.seats.map((s) => [s.name, s.bot, s.placement])).toEqual([
 			['Rina', false, 1],
 			['Bot Rain', true, 2]

@@ -2,6 +2,7 @@
 // the room list and the match result outbox. Each game keeps its own actor and actions.
 import { UserError } from "rivetkit";
 import { type Identity, reportMatch, verifyPlayToken } from "../../platform";
+import { type LogEntry, type LogEvent, type MatchReport, type MatchState, stamp } from "./match";
 import { ConnParams, SeatInput } from "./schema";
 import { removePlayer, RuleError, SEATS, setAway, type Table } from "./table";
 
@@ -16,16 +17,94 @@ const REPORT_RETRY_MS = [10_000, 60_000, 5 * 60_000, 30 * 60_000, 6 * 60 * 60_00
 /** The turn the timer belongs to (`moves` = the turn key), when it runs out (epoch ms), and its full length. */
 export type TurnTimer = { moves: number; endsAt: number; total: number } | null;
 
-/** What every room keeps in `c.vars` besides its game-specific fields. */
-export type RoomVars<G extends Table> = { game: G; timer: TurnTimer; who: Record<string, Identity> };
+/** What a room saves: the game, its turn timer, and the match being played (null in the lobby). */
+export type Saved<G extends Table, M extends MatchState = MatchState> = { game: G; timer: TurnTimer; match: M | null };
+
+/**
+ * What every room keeps in `c.vars`. Not saved: who each open connection is (connections close when
+ * the actor sleeps), and the game as last committed, to see what each commit changed for the move log.
+ */
+export type RoomVars<G extends Table, M extends MatchState = MatchState> = Saved<G, M> & { who: Record<string, Identity>; logged: G };
+
+export const roomVars = <G extends Table, M extends MatchState>(game: G): RoomVars<G, M> => ({ game, logged: game, who: {}, timer: null, match: null });
+
+/** The room's tables: one JSON row for the whole room (a few KB), the result outbox, and the move log. */
+export async function migrateRoom(d: { execute: (sql: string) => Promise<unknown> }): Promise<void> {
+	await d.execute("CREATE TABLE IF NOT EXISTS room (id INTEGER PRIMARY KEY CHECK (id = 1), data TEXT NOT NULL)");
+	// Outbox: finished match results waiting to reach the platform.
+	await d.execute("CREATE TABLE IF NOT EXISTS match_reports (match_id TEXT PRIMARY KEY, body TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0)");
+	// Move log of the match being played; moved into its report when the match ends.
+	await d.execute("CREATE TABLE IF NOT EXISTS match_events (match_id TEXT NOT NULL, seq INTEGER NOT NULL, body TEXT NOT NULL, PRIMARY KEY (match_id, seq))");
+}
+
+/** onWake: loads the saved room into `c.vars`. */
+export async function loadRoom(c: Ctx): Promise<void> {
+	const rows = await c.db.execute("SELECT data FROM room WHERE id = 1");
+	if (rows[0]) Object.assign(c.vars, JSON.parse(rows[0].data));
+	c.vars.timer ??= null;
+	c.vars.match ??= null;
+	if (c.vars.match) c.vars.match.seq ??= 0; // matches started before the move log
+	c.vars.logged = c.vars.game;
+}
+
+/**
+ * After every change: arm the turn clock (`scheduleTurn`), log what changed, save room + log in one
+ * transaction (so the log never skips or repeats a move), then push the view to everyone and each
+ * hand to its owner. When the game just finished, its result and full log go to the outbox.
+ * `auto` marks a move the server made (bot, timeout or away player) for the move log.
+ */
+export async function commitRoom<G extends Table, M extends MatchState>(
+	c: Ctx,
+	game: {
+		slug: string;
+		scheduleTurn: () => Promise<void>;
+		logEvents: (before: G, after: G, auto: boolean) => LogEntry[];
+		/** Updates the match record after each move (e.g. who was knocked out). */
+		noteMove?: (match: M, game: G) => M;
+		buildReport: (match: M, game: G, roomCode: string, endedAt: string, log: LogEvent[]) => MatchReport;
+		view: () => unknown;
+		handOf: (playerId: string) => unknown;
+	},
+	auto = false,
+): Promise<void> {
+	await game.scheduleTurn();
+	const vars = c.vars as RoomVars<G, M>;
+	const entries = vars.match ? game.logEvents(vars.logged, vars.game, auto) : [];
+	vars.logged = vars.game;
+
+	let match = vars.match;
+	let events: LogEvent[] = [];
+	if (match) ({ match, events } = stamp(game.noteMove ? game.noteMove(match, vars.game) : match, entries, Date.now()));
+	const finished = !!match && vars.game.phase === "finished";
+	vars.match = finished ? null : match;
+	const saved: Saved<G, M> = { game: vars.game, timer: vars.timer, match: vars.match };
+	await c.db.transaction(
+		async (tx: Ctx) => {
+			for (const e of events) await tx.execute("INSERT INTO match_events (match_id, seq, body) VALUES (?, ?, ?)", match!.id, e.seq, JSON.stringify(e));
+			if (finished) {
+				const rows = await tx.execute("SELECT body FROM match_events WHERE match_id = ? ORDER BY seq", match!.id);
+				const log = rows.map((r: { body: string }) => JSON.parse(r.body) as LogEvent);
+				const report = game.buildReport(match!, vars.game, c.key[0] as string, new Date().toISOString(), log);
+				await tx.execute("INSERT OR IGNORE INTO match_reports (match_id, body) VALUES (?, ?)", report.matchId, JSON.stringify(report));
+				await tx.execute("DELETE FROM match_events WHERE match_id = ?", match!.id);
+			}
+			await tx.execute("INSERT INTO room (id, data) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET data = excluded.data", JSON.stringify(saved));
+		},
+		{ name: "commit" },
+	);
+
+	c.broadcast("view", game.view());
+	for (const conn of c.conns.values()) {
+		const id = playerOf(c, conn);
+		if (id) conn.send("hand", game.handOf(id));
+	}
+	await reportToDirectory(c, game.slug); // after the players got their update, so the list never slows a move
+	if (finished) await c.schedule.after(0, "sendReports");
+}
 
 // ponytail: helpers take `any` because rivetkit's context generics are long;
 // they only touch c.vars, c.conn, c.db, c.conns, c.key, c.log, c.client() and c.schedule.
 export type Ctx = any;
-
-/** Outbox: finished match results waiting to reach the platform. Each room creates it in onMigrate. */
-export const REPORTS_TABLE =
-	"CREATE TABLE IF NOT EXISTS match_reports (match_id TEXT PRIMARY KEY, body TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0)";
 
 /** Turns rule violations into errors the client is allowed to see. */
 export function apply<T>(fn: () => T): T {
@@ -171,11 +250,6 @@ export async function reportToDirectory(c: Ctx, slug: string, leaving?: string):
 	}
 }
 
-/** Puts a finished match's result in the outbox; call `c.schedule.after(0, "sendReports")` after the commit. */
-export async function queueReport(c: Ctx, report: { matchId: string }): Promise<void> {
-	await c.db.execute("INSERT OR IGNORE INTO match_reports (match_id, body) VALUES (?, ?)", report.matchId, JSON.stringify(report));
-}
-
 /** onWake: a send may have been cut off by the actor stopping; the platform ignores duplicates. */
 export async function resumeReports(c: Ctx): Promise<void> {
 	const [pending] = await c.db.execute("SELECT count(*) AS n FROM match_reports");
@@ -199,13 +273,4 @@ export async function sendReports(c: Ctx): Promise<void> {
 		await c.db.execute("DELETE FROM match_reports WHERE match_id = ?", row.match_id);
 	}
 	if (retryIn !== null) await c.schedule.after(retryIn, "sendReports");
-}
-
-/** Sends the public view to everyone and each private hand to its owner. */
-export function broadcast(c: Ctx, view: unknown, handOf: (playerId: string) => unknown): void {
-	c.broadcast("view", view);
-	for (const conn of c.conns.values()) {
-		const id = playerOf(c, conn);
-		if (id) conn.send("hand", handOf(id));
-	}
 }

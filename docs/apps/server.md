@@ -23,21 +23,24 @@ apps/server/src/
   registry.ts          # registers one actor type per game
   games/shared/
     table.ts           # pure table rules every game shares: seats, host, shuffle, next seat
-    room.ts            # actor helpers: sign-in, turn clock, leaving, room list, match result outbox
+    room.ts            # actor helpers: sign-in, turn clock, leaving, room list, save + move log + result outbox
+    match.ts           # match report and log event types, stamping, match ids
     directory.ts       # room list actor ("Open tables"), one instance per game slug
     schema.ts          # Zod validation for connection params, seats, room summaries
   games/bust-31/
     actor.ts           # room actor: state (SQLite), actions, broadcast
     rules.ts           # pure game rules
-    match.ts           # builds the match result (placements) sent to the platform
+    match.ts           # match result (placements) and move log events sent to the platform
     bots.ts            # rule-based bot strategy
     schema.ts          # Zod validation for player input
     rules.test.ts
+  games/cloudburst/    # same layout as bust-31
 ```
 
 ## Security notes (prototype)
 
 - A connection needs a play token from the platform (15 minutes, signed with Ed25519). The room uses its player id and name; the browser can't pick either.
-- A finished game's result goes into an outbox table in the room's SQLite, then to the platform (`POST /v1/matches`), retried with backoff until it is stored. The platform ignores a repeated report, so a retry is always safe.
+- Every commit of a running match appends its move log events (`logEvents` in `match.ts`) to the room's `match_events` table, in the same transaction as the room state.
+- A finished game's result and full move log go into an outbox table in the room's SQLite, then to the platform (`POST /v1/matches`), retried with backoff until it is stored. The platform ignores a repeated report, so a retry is always safe.
 - A hand is only sent to its owner; the deck and other players' hands never reach the browser.
 - Browsers can't reach the room list. Their engine tokens only reach one room; the game's server reads the list.

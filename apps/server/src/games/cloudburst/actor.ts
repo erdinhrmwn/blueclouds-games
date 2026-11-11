@@ -1,34 +1,34 @@
 import { actor, UserError } from "rivetkit";
 import { db } from "rivetkit/db";
 import { chooseBotMove } from "./bots";
-import { buildReport, type MatchState } from "./match";
+import { buildReport, logEvents } from "./match";
 import { addPlayer, createGame, dealPauseMs, drawCard, type Game, handOf, pass, playCard, publicView, resetToLobby, startGame, TURN_MS } from "./rules";
 import { PlayInput } from "./schema";
 import {
 	apply,
 	armTurn,
 	botName,
-	broadcast,
 	caller,
 	checkConnect,
+	commitRoom,
 	type Ctx,
 	dropIfGone,
 	GONE_AFTER_MS,
 	identify,
+	loadRoom,
+	migrateRoom,
 	parseSeat,
 	playerOf,
-	queueReport,
 	reportToDirectory,
-	REPORTS_TABLE,
 	requireHost,
 	requirePlayer,
 	requireScheduler,
 	resumeReports,
-	type RoomVars,
+	roomVars,
 	sendReports,
 	turnClock,
 } from "../shared/room";
-import { uuidv7 } from "../shared/match";
+import { type MatchState, newMatch } from "../shared/match";
 import { BotIdInput } from "../shared/schema";
 import { removePlayer, setAway, takeSeat } from "../shared/table";
 
@@ -36,26 +36,13 @@ const SLUG = "cloudburst";
 /** After a bot (or the timer) draws, it plays or passes this much later, so the draw shows first. */
 const AFTER_DRAW_MS = 900;
 
-type Saved = Omit<RoomVars<Game>, "who"> & {
-	/** The match being played, for its result. Null in the lobby and once the result is queued. */
-	match: MatchState | null;
-};
-type Vars = RoomVars<Game> & Saved;
-
 const rng = () => Math.random();
 
 export const cloudburstRoom = actor({
-	// The whole room is a few KB, so one JSON row is enough.
-	db: db({
-		onMigrate: async (d) => {
-			await d.execute("CREATE TABLE IF NOT EXISTS room (id INTEGER PRIMARY KEY CHECK (id = 1), data TEXT NOT NULL)");
-			await d.execute(REPORTS_TABLE);
-		},
-	}),
-	createVars: (): Vars => ({ game: createGame(), who: {}, timer: null, match: null }),
+	db: db({ onMigrate: migrateRoom }),
+	createVars: () => roomVars(createGame()),
 	onWake: async (c) => {
-		const rows = await c.db.execute<{ data: string }>("SELECT data FROM room WHERE id = 1");
-		if (rows[0]) Object.assign(c.vars, JSON.parse(rows[0].data) as Saved);
+		await loadRoom(c);
 		await scheduleTurn(c, true);
 		await resumeReports(c);
 	},
@@ -111,7 +98,7 @@ export const cloudburstRoom = actor({
 		start: async (c) => {
 			const me = requirePlayer(c);
 			c.vars.game = apply(() => startGame(c.vars.game, me, rng));
-			c.vars.match = { id: uuidv7(), startedAt: new Date().toISOString() };
+			c.vars.match = newMatch();
 			await commit(c);
 		},
 		/** Plays a card: `suit` for a Rainbow, `giveId` (the card to hand on) for a Gust. */
@@ -162,33 +149,25 @@ export const cloudburstRoom = actor({
 			const mark = !player.bot && (ev?.type === "played" || ev?.type === "drew" || ev?.type === "passed");
 			c.vars.game = mark ? { ...next, lastEvent: { ...ev, auto: true } } : next;
 			if (move.type === "draw") await c.schedule.after(AFTER_DRAW_MS, "autoPlay", game.turnKey);
-			await commit(c);
+			await commit(c, true);
 		},
 	},
 });
 
-/** Persist, then push the public view to everyone and each hand to its owner. */
-async function commit(c: Ctx): Promise<void> {
-	await scheduleTurn(c, false);
-	const finished = await trackMatch(c);
-	const saved: Saved = { game: c.vars.game, timer: c.vars.timer, match: c.vars.match };
-	await c.db.execute(
-		"INSERT INTO room (id, data) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET data = excluded.data",
-		JSON.stringify(saved),
+/** Saves the change (with its move log), then pushes the view to everyone and each hand to its owner. */
+const commit = (c: Ctx, auto = false) =>
+	commitRoom<Game, MatchState>(
+		c,
+		{
+			slug: SLUG,
+			scheduleTurn: () => scheduleTurn(c, false),
+			logEvents,
+			buildReport,
+			view: () => viewOf(c),
+			handOf: (id) => handOf(c.vars.game, id),
+		},
+		auto,
 	);
-	broadcast(c, viewOf(c), (id) => handOf(c.vars.game, id));
-	await reportToDirectory(c, SLUG); // after the players got their update, so the list never slows a move
-	if (finished) await c.schedule.after(0, "sendReports");
-}
-
-/** Once the match is over, queues its result. Returns true when it queued one. */
-async function trackMatch(c: Ctx): Promise<boolean> {
-	const { game, match } = c.vars as Saved;
-	if (!match || game.phase !== "finished") return false;
-	await queueReport(c, buildReport(match, game, c.key[0] as string, new Date().toISOString()));
-	c.vars.match = null;
-	return true;
-}
 
 const viewOf = (c: Ctx) => publicView(c.vars.game, turnClock(c.vars.timer));
 

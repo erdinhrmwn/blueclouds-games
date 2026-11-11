@@ -13,6 +13,8 @@ Multiplayer, turn-based browser games. The game server runs on Rivet Actors (one
 
 Deploy: one VPS with Docker Compose, see [docs/deploy.md](docs/deploy.md). Design: [the platform API design](docs/architecture/platform-api.md).
 
+Every match records every move for replay and audit in the backoffice: [docs/architecture/match-log.md](docs/architecture/match-log.md).
+
 ## Games
 
 | Game | Rules | Design |
