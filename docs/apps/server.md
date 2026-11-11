@@ -9,7 +9,8 @@ Rivet Actors: one actor type per game, one actor per room (keyed by the room cod
 | `PLAY_TOKEN_PUBLIC_KEY` | Ed25519 public JWK that checks the platform's play tokens |
 | `PLATFORM_URL` | Platform API as the actors reach it (default `http://127.0.0.1:3000`) |
 | `PLATFORM_SERVER_KEY` | Bearer key for match reports, same as the platform's |
-| `INTERNAL_ACTOR_KEY` | Lets rooms write to the room list (32+ chars, actors only) |
+| `RIVET_TOKEN` | Engine admin token. In dev, `bun run dev` also gives it to the local engine RivetKit starts, so dev checks tokens like production |
+| `RIVET_ENDPOINT` | Engine to connect to as a runner. Unset in dev: RivetKit starts a local engine |
 
 Set in the root `.env`; checked at startup.
 
@@ -36,4 +37,4 @@ apps/server/src/
 - Every commit of a running match appends its move log events (`logEvents` in `match.ts`) to the room's `match_events` table, in the same transaction as the room state.
 - A finished game's result and full move log go into an outbox table in the room's SQLite, then to the platform (`POST /v1/matches`), retried with backoff until it is stored. The platform ignores a repeated report, so a retry is always safe.
 - A hand is only sent to its owner; the deck and other players' hands never reach the browser.
-- Browsers can only read the room list. `report` and `remove` need `INTERNAL_ACTOR_KEY`, which rooms send as connection params.
+- Browsers can't reach the room list. Their engine tokens only reach one room; the game's server reads the list.

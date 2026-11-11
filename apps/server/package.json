@@ -8,7 +8,7 @@
 		"./games/*": "./src/games/*.ts"
 	},
 	"scripts": {
-		"dev": "bun --env-file=../../.env --watch src/index.ts",
+		"dev": "bun --env-file=../../.env scripts/dev.ts",
 		"start": "bun --env-file=../../.env src/index.ts",
 		"test": "bun test",
 		"check": "tsc --noEmit"

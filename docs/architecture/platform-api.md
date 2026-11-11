@@ -263,7 +263,7 @@ Trade-off of skipping an admin API: the backoffice depends on the table layout, 
 
 ## Locking the room list
 
-`bust31Rooms.report` / `remove` require connection params `{ internalKey }` equal to `INTERNAL_ACTOR_KEY`, known only to the actor server. `list` stays public. (Needs a quick check that rivetkit 3 passes params on actor-to-actor handle calls; if not, the key moves into the action arguments.)
+Browsers never reach the room list actor. The game's server issues each browser an engine token for one room only (`POST /api/rooms/:code/token`, a grant on that actor's id), and it reads the list itself for `GET /api/rooms`. Rooms update the list over `c.client()` with the actor server's admin token. Rivet doesn't tell an actor who is calling, so this per-room token is what keeps browsers off `report` / `remove`.
 
 ## Data store
 
@@ -381,7 +381,7 @@ Backups: nightly `pg_dump` from a cron container to off-VPS storage, kept 14 day
 | `PLATFORM_SERVER_KEY` | platform + actor server | Bearer key for actor → platform calls |
 | `PLAY_TOKEN_PUBLIC_KEY` | actor server | Public key that verifies play tokens |
 | `PLATFORM_URL` | game frontend (server side) + actor server | `http://platform:3000` (private network) |
-| `INTERNAL_ACTOR_KEY` | actor server | Guards the room list's `report` / `remove` |
+| `RIVET_TOKEN` | game frontend (server side) + actor server | Engine admin token; the game's server turns it into per-room browser tokens |
 | `PUBLIC_RIVET_ENDPOINT` | game frontend | `https://engine.nblueclouds.online` (already exists) |
 | `DOMAIN` | Caddy | `nblueclouds.online`; hostnames are built from it |
 
@@ -416,7 +416,7 @@ deploy/
 | `apps/server/src/platform.ts` (new) | `verifyPlayToken`, `reportMatch` + outbox retry |
 | `bust-31/schema.ts` | `ConnParams` → `{ playToken }` |
 | `bust-31/actor.ts` | Verify in `onBeforeConnect`, `conn.id → playerId` map, `matchId` at start, outbox on finish, drop stored secrets |
-| `bust-31/directory.ts` | `internalKey` check on `report` / `remove` |
+| `bust-31/directory.ts` | Unreachable from browsers: per-room engine tokens |
 | `apps/web/vite.config.ts` + `package.json` | `adapter-vercel` → `adapter-node`, plus a Dockerfile |
 | `apps/web/src/lib/guest.ts` | Calls `/v1/players/guest` and `/v1/play-tokens`, keeps the player secret |
 | `apps/web/src/lib/games/bust-31/connection.svelte.ts` | Gets a play token before connecting |
