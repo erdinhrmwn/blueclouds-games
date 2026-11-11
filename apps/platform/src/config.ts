@@ -1,12 +1,12 @@
 import { z } from "zod";
 
 const DbEnv = z.object({
-	PLATFORM_DB_HOST: z.string().min(1),
-	PLATFORM_DB_PORT: z.coerce.number().int().min(1).max(65535).default(5432),
-	PLATFORM_DB_USER: z.string().min(1),
+	DATABASE_HOST: z.string().min(1),
+	DATABASE_PORT: z.coerce.number().int().min(1).max(65535).default(5432),
+	DATABASE_USER: z.string().min(1),
 	/** Empty is allowed for local servers that trust local connections. */
-	PLATFORM_DB_PASSWORD: z.string().default(""),
-	PLATFORM_DB_NAME: z.string().min(1),
+	DATABASE_PASSWORD: z.string().default(""),
+	DATABASE_NAME: z.string().min(1),
 });
 
 const Env = DbEnv.extend({
@@ -46,11 +46,11 @@ function check<S extends z.ZodType>(schema: S, env: RawEnv, what: string): z.out
 }
 
 const toDb = (e: z.output<typeof DbEnv>): DbConfig => ({
-	hostname: e.PLATFORM_DB_HOST,
-	port: e.PLATFORM_DB_PORT,
-	username: e.PLATFORM_DB_USER,
-	password: e.PLATFORM_DB_PASSWORD,
-	database: e.PLATFORM_DB_NAME,
+	hostname: e.DATABASE_HOST,
+	port: e.DATABASE_PORT,
+	username: e.DATABASE_USER,
+	password: e.DATABASE_PASSWORD,
+	database: e.DATABASE_NAME,
 });
 
 /** Only the database settings, for scripts such as `db:migrate`. */

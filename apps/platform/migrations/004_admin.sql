@@ -1,4 +1,5 @@
--- Backoffice: admins, their sessions and the audit log. Only the backoffice app uses these.
+-- Backoffice: admins, their sessions and the audit log. Only the backoffice app uses these;
+-- it connects with the same database user as the platform.
 CREATE TABLE admins (
   id             uuid PRIMARY KEY DEFAULT uuidv7(),
   username       text NOT NULL UNIQUE CHECK (username ~ '^[a-z0-9_.-]{3,32}$'),
@@ -36,18 +37,3 @@ CREATE TRIGGER admins_updated_at BEFORE UPDATE ON admins FOR EACH ROW EXECUTE FU
 CREATE TRIGGER admin_sessions_updated_at BEFORE UPDATE ON admin_sessions FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 CREATE TRIGGER admin_audit_updated_at BEFORE UPDATE ON admin_audit FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
--- The backoffice connects as its own role and gets only what its screens need.
--- Created without login here; give it one with: ALTER ROLE backoffice LOGIN PASSWORD '…';
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'backoffice') THEN
-    CREATE ROLE backoffice NOLOGIN;
-  END IF;
-END $$;
-
-GRANT USAGE ON SCHEMA public TO backoffice;
-GRANT SELECT ON players, matches, match_players TO backoffice;
-GRANT SELECT (player_id, revoked_at, created_at, updated_at) ON player_secrets TO backoffice;  -- never secret_hash
-GRANT UPDATE (disabled_at, disabled_reason) ON players TO backoffice;
-GRANT UPDATE (revoked_at) ON player_secrets TO backoffice;
-GRANT SELECT, INSERT, UPDATE, DELETE ON admins, admin_sessions, admin_audit TO backoffice;

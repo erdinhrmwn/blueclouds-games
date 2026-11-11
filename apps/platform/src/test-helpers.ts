@@ -24,12 +24,12 @@ export const ORIGIN = "http://game.test";
 
 /**
  * Empties the test database and runs every migration. Also used by the backoffice tests.
- * PLATFORM_TEST_DB_NAME must be a throwaway database: its public schema is dropped.
+ * DATABASE_TEST_NAME must be a throwaway database: its public schema is dropped.
  */
 export async function resetTestDatabase() {
-	const name = process.env.PLATFORM_TEST_DB_NAME;
-	if (!name) throw new Error("Set PLATFORM_TEST_DB_NAME to a throwaway Postgres database to run tests.");
-	if (name === process.env.PLATFORM_DB_NAME) throw new Error("PLATFORM_TEST_DB_NAME must differ from PLATFORM_DB_NAME: tests drop its schema.");
+	const name = process.env.DATABASE_TEST_NAME;
+	if (!name) throw new Error("Set DATABASE_TEST_NAME to a throwaway Postgres database to run tests.");
+	if (name === process.env.DATABASE_NAME) throw new Error("DATABASE_TEST_NAME must differ from DATABASE_NAME: tests drop its schema.");
 	const db = { ...loadDbConfig(), database: name };
 	const sql = new SQL(db);
 	await sql.unsafe("DROP SCHEMA public CASCADE; CREATE SCHEMA public;");
@@ -41,7 +41,7 @@ export async function resetTestDatabase() {
 }
 
 /**
- * Fresh schema + app for one test file. Uses the PLATFORM_DB_* settings with PLATFORM_TEST_DB_NAME as the
+ * Fresh schema + app for one test file. Uses the DATABASE_* settings with DATABASE_TEST_NAME as the
  * database, which must be a throwaway one: its public schema is dropped.
  */
 export async function setupTestApp() {

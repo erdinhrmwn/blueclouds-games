@@ -40,11 +40,11 @@ if (!username) {
 
 const env = process.env;
 const sql = new SQL({
-	hostname: env.BACKOFFICE_DB_HOST,
-	port: Number(env.BACKOFFICE_DB_PORT || 5432),
-	username: env.BACKOFFICE_DB_USER,
-	password: env.BACKOFFICE_DB_PASSWORD ?? '',
-	database: env.BACKOFFICE_DB_NAME
+	hostname: env.DATABASE_HOST,
+	port: Number(env.DATABASE_PORT || 5432),
+	username: env.DATABASE_USER,
+	password: env.DATABASE_PASSWORD ?? '',
+	database: env.DATABASE_NAME
 });
 
 try {

@@ -3,7 +3,7 @@ import type { SQL } from 'bun';
 import { resetTestDatabase } from '../../../../platform/src/test-helpers';
 import { createAdmin, login, logout, sessionAdmin } from './auth';
 
-// Runs against the platform's test database (PLATFORM_TEST_DB_NAME), migrated fresh.
+// Runs against the platform's test database (DATABASE_TEST_NAME), migrated fresh.
 let sql: SQL;
 beforeAll(async () => {
 	sql = (await resetTestDatabase()).sql;

@@ -1,6 +1,6 @@
 # Backoffice (`apps/backoffice`)
 
-Admin UI for staff: SvelteKit (`adapter-node`) running on Bun. It has no API of its own and the platform has no admin API: pages read Postgres in `+page.server.ts` and change it through form actions, connected as the limited `backoffice` role. Design: [architecture/platform-api.md](../architecture/platform-api.md#backoffice-mvp).
+Admin UI for staff: SvelteKit (`adapter-node`) running on Bun. It has no API of its own and the platform has no admin API: pages read Postgres in `+page.server.ts` and change it through form actions, with the same database settings as the platform (`DATABASE_*`). Design: [architecture/platform-api.md](../architecture/platform-api.md#backoffice-mvp).
 
 ## Screens
 
@@ -13,8 +13,7 @@ Admin UI for staff: SvelteKit (`adapter-node`) running on Bun. It has no API of 
 ## Running
 
 ```sh
-bun run --filter platform db:migrate            # creates the admin tables and the backoffice role
-psql -c "ALTER ROLE backoffice LOGIN PASSWORD 'backoffice';"   # once per database server
+bun run --filter platform db:migrate            # creates the admin tables too
 bun run --filter backoffice admin:create root   # asks for the password (12+ characters)
 bun run dev:backoffice                          # http://localhost:5174
 ```
@@ -25,7 +24,7 @@ bun run dev:backoffice                          # http://localhost:5174
 
 | Variable | Purpose |
 |---|---|
-| `BACKOFFICE_DB_HOST`, `BACKOFFICE_DB_PORT`, `BACKOFFICE_DB_USER`, `BACKOFFICE_DB_PASSWORD`, `BACKOFFICE_DB_NAME` | Postgres connection as the `backoffice` role (port defaults to 5432) |
+| `DATABASE_HOST`, `DATABASE_PORT`, `DATABASE_USER`, `DATABASE_PASSWORD`, `DATABASE_NAME` | The platform's Postgres connection, shared |
 
 Behind a proxy, adapter-node also needs `ORIGIN` (e.g. `https://backoffice.nblueclouds.online`) and `ADDRESS_HEADER=X-Forwarded-For` so form actions and the audit log see the real origin and IP.
 
@@ -43,7 +42,7 @@ Behind a proxy, adapter-node also needs `ORIGIN` (e.g. `https://backoffice.nblue
 ```
 apps/backoffice/
   src/
-    env.ts               # BACKOFFICE_DB_* validation
+    env.ts               # DATABASE_* validation
     hooks.server.ts      # loads the admin from the session cookie, sends everyone else to /login
     lib/server/db.ts     # Bun.sql connection
     lib/server/auth.ts   # login, sessions, audit, createAdmin (+ auth.test.ts)
@@ -55,4 +54,4 @@ apps/backoffice/
   scripts/admin-create.ts
 ```
 
-Tests (`bun run test`) use the platform's test database (`PLATFORM_TEST_DB_NAME`), migrated fresh.
+Tests (`bun run test`) use the platform's test database (`DATABASE_TEST_NAME`), migrated fresh.
