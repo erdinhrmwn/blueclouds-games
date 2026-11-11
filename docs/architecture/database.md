@@ -518,6 +518,7 @@ Four migrations, each applied by the runner in one transaction, so if any existi
 | `010_tournaments.sql` | `tournaments`, `tournament_players`, `room_assignments`, the tournament columns on `rooms`, and the audit columns and actions. |
 | `011_player_accounts.sql` | `username`, `password_hash`, `is_active`, `is_bot`, `is_vip` on `players`, and the VIP audit actions. |
 | `012_guest_usernames.sql` | Guests get a `guest_…` username (existing ones backfilled), `is_guest`, and the guest-prefix check. |
+| `013_guest_cleanup.sql` | Deleting a player takes its `player_secrets` with it and clears `rooms.created_by_player_id`; indexes for the guest sweep. |
 
 Before deploying, run these on the live database. Each must return 0 (or the listed rows must be fixed first):
 

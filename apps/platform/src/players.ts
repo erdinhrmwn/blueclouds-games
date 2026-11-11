@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { bearer, hashSecret, newSecret, playerAuth, playerFromHeader, type PlayerRow, type PlayerVariables, toPlayer } from "./auth";
 import { ApiError, ok, parse, readJson } from "./http";
+import { deleteGuestIfUnused } from "./guests";
 import { rateLimit } from "./rate-limit";
 import type { Signer } from "./tokens";
 
@@ -36,7 +37,7 @@ const LOCKOUT = { tries: 5, windowMs: 15 * 60_000 };
 const RETURNING = (sql: SQL) => sql`RETURNING id, display_name, username, is_guest, created_at, disabled_at`;
 /** Tries before giving up on a free guest number (6 digits: a clash is rare, a few in a row means something else). */
 const GUEST_NUMBER_TRIES = 5;
-const guestNumber = () => String(100_000 + (crypto.getRandomValues(new Uint32Array(1))[0] % 900_000));
+const guestNumber = () => String(100_000 + (crypto.getRandomValues(new Uint32Array(1))[0]! % 900_000));
 
 /**
  * Wrong passwords per username.
@@ -136,13 +137,20 @@ export function playerRoutes(sql: SQL, signer: Signer) {
 		return ok(c, { player: toPlayer(row), playerSecret: secret });
 	});
 
-	/** Signs this device out: its secret stops working. */
+	/** Signs this device out: its secret stops working. A guest that never played is deleted, since it can't come back. */
 	app.post("/players/logout", auth, async (c) => {
+		const player = c.get("player");
 		await sql`UPDATE player_secrets SET revoked_at = now() WHERE secret_hash = ${hashSecret(bearer(c.req.header("authorization"))!)}`;
+		if (player.guest) await deleteGuestIfUnused(sql, player.id);
 		return ok(c, { signedOut: true });
 	});
 
-	app.get("/players/me", auth, (c) => ok(c, { player: c.get("player") }));
+	/** The game asks on every page load; that counts as being seen (at most one write an hour), so the guest sweep spares it. */
+	app.get("/players/me", auth, async (c) => {
+		const player = c.get("player");
+		await sql`UPDATE players SET last_seen_at = now() WHERE id = ${player.id} AND last_seen_at < now() - interval '1 hour'`;
+		return ok(c, { player });
+	});
 
 	app.patch("/players/me", auth, async (c) => {
 		const { name } = parse(NameBody, await readJson(c));
