@@ -1,13 +1,15 @@
 import { SQL } from "bun";
+import { loadDbConfig } from "../src/config";
 import { log } from "../src/log";
 import { migrate } from "../src/migrate";
 
-const url = process.env.DATABASE_URL;
-if (!url) {
-	log.error({ msg: "DATABASE_URL is not set" });
+let sql: SQL;
+try {
+	sql = new SQL(loadDbConfig());
+} catch (err) {
+	log.error({ msg: String(err instanceof Error ? err.message : err) });
 	process.exit(1);
 }
-const sql = new SQL(url);
 try {
 	const applied = await migrate(sql);
 	log.info({ msg: applied.length ? "migrations applied" : "database is up to date", applied });

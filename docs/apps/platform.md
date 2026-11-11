@@ -6,13 +6,13 @@ The player + match API: Hono on Bun, Postgres. It has no UI and no admin API. Fu
 
 ```sh
 docker compose up -d                      # Postgres 18 + DragonflyDB on 127.0.0.1 (compose.yaml)
-cp apps/platform/.env.example apps/platform/.env   # then fill in the two REQUIRED keys
+cp apps/platform/.env.example apps/platform/.env   # then fill in the empty values
 bun run --filter platform keys:generate   # prints PLAY_TOKEN_PRIVATE_KEY / PLAY_TOKEN_PUBLIC_KEY
 bun run --filter platform db:migrate
 bun run dev:platform                      # http://localhost:3000/v1/health
 ```
 
-Platform tests need `TEST_DATABASE_URL` pointing at a throwaway database (its schema is dropped on every run). The dev Postgres creates one, `platform_test`, on first start; `apps/platform/.env.example` already points at both databases.
+Platform tests use the same `DB_*` server with `TEST_DB_NAME` as the database. It must be a throwaway database (its schema is dropped on every run) and differ from `DB_NAME`. The dev Postgres in `compose.yaml` creates one, `platform_test`, on first start. Docker is optional: any Postgres 18 works.
 
 `docker compose down` stops the services; add `-v` to also delete their data.
 
@@ -20,7 +20,8 @@ Platform tests need `TEST_DATABASE_URL` pointing at a throwaway database (its sc
 
 | Variable | Purpose |
 |---|---|
-| `DATABASE_URL` | Postgres connection |
+| `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` | Postgres 18 connection (`DB_PORT` defaults to 5432; `DB_PASSWORD` may be empty) |
+| `TEST_DB_NAME` | Tests only: throwaway database on the same server |
 | `PLAY_TOKEN_PRIVATE_KEY` | Ed25519 private JWK that signs play tokens |
 | `PLATFORM_SERVER_KEY` | Bearer key the actor server sends with match reports (32+ chars) |
 | `ALLOWED_ORIGINS` | Comma-separated browser origins allowed by CORS |

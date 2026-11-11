@@ -5,7 +5,7 @@ import { log } from "./log";
 import { createSigner } from "./tokens";
 
 const config = loadConfig();
-const sql = new SQL(config.databaseUrl);
+const sql = new SQL(config.db);
 const signer = await createSigner(config.playTokenPrivateKey);
 const app = createApp({ sql, config, signer });
 const server = Bun.serve({ port: config.port, fetch: app.fetch });

@@ -372,14 +372,14 @@ Backups: nightly `pg_dump` from a cron container to off-VPS storage, kept 14 day
 
 | Variable | Where | Purpose |
 |---|---|---|
-| `DATABASE_URL` | platform | Postgres connection |
+| `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` | platform | Postgres connection |
 | `PLAY_TOKEN_PRIVATE_KEY` | platform | Ed25519 private key (JWK) that signs play tokens |
 | `PLATFORM_SERVER_KEY` | platform + actor server | Bearer key for actor → platform calls |
 | `ALLOWED_ORIGINS` | platform | Comma-separated origins allowed by CORS (game frontend) |
 | `PLAY_TOKEN_PUBLIC_KEY` | actor server | Public key that verifies play tokens |
 | `PLATFORM_URL` | actor server | `http://platform:3000` (private network) |
 | `INTERNAL_ACTOR_KEY` | actor server | Guards the room list's `report` / `remove` |
-| `DATABASE_URL` (backoffice) | backoffice | Postgres connection as the `backoffice` role |
+| `DB_*` (backoffice) | backoffice | Same keys, connecting as the `backoffice` role |
 | `PUBLIC_PLATFORM_URL` | game frontend | `https://api.nblueclouds.online` |
 | `PUBLIC_RIVET_ENDPOINT` | game frontend | `https://engine.nblueclouds.online` (already exists) |
 | `DOMAIN` | Caddy | `nblueclouds.online`; hostnames are built from it |
