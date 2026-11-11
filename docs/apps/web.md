@@ -11,6 +11,8 @@ SvelteKit app the players use. Started with `bun run dev:web` on http://localhos
 
 Set in the root `.env` (template: `.env.example`; `vite.config.ts` points SvelteKit at the repo root). Optional for local dev.
 
+Production: `bun run build`, then `bun run start` (adapter-node output, run on Bun). It also needs `ORIGIN` (the public URL) and, behind Caddy, `ADDRESS_HEADER=X-Forwarded-For` so the player's IP reaches the platform's rate limit.
+
 ## Structure
 
 ```
