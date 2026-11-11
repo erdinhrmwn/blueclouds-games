@@ -189,7 +189,7 @@ Bearer player secret. `200`, `data: { "player": {…} }`; `401 unauthenticated`;
 
 ### `PATCH /v1/players/me`
 
-Bearer player secret. Request `{ "name": "Rina K" }`. `200`, `data: { "player": {…} }`. The game's name modal calls this; rooms pick up the new name at the next connect.
+Bearer player secret. Request `{ "name": "Rina K" }`. `200`, `data: { "player": {…} }`; `403 forbidden` for a guest, which keeps its generated name until it links an account. The profile page's rename dialog calls this; rooms pick up the new name at the next connect.
 
 ### `POST /v1/play-tokens`
 

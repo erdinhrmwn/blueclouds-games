@@ -68,11 +68,18 @@ describe("me", () => {
 		expect(res.status).toBe(401);
 	});
 
-	test("returns and renames the current player", async () => {
+	test("returns the current player; only an account can rename", async () => {
 		const { player, secret } = await guest(t.app);
 		expect((await call(t.app, "GET", "/v1/players/me", { token: secret })).json.data.player).toEqual(
 			expect.objectContaining({ id: player.id, name: "Rina" }),
 		);
+		const refused = await call(t.app, "PATCH", "/v1/players/me", { token: secret, body: { name: "Rina K" } });
+		expect(refused.status).toBe(403);
+		expect(refused.json.error.code).toBe("forbidden");
+
+		const body = { name: "Rina", username: `rina_${player.id.slice(-8)}`, password: "long enough" };
+		const headers = { "x-forwarded-for": crypto.randomUUID() };
+		expect((await call(t.app, "POST", "/v1/players/register", { token: secret, body, headers })).status).toBe(200);
 		const renamed = await call(t.app, "PATCH", "/v1/players/me", { token: secret, body: { name: "Rina K" } });
 		expect(renamed.status).toBe(200);
 		expect(renamed.json.data.player.name).toBe("Rina K");
@@ -94,10 +101,10 @@ describe("me", () => {
 	});
 
 	test("updated_at moves on update", async () => {
-		const { player, secret } = await guest(t.app);
+		const { player } = await guest(t.app);
 		const [before] = await t.sql`SELECT updated_at FROM players WHERE id = ${player.id}`;
 		await Bun.sleep(5);
-		await call(t.app, "PATCH", "/v1/players/me", { token: secret, body: { name: "New" } });
+		await t.sql`UPDATE players SET display_name = 'New' WHERE id = ${player.id}`;
 		const [after] = await t.sql`SELECT updated_at FROM players WHERE id = ${player.id}`;
 		expect(after.updated_at.getTime()).toBeGreaterThan(before.updated_at.getTime());
 	});

@@ -50,22 +50,22 @@ const secretOf = (cookies: Cookies) => cookies.get(SECRET_COOKIE);
 const saveSecret = (cookies: Cookies, secret: string) =>
 	cookies.set(SECRET_COOKIE, secret, { path: '/', httpOnly: true, secure: !dev, sameSite: 'lax', maxAge: SECRET_MAX_AGE });
 
-/** A new guest for this browser; without a name the platform makes one up ("Guest 482193"). */
-async function createGuest(event: RequestEvent, name?: string): Promise<{ player: Me; playerSecret: string }> {
-	const res = await call<{ player: Me; playerSecret: string }>(event, '/players/guest', { method: 'POST', body: name ? { name } : {} });
-	saveSecret(event.cookies, res.playerSecret);
-	return res;
-}
-const newGuest = async (event: RequestEvent, name: string) => (await createGuest(event, name)).playerSecret;
-
-/** "Play as guest": the platform picks the name and username. */
+/** "Play as guest": a new guest for this browser. The platform picks the name and username; a guest can't choose them. */
 export async function startGuest(event: RequestEvent): Promise<Me> {
-	const { player } = await createGuest(event);
+	const { player, playerSecret } = await call<{ player: Me; playerSecret: string }>(event, '/players/guest', { method: 'POST', body: {} });
+	saveSecret(event.cookies, playerSecret);
 	return { name: player.name, username: player.username, guest: player.guest };
 }
 
-// A secret the platform no longer knows (e.g. a reset database): start a fresh guest.
+// A secret the platform no longer knows (e.g. a reset database).
 const lost = (e: unknown) => e instanceof PlatformError && e.code === 'unauthenticated';
+/** Every page needs a player (see +layout.server.ts), so a missing one here means the session ended. */
+const ended = () => new PlatformError(401, 'unauthenticated', 'Your session ended. Reload the page to continue.');
+function secretOrEnded(cookies: Cookies): string {
+	const secret = secretOf(cookies);
+	if (!secret) throw ended();
+	return secret;
+}
 
 export type Me = { name: string; username: string | null; guest: boolean };
 
@@ -124,42 +124,21 @@ export async function logout(event: RequestEvent): Promise<void> {
 	}
 }
 
-/** Renames the player, creating the guest on first use. */
+/** Renames an account. The platform refuses a guest: it keeps its generated name until it links an account. */
 export async function savePlayerName(event: RequestEvent, name: string): Promise<void> {
-	const secret = secretOf(event.cookies);
-	if (!secret) return void (await newGuest(event, name));
-	try {
-		await call(event, '/players/me', { method: 'PATCH', secret, body: { name } });
-	} catch (e) {
-		if (!lost(e)) throw e;
-		await newGuest(event, name);
-	}
+	await call(event, '/players/me', { method: 'PATCH', secret: secretOrEnded(event.cookies), body: { name } });
 }
 
-/** A fresh play token. `name` is only used if the guest has to be (re)created. */
-export async function playToken(event: RequestEvent, name: string): Promise<string> {
-	const secret = secretOf(event.cookies) ?? (await newGuest(event, name));
-	const fetchToken = (s: string) => call<{ token: string }>(event, '/play-tokens', { method: 'POST', secret: s });
-	try {
-		return (await fetchToken(secret)).token;
-	} catch (e) {
-		if (!lost(e)) throw e;
-		return (await fetchToken(await newGuest(event, name))).token;
-	}
+/** A fresh play token. */
+export async function playToken(event: RequestEvent): Promise<string> {
+	return (await call<{ token: string }>(event, '/play-tokens', { method: 'POST', secret: secretOrEnded(event.cookies) })).token;
 }
 
 type Room = { id: string; code: string; game: string };
 
-/** Opens a new table: the platform picks the code. `name` is only used if the guest has to be (re)created. */
-export async function createRoom(event: RequestEvent, game: string, name: string): Promise<Room> {
-	const open = (s: string) => call<{ room: Room }>(event, '/rooms', { method: 'POST', secret: s, body: { game } });
-	const secret = secretOf(event.cookies) ?? (await newGuest(event, name));
-	try {
-		return (await open(secret)).room;
-	} catch (e) {
-		if (!lost(e)) throw e;
-		return (await open(await newGuest(event, name))).room;
-	}
+/** Opens a new table: the platform picks the code. */
+export async function createRoom(event: RequestEvent, game: string): Promise<Room> {
+	return (await call<{ room: Room }>(event, '/rooms', { method: 'POST', secret: secretOrEnded(event.cookies), body: { game } })).room;
 }
 
 /**

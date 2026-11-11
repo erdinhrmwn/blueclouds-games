@@ -4,7 +4,7 @@
 	import { nextPath } from '#lib/guest.ts';
 	import { createAccount, type FormErrors, logIn, NAME_MAX, playAsGuest } from '#lib/player.svelte.ts';
 
-	/** First stop for anyone without a player: log in, sign up, or play as a guest under a display name. */
+	/** First stop for anyone without a player: log in, sign up, or play as a guest. */
 	let tab = $state<'login' | 'signup'>('login');
 	let busy = $state(false);
 
@@ -102,7 +102,7 @@
 		<div class="space-y-3">
 			<button class="btn-ghost w-full" onclick={guest} disabled={busy}>Play as guest</button>
 			{#if guestError}<p class="text-sm text-ember" role="alert">{guestError}</p>{/if}
-			<p class="text-sm text-paper/75">You get a name like Guest 482193. Change it, or link an account to keep your games, from your profile.</p>
+			<p class="text-sm text-paper/75">You get a name like Guest 482193. Link an account later to pick your own.</p>
 		</div>
 	</div>
 </section>

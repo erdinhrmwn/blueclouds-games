@@ -55,7 +55,7 @@ export async function logOut(): Promise<string | null> {
 	return null;
 }
 
-/** Saves the name on the platform (creating the guest on first use). Returns an error message, or null. */
+/** Renames an account (a guest keeps its generated name until it links one). Returns an error message, or null. */
 export async function setPlayerName(raw: string): Promise<string | null> {
 	const name = raw.trim();
 	if (name.length < 1 || name.length > NAME_MAX) return `Enter a name of 1–${NAME_MAX} characters.`;
@@ -70,4 +70,4 @@ export async function setPlayerName(raw: string): Promise<string | null> {
 }
 
 /** A fresh play token for connecting to a room. */
-export const playToken = async () => (await fetchPlayToken(player.name)).token;
+export const playToken = async () => (await fetchPlayToken()).token;

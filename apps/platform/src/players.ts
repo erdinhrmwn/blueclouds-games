@@ -152,10 +152,13 @@ export function playerRoutes(sql: SQL, signer: Signer) {
 		return ok(c, { player });
 	});
 
+	/** Accounts only: a guest keeps its generated name until it links an account. */
 	app.patch("/players/me", auth, async (c) => {
+		const player = c.get("player");
+		if (player.guest) throw new ApiError("forbidden", 403, "Link an account to choose your name.");
 		const { name } = parse(NameBody, await readJson(c));
 		const [row] = await sql`
-			UPDATE players SET display_name = ${name} WHERE id = ${c.get("player").id} ${RETURNING(sql)}`;
+			UPDATE players SET display_name = ${name} WHERE id = ${player.id} ${RETURNING(sql)}`;
 		return ok(c, { player: toPlayer(row) });
 	});
 
