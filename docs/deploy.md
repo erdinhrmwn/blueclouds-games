@@ -47,19 +47,4 @@ Logs: `docker compose -f deploy/compose.yml --env-file .env logs -f <service>`.
 
 ## Backups
 
-[deploy/backup.sh](../deploy/backup.sh) writes a Postgres dump to `/var/backups/blueclouds` and keeps 14 days. Change the folder with `BACKUP_DIR` and the retention with `BACKUP_KEEP_DAYS`. Run it from the host's cron:
-
-```
-15 3 * * * /srv/blueclouds/deploy/backup.sh >> /var/log/blueclouds-backup.log 2>&1
-```
-
-Postgres holds everything durable: players, matches, admins and the audit log. The engine volumes only hold rooms in progress. They aren't backed up, because a file copy of a running engine may not restore. A lost engine volume loses open tables, plus any match result still waiting to be sent.
-
-Backups on the same VPS don't survive losing the VPS. Copy `/var/backups/blueclouds` somewhere else as well.
-
-Restore into a fresh database:
-
-```sh
-docker compose -f deploy/compose.yml --env-file .env exec -T postgres \
-  sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists' < postgres-<time>.dump
-```
+None, by choice: losing the VPS disk loses players, matches and admins. For a one-off copy, run `pg_dump` inside the `postgres` container.
