@@ -21,9 +21,9 @@ const report = (over: Record<string, unknown> = {}) => ({
 	startedAt: "2026-11-11T08:00:00Z",
 	endedAt: "2026-11-11T08:06:12Z",
 	players: [
-		{ seat: 0, playerId: ann.player.id, bot: false, placement: 1, livesLeft: 2 },
-		{ seat: 2, playerId: bob.player.id, bot: false, placement: 3, livesLeft: 0 },
-		{ seat: 3, playerId: null, bot: true, botName: "Bot Rain", placement: 2, livesLeft: 0 },
+		{ seat: 0, playerId: ann.player.id, bot: false, placement: 1, score: 2 },
+		{ seat: 2, playerId: bob.player.id, bot: false, placement: 3, score: 0 },
+		{ seat: 3, playerId: null, bot: true, botName: "Bot Rain", placement: 2, score: 0 },
 	],
 	log: { logVersion: 1, events: events() },
 	...over,
@@ -63,8 +63,8 @@ describe("match reports", () => {
 	test("unknown player → 422 and nothing is stored", async () => {
 		const body = report({
 			players: [
-				{ seat: 0, playerId: Bun.randomUUIDv7(), bot: false, placement: 1, livesLeft: 1 },
-				{ seat: 1, playerId: null, bot: true, placement: 2, livesLeft: 0 },
+				{ seat: 0, playerId: Bun.randomUUIDv7(), bot: false, placement: 1, score: 1 },
+				{ seat: 1, playerId: null, bot: true, botName: "Bot Rain", placement: 2, score: 0 },
 			],
 		});
 		const res = await post(body);
@@ -77,8 +77,8 @@ describe("match reports", () => {
 	test("bot-only matches are recorded", async () => {
 		const body = report({
 			players: [
-				{ seat: 0, playerId: null, bot: true, placement: 1, livesLeft: 1 },
-				{ seat: 1, playerId: null, bot: true, placement: 2, livesLeft: 0 },
+				{ seat: 0, playerId: null, bot: true, botName: "Bot Cloud", placement: 1, score: 1 },
+				{ seat: 1, playerId: null, bot: true, botName: "Bot Rain", placement: 2, score: 0 },
 			],
 		});
 		expect((await post(body)).status).toBe(201);
@@ -87,8 +87,8 @@ describe("match reports", () => {
 	test("rejects invalid reports with field errors", async () => {
 		const twoWinners = report({
 			players: [
-				{ seat: 0, playerId: ann.player.id, bot: false, placement: 1, livesLeft: 1 },
-				{ seat: 1, playerId: null, bot: true, placement: 1, livesLeft: 0 },
+				{ seat: 0, playerId: ann.player.id, bot: false, placement: 1, score: 1 },
+				{ seat: 1, playerId: null, bot: true, botName: "Bot Rain", placement: 1, score: 0 },
 			],
 		});
 		const res = await post(twoWinners);
@@ -98,6 +98,24 @@ describe("match reports", () => {
 		expect((await post(report({ game: "chess" }))).json.error.fields.game).toBe("Unknown game.");
 		expect((await post(report({ matchId: crypto.randomUUID() }))).status).toBe(400); // not v7
 		expect((await post(report({ endedAt: "2026-11-11T07:00:00Z" }))).json.error.fields.endedAt).toBeTruthy();
+		const namelessBot = { seat: 1, playerId: null, bot: true, placement: 2, score: 0 };
+		expect((await post(report({ players: [report().players[0], namelessBot] }))).status).toBe(400);
+	});
+});
+
+describe("any game in the catalog", () => {
+	test("a new game only needs its row in games; score means what the game says", async () => {
+		const seat = (s: number, placement: number, score: number) => ({ seat: s, playerId: null, bot: true, botName: `Bot ${s}`, placement, score });
+		const twoSeats = report({ game: "test-game", players: [seat(0, 1, 3), seat(1, 2, 12)] });
+		expect((await post(twoSeats)).json.error.fields.game).toBe("Unknown game.");
+
+		await t.sql`INSERT INTO games (slug, name, min_players, max_players, score_label) VALUES ('test-game', 'Test Game', 3, 4, 'Points')`;
+		expect((await post(twoSeats)).json.error.fields.players).toBe("Needs 3–4 players.");
+		// Lower is better here, places 2 and 3 tie, and a score may be negative: all up to the game.
+		const body = report({ game: "test-game", players: [seat(0, 1, -2), seat(1, 2, 12), seat(2, 2, 12)] });
+		expect((await post(body)).status).toBe(201);
+		const rows = await t.sql`SELECT seat, placement, score FROM match_players WHERE match_id = ${body.matchId} ORDER BY seat`;
+		expect(rows.map((r: { score: number }) => r.score)).toEqual([-2, 12, 12]);
 	});
 });
 
@@ -149,8 +167,8 @@ describe("my match history", () => {
 		for (let i = 0; i < 22; i++) {
 			const body = report({
 				players: [
-					{ seat: 0, playerId: carl.player.id, bot: false, placement: i % 2 ? 1 : 2, livesLeft: 1 },
-					{ seat: 1, playerId: null, bot: true, placement: i % 2 ? 2 : 1, livesLeft: 0 },
+					{ seat: 0, playerId: carl.player.id, bot: false, placement: i % 2 ? 1 : 2, score: 1 },
+					{ seat: 1, playerId: null, bot: true, botName: "Bot Rain", placement: i % 2 ? 2 : 1, score: 0 },
 				],
 			});
 			ids.push(body.matchId);

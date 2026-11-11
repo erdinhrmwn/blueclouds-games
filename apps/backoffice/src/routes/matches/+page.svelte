@@ -20,7 +20,7 @@
 		<label class="label" for="game">Game</label>
 		<select class="field" id="game" name="game" value={f.game}>
 			<option value="">All games</option>
-			{#each data.games as g (g)}<option value={g}>{g}</option>{/each}
+			{#each data.games as g (g.slug)}<option value={g.slug}>{g.name}</option>{/each}
 		</select>
 	</div>
 	<div>
@@ -61,7 +61,7 @@
 						<td class="px-3 py-2 whitespace-nowrap">
 							<a class="underline decoration-line underline-offset-2 hover:decoration-ink" href="/matches/{m.id}">{utc(m.endedAt)}</a>
 						</td>
-						<td class="px-3 py-2">{m.game}</td>
+						<td class="px-3 py-2">{m.gameName}</td>
 						<td class="px-3 py-2 font-mono text-xs">{m.roomCode}</td>
 						<td class="px-3 py-2">{m.players}</td>
 						<td class="px-3 py-2">{m.winner ?? ''}</td>

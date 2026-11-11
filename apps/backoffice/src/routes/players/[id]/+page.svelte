@@ -83,7 +83,7 @@
 						<td class="px-3 py-2 whitespace-nowrap">
 							<a class="underline decoration-line underline-offset-2 hover:decoration-ink" href="/matches/{m.id}">{utc(m.endedAt)}</a>
 						</td>
-						<td class="px-3 py-2">{m.game}</td>
+						<td class="px-3 py-2">{m.gameName}</td>
 						<td class="px-3 py-2 font-mono text-xs">{m.roomCode}</td>
 						<td class="px-3 py-2">{m.placement} of {m.players}</td>
 					</tr>

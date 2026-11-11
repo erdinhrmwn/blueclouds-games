@@ -36,16 +36,16 @@ export async function searchPlayers(sql: SQL, q: string, before: string | null):
 	return (await sql`SELECT ${PLAYER_COLUMNS(sql)} FROM players WHERE ${filter} ${page} ORDER BY id DESC LIMIT ${PAGE_SIZE}`) as PlayerRow[];
 }
 
-export type PlayerMatch = { id: string; game: string; roomCode: string; endedAt: Date; placement: number; players: number };
+export type PlayerMatch = { id: string; game: string; gameName: string; roomCode: string; endedAt: Date; placement: number; players: number };
 
 export async function playerDetail(sql: SQL, id: string): Promise<{ player: PlayerRow; matches: PlayerMatch[] } | null> {
 	if (!isUuid(id)) return null;
 	const [player] = (await sql`SELECT ${PLAYER_COLUMNS(sql)} FROM players WHERE id = ${id}`) as PlayerRow[];
 	if (!player) return null;
 	const matches = (await sql`
-		SELECT m.id, m.game_slug AS game, m.room_code AS "roomCode", m.ended_at AS "endedAt", mp.placement,
+		SELECT m.id, m.game_slug AS game, g.name AS "gameName", m.room_code AS "roomCode", m.ended_at AS "endedAt", mp.placement,
 		       (SELECT count(*)::int FROM match_players x WHERE x.match_id = m.id) AS players
-		FROM match_players mp JOIN matches m ON m.id = mp.match_id
+		FROM match_players mp JOIN matches m ON m.id = mp.match_id JOIN games g ON g.slug = m.game_slug
 		WHERE mp.player_id = ${id}
 		ORDER BY m.id DESC LIMIT 20`) as PlayerMatch[];
 	return { player, matches };

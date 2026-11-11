@@ -23,7 +23,7 @@
 <svelte:head><title>Match {m.roomCode} · Backoffice</title></svelte:head>
 
 <a href="/matches" class="text-sm text-muted underline-offset-2 hover:underline">Matches</a>
-<h1 class="mt-1 text-2xl font-semibold">{m.game} at table {m.roomCode}</h1>
+<h1 class="mt-1 text-2xl font-semibold">{m.gameName} at table {m.roomCode}</h1>
 
 <dl class="mt-4 grid max-w-2xl grid-cols-[auto_1fr] gap-x-6 gap-y-1 text-sm">
 	<dt class="text-muted">Match id</dt>
@@ -41,7 +41,7 @@
 				<th class="px-3 py-2 font-medium">Place</th>
 				<th class="px-3 py-2 font-medium">Player</th>
 				<th class="px-3 py-2 font-medium">Seat</th>
-				<th class="px-3 py-2 font-medium">Lives left</th>
+				<th class="px-3 py-2 font-medium">{m.scoreLabel}</th>
 			</tr>
 		</thead>
 		<tbody>
@@ -56,7 +56,7 @@
 						{/if}
 					</td>
 					<td class="px-3 py-2">{s.seat + 1}</td>
-					<td class="px-3 py-2">{s.livesLeft}</td>
+					<td class="px-3 py-2">{s.score}</td>
 				</tr>
 			{/each}
 		</tbody>
