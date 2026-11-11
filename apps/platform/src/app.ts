@@ -7,6 +7,7 @@ import { secureHeaders } from "hono/secure-headers";
 import type { Config } from "./config";
 import { ApiError, fail, ok } from "./http";
 import { log } from "./log";
+import { matchRoutes } from "./matches";
 import { playerRoutes } from "./players";
 import type { Signer } from "./tokens";
 
@@ -43,6 +44,7 @@ export function createApp(deps: Deps) {
 	});
 
 	app.route("/v1", playerRoutes(deps.sql, deps.signer));
+	app.route("/v1", matchRoutes(deps.sql, deps.config.serverKey));
 
 	app.notFound((c) => fail(c, new ApiError("not_found", 404, "Not found.")));
 	app.onError((err, c) => {
