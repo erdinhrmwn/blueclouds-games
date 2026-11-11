@@ -58,7 +58,7 @@
 
 	<div class="flex flex-col items-center gap-2 text-center">
 		<p class="label">Table code</p>
-		<p class="rounded-md border border-brass/50 bg-black/30 px-4 py-1 font-mono text-3xl tracking-[0.2em] text-brass sm:text-4xl">
+		<p class="rounded-md border border-brass/50 bg-black/30 px-3 py-1 font-mono text-2xl tracking-[0.2em] text-brass sm:px-4 sm:text-4xl">
 			{code}
 		</p>
 		{#if tournament}

@@ -4,6 +4,7 @@
 	import type { Card } from 'server/games/bust-31/rules';
 	import { untrack } from 'svelte';
 	import { prefersReducedMotion } from 'svelte/motion';
+	import { MediaQuery } from 'svelte/reactivity';
 	import { fly } from 'svelte/transition';
 	import BustStamp from './BustStamp.svelte';
 	import Felt from '#lib/components/Felt.svelte';
@@ -15,6 +16,9 @@
 	import TotalGauge from './TotalGauge.svelte';
 
 	let { room }: { room: Bust31Connection } = $props();
+	/** Phones get a smaller pile so the middle of the table stays clear of the seats. */
+	const wide = new MediaQuery('min-width: 640px');
+	const pileSize = $derived(wide.current ? 'md' : 'sm');
 	const view = $derived(room.view!);
 
 	// Fixed chairs: everyone sees the same table, dealer at the head.
@@ -173,10 +177,10 @@
 			<div class="flex flex-col items-center gap-4 sm:flex-row sm:gap-8">
 				<TotalGauge total={view.total} limit={view.limit} direction={view.direction} />
 				<div class="flex items-end gap-5">
-					<div class="grid h-[6.75rem] w-[4.75rem] place-items-center rounded-lg border border-dashed border-paper/40">
+					<div class="grid h-20 w-14 place-items-center rounded-lg sm:h-[6.75rem] sm:w-[4.75rem] border border-dashed border-paper/40">
 						{#each under as u (u.id)}
 							<div class="col-start-1 row-start-1" style="rotate: {tiltOf(u.id)}deg" aria-hidden="true">
-								<PlayingCard card={u} />
+								<PlayingCard card={u} size={pileSize} />
 							</div>
 						{/each}
 						{#key view.topCard?.id}
@@ -186,7 +190,7 @@
 									data-pile-top
 									in:placeCard|global={{ from: flightFrom(view.topCard.id), tilt: flightTilt(view.topCard.id) }}
 								>
-									<div style="rotate: {tiltOf(view.topCard.id)}deg"><PlayingCard card={view.topCard} /></div>
+									<div style="rotate: {tiltOf(view.topCard.id)}deg"><PlayingCard card={view.topCard} size={pileSize} /></div>
 								</div>
 							{/if}
 						{/key}

@@ -51,7 +51,7 @@
 	}
 </script>
 
-<div class="relative mx-auto aspect-[2/3] w-full max-w-3xl px-10 py-14 sm:aspect-[16/10] sm:px-16 sm:py-16">
+<div class="relative mx-auto aspect-[3/4] w-full max-w-3xl px-10 py-14 sm:aspect-[16/10] sm:px-16 sm:py-16">
 	<div class="table-rim u relative h-full w-full p-3 sm:p-4">
 		<div class="felt u relative grid h-full w-full place-items-center">
 			{@render children()}

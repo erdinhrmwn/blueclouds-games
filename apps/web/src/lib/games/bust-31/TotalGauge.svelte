@@ -40,7 +40,7 @@
 
 <div class="flex flex-col items-center gap-1.5">
 	<div
-		class="relative size-32 sm:size-36"
+		class="relative size-28 sm:size-36"
 		role="meter"
 		aria-valuemin="0"
 		aria-valuemax={limit}
@@ -81,7 +81,7 @@
 			{#key total}
 				<!-- The number pops on every change so a move is felt even when looking at the hand. -->
 				<span
-					class="font-display text-5xl leading-none font-black tabular-nums"
+					class="font-display text-4xl leading-none sm:text-5xl font-black tabular-nums"
 					style="color: {tone}"
 					in:scale={{ start: 1.5, duration: prefersReducedMotion.current ? 0 : 260 }}>{total}</span
 				>

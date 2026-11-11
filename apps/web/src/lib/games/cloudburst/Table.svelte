@@ -6,6 +6,7 @@
 	import { dealCards, placeCard, seatRect, shake } from '#lib/motion.ts';
 	import { type Card, DEAL, fits, HAND_SIZE, MAX_PLAYERS, type Suit, SUITS } from 'server/games/cloudburst/rules';
 	import { prefersReducedMotion } from 'svelte/motion';
+	import { MediaQuery } from 'svelte/reactivity';
 	import { fly } from 'svelte/transition';
 	import CloudCard from './CloudCard.svelte';
 	import type { CloudburstConnection } from './connection.svelte.ts';
@@ -13,6 +14,9 @@
 	import { SUIT_NAME, SUIT_TEXT } from './suits.ts';
 
 	let { room }: { room: CloudburstConnection } = $props();
+	/** Phones get a smaller pile so the middle of the table stays clear of the seats. */
+	const wide = new MediaQuery('min-width: 640px');
+	const pileSize = $derived(wide.current ? 'md' : 'sm');
 	const view = $derived(room.view!);
 	const inSeat = (s: number) => view.players.find((p) => p.seat === s) ?? null;
 	const nameOf = (id: string | null | undefined) => view.players.find((p) => p.id === id)?.name ?? '?';
@@ -311,14 +315,14 @@
 					<span class="sr-only sm:not-sr-only">{view.direction === 1 ? 'Clockwise' : 'Counter-clockwise'}</span>
 				</div>
 				<div class="flex flex-col items-center gap-2">
-					<div class="grid h-[6.75rem] w-[4.75rem] place-items-center">
+					<div class="grid h-[4.6rem] w-[3.25rem] place-items-center sm:h-[6.75rem] sm:w-[4.75rem]">
 						{#each view.pileUnder as u (u.id)}
-							<div class="col-start-1 row-start-1" style="rotate: {tiltOf(u.id)}deg" aria-hidden="true"><CloudCard card={u} /></div>
+							<div class="col-start-1 row-start-1" style="rotate: {tiltOf(u.id)}deg" aria-hidden="true"><CloudCard card={u} size={pileSize} /></div>
 						{/each}
 						{#key view.topCard?.id}
 							{#if view.topCard}
 								<div class="col-start-1 row-start-1" in:placeCard|global={{ from: flightFrom(view.topCard.id), tilt: -20 }}>
-									<div style="rotate: {tiltOf(view.topCard.id)}deg"><CloudCard card={view.topCard} /></div>
+									<div style="rotate: {tiltOf(view.topCard.id)}deg"><CloudCard card={view.topCard} size={pileSize} /></div>
 								</div>
 							{/if}
 						{/key}
