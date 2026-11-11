@@ -8,6 +8,8 @@ export class RoomConnection {
 	view = $state<PublicView | null>(null);
 	/** Local epoch ms when the current human turn runs out, or null when no timer runs. */
 	turnEndsAt = $state<number | null>(null);
+	/** Full length of the current turn timer in ms (bots think for less time than humans get). */
+	turnTotal = $state(1);
 	hand = $state<Card[]>([]);
 	playerId = $state<string | null>(null);
 	status = $state<Status>('connecting');
@@ -56,11 +58,13 @@ export class RoomConnection {
 	// The server sends time left, not a timestamp, so a wrong device clock can't skew the countdown.
 	#setView(v: PublicView) {
 		this.view = v;
-		this.turnEndsAt = v.turnMsLeft === null ? null : Date.now() + v.turnMsLeft;
+		this.turnEndsAt = v.turn ? Date.now() + v.turn.left : null;
+		if (v.turn) this.turnTotal = v.turn.total;
 	}
 
 	start = () => this.#run(() => this.#conn.start());
-	addBot = () => this.#run(() => this.#conn.addBot());
+	addBot = (seat: number) => this.#run(() => this.#conn.addBot(seat));
+	takeSeat = (seat: number) => this.#run(() => this.#conn.takeSeat(seat));
 	removeBot = (id: string) => this.#run(() => this.#conn.removeBot(id));
 	play = (cardId: string) => this.#run(() => this.#conn.play({ cardId }));
 	reset = () => this.#run(() => this.#conn.reset());

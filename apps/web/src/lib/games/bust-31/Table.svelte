@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { RoomConnection } from './connection.svelte.ts';
-	import { placeCard, seatRect, shake } from '#lib/motion.ts';
+	import { dealCards, placeCard, seatRect, shake } from '#lib/motion.ts';
 	import type { Card } from 'server/games/bust-31/rules';
 	import { untrack } from 'svelte';
 	import { prefersReducedMotion } from 'svelte/motion';
@@ -10,42 +10,64 @@
 	import WinCascade from './WinCascade.svelte';
 	import PlayingCard from './PlayingCard.svelte';
 	import Seat from '#lib/components/Seat.svelte';
+	import { DEAL, HAND_SIZE, MAX_PLAYERS } from 'server/games/bust-31/rules';
+	import Dealer from './Dealer.svelte';
 	import TotalGauge from './TotalGauge.svelte';
-	import { TURN_MS } from 'server/games/bust-31/rules';
 
 	let { room }: { room: RoomConnection } = $props();
 	const view = $derived(room.view!);
 
-	// Rotate seats so the viewer always sits at the bottom of the table.
-	const myIndex = $derived(Math.max(0, view.players.findIndex((p) => p.id === room.playerId)));
-	const seatAt = (k: number) => view.players[(myIndex + k) % view.players.length]!;
+	// Fixed chairs: everyone sees the same table, dealer at the head.
+	const inSeat = (s: number) => view.players.find((p) => p.seat === s) ?? null;
+
+	// The dealer deals every new round (game start, or after a bust once its stamp has shown).
+	// The server holds the first turn until this ends; your hand appears when the deal is done.
+	let dealing = $state(false);
+	let dealtMoves: number | null = null;
+	$effect(() => {
+		const e = view.lastEvent;
+		if (view.phase !== 'playing' || (e?.type !== 'started' && e?.type !== 'bust') || dealtMoves === view.moves) return;
+		dealtMoves = view.moves;
+		if (prefersReducedMotion.current) return;
+		const seats = view.players.filter((p) => p.lives > 0).map((p) => p.id);
+		const wait = e.type === 'bust' ? DEAL.afterBustMs : 0;
+		dealing = true;
+		// Timers are not cleared on re-run: every server update re-runs this effect, and the deal must finish.
+		setTimeout(() => {
+			dealCards(document.querySelector('[data-deck]')?.getBoundingClientRect() ?? null, seats.map(seatRect), {
+				passes: HAND_SIZE,
+				...DEAL
+			});
+		}, wait);
+		setTimeout(() => (dealing = false), wait + seats.length * HAND_SIZE * DEAL.stepMs + DEAL.flightMs);
+	});
 	// Whoever played the card now on the pile; the new card flies in from their seat.
 	const lastPlayer = $derived(view.lastEvent?.type === 'played' ? view.lastEvent.playerId : null);
 
 	// Your own card flies from where it sat in your hand, so remember that spot on click.
 	// It is hidden in the hand meanwhile, so it never shows twice while the server answers.
-	let placing = $state<{ id: string; rect: DOMRect; tilt: number } | null>(null);
+	// Card ids repeat across rounds and reshuffles, so this is tied to the hand it was clicked
+	// in: the next hand from the server (new round included) must show every card it holds.
+	let placing = $state.raw<{ id: string; rect: DOMRect; tilt: number; hand: Card[] } | null>(null);
 	function play(cardId: string) {
 		const el = document.querySelector(`[data-card="${CSS.escape(cardId)}"]`);
 		const i = room.hand.findIndex((c) => c.id === cardId);
-		if (el) placing = { id: cardId, rect: el.getBoundingClientRect(), tilt: fanAngle(i, room.hand.length) };
+		if (el) placing = { id: cardId, rect: el.getBoundingClientRect(), tilt: fanAngle(i, room.hand.length), hand: room.hand };
 		room.play(cardId).then(() => {
 			if (room.error) placing = null; // rejected: show the card again
 		});
 	}
+	// The pile's fly-in has read `placing` by the time the new hand arrives (it follows the view).
+	$effect(() => {
+		if (placing && room.hand !== placing.hand) placing = null;
+	});
 	const flightFrom = (cardId: string) => (placing?.id === cardId ? placing.rect : seatRect(lastPlayer));
 	const flightTilt = (cardId: string) => (placing?.id === cardId ? placing.tilt : -25);
 
 	// Cards played earlier stay visible under the top one, each at its own slight angle.
 	const tiltOf = (id: string) => ([...id].reduce((h, ch) => h * 31 + ch.charCodeAt(0), 7) % 13) - 6;
-	let under = $state<{ id: string; card: Card }[]>([]);
-	let shownTop: Card | null = null;
-	$effect(() => {
-		const top = view.topCard;
-		if (top?.id === shownTop?.id) return;
-		under = top && shownTop ? [...untrack(() => under), { id: shownTop.id, card: shownTop }].slice(-3) : [];
-		shownTop = top;
-	});
+	// They come from the server, so a refresh mid-round shows the same pile.
+	const under = $derived(view.pileUnder);
 
 	// A bust clears the pile (new round), so the busting card is shown on its own for a moment.
 	let tableEl = $state<HTMLElement>();
@@ -63,7 +85,7 @@
 	});
 	const iWon = $derived(view.winnerId !== null && view.winnerId === room.playerId);
 
-	// Ticks while a human turn timer runs; the deadline itself comes from the server.
+	// Ticks while a turn timer runs; the deadline itself comes from the server.
 	let now = $state(Date.now());
 	$effect(() => {
 		if (room.turnEndsAt === null) return;
@@ -73,7 +95,7 @@
 	const msLeft = $derived(room.turnEndsAt === null ? null : Math.max(0, room.turnEndsAt - now));
 	const secondsLeft = $derived(msLeft === null ? null : Math.ceil(msLeft / 1000));
 	// Snapshot taken once per deadline; the bar and ring animate down from it every frame.
-	const drain = $derived(room.turnEndsAt === null ? null : { ms: Math.max(0, room.turnEndsAt - Date.now()), total: TURN_MS });
+	const drain = $derived(room.turnEndsAt === null ? null : { ms: Math.max(0, room.turnEndsAt - Date.now()), total: room.turnTotal });
 
 	const nameOf = (id: string | null) => view.players.find((p) => p.id === id)?.name ?? '?';
 
@@ -100,17 +122,22 @@
 
 <!-- clip sideways only, so cards flying in mid-animation never add a horizontal scrollbar on phones -->
 <div bind:this={tableEl} class="overflow-x-clip">
-	<Felt count={view.players.length}>
+	<Felt count={MAX_PLAYERS + 1}>
 		{#snippet seat(k)}
-			{@const p = seatAt(k)}
-			<Seat
-				player={p}
-				isTurn={p.id === view.turnPlayerId || p.id === view.winnerId}
-				isHost={p.id === view.hostId}
-				isMe={p.id === room.playerId}
-				timeLeft={p.id === view.turnPlayerId && msLeft !== null ? msLeft / TURN_MS : null}
-				drain={p.id === view.turnPlayerId ? drain : null}
-			/>
+			{#if k === 0}
+				<Dealer deckCount={view.deckCount} />
+			{:else}
+				{@const p = inSeat(k - 1)}
+				<Seat
+					player={p}
+					number={k}
+					isTurn={!!p && (p.id === view.turnPlayerId || p.id === view.winnerId)}
+					isHost={!!p && p.id === view.hostId}
+					isMe={!!p && p.id === room.playerId}
+					timeLeft={p && p.id === view.turnPlayerId && msLeft !== null ? Math.min(1, msLeft / room.turnTotal) : null}
+					drain={p && p.id === view.turnPlayerId ? drain : null}
+				/>
+			{/if}
 		{/snippet}
 
 		{#if view.phase === 'finished'}
@@ -135,18 +162,10 @@
 			<div class="flex flex-col items-center gap-4 sm:flex-row sm:gap-8">
 				<TotalGauge total={view.total} limit={view.limit} direction={view.direction} />
 				<div class="flex items-end gap-5">
-					<div class="flex flex-col items-center gap-1" aria-label="{view.deckCount} cards left in the deck">
-						<div class="relative h-[4.5rem] w-12">
-							<span class="card-back absolute inset-0 translate-x-1 translate-y-1"></span>
-							<span class="card-back absolute inset-0 translate-x-0.5 translate-y-0.5"></span>
-							<span class="card-back absolute inset-0"></span>
-						</div>
-						<span class="text-xs text-paper/75">Deck {view.deckCount}</span>
-					</div>
 					<div class="grid h-[6.75rem] w-[4.75rem] place-items-center rounded-lg border border-dashed border-paper/40">
 						{#each under as u (u.id)}
 							<div class="col-start-1 row-start-1" style="rotate: {tiltOf(u.id)}deg" aria-hidden="true">
-								<PlayingCard card={u.card} />
+								<PlayingCard card={u} />
 							</div>
 						{/each}
 						{#key view.topCard?.id}
@@ -186,7 +205,7 @@
 			{#if room.myTurn && secondsLeft !== null && secondsLeft <= 5}
 				<p class="sr-only" role="alert">Time is almost up.</p>
 			{/if}
-			<div class="flex justify-center px-4 pt-2">
+			<div class="flex justify-center px-4 pt-2 transition-opacity duration-300 {dealing ? 'pointer-events-none opacity-0' : ''}">
 				{#each room.hand as card, i (card.id)}
 					<div
 						class="-mx-1.5 sm:mx-0.5 {placing?.id === card.id ? 'invisible' : ''}"

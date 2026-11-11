@@ -3,18 +3,12 @@
 	import { MAX_PLAYERS, MIN_PLAYERS } from 'server/games/bust-31/rules';
 	import Felt from '#lib/components/Felt.svelte';
 	import Seat from '#lib/components/Seat.svelte';
+	import Dealer from './Dealer.svelte';
 
 	let { room, code }: { room: RoomConnection; code: string } = $props();
 	const view = $derived(room.view!);
-	const full = $derived(view.players.length >= MAX_PLAYERS);
 	const canStart = $derived(view.players.length >= MIN_PLAYERS);
-
-	// Viewer at the bottom, then the others in join order, then empty chairs.
-	const ordered = $derived.by(() => {
-		const me = view.players.findIndex((p) => p.id === room.playerId);
-		const n = view.players.length;
-		return Array.from({ length: MAX_PLAYERS }, (_, k) => (k < n ? view.players[(Math.max(0, me) + k) % n]! : null));
-	});
+	const inSeat = (s: number) => view.players.find((p) => p.seat === s) ?? null;
 
 	let copied = $state(false);
 	async function copyLink() {
@@ -28,15 +22,24 @@
 	}
 </script>
 
-<Felt count={MAX_PLAYERS}>
+<!-- Spot 0 is the dealer at the head of the table; chairs 1–6 follow clockwise. -->
+<Felt count={MAX_PLAYERS + 1}>
 	{#snippet seat(k)}
-		{@const p = ordered[k] ?? null}
-		<Seat
-			player={p}
-			isHost={p?.id === view.hostId}
-			isMe={p?.id === room.playerId}
-			action={room.isHost && p?.bot ? { label: 'remove', run: () => room.removeBot(p.id) } : undefined}
-		/>
+		{#if k === 0}
+			<Dealer />
+		{:else}
+			{@const s = k - 1}
+			{@const p = inSeat(s)}
+			<Seat
+				player={p}
+				number={k}
+				isHost={p?.id === view.hostId}
+				isMe={p?.id === room.playerId}
+				action={room.isHost && p?.bot ? { label: 'remove', run: () => room.removeBot(p.id) } : undefined}
+				onSit={p ? undefined : () => room.takeSeat(s)}
+				onAddBot={!p && room.isHost ? () => room.addBot(s) : undefined}
+			/>
+		{/if}
 	{/snippet}
 
 	<div class="flex flex-col items-center gap-2 text-center">
@@ -53,13 +56,12 @@
 <div class="mt-6 flex flex-col items-center gap-3">
 	{#if room.isHost}
 		<div class="flex flex-wrap justify-center gap-3">
-			<button class="btn-ghost" onclick={room.addBot} disabled={room.busy || full}>Add bot</button>
-			<button class="btn-brass" onclick={room.start} disabled={room.busy || !canStart}>Deal cards</button>
+			<button class="btn-brass" onclick={room.start} disabled={room.busy || !canStart}>Play</button>
 		</div>
 		<p class="text-sm text-paper/75">
-			{canStart ? `${view.players.length} players ready.` : `Needs at least ${MIN_PLAYERS} players. Invite a friend or add a bot.`}
+			{canStart ? `${view.players.length} players ready.` : `Needs at least ${MIN_PLAYERS} players. Invite a friend, or press + on an empty seat to add a bot.`}
 		</p>
 	{:else}
-		<p class="text-sm text-paper/75">Waiting for {view.players.find((p) => p.id === view.hostId)?.name ?? 'the host'} to deal…</p>
+		<p class="text-sm text-paper/75">Waiting for {view.players.find((p) => p.id === view.hostId)?.name ?? 'the host'} to start…</p>
 	{/if}
 </div>

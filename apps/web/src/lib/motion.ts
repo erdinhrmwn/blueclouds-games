@@ -56,14 +56,56 @@ export function countdown(node: Element, params: Countdown) {
 		if (anim && Math.abs(endsAt - performance.now() - p.ms) < 300) return;
 		anim?.cancel();
 		endsAt = performance.now() + p.ms;
+		// More time than the turn length means the clock has not started yet (the dealer is dealing):
+		// stay full for the difference, then drain.
+		const delay = Math.max(0, p.ms - p.total);
 		const left = Math.min(1, p.ms / p.total);
 		const frames =
 			p.kind === 'bar'
 				? [{ transform: `scaleX(${left})` }, { transform: 'scaleX(0)' }]
 				: [{ strokeDashoffset: `${100 * (1 - left)}` }, { strokeDashoffset: '100' }];
-		anim = node.animate(frames, { duration: p.ms, easing: 'linear', fill: 'forwards' });
+		anim = node.animate(frames, { delay, duration: p.ms - delay, easing: 'linear', fill: 'both' });
 	}
 
 	run(params);
 	return { update: run, destroy: () => anim?.cancel() };
+}
+
+/**
+ * The dealer deals: face-down cards fly from `from` (the deck) to each seat in turn,
+ * going around the table `passes` times. Pure decoration, so it lives outside Svelte's tree
+ * in a fixed layer and cleans up after itself.
+ */
+export function dealCards(
+	from: DOMRect | null,
+	seats: (DOMRect | null)[],
+	{ passes, stepMs, flightMs }: { passes: number; stepMs: number; flightMs: number }
+): void {
+	const targets = seats.filter((r): r is DOMRect => r !== null);
+	if (!from || targets.length === 0 || prefersReducedMotion.current) return;
+	const layer = document.createElement('div');
+	layer.setAttribute('aria-hidden', 'true');
+	layer.style.cssText = 'position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:30';
+	document.body.append(layer);
+	const W = 28, H = 40;
+	let last: Animation | undefined;
+	for (let pass = 0; pass < passes; pass++) {
+		targets.forEach((to, i) => {
+			const card = document.createElement('span');
+			card.className = 'card-back';
+			card.style.cssText = `position:absolute;width:${W}px;height:${H}px;left:${from.left + from.width / 2 - W / 2}px;top:${from.top + from.height / 2 - H / 2}px;opacity:0`;
+			layer.append(card);
+			const dx = to.left + to.width / 2 - (from.left + from.width / 2);
+			const dy = to.top + to.height / 2 - (from.top + from.height / 2);
+			last = card.animate(
+				[
+					{ transform: 'translate(0, 0) rotate(0deg) scale(0.9)', opacity: 1 },
+					{ transform: `translate(${dx}px, ${dy}px) rotate(${(i % 2 ? 1 : -1) * 200}deg) scale(0.7)`, opacity: 1, offset: 0.9 },
+					{ transform: `translate(${dx}px, ${dy}px) rotate(${(i % 2 ? 1 : -1) * 200}deg) scale(0.5)`, opacity: 0 }
+				],
+				{ delay: (pass * targets.length + i) * stepMs, duration: flightMs, easing: 'cubic-bezier(0.2, 0.7, 0.3, 1)', fill: 'both' }
+			);
+		});
+	}
+	last?.finished.then(() => layer.remove(), () => layer.remove());
 }

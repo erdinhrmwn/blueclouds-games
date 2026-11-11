@@ -1,11 +1,11 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 
-	/** Oval card table; `seats` are placed around the rim, seat 0 at the bottom (the viewer). */
+	/** Oval card table with `count` fixed spots around the rim: spot 0 at the top, then clockwise. */
 	let { count, seat, children }: { count: number; seat: Snippet<[number]>; children: Snippet } = $props();
 
 	function position(k: number) {
-		const angle = Math.PI / 2 + (k * 2 * Math.PI) / count; // clockwise from the bottom
+		const angle = -Math.PI / 2 + (k * 2 * Math.PI) / count; // clockwise from the top
 		return `left: ${50 + 50 * Math.cos(angle)}%; top: ${50 + 50 * Math.sin(angle)}%;`;
 	}
 </script>

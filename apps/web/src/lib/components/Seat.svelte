@@ -2,7 +2,7 @@
 	import { countdown } from '#lib/motion.ts';
 
 	/** What any game shows about a player in a seat. */
-	type SeatPlayer = { id: string; name: string; lives: number; cards: number; bot: boolean };
+	type SeatPlayer = { id: string; name: string; lives: number; bot: boolean; away?: boolean };
 
 	let {
 		player,
@@ -12,7 +12,10 @@
 		lives = 3,
 		timeLeft = null,
 		drain = null,
-		action
+		action,
+		number,
+		onSit,
+		onAddBot
 	}: {
 		player: SeatPlayer | null;
 		isTurn?: boolean;
@@ -24,29 +27,39 @@
 		/** Time left when this deadline arrived; the ring animates down from it. */
 		drain?: { ms: number; total: number } | null;
 		action?: { label: string; run: () => void };
+		/** Chair number shown to people (1-based). */
+		number?: number;
+		/** Empty chair only: move yourself here. */
+		onSit?: () => void;
+		/** Empty chair only (host): put a bot here. */
+		onAddBot?: () => void;
 	} = $props();
 
 	const out = $derived(!!player && player.lives === 0);
-	// Bots share the "Bot" prefix, so use their last word for the monogram.
-	const initial = $derived((player?.bot ? player.name.trim().split(/\s+/).at(-1) : player?.name.trim())?.charAt(0).toUpperCase() ?? '');
+	const initial = $derived(player?.name.trim().charAt(0).toUpperCase() ?? '');
 </script>
 
 {#if player}
-	<div data-seat={player.id} class="flex w-24 flex-col items-center gap-1 text-center sm:w-28 {out ? 'opacity-40 grayscale' : ''}">
+	<div data-seat={player.id} class="flex w-24 flex-col items-center gap-1 text-center sm:w-28 {out ? 'opacity-40 grayscale' : player.away ? 'opacity-60' : ''}">
 		<div class="relative">
-			{#if player.cards > 0 && !out}
-				<!-- face-down hand peeking over the chair -->
-				<div class="absolute -top-3 left-1/2 flex -translate-x-1/2" aria-hidden="true">
-					{#each Array(player.cards) as _, i (i)}
-						<span class="card-back -mx-1 block h-6 w-4" style="transform: rotate({(i - (player.cards - 1) / 2) * 12}deg)"></span>
-					{/each}
-				</div>
-			{/if}
 			<div
 				class="relative grid size-12 place-items-center rounded-full border-2 font-display text-xl font-bold sm:size-14
 					{isTurn ? 'turn border-brass bg-brass text-ink' : 'border-rim-light bg-[#2a1d13] text-paper'}"
 			>
-				{initial}
+				{#if player.bot}
+					<!-- robot head: bots get an icon instead of a monogram -->
+					<svg viewBox="0 0 24 24" class="size-6 sm:size-7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Bot">
+						<path d="M12 3v3" />
+						<circle cx="12" cy="2.6" r="0.9" fill="currentColor" stroke="none" />
+						<rect x="4.5" y="6.5" width="15" height="12" rx="3" />
+						<circle cx="9.3" cy="11.8" r="1.4" fill="currentColor" stroke="none" />
+						<circle cx="14.7" cy="11.8" r="1.4" fill="currentColor" stroke="none" />
+						<path d="M9.5 15.5h5" />
+						<path d="M2.8 11v3.5M21.2 11v3.5" />
+					</svg>
+				{:else}
+					{initial}
+				{/if}
 				{#if timeLeft !== null}
 					<svg class="pointer-events-none absolute -inset-1.5 size-[calc(100%+0.75rem)] -rotate-90" viewBox="0 0 40 40" aria-hidden="true">
 						<circle
@@ -64,8 +77,8 @@
 						/>
 					</svg>
 				{/if}
-				{#if player.bot}
-					<span class="absolute -right-1.5 -bottom-1 rounded-sm bg-paper px-1 text-[10px] font-semibold text-ink">bot</span>
+				{#if player.away}
+					<span class="absolute -right-2 -bottom-1 rounded-sm bg-paper px-1 text-[10px] font-semibold text-ink">away</span>
 				{/if}
 			</div>
 		</div>
@@ -85,9 +98,20 @@
 		{/if}
 	</div>
 {:else}
-	<div class="flex w-24 flex-col items-center gap-1 sm:w-28" aria-label="Empty seat">
-		<div class="size-12 rounded-full border-2 border-dashed border-paper/40 sm:size-14"></div>
-		<div class="text-xs text-paper/60">empty seat</div>
+	<div class="flex w-24 flex-col items-center gap-1 sm:w-28" role="group" aria-label="Seat {number ?? ''}, empty">
+		{#if onAddBot}
+			<button
+				class="grid size-12 place-items-center rounded-full border-2 border-dashed border-brass/70 text-2xl leading-none text-brass transition hover:border-solid hover:bg-brass/10 disabled:opacity-40 sm:size-14"
+				onclick={onAddBot}
+				aria-label="Add a bot to seat {number ?? ''}">+</button
+			>
+		{:else}
+			<div class="size-12 rounded-full border-2 border-dashed border-paper/40 sm:size-14"></div>
+		{/if}
+		<div class="text-xs text-paper/70">Seat {number ?? ''}</div>
+		{#if onSit}
+			<button class="link-btn -my-2 text-xs" onclick={onSit}>Sit here</button>
+		{/if}
 	</div>
 {/if}
 
