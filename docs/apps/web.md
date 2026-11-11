@@ -8,6 +8,8 @@ SvelteKit app the players use. Started with `bun run dev:web` on http://localhos
 |---|---|
 | `PUBLIC_RIVET_ENDPOINT` | `http://127.0.0.1:6420` |
 
+Template: `apps/web/.env.example` (copy to `apps/web/.env`; optional for local dev).
+
 ## Structure
 
 ```

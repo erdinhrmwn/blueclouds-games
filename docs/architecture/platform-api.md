@@ -385,7 +385,7 @@ Backups: nightly `pg_dump` from a cron container to off-VPS storage, kept 14 day
 | `DOMAIN` | Caddy | `nblueclouds.online`; hostnames are built from it |
 | `ALLOWED_ORIGINS` value | platform | `https://nblueclouds.online` |
 
-Each app validates its variables at startup and exits if one is missing. `bun run keys:generate` prints a fresh Ed25519 key pair. `.env.example` files list only these keys.
+Each app validates its variables at startup and exits if one is missing. `bun run keys:generate` prints a fresh Ed25519 key pair. Each app has its own `.env.example` (e.g. `apps/platform/.env.example`) listing only the keys it reads.
 
 ## Repo changes (MVP)
 

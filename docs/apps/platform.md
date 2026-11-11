@@ -6,13 +6,13 @@ The player + match API: Hono on Bun, Postgres. It has no UI and no admin API. Fu
 
 ```sh
 docker compose up -d                      # Postgres 18 + DragonflyDB on 127.0.0.1 (compose.yaml)
-# Put the platform keys from .env.example into apps/platform/.env.
+cp apps/platform/.env.example apps/platform/.env   # then fill in the two REQUIRED keys
 bun run --filter platform keys:generate   # prints PLAY_TOKEN_PRIVATE_KEY / PLAY_TOKEN_PUBLIC_KEY
 bun run --filter platform db:migrate
 bun run dev:platform                      # http://localhost:3000/v1/health
 ```
 
-Platform tests need `TEST_DATABASE_URL` pointing at a throwaway database (its schema is dropped on every run). The dev Postgres creates one, `platform_test`, on first start; the `.env.example` values already point at both databases.
+Platform tests need `TEST_DATABASE_URL` pointing at a throwaway database (its schema is dropped on every run). The dev Postgres creates one, `platform_test`, on first start; `apps/platform/.env.example` already points at both databases.
 
 `docker compose down` stops the services; add `-v` to also delete their data.
 
