@@ -23,7 +23,8 @@ services:
   # Redis-compatible store. Nothing uses it yet; it is here so local dev matches the plan.
   dragonfly:
     image: ghcr.io/dragonflydb/dragonfly:v1.40.2
-    command: ["--maxmemory=256mb", "--proactor_threads=2"]
+    # Dragonfly needs at least 256 MiB per thread and refuses to start below that: 2 threads → 1 GB.
+    command: ["--proactor_threads=2", "--maxmemory=1gb"]
     ulimits:
       memlock: -1
     ports:
