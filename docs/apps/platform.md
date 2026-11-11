@@ -44,6 +44,16 @@ All keys live in the root `.env` (template: `.env.example`); the package scripts
 
 Every response uses the `{ ok, data, error }` envelope described in the design.
 
+## Database roles
+
+The platform owns the schema and runs every migration, including the backoffice's tables (`admins`, `admin_sessions`, `admin_audit`). Migration `004_admin.sql` creates a `backoffice` role (if missing) with only the grants the backoffice needs: read players and matches, set `disabled_at` / `disabled_reason` / `revoked_at`, and full access to the admin tables. It can't read `secret_hash` or rename players.
+
+The role is created without login. Give it one once per database server (the migration user needs `CREATEROLE` the first time):
+
+```sql
+ALTER ROLE backoffice LOGIN PASSWORD 'choose-one';
+```
+
 ## Structure
 
 ```
