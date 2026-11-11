@@ -19,7 +19,7 @@ import {
 	TURN_MS,
 } from "./rules";
 import { type Identity, reportMatch, verifyPlayToken } from "../../platform";
-import { buildReport, type MatchState, noteMove, uuidv7 } from "./match";
+import { buildReport, type LogEntry, type LogEvent, logEvents, type MatchState, noteMove, stamp, uuidv7 } from "./match";
 import { BotIdInput, ConnParams, PlayInput, SeatInput } from "./schema";
 
 /** How long a closed tab has to come back (a refresh) before its player leaves the table. */
@@ -37,8 +37,11 @@ type Saved = {
 	/** The game being played, for its result. Null in the lobby and once the result is queued. */
 	match: MatchState | null;
 };
-/** Not saved: who each open connection is, from its play token. Connections close when the actor sleeps. */
-type Vars = Saved & { who: Record<string, Identity> };
+/**
+ * Not saved: who each open connection is, from its play token (connections close when the actor sleeps),
+ * and the game as last committed, to see what each commit changed for the move log.
+ */
+type Vars = Saved & { who: Record<string, Identity>; logged: Game };
 
 const rng = () => Math.random();
 
@@ -61,17 +64,26 @@ export const bust31Room = actor({
 			await d.execute(
 				"CREATE TABLE IF NOT EXISTS match_reports (match_id TEXT PRIMARY KEY, body TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0)",
 			);
+			// Move log of the match being played; moved into its report when the match ends.
+			await d.execute(
+				"CREATE TABLE IF NOT EXISTS match_events (match_id TEXT NOT NULL, seq INTEGER NOT NULL, body TEXT NOT NULL, PRIMARY KEY (match_id, seq))",
+			);
 		},
 	}),
-	createVars: (): Vars => ({ game: createGame(), who: {}, timer: null, match: null }),
+	createVars: (): Vars => {
+		const game = createGame();
+		return { game, logged: game, who: {}, timer: null, match: null };
+	},
 	onWake: async (c) => {
 		const rows = await c.db.execute<{ data: string }>("SELECT data FROM room WHERE id = 1");
 		if (rows[0]) Object.assign(c.vars, JSON.parse(rows[0].data) as Saved);
 		c.vars.game.moves ??= 0; // rooms saved before move counting existed
 		c.vars.timer ??= null;
 		c.vars.match ??= null;
+		if (c.vars.match) c.vars.match.seq ??= 0; // matches started before the move log
 		delete (c.vars as { tokens?: unknown }).tokens; // rooms saved before platform sign-in
 		c.vars.game.players.forEach((p, i) => (p.seat ??= i)); // rooms saved before fixed seats
+		c.vars.logged = c.vars.game;
 		await scheduleTurn(c, true);
 		// A send may have been cut off by the actor stopping; the platform ignores duplicates.
 		const [pending] = await c.db.execute<{ n: number }>("SELECT count(*) AS n FROM match_reports");
@@ -142,7 +154,7 @@ export const bust31Room = actor({
 		start: async (c) => {
 			const me = requirePlayer(c);
 			c.vars.game = apply(() => startGame(c.vars.game, me, rng));
-			c.vars.match = { id: uuidv7(), startedAt: new Date().toISOString(), out: [] };
+			c.vars.match = { id: uuidv7(), startedAt: new Date().toISOString(), out: [], seq: 0 };
 			await commit(c);
 		},
 		play: async (c, input: unknown) => {
@@ -211,7 +223,7 @@ export const bust31Room = actor({
 			const ev = next.lastEvent;
 			const auto = !player.bot && (ev?.type === "played" || ev?.type === "bust");
 			c.vars.game = auto ? { ...next, lastEvent: { ...ev, auto: true } } : next;
-			await commit(c);
+			await commit(c, true);
 		},
 	},
 });
@@ -242,15 +254,15 @@ function requireHost(c: Ctx): void {
 	if (c.vars.game.hostId !== requirePlayer(c)) throw new UserError("Only the host can do that.", { code: "rule" });
 }
 
-/** Persist, then push the public view to everyone and each hand to its owner. */
-async function commit(c: Ctx): Promise<void> {
+/**
+ * Persist, then push the public view to everyone and each hand to its owner.
+ * `auto` marks a move the server made (bot, timeout or away player) for the move log.
+ */
+async function commit(c: Ctx, auto = false): Promise<void> {
 	await scheduleTurn(c, false);
-	const finished = await trackMatch(c);
-	const saved: Saved = { game: c.vars.game, timer: c.vars.timer, match: c.vars.match };
-	await c.db.execute(
-		"INSERT INTO room (id, data) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET data = excluded.data",
-		JSON.stringify(saved),
-	);
+	const entries = c.vars.match ? logEvents(c.vars.logged, c.vars.game, auto) : [];
+	c.vars.logged = c.vars.game;
+	const finished = await save(c, entries);
 	c.broadcast("view", viewOf(c));
 	for (const conn of c.conns.values()) {
 		const id = playerOf(c, conn);
@@ -260,18 +272,38 @@ async function commit(c: Ctx): Promise<void> {
 	if (finished) await c.schedule.after(0, "sendReports");
 }
 
-/** Follows eliminations; once the game is over, queues its result. Returns true when it queued one. */
-async function trackMatch(c: Ctx): Promise<boolean> {
-	const { game, match } = c.vars as Saved;
-	if (!match) return false;
-	if (game.phase !== "finished") {
-		c.vars.match = noteMove(match, game);
-		return false;
-	}
-	const report = buildReport(match, game, c.key[0] as string, new Date().toISOString());
-	await c.db.execute("INSERT OR IGNORE INTO match_reports (match_id, body) VALUES (?, ?)", report.matchId, JSON.stringify(report));
-	c.vars.match = null;
-	return true;
+/**
+ * Saves the room and the match's new log events in one transaction, so the log never skips or
+ * repeats a move. Once the game is over, its result and full log go to the outbox. Returns true when it queued one.
+ */
+async function save(c: Ctx, entries: LogEntry[]): Promise<boolean> {
+	const { game } = c.vars as Saved;
+	let events: LogEvent[] = [];
+	if (c.vars.match) ({ match: c.vars.match, events } = stamp(noteMove(c.vars.match, game), entries, Date.now()));
+	const match = c.vars.match as MatchState | null;
+	const finished = !!match && game.phase === "finished";
+	if (finished) c.vars.match = null;
+	const saved: Saved = { game, timer: c.vars.timer, match: c.vars.match };
+	await c.db.transaction(
+		async (tx: Ctx) => {
+			for (const e of events) {
+				await tx.execute("INSERT INTO match_events (match_id, seq, body) VALUES (?, ?, ?)", match!.id, e.seq, JSON.stringify(e));
+			}
+			if (finished) {
+				const rows = await tx.execute("SELECT body FROM match_events WHERE match_id = ? ORDER BY seq", match!.id);
+				const log = rows.map((r: { body: string }) => JSON.parse(r.body) as LogEvent);
+				const report = buildReport(match!, game, c.key[0] as string, new Date().toISOString(), log);
+				await tx.execute("INSERT OR IGNORE INTO match_reports (match_id, body) VALUES (?, ?)", report.matchId, JSON.stringify(report));
+				await tx.execute("DELETE FROM match_events WHERE match_id = ?", match!.id);
+			}
+			await tx.execute(
+				"INSERT INTO room (id, data) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET data = excluded.data",
+				JSON.stringify(saved),
+			);
+		},
+		{ name: "commit" },
+	);
+	return finished;
 }
 
 /**

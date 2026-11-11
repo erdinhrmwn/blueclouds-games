@@ -3,7 +3,7 @@ import type { SQL } from 'bun';
 import { resetTestDatabase } from '../../../../platform/src/test-helpers';
 import { createAdmin } from './auth';
 import { listAudit } from './audit-log';
-import { listMatches, matchDetail } from './matches';
+import { listMatches, matchDetail, matchGames, matchLog } from './matches';
 import { disablePlayer } from './players';
 
 let sql: SQL;
@@ -15,7 +15,7 @@ beforeAll(async () => {
 	const match = async (id: string, ended: string, humanWins: boolean) => {
 		await sql`INSERT INTO matches (id, game_slug, room_code, rules_version, started_at, ended_at, body_hash)
 		          VALUES (${id}, 'bust-31', 'ABCD', 1, ${ended}::timestamptz - interval '5 min', ${ended}, '\\x00')`;
-		await sql`INSERT INTO match_players (match_id, seat, player_id, bot_name, placement, lives_left) VALUES
+		await sql`INSERT INTO match_players (match_id, seat, player_id, bot_name, placement, score) VALUES
 		          (${id}, 0, ${rina}, NULL, ${humanWins ? 1 : 2}, ${humanWins ? 2 : 0}),
 		          (${id}, 1, NULL, 'Bot Rain', ${humanWins ? 2 : 1}, ${humanWins ? 0 : 1})`;
 	};
@@ -35,8 +35,20 @@ describe('matches', () => {
 		expect(await listMatches(sql, { ...empty, from: 'garbage' })).toHaveLength(2);
 	});
 
+	test('move log: as stored, or null for an old match', async () => {
+		const id = '01900000-0000-7000-8000-000000000001';
+		const events = [{ seq: 0, t: 0, type: 'finished', data: { winner: 0 } }];
+		await sql`INSERT INTO match_logs (match_id, log_version, event_count, events) VALUES (${id}, 1, 1, ${JSON.stringify(events)}::text::jsonb)`;
+		expect(await matchLog(sql, id)).toEqual({ logVersion: 1, events });
+		expect(await matchLog(sql, '01900000-0000-7000-8000-000000000002')).toBeNull();
+		expect(await matchLog(sql, 'nope')).toBeNull();
+	});
+
 	test('detail lists seats by placement', async () => {
 		const m = await matchDetail(sql, '01900000-0000-7000-8000-000000000001');
+		expect(m).toMatchObject({ gameName: 'Bust 31', scoreLabel: 'Lives left' });
+		expect(m?.seats[0]?.score).toBe(2);
+		expect(await matchGames(sql)).toEqual([{ slug: 'bust-31', name: 'Bust 31' }]);
 		expect(m?.seats.map((s) => [s.name, s.bot, s.placement])).toEqual([
 			['Rina', false, 1],
 			['Bot Rain', true, 2]

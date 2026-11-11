@@ -14,18 +14,18 @@ export type Deps = { sql: SQL; config: Config; signer: Signer };
 export type AppEnv = { Variables: RequestIdVariables };
 
 const MAX_BODY_BYTES = 16 * 1024;
+/** Match reports carry the whole move log (a 6-player Bust 31 match is about 25 KB). */
+const MAX_MATCH_BODY_BYTES = 512 * 1024;
 
 export function createApp(deps: Deps) {
 	const app = new Hono<AppEnv>();
 
 	app.use(requestId());
 	app.use(secureHeaders());
-	app.use(
-		bodyLimit({
-			maxSize: MAX_BODY_BYTES,
-			onError: (c) => fail(c, new ApiError("payload_too_large", 413, "Request body is too large.")),
-		}),
-	);
+	const limit = (maxSize: number) =>
+		bodyLimit({ maxSize, onError: (c) => fail(c, new ApiError("payload_too_large", 413, "Request body is too large.")) });
+	const [small, large] = [limit(MAX_BODY_BYTES), limit(MAX_MATCH_BODY_BYTES)];
+	app.use((c, next) => (c.req.path === "/v1/matches" ? large : small)(c, next));
 
 	/** For the container healthcheck: the process is up and the database answers. */
 	app.get("/v1/health", async (c) => {

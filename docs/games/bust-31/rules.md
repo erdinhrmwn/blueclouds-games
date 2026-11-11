@@ -10,4 +10,6 @@
 - The last player with lives left wins.
 - Each human turn is limited to 20 seconds (`TURN_MS` in `rules.ts`). When it runs out, the server plays a card for you using the bot strategy. Bots get the same 20-second clock but decide within 1.5–4 seconds; every turn shows a countdown ring on that seat.
 
+Every match records every move (deal, play, bust, reshuffle, away, back, finished) for replay and audit in the backoffice: event shapes in [match-log.md](../../architecture/match-log.md#bust-31-events).
+
 Code: `apps/server/src/games/bust-31/` (rules, actor, bots) and `apps/web/src/lib/games/bust-31/` (UI). UI design reasoning: [design.md](design.md).
