@@ -62,7 +62,7 @@ export async function disablePlayer(sql: SQL, admin: Admin, id: string, reason: 
 			WHERE id = ${id} AND disabled_at IS NULL RETURNING id`;
 		if (!row) return false;
 		const revoked = await tx`UPDATE player_secrets SET revoked_at = now() WHERE player_id = ${id} AND revoked_at IS NULL RETURNING player_id`;
-		await audit(tx, { adminId: admin.id, action: 'player.disable', targetId: id, detail: { reason, secretsRevoked: revoked.length }, ip });
+		await audit(tx, { adminId: admin.id, action: 'player.disable', playerId: id, detail: { reason, secretsRevoked: revoked.length }, ip });
 		return true;
 	});
 }
@@ -74,7 +74,7 @@ export async function enablePlayer(sql: SQL, admin: Admin, id: string, ip: strin
 			UPDATE players SET disabled_at = NULL, disabled_reason = NULL
 			WHERE id = ${id} AND disabled_at IS NOT NULL RETURNING id`;
 		if (!row) return false;
-		await audit(tx, { adminId: admin.id, action: 'player.enable', targetId: id, ip });
+		await audit(tx, { adminId: admin.id, action: 'player.enable', playerId: id, ip });
 		return true;
 	});
 }

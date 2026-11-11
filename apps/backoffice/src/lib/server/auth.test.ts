@@ -12,7 +12,7 @@ beforeAll(async () => {
 afterAll(() => sql.close());
 
 const failures = async (username: string) =>
-	(await sql`SELECT count(*)::int AS n FROM admin_audit WHERE action = 'login_failed' AND detail->>'username' = ${username}`)[0].n;
+	(await sql`SELECT count(*)::int AS n FROM admin_audit_events WHERE action = 'login_failed' AND detail->>'username' = ${username}`)[0].n;
 
 describe('admin login', () => {
 	test('a wrong password fails and writes a login_failed audit row', async () => {

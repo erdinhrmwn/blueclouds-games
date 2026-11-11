@@ -7,7 +7,12 @@ import { rateLimit } from "./rate-limit";
 import type { Signer } from "./tokens";
 
 /** Same rule as the room's display name: trimmed, 1–20 characters. */
-const Name = z.string().trim().min(1, "Must be 1–20 characters.").max(20, "Must be 1–20 characters.");
+const Name = z
+	.string()
+	.trim()
+	.min(1, "Must be 1–20 characters.")
+	.max(20, "Must be 1–20 characters.")
+	.refine((n) => !/\p{Cc}/u.test(n), "Must not contain control characters."); // same rule as players_display_name_check
 const NameBody = z.object({ name: Name });
 
 const GUEST_LIMIT = { perIp: 5, windowMs: 60_000 };

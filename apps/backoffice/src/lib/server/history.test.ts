@@ -14,7 +14,7 @@ beforeAll(async () => {
 	[{ id: rina }] = await sql`INSERT INTO players (display_name) VALUES ('Rina') RETURNING id`;
 	const match = async (id: string, ended: string, humanWins: boolean) => {
 		await sql`INSERT INTO matches (id, game_slug, room_code, rules_version, started_at, ended_at, body_hash)
-		          VALUES (${id}, 'bust-31', 'ABCD', 1, ${ended}::timestamptz - interval '5 min', ${ended}, '\\x00')`;
+		          VALUES (${id}, 'bust-31', 'ABCD', 1, ${ended}::timestamptz - interval '5 min', ${ended}, ${new Uint8Array(32)})`;
 		await sql`INSERT INTO match_players (match_id, seat, player_id, bot_name, placement, score) VALUES
 		          (${id}, 0, ${rina}, NULL, ${humanWins ? 1 : 2}, ${humanWins ? 2 : 0}),
 		          (${id}, 1, NULL, 'Bot Rain', ${humanWins ? 2 : 1}, ${humanWins ? 0 : 1})`;
@@ -60,5 +60,5 @@ test('audit log shows the admin and the target player by name', async () => {
 	const id = await createAdmin(sql, 'root', 'correct horse battery');
 	await disablePlayer(sql, { id, username: 'root' }, rina, 'Spam', '192.168.1.9');
 	const [row] = await listAudit(sql, null);
-	expect(row).toMatchObject({ admin: 'root', action: 'player.disable', targetName: 'Rina', ip: '192.168.1.9', detail: { reason: 'Spam' } });
+	expect(row).toMatchObject({ admin: 'root', action: 'player.disable', playerName: 'Rina', ip: '192.168.1.9', detail: { reason: 'Spam' } });
 });

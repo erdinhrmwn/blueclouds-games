@@ -18,13 +18,16 @@ const sha256 = (s: string) => new Bun.CryptoHasher('sha256').update(s).digest();
 /** Same work for an unknown username as for a wrong password, so timing doesn't reveal which usernames exist. */
 let dummyHash: Promise<string> | undefined;
 
+/** Same list as the CHECK on admin_audit_events.action: a new action is added in both places. */
+export type AuditAction = 'login' | 'login_failed' | 'logout' | 'player.disable' | 'player.enable';
+
 export async function audit(
 	sql: SQL,
-	entry: { adminId: string | null; action: string; targetId?: string | null; detail?: Record<string, unknown>; ip: string | null }
+	entry: { adminId: string | null; action: AuditAction; playerId?: string | null; detail?: Record<string, unknown>; ip: string | null }
 ): Promise<void> {
 	await sql`
-		INSERT INTO admin_audit (admin_id, action, target_id, detail, ip)
-		VALUES (${entry.adminId}, ${entry.action}, ${entry.targetId ?? null}, ${entry.detail ?? {}}, ${entry.ip}::inet)`;
+		INSERT INTO admin_audit_events (admin_id, action, player_id, detail, ip)
+		VALUES (${entry.adminId}, ${entry.action}, ${entry.playerId ?? null}, ${entry.detail ?? {}}, ${entry.ip}::inet)`;
 }
 
 export type LoginResult = { ok: true; token: string; admin: Admin } | { ok: false; reason: 'invalid' | 'locked' };
@@ -32,7 +35,7 @@ export type LoginResult = { ok: true; token: string; admin: Admin } | { ok: fals
 export async function login(sql: SQL, username: string, password: string, ip: string | null): Promise<LoginResult> {
 	const name = username.trim().toLowerCase();
 	const [{ failures }] = await sql`
-		SELECT count(*)::int AS failures FROM admin_audit
+		SELECT count(*)::int AS failures FROM admin_audit_events
 		WHERE action = 'login_failed' AND detail->>'username' = ${name}
 		  AND created_at > now() - make_interval(mins => ${LOCKOUT.minutes})`;
 	if (failures >= LOCKOUT.tries) return { ok: false, reason: 'locked' };

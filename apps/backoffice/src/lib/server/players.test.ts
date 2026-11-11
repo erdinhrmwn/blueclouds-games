@@ -33,7 +33,7 @@ describe('players', () => {
 		expect(await disablePlayer(sql, admin, id, 'Abuse in chat', '10.0.0.2')).toBe(true);
 		const [secret] = await sql`SELECT revoked_at FROM player_secrets WHERE player_id = ${id}`;
 		expect(secret.revoked_at).not.toBeNull();
-		const rows = await sql`SELECT action, detail, host(ip) AS ip FROM admin_audit WHERE target_id = ${id}`;
+		const rows = await sql`SELECT action, detail, host(ip) AS ip FROM admin_audit_events WHERE player_id = ${id}`;
 		expect(rows).toEqual([{ action: 'player.disable', detail: { reason: 'Abuse in chat', secretsRevoked: 1 }, ip: '10.0.0.2' }]);
 		expect(await disablePlayer(sql, admin, id, 'again', null)).toBe(false); // already disabled
 	});

@@ -43,8 +43,8 @@
 						<td class="px-3 py-2">{r.admin ?? ''}</td>
 						<td class="px-3 py-2 {r.action === 'login_failed' || r.action === 'player.disable' ? 'text-danger' : ''}">{ACTIONS[r.action] ?? r.action}</td>
 						<td class="px-3 py-2">
-							{#if r.targetId}
-								<a class="underline decoration-line underline-offset-2 hover:decoration-ink" href="/players/{r.targetId}">{r.targetName ?? r.targetId}</a>
+							{#if r.playerId}
+								<a class="underline decoration-line underline-offset-2 hover:decoration-ink" href="/players/{r.playerId}">{r.playerName ?? r.playerId}</a>
 							{/if}
 						</td>
 						<td class="px-3 py-2">{note(r)}</td>

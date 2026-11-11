@@ -68,7 +68,7 @@ describe("me", () => {
 
 	test("disabled player and revoked secret are refused", async () => {
 		const a = await guest(t.app);
-		await t.sql`UPDATE players SET disabled_at = now() WHERE id = ${a.player.id}`;
+		await t.sql`UPDATE players SET disabled_at = now(), disabled_reason = 'Test' WHERE id = ${a.player.id}`;
 		const disabled = await call(t.app, "GET", "/v1/players/me", { token: a.secret });
 		expect(disabled.status).toBe(403);
 		expect(disabled.json.error.code).toBe("forbidden");
@@ -105,7 +105,7 @@ describe("play tokens", () => {
 
 	test("disabled player cannot get a token", async () => {
 		const { player, secret } = await guest(t.app);
-		await t.sql`UPDATE players SET disabled_at = now() WHERE id = ${player.id}`;
+		await t.sql`UPDATE players SET disabled_at = now(), disabled_reason = 'Test' WHERE id = ${player.id}`;
 		expect((await call(t.app, "POST", "/v1/play-tokens", { token: secret })).status).toBe(403);
 	});
 });
