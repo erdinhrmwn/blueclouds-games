@@ -6,7 +6,7 @@ The player + match API: Hono on Bun, Postgres. It has no UI and no admin API. Fu
 
 ```sh
 docker compose up -d                      # Postgres 18 + DragonflyDB on 127.0.0.1 (compose.yaml)
-cp .env.example .env                      # one .env at the repo root; fill in the empty values
+cp .env.example .env                      # dev defaults; add the play token keys
 bun run --filter platform keys:generate   # prints PLAY_TOKEN_PRIVATE_KEY / PLAY_TOKEN_PUBLIC_KEY
 bun run --filter platform db:migrate
 bun run dev:platform                      # http://localhost:3000/v1/health
