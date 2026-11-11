@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { page } from '$app/state';
 	import { NAME_MAX, player, setPlayerName } from '#lib/player.svelte.ts';
 
 	// First visit: the dialog can't be dismissed until there is a name.
@@ -7,7 +8,8 @@
 	let draft = $state('');
 	let error = $state<string | null>(null);
 	let saving = $state(false);
-	const open = $derived(player.ready && (!player.name || player.editing));
+	// The account page has its own forms: someone signing in doesn't need a guest name first.
+	const open = $derived(player.ready && page.url.pathname !== '/account' && (!player.name || player.editing));
 	const required = $derived(!player.name);
 
 	$effect(() => {
@@ -48,6 +50,7 @@
 			<input class="field" bind:value={draft} maxlength={NAME_MAX} autocomplete="nickname" placeholder="e.g. Rina" autofocus required />
 		</label>
 		{#if error}<p class="text-sm text-ember" role="alert">{error}</p>{/if}
+		{#if required}<p class="text-sm text-paper/75">Have an account? <a class="link-btn" href="/account">Sign in</a></p>{/if}
 		<div class="flex justify-end gap-3">
 			{#if !required}
 				<button type="button" class="btn-ghost" onclick={() => (player.editing = false)}>Cancel</button>

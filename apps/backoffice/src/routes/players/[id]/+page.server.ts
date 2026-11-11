@@ -1,7 +1,7 @@
 import { error, fail } from '@sveltejs/kit';
 import { auditIp } from '#lib/server/auth.ts';
 import { sql } from '#lib/server/db.ts';
-import { disablePlayer, enablePlayer, playerDetail, REASON_MAX } from '#lib/server/players.ts';
+import { disablePlayer, enablePlayer, playerDetail, REASON_MAX, setVip } from '#lib/server/players.ts';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ params }) => {
@@ -22,5 +22,11 @@ export const actions: Actions = {
 		const done = await enablePlayer(sql, locals.admin!, params.id, auditIp(getClientAddress()));
 		if (!done) return fail(409, { error: 'This player is already active.' });
 		return { message: 'Player enabled. They start a new guest session next time they play.' };
+	},
+	vip: async ({ params, request, locals, getClientAddress }) => {
+		const vip = (await request.formData()).get('vip') === 'true';
+		const done = await setVip(sql, locals.admin!, params.id, vip, auditIp(getClientAddress()));
+		if (!done) return fail(409, { error: vip ? 'This player is already a VIP.' : 'This player is not a VIP.' });
+		return { message: vip ? 'Player is now a VIP.' : 'VIP taken away.' };
 	}
 };

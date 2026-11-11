@@ -10,6 +10,8 @@
 		logout: 'Signed out',
 		'player.disable': 'Disabled player',
 		'player.enable': 'Enabled player',
+		'player.vip_grant': 'Made player VIP',
+		'player.vip_revoke': 'Took VIP away',
 		'tournament.create': 'Created tournament',
 		'tournament.cancel': 'Cancelled tournament',
 		'tournament.register': 'Registered players',

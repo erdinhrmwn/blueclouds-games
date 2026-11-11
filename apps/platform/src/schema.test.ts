@@ -110,6 +110,12 @@ describe("player names", () => {
 		await refused(sql`INSERT INTO players (display_name) VALUES (' Rina')`, /display_name_check/);
 	});
 
+	test("an account needs both a username and a password hash; is_active can't be written", async () => {
+		await refused(sql`INSERT INTO players (display_name, username) VALUES ('Lu', 'lu')`, /players_account_check/);
+		await refused(sql`INSERT INTO players (display_name, username, password_hash) VALUES ('Lu', 'Lu', '$argon2id$x')`, /players_username_check/);
+		await refused(sql`UPDATE players SET is_active = false WHERE id = ${player}`, /is_active/);
+	});
+
 	test("the API answers 400 for the same name instead of hitting the constraint", async () => {
 		const t = await setupTestApp();
 		try {

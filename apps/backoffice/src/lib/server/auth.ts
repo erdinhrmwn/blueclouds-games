@@ -25,6 +25,8 @@ export type AuditAction =
 	| 'logout'
 	| 'player.disable'
 	| 'player.enable'
+	| 'player.vip_grant'
+	| 'player.vip_revoke'
 	| 'tournament.create'
 	| 'tournament.cancel'
 	| 'tournament.register'
