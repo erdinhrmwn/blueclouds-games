@@ -1,0 +1,24 @@
+{
+	"name": "server",
+	"version": "0.0.1",
+	"private": true,
+	"type": "module",
+	"exports": {
+		".": "./src/registry.ts",
+		"./games/*": "./src/games/*.ts"
+	},
+	"scripts": {
+		"dev": "bun --watch src/index.ts",
+		"start": "bun src/index.ts",
+		"test": "bun test",
+		"check": "tsc --noEmit"
+	},
+	"dependencies": {
+		"rivetkit": "3.0.7",
+		"zod": "^4.1.0"
+	},
+	"devDependencies": {
+		"@types/bun": "latest",
+		"typescript": "^6.0.3"
+	}
+}

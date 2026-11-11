@@ -1,0 +1,13 @@
+{
+  "name": "card-game",
+  "private": true,
+  "type": "module",
+  "workspaces": ["apps/*"],
+  "scripts": {
+    "dev": "bun run --parallel --no-exit-on-error dev:server dev:web",
+    "dev:server": "bun run --filter server dev",
+    "dev:web": "bun run --filter web dev",
+    "test": "bun run --filter server test",
+    "check": "bun run --filter '*' check"
+  }
+}

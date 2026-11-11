@@ -1,0 +1,66 @@
+@import 'tailwindcss';
+
+@theme {
+	--font-display: 'Fraunces', Georgia, serif;
+	--font-sans: 'IBM Plex Sans', system-ui, sans-serif;
+	--font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+
+	--color-room: #14110e; /* the dark room around the table */
+	--color-felt: #1d4a3a;
+	--color-felt-deep: #10301f;
+	--color-rim: #4a2f1c;
+	--color-rim-light: #7a5233;
+	--color-paper: #f3ead6; /* card face */
+	--color-ink: #221c16;
+	--color-brass: #d2a54c;
+	--color-brass-dim: #8a6b2e;
+	--color-ember: #d9643f; /* AA (5:1) as text on the dark room */
+}
+
+@layer base {
+	body {
+		@apply min-h-dvh bg-room font-sans text-paper antialiased;
+		background-image: radial-gradient(ellipse at 50% -10%, #2a2119 0%, transparent 60%);
+	}
+	/* Tailwind v4 resets buttons to the default cursor. */
+	button:not(:disabled),
+	[role='button'] {
+		cursor: pointer;
+	}
+	:focus-visible {
+		outline: 2px solid var(--color-brass);
+		outline-offset: 3px;
+	}
+}
+
+@utility btn {
+	@apply inline-flex min-h-11 items-center justify-center gap-2 rounded-md px-5 py-2.5 text-sm font-semibold tracking-wide transition disabled:cursor-not-allowed disabled:opacity-40;
+}
+@utility btn-brass {
+	@apply btn bg-brass text-ink shadow-[0_2px_0_var(--color-brass-dim)] hover:brightness-110 active:translate-y-px active:shadow-none;
+}
+@utility btn-ghost {
+	@apply btn border border-paper/25 text-paper hover:border-paper/50 hover:bg-paper/5;
+}
+@utility field {
+	@apply w-full rounded-md border border-paper/20 bg-black/30 px-4 py-2.5 text-paper placeholder:text-paper/55 focus:border-brass;
+}
+/* Small section label: sentence case, no wide tracking. */
+@utility label {
+	@apply text-[13px] font-medium text-paper/75;
+}
+/* Low-emphasis text button; min height keeps it a 44px tap target. */
+@utility link-btn {
+	@apply inline-flex min-h-11 cursor-pointer items-center px-2 text-sm text-paper/75 underline underline-offset-4 hover:text-paper;
+}
+
+/* Back of a card: oxblood with a diamond lattice. */
+@utility card-back {
+	border-radius: 0.35rem;
+	border: 2px solid var(--color-paper);
+	background-color: #6e1f24;
+	background-image:
+		repeating-linear-gradient(45deg, rgb(255 255 255 / 0.09) 0 2px, transparent 2px 7px),
+		repeating-linear-gradient(-45deg, rgb(255 255 255 / 0.09) 0 2px, transparent 2px 7px);
+	box-shadow: 0 1px 3px rgb(0 0 0 / 0.5);
+}
