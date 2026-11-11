@@ -31,7 +31,8 @@ export async function setupTestApp() {
 	if (!url) throw new Error("Set TEST_DATABASE_URL to a throwaway Postgres database to run platform tests.");
 	const sql = new SQL(url);
 	await sql.unsafe("DROP SCHEMA public CASCADE; CREATE SCHEMA public;");
-	const [{ builtin }] = await sql`SELECT to_regproc('pg_catalog.uuidv7') IS NOT NULL AS builtin`;
+	// to_regproc() returns NULL for overloaded names, and PG 18 has uuidv7() and uuidv7(interval).
+	const [{ builtin }] = await sql`SELECT EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'uuidv7' AND pronamespace = 'pg_catalog'::regnamespace) AS builtin`;
 	if (!builtin) await sql.unsafe(UUIDV7_POLYFILL);
 	await migrate(sql);
 
