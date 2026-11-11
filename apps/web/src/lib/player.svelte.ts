@@ -16,21 +16,6 @@ export function loadPlayer(me: { name: string; username: string | null } | null)
 	player.ready = true;
 }
 
-/** The parts of a page URL used here (SvelteKit's `page.url` has read-only search params). */
-type PageUrl = Pick<URL, 'origin' | 'pathname' | 'search'> & { searchParams: Pick<URLSearchParams, 'get'> };
-
-/** Where to go after logging in or signing up: the page it came from (same site only), else home. */
-export function nextPath(url: PageUrl): string {
-	const next = url.searchParams.get('next');
-	if (!next?.startsWith('/')) return '/';
-	const to = new URL(next, url.origin);
-	return to.origin === url.origin ? to.pathname + to.search : '/';
-}
-
-/** Link to a login or signup page that comes back here afterwards. */
-export const authHref = (to: 'login' | 'signup', url: PageUrl) =>
-	['/login', '/signup', '/account'].includes(url.pathname) ? `/${to}` : `/${to}?next=${encodeURIComponent(url.pathname + url.search)}`;
-
 /** What a failed account form shows: one message per field, or one for the whole form. */
 export type FormErrors = { form?: string; fields: Record<string, string> };
 

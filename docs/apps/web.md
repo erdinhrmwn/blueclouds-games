@@ -28,5 +28,5 @@ apps/web/src/
   lib/guest.ts         # table code check (who you are comes from the server, see +layout.server.ts)
   lib/player.svelte.ts # player name shared by the name dialog; play tokens for rooms
   lib/motion.ts        # shared animations
-  routes/              # / (pick a game), /[game], /[game]/room/[code], /login, /signup, /account, api/player, api/play-token, api/[game]/rooms, api/[game]/rooms/[code]/token
+  routes/              # / (pick a game), /[game], /[game]/room/[code], /welcome (log in, sign up or play as guest; every page sends you here without a player), /profile, api/player, api/play-token, api/[game]/rooms, api/[game]/rooms/[code]/token
 ```
