@@ -8,8 +8,8 @@ const config = loadConfig();
 const sql = new SQL(config.db);
 const signer = await createSigner(config.playTokenPrivateKey);
 const app = createApp({ sql, config, signer });
-const server = Bun.serve({ port: config.port, fetch: app.fetch });
-log.info({ msg: "platform listening", port: server.port });
+const server = Bun.serve({ hostname: config.host, port: config.port, fetch: app.fetch });
+log.info({ msg: "platform listening", host: config.host, port: server.port });
 
 async function shutdown(signal: string) {
 	log.info({ msg: "shutting down", signal });

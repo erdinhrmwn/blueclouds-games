@@ -44,6 +44,7 @@ export async function setupTestApp() {
 		playTokenPrivateKey: JSON.stringify(await exportJWK(privateKey)),
 		serverKey: SERVER_KEY,
 		allowedOrigins: [ORIGIN],
+		host: "127.0.0.1",
 		port: 0,
 	};
 	const app = createApp({ sql, config, signer: await createSigner(config.playTokenPrivateKey) });

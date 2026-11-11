@@ -25,6 +25,7 @@ Platform tests use the same `PLATFORM_DB_*` server with `PLATFORM_TEST_DB_NAME` 
 | `PLAY_TOKEN_PRIVATE_KEY` | Ed25519 private JWK that signs play tokens |
 | `PLATFORM_SERVER_KEY` | Bearer key the actor server sends with match reports (32+ chars) |
 | `PLATFORM_ALLOWED_ORIGINS` | Comma-separated browser origins allowed by CORS |
+| `PLATFORM_HOST` | Listen interface (default `127.0.0.1`; `0.0.0.0` inside a container) |
 | `PLATFORM_PORT` | Listen port (default `3000`) |
 
 All keys live in the root `.env` (template: `.env.example`); the package scripts load it with `--env-file`. The app refuses to start if one is missing or invalid.

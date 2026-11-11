@@ -15,6 +15,7 @@ describe("config", () => {
 		const c = loadConfig(env);
 		expect(c.db).toEqual({ hostname: "127.0.0.1", port: 5432, username: "platform", password: "", database: "platform" });
 		expect(c.allowedOrigins).toEqual(["http://localhost:5173", "https://nblueclouds.online"]);
+		expect(c.host).toBe("127.0.0.1");
 		expect(c.port).toBe(3000);
 	});
 
