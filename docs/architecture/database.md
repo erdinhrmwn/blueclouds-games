@@ -1,8 +1,8 @@
 # Platform database
 
-Status: **proposal**, waiting for Erdin's OK. Nothing here is built yet. Rooms (server-made codes) and tournaments (admin-made rooms with assigned players) added on Erdin's request.
+Status: **built** (Erdin approved it on 2026-11-11), in migrations `008`–`011`. Rooms (server-made codes), tournaments (rooms with assigned players) and player accounts were added on Erdin's request.
 
-This file is meant to become the one place that describes the platform's Postgres schema. Today the schema is spread over `platform-api.md` (its "Data store" section is out of date), `match-schema.md` and `match-log.md`, and parts of it are only enforced by Zod in the API, not by the database.
+This file is the one place that describes the platform's Postgres schema. `match-schema.md` and `match-log.md` keep only the rules for games and the log format.
 
 ## Goal
 
@@ -24,7 +24,7 @@ Kept as is (Erdin's rules): Postgres 18, UUIDv7 ids, `created_at` + `updated_at`
 |---|---|
 | Tables | Plural `snake_case` nouns. A child table is `<parent>_<child>` (`player_secrets`, `match_players`). |
 | Ids | `id uuid PRIMARY KEY DEFAULT uuidv7()`. Exceptions on purpose: `matches.id` is chosen by the room (the idempotency key), secret and session tables are keyed by the token hash, `games` by its slug. |
-| Time | `timestamptz` only. A state change is a timestamp (`disabled_at`, `revoked_at`), not a boolean, so we know when it happened. |
+| Time | `timestamptz` only. A state change is a timestamp (`disabled_at`, `revoked_at`), not a boolean, so we know when it happened. `players.is_active` is the one boolean view of a state: generated from `disabled_at`, so the two can never disagree. |
 | Fixed value lists | `text` + `CHECK (x IN (...))`, never a Postgres `ENUM` type. A `CHECK` is changed in one migration; an `ENUM` value can never be removed. |
 | Index names | Postgres' own default style: `<table>_<columns>_idx`, `<table>_<columns>_key` for unique ones. |
 | Constraint names | Left to Postgres (`<table>_<column>_check`, `_fkey`), so most migrations don't name them at all. |
@@ -59,6 +59,8 @@ Storage estimate: the move log is the big one, about 25 KB per match before comp
 |---|---|
 | `display_name` must be trimmed and contain no control characters | Today a name like `"Rina\n"` passes Zod (it only trims and counts). Names show up in the backoffice and in rooms; a newline or a zero-width trick shouldn't be storable. Zod gets the same rule so the API answers 400 instead of hitting the constraint. |
 | `disabled_at` and `disabled_reason` are set together, reason 1–200 characters | The backoffice always writes both; the database should refuse half a state. 200 = `REASON_MAX` in the backoffice. |
+| `username` (unique, lowercase, `^[a-z0-9_.-]{3,32}$`) and `password_hash` (argon2id), both set or both null (`011`) | Player accounts (Erdin, 2026-11-11). Null = a guest. Registering upgrades the guest in place, so their history stays theirs; signing in gives each device its own `player_secrets` row. |
+| `is_active` generated as `disabled_at IS NULL`; `is_bot` and `is_vip` plain flags, default false (`011`) | Erdin asked for the three booleans. `is_active` can't be written, so it never disagrees with `disabled_at`. `is_bot` marks an account the system runs (bots at a table are still seats with a `bot_name`, not players). `is_vip` is set in the backoffice and audited (`player.vip_grant`, `player.vip_revoke`). |
 
 ### `player_secrets`
 
@@ -72,7 +74,7 @@ No change. It was designed in `006` with checks already.
 
 ### `tournaments`, `tournament_players`, `rooms` and `room_assignments` (new)
 
-Today the **browser** makes up the room code (`newRoomCode()` in `apps/web/src/lib/guest.ts`) and any code typed into the URL creates a room on the spot. Nothing outside the actor knows a room exists, so there is no way to prepare a room and send players into it.
+Before `009` the **browser** made up the room code and any code typed into the URL created a room on the spot. Nothing outside the actor knew a room existed, so there was no way to prepare a room and send players into it.
 
 New: the **platform** generates every code and keeps one row per room. An admin can create a **tournament**, register many players into it, and let the platform spread them over as many rooms as needed, based on how many players fit in one room (Erdin, 2026-11-11).
 
@@ -150,7 +152,7 @@ CREATE INDEX room_assignments_player_id_idx ON room_assignments (player_id);
 How a tournament runs:
 
 1. **Create** the tournament in the backoffice: game, name, start time, players per room (for example 6 for Bust 31), and the registration window: opens (default: now) and closes (default: 10 minutes before the start).
-2. **Register players**, two ways, both only while registration is open (`registration_opens_at` to `registration_closes_at`): an admin pastes a list of player ids in the backoffice, or a player presses **Join tournament** on the game's home page (`registered_by_admin_id` is then null). A player can leave again until it closes. Registering twice does nothing.
+2. **Register players**, two ways: a player presses **Join** on the game's home page while registration is open (`registration_opens_at` to `registration_closes_at`; `registered_by_admin_id` is then null), or an admin pastes a list of player ids in the backoffice, any time until the tables are handed out. A player can leave again until it closes. Registering twice does nothing.
 3. **Distribute, automatically**: when registration closes (`registration_closes_at`) the platform's distribute job does it, with no admin needed (Erdin wanted it fully automatic). The backoffice also has a "Distribute now" button that runs the same code early. The platform shuffles the registered players who have no room yet, opens `ceil(n / players_per_room)` rooms, and splits them as evenly as possible, each on a seat. 20 players at 6 per room → 4 rooms of 5, not 6+6+6+2. If a room would end up below the game's minimum (3 players at 2 per room → 2 + 1), it refuses and says how many players to add or remove. Everything happens in one transaction with one audit event, and sets `distributed_at`. If the job can't distribute (too few players for the game's minimum, or nobody registered), it writes the reason to `distribute_error`, the tournament page shows it in red, and the job tries again on every tick until an admin fixes the registrations or cancels.
 4. **Late changes**: once registration has closed, nobody can sign up; an admin can still add a player by hand into a room with a free seat. Nobody already seated is ever moved. Unregistering a seated player removes their seat first.
 5. **Play**: players see their table on the game's home page and join before the start; every room starts on its own at `starts_at` (see "Inside the room" below).
@@ -176,7 +178,7 @@ Rules the database holds, so neither app can get them wrong:
 | Nobody ever opened the room (no assigned player connected, so the actor never woke) | The 30-second job closes it at `starts_at + 4 min` (the 3-minute wait plus a margin) with `not_enough_players` |
 | The last room of a tournament closes | Same transaction: `tournaments.ended_at = now()` |
 
-A started room is never closed by the job: its match always reaches the platform through the room's outbox, however long it takes. ponytail: a room whose actor dies for good mid-match would keep its tournament open; an admin can close it from the tournament page if that ever happens.
+A started room is never closed by the job: its match always reaches the platform through the room's outbox, however long it takes. If the room's start call got lost and the job closed it as `not_enough_players`, the match report still switches it to `finished`. ponytail: a room whose actor dies for good mid-match keeps its tournament open; if that ever happens, add a "close table" button to the tournament page.
 
 **Someone outside the tournament joins by code.** A tournament room's code works like any other in the URL, so it must be safe to share or guess. It is, in two places:
 
@@ -256,7 +258,7 @@ How it flows (the parts outside the schema, for the build):
 |---|---|
 | Renamed to `admin_audit_events` | The only table name that isn't a plural noun. One row is one event. |
 | `target_id` becomes `player_id REFERENCES players(id)`, plus new `tournament_id` and `room_id` columns with foreign keys | Every action so far targets a player, and the audit screen already joins it to `players`. Tournament and room actions target those (an assignment also names the player). One column per kind of target, each with a foreign key, instead of an untyped `target_id`. |
-| `action IN ('login', 'login_failed', 'logout', 'player.disable', 'player.enable', 'tournament.create', 'tournament.update', 'tournament.cancel', 'tournament.register', 'tournament.unregister', 'tournament.distribute', 'room.assign', 'room.unassign')` | The list of actions is the audit log's vocabulary. A typo in code would otherwise write an action no filter will ever find. A new action = add it to the check in the same migration as the code. |
+| `action IN ('login', 'login_failed', 'logout', 'player.disable', 'player.enable', 'player.vip_grant', 'player.vip_revoke', 'tournament.create', 'tournament.cancel', 'tournament.register', 'tournament.unregister', 'tournament.distribute', 'room.assign', 'room.unassign')` | The list of actions is the audit log's vocabulary. A typo in code would otherwise write an action no filter will ever find. A new action = add it to the check in the same migration as the code. |
 | `detail` must be a JSON object | It always is; reading code assumes it. |
 | Index `admin_audit_created` dropped | The audit screen sorts and pages by `id`, which the primary key already serves. |
 | Append-only | An audit log anyone can edit isn't an audit log. |
@@ -286,6 +288,7 @@ Every index, and the query it is for:
 | Index | Query |
 |---|---|
 | `players` PK | Player detail, history joins |
+| `players_username_key` | Player sign-in |
 | `player_secrets` PK `(secret_hash)` | Every authenticated platform call |
 | `player_secrets_player_id_idx` | Disable a player (revoke all their secrets) |
 | `matches` PK | Backoffice match list without filters (newest first, pages by `id`), match detail |
@@ -314,7 +317,7 @@ Every index, and the query it is for:
 
 ## Full schema after the change
 
-What a fresh database looks like after `001`–`008` (Cloudburst's `007` only inserts its `games` row). Triggers for `updated_at` and append-only are left out of the listing.
+What a fresh database looks like after `001`–`011` (Cloudburst's `007` only inserts its `games` row). Triggers for `updated_at` and append-only are left out of the listing.
 
 ```sql
 CREATE TABLE players (
@@ -325,9 +328,15 @@ CREATE TABLE players (
   disabled_at      timestamptz,
   disabled_reason  text CHECK (char_length(disabled_reason) BETWEEN 1 AND 200),
   last_seen_at     timestamptz NOT NULL DEFAULT now(),
+  username         text UNIQUE CHECK (username ~ '^[a-z0-9_.-]{3,32}$'),  -- null = guest
+  password_hash    text CHECK (password_hash LIKE '$argon2id$%'),
+  is_active        boolean NOT NULL GENERATED ALWAYS AS (disabled_at IS NULL) STORED,
+  is_bot           boolean NOT NULL DEFAULT false,
+  is_vip           boolean NOT NULL DEFAULT false,
   created_at       timestamptz NOT NULL DEFAULT now(),
   updated_at       timestamptz NOT NULL DEFAULT now(),
-  CHECK ((disabled_at IS NULL) = (disabled_reason IS NULL))
+  CHECK ((disabled_at IS NULL) = (disabled_reason IS NULL)),
+  CHECK ((username IS NULL) = (password_hash IS NULL))
 );
 
 CREATE TABLE player_secrets (
@@ -484,7 +493,7 @@ CREATE TABLE admin_audit_events (  -- append-only
   id          uuid PRIMARY KEY DEFAULT uuidv7(),
   admin_id    uuid REFERENCES admins(id),   -- null for a failed login
   action      text NOT NULL CHECK (action IN ('login', 'login_failed', 'logout', 'player.disable', 'player.enable',
-                                              'tournament.create', 'tournament.update', 'tournament.cancel',
+                                              'player.vip_grant', 'player.vip_revoke', 'tournament.create', 'tournament.cancel',
                                               'tournament.register', 'tournament.unregister', 'tournament.distribute',
                                               'room.assign', 'room.unassign')),
   player_id   uuid REFERENCES players(id),  -- the player the action was on, if any
@@ -500,9 +509,14 @@ CREATE INDEX admin_audit_events_login_failed_idx ON admin_audit_events ((detail-
 
 ## Migration path
 
-One new migration, `008_production_schema.sql`, made only of `ALTER`s on the existing tables. No table is rebuilt and no data is copied, so a database that already has players and matches keeps all of them. The runner already applies each file in one transaction, so if any existing row breaks a new rule the whole migration rolls back and the platform refuses to start, with the offending constraint named in the log. Nothing is half applied.
+Four migrations, each applied by the runner in one transaction, so if any existing row breaks a new rule the migration rolls back and the platform refuses to start, with the offending constraint named in the log. Nothing is half applied. Each file ends with its roll-back statements, all tested.
 
-A draft of `008` (including rooms) was dry-run on Postgres 16 against `001`–`007` with sample data: it applies cleanly, moves existing matches onto rooms, and the new rules reject an `UPDATE` on `matches`, a `DELETE` on the audit log, disabling `root`, a name with a newline, an unknown audit action, a v4 match id, a second winner, a tournament room made by a player, a room whose game differs from its tournament, two players on one seat, a seat for an unregistered player, and one player in two rooms of the same tournament.
+| File | What |
+|---|---|
+| `008_production_schema.sql` | Hardening only: `ALTER`s on the existing tables, the append-only triggers, index and name fixes. Existing rows stay. |
+| `009_rooms.sql` | `rooms`; one open room per distinct `room_code` already in `matches` (no known creator), `matches.room_id` filled from it, `room_code` dropped. The only edit of append-only rows, done openly with `DISABLE TRIGGER`. |
+| `010_tournaments.sql` | `tournaments`, `tournament_players`, `room_assignments`, the tournament columns on `rooms`, and the audit columns and actions. |
+| `011_player_accounts.sql` | `username`, `password_hash`, `is_active`, `is_bot`, `is_vip` on `players`, and the VIP audit actions. |
 
 Before deploying, run these on the live database. Each must return 0 (or the listed rows must be fixed first):
 
@@ -517,29 +531,26 @@ SELECT count(*) FROM (SELECT room_code FROM matches GROUP BY 1 HAVING count(DIST
 SELECT count(*) FROM admin_audit WHERE target_id IS NOT NULL AND target_id NOT IN (SELECT id FROM players);
 ```
 
-Existing matches keep their room: `008` creates one open room per distinct `room_code` already in `matches` (with no creator, since we don't know it), fills `matches.room_id` from it, then drops `room_code`. This runs before the append-only trigger is added, in the same migration. Codes are unique across games, so the preflight query above must also show no code used by two games (very unlikely with random codes; if it happens, that one match's code is fixed by hand first).
+Codes are unique across games now, so the second-to-last query must show no code used by two games (very unlikely with random codes; if it happens, that one match's code is fixed by hand first).
 
-Order relative to Cloudburst: its `007_cloudburst.sql` only inserts a `games` row, which already satisfies every rule here, so the two can merge in either order.
+## Where it lives in the code
 
-Roll back: the end of `008` lists the reverse statements, as `006` does (drop the new checks, indexes and triggers, rename `admin_audit_events` and `player_id` back, recreate the two old indexes). No data is lost either way.
+- **Platform** (`apps/platform/src`):
+  - `rooms.ts`: `POST /v1/rooms` (new table), `GET /v1/rooms/:code` (may this player enter: 404 unknown, 403 for a tournament room they aren't assigned to or a cancelled tournament; assigned players may still enter a closed table to see how it ended), and for the actor with the server key `GET /v1/rooms/:code/seats`, `POST /v1/rooms/:code/start`, `POST /v1/rooms/:code/close`.
+  - `tournaments.ts`: `planRooms` (the even split), `distributeIn` (shared with the backoffice), the 30-second job started in `index.ts`, `GET /v1/tournaments?game=`, `POST`/`DELETE /v1/tournaments/:id/registration`, `GET /v1/players/me/rooms`.
+  - `matches.ts`: a report names its room by code; a tournament room's report closes the room, and the tournament with its last room.
+  - `players.ts`: `POST /v1/players/register` (upgrades the guest whose secret is sent, or makes a new player), `POST /v1/players/login` (a new secret for this device; 5 wrong passwords lock the username for 15 minutes), `POST /v1/players/logout` (revokes this device's secret).
+  - Creating and changing tournaments has no platform API: only the backoffice does that.
+- **Room actors** (`apps/server/src/games/shared/room.ts`, one place for both games): read the room's seats from the platform, let only assigned players sit (on their seat), turn off host controls, start by themselves at `starts_at` (early once everyone is in, otherwise after the 3-minute wait with whoever came), close the table when fewer than the game's minimum came, and stay off the public room list.
+- **Game web**: the tournaments panel on each game's home page (sign up, "Go to your table"), the countdown in a tournament table's lobby, and the account page (`/account`: create account, sign in, sign out).
+- **Backoffice**: Tournaments list and create form; a tournament's page registers players by pasted ids, hands out tables now, seats a player by hand or takes them off, and cancels; players show their account, bot and VIP flags, and VIP can be granted or taken back. Every change is an audit event.
 
-## Code that changes with it
+Decisions made while building, on top of the design above:
 
-The hardening part is small. Rooms are a real feature and touch every app, so they are built as their own step after it:
-
-Hardening:
-
-- **Platform** `players.ts`: the name rule in Zod also refuses control characters (same rule as the database).
-- **Backoffice** `auth.ts`, `audit-log.ts`, `players.ts`: `admin_audit` becomes `admin_audit_events`, `target_id`/`targetId` becomes `player_id`/`playerId`.
-
-Rooms:
-
-- **Platform**: tournament list and sign-up (`GET /v1/tournaments`, `POST`/`DELETE /v1/tournaments/:id/registration`); the distribute job (a 30-second loop started in `index.ts`, the distribution itself in one plain function shared with the backoffice's "Distribute now"); `POST /v1/rooms`, `GET /v1/rooms/:code` (player secret, or server key for the actor), `GET /v1/players/me/rooms`; `POST /v1/rooms/:code/start` and `/close` (server key, tournament rooms); `POST /v1/matches` maps `roomCode` to `room_id` and closes a tournament room (and its tournament, if it was the last). Creating and changing tournaments has no platform API: only the backoffice does that.
-- **Game web**: "New table" asks the server for a code; the room token route checks the room with the platform first; home page shows assigned rooms. `newRoomCode()` is deleted.
-- **Room actors** (`games/shared/room.ts`, one place for both games): read the room on start, enforce assignments and the start time in tournament rooms, keep tournament rooms off the public list.
-- **Backoffice**: Tournaments screen and tournament page (register players, Distribute, rooms and seats, move/remove, cancel), tournament and room shown on match detail. Distribute is a plain function with its own test: balanced sizes, nobody seated twice, refuses below the game's minimum.
-- **Tests**: fixtures that insert a 1-byte `body_hash` use a 32-byte one; new checks below.
-- **Docs**: this file becomes the schema reference. The "Data store" section of `platform-api.md` is replaced by a link here (it is out of date), and `match-schema.md` keeps only the rules for games.
+- Admins can register players any time until the tables are handed out; only players are held to the sign-up window.
+- "Hand out tables now" closes sign-up at that moment, so nobody can sign up after the tables exist.
+- Players log in with a username that is stored lowercase, so `Ann` and `ann` are one account.
+- Not built yet: showing the tournament and room on the backoffice's match detail page.
 
 ## Left out on purpose
 

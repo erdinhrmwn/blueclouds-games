@@ -45,7 +45,7 @@ Every response uses the `{ ok, data, error }` envelope described in the design.
 
 ## Database
 
-The platform owns the schema and runs every migration, including the backoffice's tables (`admins`, `admin_sessions`, `admin_audit`). The backoffice connects with the same `DATABASE_*` settings.
+The platform owns the schema and runs every migration, including the backoffice's tables (`admins`, `admin_sessions`, `admin_audit_events`). The backoffice connects with the same `DATABASE_*` settings.
 
 ## Structure
 
