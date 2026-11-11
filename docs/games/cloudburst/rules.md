@@ -107,25 +107,7 @@ Choices checked in the same simulation:
 
 ## Score in the match report
 
-Checked every place that uses the per-seat `livesLeft` today:
-
-| Where | What it does with it |
-|---|---|
-| `apps/platform/migrations/003_matches.sql` | `match_players.lives_left smallint NOT NULL` |
-| `apps/platform/src/matches.ts` | Accepts `livesLeft` (0–99) in `POST /v1/matches`, stores it, returns it in `GET /v1/players/me/matches` |
-| `apps/backoffice/src/lib/server/matches.ts`, `routes/matches/[id]/+page.svelte` | Shows a "Lives left" column on the match page |
-| `apps/server/src/games/bust-31/match.ts` | Sends `lives` as `livesLeft` |
-| Tests | `platform/src/matches.test.ts`, `backoffice/src/lib/server/history.test.ts`, `bust-31/match.test.ts` |
-
-The game web app doesn't read it. Ranking never depends on it either: `placement` already says who came where.
-
-Options:
-
-1. **Rename to `score`, meaning defined by each game** (proposed). Bust 31 sends lives left, Cloudburst sends points. The backoffice column takes its label from a small per-game map (`Lives left`, `Points`), next to the per-game move log renderer. One migration (`006_match_score.sql`, after the match log's `005`), a rename in the files above, nothing else. The range stays `smallint`, 0–999.
-2. Keep `lives_left` and add a nullable `points` column. No rename, but every future game adds another column that is empty for the others.
-3. Drop the column: placement is enough, and the move log's `finished` event holds the final numbers. Smallest, but the backoffice match page loses the number for any match whose log isn't shown.
-
-With option 1, "higher is better" for Bust 31 and "lower is better" for Cloudburst. That is fine because the number is only displayed; anything that ranks uses `placement`.
+Each seat's final points go in the report's per-seat `score`. That field used to be Bust 31's `livesLeft`; it was renamed so every game can use it (Bust 31 sends lives left, Cloudburst points). Rankings always use `placement`; the backoffice labels the column per game ("Lives left", "Points").
 
 ## Building it (what is reused)
 
@@ -142,6 +124,6 @@ The earlier plan was to extract shared parts once a second game exists; this is 
 
 New for Cloudburst: `apps/server/src/games/cloudburst/{rules,bots,match,schema,actor}.ts` (actor `cloudburstRoom`, one action `play({ cardId, suit?, giveId? })` plus `draw` and `pass`), rule tests in `rules.test.ts`, the web components in `lib/games/cloudburst/`, a catalog entry, and `cloudburst` in the platform's `GAMES` list.
 
-Suggested order (one commit each): 1) extract the shared server parts with Bust 31 tests still green, 2) Cloudburst rules + bots + tests, 3) actor, 4) web table, 5) platform `score` rename and game entry, after the match log has landed (both touch `POST /v1/matches`).
+Suggested order (one commit each): 1) extract the shared server parts with Bust 31 tests still green, 2) Cloudburst rules + bots + tests, 3) actor, 4) web table, 5) the platform game entry.
 
 UI design reasoning: [design.md](design.md).

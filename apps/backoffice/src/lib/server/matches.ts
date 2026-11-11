@@ -30,7 +30,7 @@ export async function matchGames(sql: SQL): Promise<string[]> {
 	return (await sql`SELECT DISTINCT game_slug FROM matches ORDER BY 1`).map((r: { game_slug: string }) => r.game_slug);
 }
 
-export type Seat = { seat: number; playerId: string | null; name: string | null; bot: boolean; placement: number; livesLeft: number };
+export type Seat = { seat: number; playerId: string | null; name: string | null; bot: boolean; placement: number; score: number };
 export type MatchDetail = Omit<MatchRow, 'players' | 'winner'> & { rulesVersion: number; startedAt: Date; seats: Seat[] };
 
 export async function matchDetail(sql: SQL, id: string): Promise<MatchDetail | null> {
@@ -41,7 +41,7 @@ export async function matchDetail(sql: SQL, id: string): Promise<MatchDetail | n
 	if (!m) return null;
 	const seats = (await sql`
 		SELECT mp.seat, mp.player_id AS "playerId", coalesce(p.display_name, mp.bot_name) AS name, mp.player_id IS NULL AS bot,
-		       mp.placement, mp.lives_left AS "livesLeft"
+		       mp.placement, mp.score
 		FROM match_players mp LEFT JOIN players p ON p.id = mp.player_id
 		WHERE mp.match_id = ${id} ORDER BY mp.placement, mp.seat`) as Seat[];
 	return { ...m, seats };

@@ -12,7 +12,7 @@ const Seat = z
 		bot: z.boolean(),
 		botName: z.string().trim().min(1).max(20).optional(),
 		placement: z.number().int().min(1).max(32),
-		livesLeft: z.number().int().min(0).max(99),
+		score: z.number().int().min(0).max(999),
 	})
 	.refine((s) => s.bot === (s.playerId === null), { message: "A seat has a playerId exactly when it is not a bot." });
 
@@ -82,7 +82,7 @@ export function matchRoutes(sql: SQL, serverKey: string) {
 				player_id: p.playerId,
 				bot_name: p.bot ? (p.botName ?? null) : null,
 				placement: p.placement,
-				lives_left: p.livesLeft,
+				score: p.score,
 			}));
 			await tx`INSERT INTO match_players ${tx(rows)}`;
 			return true;
@@ -95,7 +95,7 @@ export function matchRoutes(sql: SQL, serverKey: string) {
 		const { cursor } = parse(HistoryQuery, c.req.query());
 		const me = c.get("player").id;
 		const rows = await sql`
-			SELECT m.id, m.game_slug, m.room_code, m.started_at, m.ended_at, mp.seat, mp.placement, mp.lives_left,
+			SELECT m.id, m.game_slug, m.room_code, m.started_at, m.ended_at, mp.seat, mp.placement, mp.score,
 			       (SELECT count(*)::int FROM match_players x WHERE x.match_id = m.id) AS players
 			FROM match_players mp JOIN matches m ON m.id = mp.match_id
 			WHERE mp.player_id = ${me} ${cursor ? sql`AND mp.match_id < ${cursor}` : sql``}
@@ -112,7 +112,7 @@ export function matchRoutes(sql: SQL, serverKey: string) {
 				players: r.players,
 				seat: r.seat,
 				placement: r.placement,
-				livesLeft: r.lives_left,
+				score: r.score,
 			})),
 			nextCursor: rows.length > HISTORY_PAGE ? (page.at(-1)?.id ?? null) : null,
 		});

@@ -212,11 +212,13 @@ Called by a room actor when a game finishes. Bearer `PLATFORM_SERVER_KEY`.
   "startedAt": "2026-11-11T08:00:00Z",
   "endedAt": "2026-11-11T08:06:12Z",
   "players": [
-    { "seat": 0, "playerId": "uuidv7", "bot": false, "placement": 1, "livesLeft": 2 },
-    { "seat": 3, "playerId": null, "bot": true, "botName": "Bot Rain", "placement": 2, "livesLeft": 0 }
+    { "seat": 0, "playerId": "uuidv7", "bot": false, "placement": 1, "score": 2 },
+    { "seat": 3, "playerId": null, "bot": true, "botName": "Bot Rain", "placement": 2, "score": 0 }
   ]
 }
 ```
+
+`score` (0–999) is a per-seat number each game defines (Bust 31 sends lives left). Rankings use `placement`; `score` is only shown.
 
 **Idempotent by `matchId`:**
 
@@ -303,7 +305,7 @@ CREATE TABLE match_players (
   player_id     uuid REFERENCES players(id),  -- null for bots
   bot_name      text,
   placement     smallint NOT NULL,
-  lives_left    smallint NOT NULL,
+  score         smallint NOT NULL,  -- game-defined (Bust 31: lives left)
   created_at    timestamptz NOT NULL DEFAULT now(),
   updated_at    timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (match_id, seat)

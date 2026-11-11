@@ -15,7 +15,7 @@ beforeAll(async () => {
 	const match = async (id: string, ended: string, humanWins: boolean) => {
 		await sql`INSERT INTO matches (id, game_slug, room_code, rules_version, started_at, ended_at, body_hash)
 		          VALUES (${id}, 'bust-31', 'ABCD', 1, ${ended}::timestamptz - interval '5 min', ${ended}, '\\x00')`;
-		await sql`INSERT INTO match_players (match_id, seat, player_id, bot_name, placement, lives_left) VALUES
+		await sql`INSERT INTO match_players (match_id, seat, player_id, bot_name, placement, score) VALUES
 		          (${id}, 0, ${rina}, NULL, ${humanWins ? 1 : 2}, ${humanWins ? 2 : 0}),
 		          (${id}, 1, NULL, 'Bot Rain', ${humanWins ? 2 : 1}, ${humanWins ? 0 : 1})`;
 	};

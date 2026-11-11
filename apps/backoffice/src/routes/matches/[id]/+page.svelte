@@ -2,6 +2,9 @@
 	import { utc } from '#lib/format.ts';
 	import type { PageProps } from './$types';
 
+	// What each game's per-seat score means. Unknown games just say "Score".
+	const SCORE_LABEL = new Map([['bust-31', 'Lives left']]);
+
 	let { data }: PageProps = $props();
 	const m = $derived(data.match);
 	const minutes = $derived(Math.max(1, Math.round((new Date(m.endedAt).getTime() - new Date(m.startedAt).getTime()) / 60_000)));
@@ -28,7 +31,7 @@
 				<th class="px-3 py-2 font-medium">Place</th>
 				<th class="px-3 py-2 font-medium">Player</th>
 				<th class="px-3 py-2 font-medium">Seat</th>
-				<th class="px-3 py-2 font-medium">Lives left</th>
+				<th class="px-3 py-2 font-medium">{SCORE_LABEL.get(m.game) ?? 'Score'}</th>
 			</tr>
 		</thead>
 		<tbody>
@@ -43,7 +46,7 @@
 						{/if}
 					</td>
 					<td class="px-3 py-2">{s.seat + 1}</td>
-					<td class="px-3 py-2">{s.livesLeft}</td>
+					<td class="px-3 py-2">{s.score}</td>
 				</tr>
 			{/each}
 		</tbody>

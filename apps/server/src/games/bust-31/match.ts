@@ -13,7 +13,7 @@ export type MatchReport = {
 	rulesVersion: number;
 	startedAt: string;
 	endedAt: string;
-	players: { seat: number; playerId: string | null; bot: boolean; botName?: string; placement: number; livesLeft: number }[];
+	players: { seat: number; playerId: string | null; bot: boolean; botName?: string; placement: number; score: number }[];
 };
 
 /**
@@ -53,7 +53,7 @@ export function buildReport(match: MatchState, game: Game, roomCode: string, end
 			bot: p.bot,
 			...(p.bot ? { botName: p.name } : {}),
 			placement: placement(p.id),
-			livesLeft: Math.max(0, p.lives),
+			score: Math.max(0, p.lives),
 		})),
 	};
 }

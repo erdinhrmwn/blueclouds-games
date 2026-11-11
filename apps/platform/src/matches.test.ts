@@ -21,9 +21,9 @@ const report = (over: Record<string, unknown> = {}) => ({
 	startedAt: "2026-11-11T08:00:00Z",
 	endedAt: "2026-11-11T08:06:12Z",
 	players: [
-		{ seat: 0, playerId: ann.player.id, bot: false, placement: 1, livesLeft: 2 },
-		{ seat: 2, playerId: bob.player.id, bot: false, placement: 3, livesLeft: 0 },
-		{ seat: 3, playerId: null, bot: true, botName: "Bot Rain", placement: 2, livesLeft: 0 },
+		{ seat: 0, playerId: ann.player.id, bot: false, placement: 1, score: 2 },
+		{ seat: 2, playerId: bob.player.id, bot: false, placement: 3, score: 0 },
+		{ seat: 3, playerId: null, bot: true, botName: "Bot Rain", placement: 2, score: 0 },
 	],
 	...over,
 });
@@ -57,8 +57,8 @@ describe("match reports", () => {
 	test("unknown player → 422 and nothing is stored", async () => {
 		const body = report({
 			players: [
-				{ seat: 0, playerId: Bun.randomUUIDv7(), bot: false, placement: 1, livesLeft: 1 },
-				{ seat: 1, playerId: null, bot: true, placement: 2, livesLeft: 0 },
+				{ seat: 0, playerId: Bun.randomUUIDv7(), bot: false, placement: 1, score: 1 },
+				{ seat: 1, playerId: null, bot: true, placement: 2, score: 0 },
 			],
 		});
 		const res = await post(body);
@@ -71,8 +71,8 @@ describe("match reports", () => {
 	test("bot-only matches are recorded", async () => {
 		const body = report({
 			players: [
-				{ seat: 0, playerId: null, bot: true, placement: 1, livesLeft: 1 },
-				{ seat: 1, playerId: null, bot: true, placement: 2, livesLeft: 0 },
+				{ seat: 0, playerId: null, bot: true, placement: 1, score: 1 },
+				{ seat: 1, playerId: null, bot: true, placement: 2, score: 0 },
 			],
 		});
 		expect((await post(body)).status).toBe(201);
@@ -81,8 +81,8 @@ describe("match reports", () => {
 	test("rejects invalid reports with field errors", async () => {
 		const twoWinners = report({
 			players: [
-				{ seat: 0, playerId: ann.player.id, bot: false, placement: 1, livesLeft: 1 },
-				{ seat: 1, playerId: null, bot: true, placement: 1, livesLeft: 0 },
+				{ seat: 0, playerId: ann.player.id, bot: false, placement: 1, score: 1 },
+				{ seat: 1, playerId: null, bot: true, placement: 1, score: 0 },
 			],
 		});
 		const res = await post(twoWinners);
@@ -102,8 +102,8 @@ describe("my match history", () => {
 		for (let i = 0; i < 22; i++) {
 			const body = report({
 				players: [
-					{ seat: 0, playerId: carl.player.id, bot: false, placement: i % 2 ? 1 : 2, livesLeft: 1 },
-					{ seat: 1, playerId: null, bot: true, placement: i % 2 ? 2 : 1, livesLeft: 0 },
+					{ seat: 0, playerId: carl.player.id, bot: false, placement: i % 2 ? 1 : 2, score: 1 },
+					{ seat: 1, playerId: null, bot: true, placement: i % 2 ? 2 : 1, score: 0 },
 				],
 			});
 			ids.push(body.matchId);

@@ -24,9 +24,9 @@ test("placements follow the elimination order, winner first", () => {
 	expect(match.out).toEqual(["c"]);
 	const report = buildReport(match, table({ a: 2, "bot-1": 0, c: 0 }, "a"), "ABCD", "2026-11-11T10:05:00.000Z");
 	const byWho = Object.fromEntries(report.players.map((p) => [p.playerId ?? p.botName, p]));
-	expect(byWho.a).toMatchObject({ placement: 1, livesLeft: 2, bot: false });
+	expect(byWho.a).toMatchObject({ placement: 1, score: 2, bot: false });
 	expect(byWho["Bot Rain"]).toMatchObject({ placement: 2, playerId: null, bot: true });
-	expect(byWho.c).toMatchObject({ placement: 3, livesLeft: 0 });
+	expect(byWho.c).toMatchObject({ placement: 3, score: 0 });
 });
 
 test("noteMove does not count a player twice", () => {
