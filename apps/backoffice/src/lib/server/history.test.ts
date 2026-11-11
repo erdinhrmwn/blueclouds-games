@@ -54,6 +54,29 @@ describe('matches', () => {
 			['Rina', false, 1],
 			['Bot Rain', true, 2]
 		]);
+		// A table from before rooms were stored: open, opener unknown.
+		expect(m).toMatchObject({ roomCode: 'ABCD', tournamentId: null, openedByPlayerId: null, openedByAdmin: null });
+	});
+
+	test('detail shows the tournament, or who opened an open table', async () => {
+		const admin = await createAdmin(sql, 'tables', 'correct horse battery');
+		const [{ id: cup }] = await sql`
+			INSERT INTO tournaments (game_slug, name, players_per_room, starts_at, registration_opens_at, registration_closes_at, created_by_admin_id)
+			VALUES ('bust-31', 'Friday Cup', 2, now(), now() - interval '1 hour', now(), ${admin}) RETURNING id`;
+		const [{ id: cupRoom }] = await sql`INSERT INTO rooms (game_slug, code, tournament_id) VALUES ('bust-31', 'CUP01', ${cup}) RETURNING id`;
+		const [{ id: openRoom }] = await sql`INSERT INTO rooms (game_slug, code, created_by_player_id) VALUES ('bust-31', 'OPEN1', ${rina}) RETURNING id`;
+		const played = async (id: string, roomId: string) => {
+			await sql`INSERT INTO matches (id, game_slug, room_id, rules_version, started_at, ended_at, body_hash)
+			          VALUES (${id}, 'bust-31', ${roomId}, 1, now() - interval '5 min', now(), ${new Uint8Array(32)})`;
+			return matchDetail(sql, id);
+		};
+		expect(await played('01900000-0000-7000-8000-000000000003', cupRoom)).toMatchObject({ roomCode: 'CUP01', tournamentId: cup, tournamentName: 'Friday Cup' });
+		expect(await played('01900000-0000-7000-8000-000000000004', openRoom)).toMatchObject({
+			roomCode: 'OPEN1',
+			tournamentId: null,
+			openedByPlayerId: rina,
+			openedByPlayer: 'Rina'
+		});
 	});
 });
 

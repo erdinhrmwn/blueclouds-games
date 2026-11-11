@@ -46,7 +46,7 @@ When the deck runs out, everything under the top card is shuffled into a new dec
 
 ## Rounds and points
 
-- A **round** ends the moment one player empties their hand. Everyone else takes **1 point per card** still in their hand (a "drop" in their cloud). The player who went out takes 0.
+- A **round** ends the moment one player empties their hand. Everyone else takes **1 point per card** still in their hand (a "drop" in their cloud). The player who went out takes 0. The cards left are then shown face up to the whole table, since they go back into the deck.
 - Every round is a fresh deal from the full deck. The first turn moves one seat clockwise each round (round 1: the first seat on the dealer's left), so nobody always starts.
 - The **match** ends after the round in which anyone reaches **10 points** (`BURST_AT`). The player with the **fewest points wins**.
 - Tie for fewest: one more round is played by everyone, until a single player has the fewest.

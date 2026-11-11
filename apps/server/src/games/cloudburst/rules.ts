@@ -32,14 +32,26 @@ export type Player = {
 	points: number;
 };
 
-/** What happened last, for the table's animations. Never holds a card other players must not see. */
+/**
+ * What happened last, for the table's animations. Never holds a card other players must not see:
+ * the hands in `roundEnd.left` are shown on purpose, the round is over and they go back in the deck.
+ */
 export type GameEvent =
 	| { type: "joined"; playerId: string }
 	| { type: "dealt"; round: number }
 	| { type: "played"; playerId: string; card: Card; skipped?: string; gaveTo?: string; auto?: boolean }
 	| { type: "drew"; playerId: string; got: boolean; auto?: boolean }
 	| { type: "passed"; playerId: string; auto?: boolean }
-	| { type: "roundEnd"; outId: string; card: Card; gained: Record<string, number>; tie: boolean; next: "round" | "finished" };
+	| {
+			type: "roundEnd";
+			outId: string;
+			card: Card;
+			gained: Record<string, number>;
+			/** The cards each player still held, face up for the round-end reveal. */
+			left: Record<string, Card[]>;
+			tie: boolean;
+			next: "round" | "finished";
+	  };
 
 export type Game = {
 	phase: "lobby" | "playing" | "finished";
@@ -211,15 +223,17 @@ export function pass(game: Game, playerId: string): Game {
 /** Someone went out: everyone else takes a point per card left. Then a new round, or the end of the match. */
 function endRound(game: Game, outId: string, card: Card, rng: Rng): Game {
 	const gained: Record<string, number> = {};
+	const left: Record<string, Card[]> = {};
 	const players = game.players.map((p) => {
 		gained[p.id] = p.hand.length;
+		left[p.id] = p.hand;
 		return { ...p, points: p.points + p.hand.length };
 	});
 	const fewest = Math.min(...players.map((p) => p.points));
 	const leaders = players.filter((p) => p.points === fewest);
 	const burst = players.some((p) => p.points >= BURST_AT);
 	const finished = burst && leaders.length === 1;
-	const roundEnd: GameEvent = { type: "roundEnd", outId, card, gained, tie: burst && !finished, next: finished ? "finished" : "round" };
+	const roundEnd: GameEvent = { type: "roundEnd", outId, card, gained, left, tie: burst && !finished, next: finished ? "finished" : "round" };
 	const scored = { ...game, players, lastEvent: roundEnd, moves: game.moves + 1, turnKey: game.turnKey + 1 };
 	if (finished) return { ...scored, phase: "finished", winnerId: leaders[0]!.id };
 	return { ...dealRound(scored, rng), lastEvent: roundEnd };

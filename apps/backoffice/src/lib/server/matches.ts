@@ -32,14 +32,29 @@ export async function matchGames(sql: SQL): Promise<{ slug: string; name: string
 }
 
 export type Seat = { seat: number; playerId: string | null; name: string | null; bot: boolean; placement: number; score: number };
-export type MatchDetail = Omit<MatchRow, 'players' | 'winner'> & { rulesVersion: number; startedAt: Date; scoreLabel: string; seats: Seat[] };
+/** Where the match was played: a tournament table, or an open table and who opened it (both null for tables older than 009). */
+export type MatchTable = {
+	tournamentId: string | null;
+	tournamentName: string | null;
+	openedByPlayerId: string | null;
+	openedByPlayer: string | null;
+	openedByAdmin: string | null;
+};
+export type MatchDetail = Omit<MatchRow, 'players' | 'winner'> &
+	MatchTable & { rulesVersion: number; startedAt: Date; scoreLabel: string; seats: Seat[] };
 
 export async function matchDetail(sql: SQL, id: string): Promise<MatchDetail | null> {
 	if (!isUuid(id)) return null;
 	const [m] = await sql`
 		SELECT m.id, m.game_slug AS game, g.name AS "gameName", g.score_label AS "scoreLabel", r.code AS "roomCode",
-		       m.rules_version AS "rulesVersion", m.started_at AS "startedAt", m.ended_at AS "endedAt"
-		FROM matches m JOIN games g ON g.slug = m.game_slug JOIN rooms r ON r.id = m.room_id WHERE m.id = ${id}`;
+		       m.rules_version AS "rulesVersion", m.started_at AS "startedAt", m.ended_at AS "endedAt",
+		       r.tournament_id AS "tournamentId", t.name AS "tournamentName",
+		       r.created_by_player_id AS "openedByPlayerId", op.display_name AS "openedByPlayer", oa.username AS "openedByAdmin"
+		FROM matches m JOIN games g ON g.slug = m.game_slug JOIN rooms r ON r.id = m.room_id
+		LEFT JOIN tournaments t ON t.id = r.tournament_id
+		LEFT JOIN players op ON op.id = r.created_by_player_id
+		LEFT JOIN admins oa ON oa.id = r.created_by_admin_id
+		WHERE m.id = ${id}`;
 	if (!m) return null;
 	const seats = (await sql`
 		SELECT mp.seat, mp.player_id AS "playerId", coalesce(p.display_name, mp.bot_name) AS name, mp.player_id IS NULL AS bot,

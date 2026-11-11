@@ -13,7 +13,8 @@
 		onplay
 	}: {
 		card: Card;
-		size?: 'sm' | 'md' | 'lg';
+		/** `xs`: the tiny cards of the round-end reveal at a seat. */
+		size?: 'xs' | 'sm' | 'md' | 'lg';
 		/** In your hand: false dims the card and says so. */
 		fits?: boolean;
 		disabled?: boolean;
@@ -36,7 +37,7 @@
 		<span class="rainbow" aria-hidden="true">
 			{#each SUITS as s (s)}<span class="band {SUIT_BG[s]}"></span>{/each}
 		</span>
-		<span class="relative font-display text-sm font-bold text-paper">Rainbow</span>
+		<span class="word relative font-display text-sm font-bold text-paper">Rainbow</span>
 	{:else}
 		<span class="corner top-1.5 left-1.5 flex flex-col items-center">
 			<span>{corner}</span><SuitGlyph suit={card.suit!} class="size-3" />
@@ -54,7 +55,7 @@
 					<rect x="3.5" y="6" width="9" height="12" rx="1.5" /><path d="M15 12h6m-2.5-2.5L21 12l-2.5 2.5" />
 				{/if}
 			</svg>
-			<span class="text-[11px] font-semibold">{WORD[card.kind]}</span>
+			<span class="word text-[11px] font-semibold">{WORD[card.kind]}</span>
 		{/if}
 		<span class="corner right-1.5 bottom-1.5 flex rotate-180 flex-col items-center">
 			<span>{corner}</span><SuitGlyph suit={card.suit!} class="size-3" />
@@ -97,6 +98,12 @@
 			inset 0 0 0 5px rgb(34 28 22 / 0.12),
 			0 6px 14px rgb(0 0 0 / 0.45);
 	}
+	.xs {
+		width: 1.75rem;
+		height: 2.5rem;
+		border-radius: 0.3rem;
+		gap: 0;
+	}
 	.sm {
 		width: 3.25rem;
 		height: 4.6rem;
@@ -118,6 +125,9 @@
 	.num {
 		font-size: 2.4em;
 	}
+	.xs .num {
+		font-size: 1rem;
+	}
 	.sm .num {
 		font-size: 1.6rem;
 	}
@@ -133,6 +143,18 @@
 		width: 1.9rem;
 		height: 1.9rem;
 	}
+	.xs :global(.glyph) {
+		width: 0.6rem;
+		height: 0.6rem;
+	}
+	.xs :global(.glyph-lg) {
+		width: 1rem;
+		height: 1rem;
+	}
+	/* Too small for words: the glyph (or the four bands) says what the card is. */
+	.xs .word {
+		display: none;
+	}
 	.sm :global(.glyph-lg) {
 		width: 1.3rem;
 		height: 1.3rem;
@@ -144,6 +166,7 @@
 		font-size: 0.75rem;
 		line-height: 1;
 	}
+	.xs .corner,
 	.sm .corner {
 		display: none;
 	}
@@ -158,6 +181,10 @@
 		background: var(--color-ink);
 		padding: 22% 0;
 		gap: 3px;
+	}
+	.xs .rainbow {
+		inset: 3px;
+		gap: 2px;
 	}
 	.band {
 		display: block;
