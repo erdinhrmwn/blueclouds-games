@@ -1,7 +1,4 @@
-# Local development services: `docker compose up -d`.
-# Credentials and ports come from the root .env (same keys the platform reads), with dev defaults.
-# Ports bind to 127.0.0.1 only. Changing the DB user, password or names after the first start
-# needs a fresh volume: `docker compose down -v`.
+# Local dev services: `docker compose up -d`. Values come from the root .env (dev defaults below).
 name: blueclouds-dev
 
 services:
@@ -13,24 +10,6 @@ services:
       POSTGRES_PASSWORD: ${PLATFORM_DB_PASSWORD:-platform}
       POSTGRES_DB: ${PLATFORM_DB_NAME:-platform}
       POSTGRES_TEST_DB: ${PLATFORM_TEST_DB_NAME:-platform_test}
-      # UTF-8 with the built-in collation: same sort order on every OS, no ICU/glibc surprises.
-      POSTGRES_INITDB_ARGS: --encoding=UTF8 --locale-provider=builtin --builtin-locale=C.UTF-8
-      TZ: UTC
-    command:
-      - postgres
-      - -c
-      - shared_buffers=256MB
-      - -c
-      - max_connections=50
-      # Dev only: commits return before the WAL hits disk. Faster tests; a crash can lose the
-      # last few transactions but never corrupts the database.
-      - -c
-      - synchronous_commit=off
-      - -c
-      - log_min_duration_statement=250ms
-      - -c
-      - timezone=UTC
-    shm_size: 256mb
     ports:
       - "127.0.0.1:${PLATFORM_DB_PORT:-5432}:5432"
     volumes:
@@ -39,23 +18,20 @@ services:
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
       interval: 5s
-      timeout: 3s
       retries: 10
-      start_period: 10s
 
-  # Redis-compatible store. Nothing uses it yet; it is here so local dev matches the plan.
+  # Redis-compatible. Not used yet.
   dragonfly:
     image: ghcr.io/dragonflydb/dragonfly:v1.40.2
     restart: unless-stopped
-    # Dragonfly needs at least 256 MiB per thread; 1 thread + 512 MB is plenty for dev.
-    command: ["--proactor_threads=1", "--maxmemory=512mb", "--dir=/data", "--dbfilename=dump"]
+    # Needs at least 256 MiB per thread.
+    command: ["--proactor_threads=1", "--maxmemory=512mb"]
     ulimits:
       memlock: -1
     ports:
       - "127.0.0.1:6379:6379"
     volumes:
       - dragonfly-data:/data
-    # The image ships its own healthcheck.
 
 volumes:
   postgres-data:
