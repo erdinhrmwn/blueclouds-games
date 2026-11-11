@@ -23,6 +23,7 @@ The **platform** is a separate service that owns **who a player is** and **what 
 | Responsibility | Platform = player + match API only. Backoffice = separate app, no admin API on the platform |
 | Bot matches | Recorded in history like any other match |
 | Move log | Every match records every move for replay and audit: see [match-log.md](match-log.md) |
+| Match data | One generic schema for every game (`games` catalog, per-seat `placement` + game-defined `score`): see [match-schema.md](match-schema.md) |
 | Ids | UUIDv7 everywhere |
 | Responses | One envelope for every response (see below) |
 
@@ -213,8 +214,8 @@ Called by a room actor when a game finishes. Bearer `PLATFORM_SERVER_KEY`.
   "startedAt": "2026-11-11T08:00:00Z",
   "endedAt": "2026-11-11T08:06:12Z",
   "players": [
-    { "seat": 0, "playerId": "uuidv7", "bot": false, "placement": 1, "livesLeft": 2 },
-    { "seat": 3, "playerId": null, "bot": true, "botName": "Bot Rain", "placement": 2, "livesLeft": 0 }
+    { "seat": 0, "playerId": "uuidv7", "bot": false, "placement": 1, "score": 2 },
+    { "seat": 3, "playerId": null, "bot": true, "botName": "Bot Rain", "placement": 2, "score": 0 }
   ],
   "log": { "logVersion": 1, "events": [{ "seq": 0, "t": 0, "type": "deal", "data": { "…": "…" } }] }
 }
@@ -230,7 +231,7 @@ Called by a room actor when a game finishes. Bearer `PLATFORM_SERVER_KEY`.
 
 "Same body" = SHA-256 of the canonical JSON, stored on the row. `INSERT … ON CONFLICT (id) DO NOTHING`, then compare hashes, in one transaction with the `match_players` rows and the `match_logs` row. The hash covers the log too. The log's format and checks are in [match-log.md](match-log.md).
 
-Validation: `game` must be a known slug, 2–6 players, seats unique, exactly one `placement: 1`, every non-bot `playerId` must exist (`422 unknown_player`). Matches against bots only are recorded too.
+Validation: `game` must be a row in `games` and the seat count within its limits, a bot seat needs `botName`, `score` is any integer the game defines (see [match-schema.md](match-schema.md)), seats unique, exactly one `placement: 1`, every non-bot `playerId` must exist (`422 unknown_player`). Matches against bots only are recorded too.
 
 **Actor side (outbox):** on `finished`, the room saves `{matchId, body}` (result and full move log) to a `match_reports` row in its own SQLite, then calls the API. On failure it retries with `c.schedule.after` (10s, 1m, 5m, 30m, then 6h until it succeeds, logging each failure). Because the endpoint is idempotent, a retry after a timeout that actually succeeded is harmless. A finished game never waits on this call.
 
@@ -286,9 +287,20 @@ CREATE TABLE player_secrets (
   updated_at    timestamptz NOT NULL DEFAULT now()
 );
 
+-- The game catalog: a new game is one INSERT (match-schema.md).
+CREATE TABLE games (
+  slug          text PRIMARY KEY,             -- "bust-31"
+  name          text NOT NULL,
+  min_players   smallint NOT NULL,
+  max_players   smallint NOT NULL,
+  score_label   text NOT NULL,                -- what match_players.score means: "Lives left", "Points"
+  created_at    timestamptz NOT NULL DEFAULT now(),
+  updated_at    timestamptz NOT NULL DEFAULT now()
+);
+
 CREATE TABLE matches (
   id            uuid PRIMARY KEY,             -- UUIDv7 chosen by the room: the idempotency key
-  game_slug     text NOT NULL,
+  game_slug     text NOT NULL REFERENCES games(slug),
   room_code     text NOT NULL,
   rules_version int  NOT NULL,
   started_at    timestamptz NOT NULL,
@@ -303,12 +315,13 @@ CREATE TABLE match_players (
   match_id      uuid NOT NULL REFERENCES matches(id),
   seat          smallint NOT NULL,
   player_id     uuid REFERENCES players(id),  -- null for bots
-  bot_name      text,
-  placement     smallint NOT NULL,
-  lives_left    smallint NOT NULL,
+  bot_name      text,                         -- set exactly when player_id is null
+  placement     smallint NOT NULL,            -- 1 = winner (exactly one); ranking always uses this
+  score         int NOT NULL,                 -- game-defined, labelled by games.score_label
   created_at    timestamptz NOT NULL DEFAULT now(),
   updated_at    timestamptz NOT NULL DEFAULT now(),
-  PRIMARY KEY (match_id, seat)
+  PRIMARY KEY (match_id, seat),
+  CHECK ((player_id IS NULL) = (bot_name IS NOT NULL))
 );
 CREATE INDEX match_players_player ON match_players (player_id, match_id DESC) WHERE player_id IS NOT NULL;
 

@@ -60,7 +60,6 @@ apps/platform/
     tokens.ts       # play token signing
     players.ts      # guest, me, play tokens
     matches.ts      # match reports (with move logs) + history
-    games.ts        # games the platform accepts results for
     migrate.ts      # migration runner
     *.test.ts
   migrations/       # NNN_name.sql, applied in order
