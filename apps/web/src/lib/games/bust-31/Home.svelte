@@ -2,6 +2,7 @@
 	import type { GameEntry } from '#lib/games/catalog.ts';
 	import JoinPanel from '#lib/components/JoinPanel.svelte';
 	import OpenTables from '#lib/components/OpenTables.svelte';
+	import Tournaments from '#lib/components/Tournaments.svelte';
 	import { LIMIT } from 'server/games/bust-31/rules';
 	import PlayingCard from './PlayingCard.svelte';
 
@@ -31,6 +32,8 @@
 
 	<JoinPanel game={game.slug} />
 </div>
+
+<Tournaments game={game.slug} />
 
 <OpenTables game={game.slug} />
 

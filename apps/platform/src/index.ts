@@ -3,6 +3,7 @@ import { createApp } from "./app";
 import { loadConfig } from "./config";
 import { log } from "./log";
 import { createSigner } from "./tokens";
+import { startTournamentJob } from "./tournaments";
 
 const config = loadConfig();
 const sql = new SQL(config.db);
@@ -10,10 +11,12 @@ const signer = await createSigner(config.playTokenPrivateKey);
 const app = createApp({ sql, config, signer });
 const server = Bun.serve({ hostname: config.host, port: config.port, fetch: app.fetch });
 log.info({ msg: "platform listening", host: config.host, port: server.port });
+const job = startTournamentJob(sql);
 
 async function shutdown(signal: string) {
 	log.info({ msg: "shutting down", signal });
 	await server.stop();
+	await job.stop();
 	await sql.close();
 	process.exit(0);
 }

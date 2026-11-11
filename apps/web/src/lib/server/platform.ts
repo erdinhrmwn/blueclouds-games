@@ -108,6 +108,42 @@ export async function roomFor(event: RequestEvent, game: string, code: string): 
 	return room;
 }
 
+export type Tournament = {
+	id: string;
+	name: string;
+	startsAt: string;
+	registrationClosesAt: string;
+	playersPerRoom: number;
+	registered: number;
+	joined: boolean;
+};
+export type TournamentTable = { code: string; game: string; seat: number | null; tournament: { id: string; name: string; startsAt: string } };
+
+/** A game's tournaments open for sign-up, and the tournament tables this player sits at. Empty before they chose a name. */
+export async function tournamentsFor(event: RequestEvent, game: string): Promise<{ tournaments: Tournament[]; tables: TournamentTable[] }> {
+	const secret = secretOf(event.cookies);
+	const none = { tournaments: [], tables: [] };
+	if (!secret) return none;
+	const q = `game=${encodeURIComponent(game)}`;
+	try {
+		const [{ tournaments }, { rooms }] = await Promise.all([
+			call<{ tournaments: Tournament[] }>(event, `/tournaments?${q}`, { method: 'GET', secret }),
+			call<{ rooms: TournamentTable[] }>(event, `/players/me/rooms?${q}`, { method: 'GET', secret })
+		]);
+		return { tournaments, tables: rooms };
+	} catch (e) {
+		if (lost(e)) return none;
+		throw e;
+	}
+}
+
+/** Signs the player up for a tournament, or out of it. */
+export async function setRegistration(event: RequestEvent, id: string, join: boolean): Promise<void> {
+	const secret = secretOf(event.cookies);
+	if (!secret) throw new PlatformError(401, 'unauthenticated', 'Choose a name first.');
+	await call(event, `/tournaments/${encodeURIComponent(id)}/registration`, { method: join ? 'POST' : 'DELETE', secret });
+}
+
 /** Reads a JSON `{ name }` body, or stops with 400. */
 export async function readName(request: Request): Promise<string> {
 	const body = (await request.json().catch(() => null)) as { name?: unknown } | null;

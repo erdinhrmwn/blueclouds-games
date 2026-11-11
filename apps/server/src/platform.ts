@@ -14,12 +14,12 @@ const Env = z.object({
 	PLAY_TOKEN_PUBLIC_KEY: z.string().min(1),
 	/** Where the actor server reaches the platform API (server to server, not the public URL). */
 	PLATFORM_URL: z.url().default("http://127.0.0.1:3000").transform((u) => u.replace(/\/+$/, "")),
-	/** Bearer key for match reports; same value as the platform's. */
+	/** Bearer key for calls to the platform (match reports, tournament rooms); same value as the platform's. */
 	PLATFORM_SERVER_KEY: z.string().min(32, "must be at least 32 characters"),
 });
 type Env = z.output<typeof Env>;
 
-const REPORT_TIMEOUT_MS = 5_000;
+const PLATFORM_TIMEOUT_MS = 5_000;
 
 const Claims = z.object({ sub: z.uuid(), name: z.string().trim().min(1).max(20) });
 export type Identity = { id: string; name: string };
@@ -66,18 +66,49 @@ export async function verifyPlayToken(token: unknown): Promise<Identity | null> 
  * "rejected": the platform will never accept this body, so retrying is pointless. "retry": try again later.
  */
 export async function reportMatch(report: { matchId: string }): Promise<{ result: "sent" | "rejected" | "retry"; detail?: string }> {
-	const { PLATFORM_URL, PLATFORM_SERVER_KEY } = config ?? loadPlatformConfig();
 	try {
-		const res = await fetch(`${PLATFORM_URL}/v1/matches`, {
-			method: "POST",
-			headers: { "Content-Type": "application/json", Authorization: `Bearer ${PLATFORM_SERVER_KEY}` },
-			body: JSON.stringify(report),
-			signal: AbortSignal.timeout(REPORT_TIMEOUT_MS),
-		});
+		const res = await callPlatform("POST", "/matches", report);
 		if (res.ok) return { result: "sent" };
 		const detail = `${res.status} ${await res.text().catch(() => "")}`.slice(0, 500);
 		return { result: [400, 409, 422].includes(res.status) ? "rejected" : "retry", detail };
 	} catch (err) {
 		return { result: "retry", detail: String(err) };
+	}
+}
+
+const TournamentRoom = z.object({
+	minPlayers: z.number().int().min(1),
+	startedAt: z.string().nullable(),
+	closedAt: z.string().nullable(),
+	tournament: z.object({ name: z.string(), startsAt: z.iso.datetime({ offset: true }), cancelled: z.boolean() }).nullable(),
+	seats: z.array(z.object({ playerId: z.uuid(), seat: z.number().int().min(0).nullable() })),
+});
+export type RoomSeats = z.output<typeof TournamentRoom>;
+
+async function callPlatform(method: string, path: string, body?: unknown): Promise<Response> {
+	const { PLATFORM_URL, PLATFORM_SERVER_KEY } = config ?? loadPlatformConfig();
+	return fetch(`${PLATFORM_URL}/v1${path}`, {
+		method,
+		headers: { "Content-Type": "application/json", Authorization: `Bearer ${PLATFORM_SERVER_KEY}` },
+		body: body === undefined ? undefined : JSON.stringify(body),
+		signal: AbortSignal.timeout(PLATFORM_TIMEOUT_MS),
+	});
+}
+
+/** The room's tournament, start time and seats. Null if the platform doesn't know the room; throws if it can't be reached. */
+export async function fetchRoomSeats(code: string): Promise<RoomSeats | null> {
+	const res = await callPlatform("GET", `/rooms/${encodeURIComponent(code)}/seats`);
+	if (res.status === 404) return null;
+	if (!res.ok) throw new Error(`room seats: ${res.status}`);
+	return TournamentRoom.parse(((await res.json()) as { data: { room: unknown } }).data.room);
+}
+
+/** Tells the platform a tournament room's match began, or that it gave up. A lost call is fixed by the platform's job and the match report. */
+export async function markRoom(code: string, change: "start" | "close"): Promise<boolean> {
+	try {
+		const res = await callPlatform("POST", `/rooms/${encodeURIComponent(code)}/${change}`, change === "close" ? { reason: "not_enough_players" } : undefined);
+		return res.ok;
+	} catch {
+		return false;
 	}
 }

@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { playerAuth, type PlayerVariables, serverAuth } from "./auth";
 import { ApiError, ok, parse, readJson } from "./http";
+import { closeRoom } from "./tournaments";
 
 const Seat = z
 	.object({
@@ -97,7 +98,7 @@ export function matchRoutes(sql: SQL, serverKey: string) {
 			};
 			const before = await stored();
 			if (before) return retry(before);
-			const [room] = await tx`SELECT id FROM rooms WHERE code = ${m.roomCode} AND game_slug = ${m.game}`;
+			const [room] = await tx`SELECT id, tournament_id FROM rooms WHERE code = ${m.roomCode} AND game_slug = ${m.game}`;
 			if (!room) throw new ApiError("unknown_room", 422, "The match names a room that does not exist.");
 			const inserted = await tx`
 				INSERT INTO matches (id, game_slug, room_id, rules_version, started_at, ended_at, body_hash)
@@ -118,6 +119,8 @@ export function matchRoutes(sql: SQL, serverKey: string) {
 				score: p.score,
 			}));
 			await tx`INSERT INTO match_players ${tx(rows)}`;
+			// A tournament room plays one match: its report closes the room (and the tournament, if it was the last).
+			if (room.tournament_id) await closeRoom(tx, room.id, "finished", m.startedAt);
 			await tx`
 				INSERT INTO match_logs (match_id, log_version, event_count, events)
 				VALUES (${m.matchId}, ${m.log.logVersion}, ${m.log.events.length}, ${JSON.stringify(m.log.events)}::text::jsonb)`;

@@ -10,6 +10,7 @@ import { matchRoutes } from "./matches";
 import { playerRoutes } from "./players";
 import { roomRoutes } from "./rooms";
 import type { Signer } from "./tokens";
+import { tournamentRoutes } from "./tournaments";
 
 export type Deps = { sql: SQL; config: Config; signer: Signer };
 export type AppEnv = { Variables: RequestIdVariables };
@@ -36,7 +37,8 @@ export function createApp(deps: Deps) {
 
 	app.route("/v1", playerRoutes(deps.sql, deps.signer));
 	app.route("/v1", matchRoutes(deps.sql, deps.config.serverKey));
-	app.route("/v1", roomRoutes(deps.sql));
+	app.route("/v1", roomRoutes(deps.sql, deps.config.serverKey));
+	app.route("/v1", tournamentRoutes(deps.sql));
 
 	app.notFound((c) => fail(c, new ApiError("not_found", 404, "Not found.")));
 	app.onError((err, c) => {

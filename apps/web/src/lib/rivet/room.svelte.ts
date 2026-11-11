@@ -27,6 +27,8 @@ export type BaseView = {
 	turnPlayerId: string | null;
 	turn: { left: number; total: number } | null;
 	round: number;
+	/** Set at a tournament table: it starts by itself. Times are ms from when the view was sent. */
+	tournament: { name: string; startsIn: number; waitEndsIn: number; seats: number; closed: boolean } | null;
 };
 
 /**
@@ -39,6 +41,9 @@ export class RoomConnection<View extends BaseView, Hand> {
 	turnEndsAt = $state<number | null>(null);
 	/** Full length of the current turn timer in ms (bots think for less time than humans get). */
 	turnTotal = $state(1);
+	/** Local epoch ms when a tournament table starts, and when its wait for late players ends. */
+	startsAt = $state<number | null>(null);
+	waitEndsAt = $state<number | null>(null);
 	hand = $state<Hand>() as Hand;
 	playerId = $state<string | null>(null);
 	status = $state<Status>('connecting');
@@ -121,6 +126,8 @@ export class RoomConnection<View extends BaseView, Hand> {
 		this.view = v;
 		this.turnEndsAt = v.turn ? Date.now() + v.turn.left : null;
 		if (v.turn) this.turnTotal = v.turn.total;
+		this.startsAt = v.tournament ? Date.now() + v.tournament.startsIn : null;
+		this.waitEndsAt = v.tournament ? Date.now() + v.tournament.waitEndsIn : null;
 	}
 
 	start = () => this.#run(() => this.#c.start());
