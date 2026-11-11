@@ -7,8 +7,10 @@ import { secureHeaders } from "hono/secure-headers";
 import type { Config } from "./config";
 import { ApiError, fail, ok } from "./http";
 import { log } from "./log";
+import { playerRoutes } from "./players";
+import type { Signer } from "./tokens";
 
-export type Deps = { sql: SQL; config: Config };
+export type Deps = { sql: SQL; config: Config; signer: Signer };
 export type AppEnv = { Variables: RequestIdVariables };
 
 const MAX_BODY_BYTES = 16 * 1024;
@@ -39,6 +41,8 @@ export function createApp(deps: Deps) {
 		await deps.sql`SELECT 1`;
 		return ok(c, { status: "ok" });
 	});
+
+	app.route("/v1", playerRoutes(deps.sql, deps.signer));
 
 	app.notFound((c) => fail(c, new ApiError("not_found", 404, "Not found.")));
 	app.onError((err, c) => {

@@ -3,6 +3,7 @@ import { exportJWK, generateKeyPair } from "jose";
 import { createApp } from "./app";
 import type { Config } from "./config";
 import { migrate } from "./migrate";
+import { createSigner } from "./tokens";
 
 // Postgres 18 has uuidv7() built in. Older test databases get this stand-in (tests only).
 const UUIDV7_POLYFILL = `
@@ -11,6 +12,12 @@ CREATE FUNCTION uuidv7() RETURNS uuid LANGUAGE sql VOLATILE AS $$
     substring(int8send(floor(extract(epoch FROM clock_timestamp()) * 1000)::bigint) FROM 3) FROM 1 FOR 6),
     52, 1), 53, 1), 'hex')::uuid
 $$`;
+
+/** Creates a guest and returns its secret, for tests that need a signed-in player. */
+export async function guest(app: App, name = "Rina") {
+	const res = await call(app, "POST", "/v1/players/guest", { body: { name }, headers: { "x-forwarded-for": crypto.randomUUID() } });
+	return { player: res.json.data.player as { id: string; name: string }, secret: res.json.data.playerSecret as string };
+}
 
 export const SERVER_KEY = "test-server-key-0123456789abcdef0123";
 export const ORIGIN = "http://game.test";
@@ -36,7 +43,7 @@ export async function setupTestApp() {
 		allowedOrigins: [ORIGIN],
 		port: 0,
 	};
-	const app = createApp({ sql, config });
+	const app = createApp({ sql, config, signer: await createSigner(config.playTokenPrivateKey) });
 	return { sql, app, publicKey };
 }
 

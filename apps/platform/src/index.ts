@@ -2,10 +2,12 @@ import { SQL } from "bun";
 import { createApp } from "./app";
 import { loadConfig } from "./config";
 import { log } from "./log";
+import { createSigner } from "./tokens";
 
 const config = loadConfig();
 const sql = new SQL(config.databaseUrl);
-const app = createApp({ sql, config });
+const signer = await createSigner(config.playTokenPrivateKey);
+const app = createApp({ sql, config, signer });
 const server = Bun.serve({ port: config.port, fetch: app.fetch });
 log.info({ msg: "platform listening", port: server.port });
 
