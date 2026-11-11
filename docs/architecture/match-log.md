@@ -1,4 +1,6 @@
-# Match log — design proposal
+# Match log
+
+Status: **built** for Bust 31 (room, platform, backoffice). Decided with Erdin on 2026-11-11: replay is backoffice only for now, as a timeline with a step slider.
 
 Every game records every move of every match, so a match can be replayed and audited later. Today the platform only stores the result (`matches`, `match_players`).
 
@@ -41,7 +43,7 @@ Envelope (the same for every game, checked by the platform):
 | Field | Meaning |
 |---|---|
 | `seq` | 0, 1, 2… with no gaps. Order of the log. |
-| `t` | Milliseconds since `startedAt`, never decreasing. |
+| `t` | Milliseconds since `startedAt`, 0 or more (the room's clock; if it ever steps back, events can share a time). |
 | `type` | Game-defined, `[a-z_]{1,32}`. |
 | `seat` | Who acted, as a seat in the match's `players`. Missing for server events (a deal). Seats, not player ids, because bots have no id. |
 | `data` | Game-defined JSON object. |
@@ -63,7 +65,7 @@ Envelope (the same for every game, checked by the platform):
 
 Card ids already say what the card is (`n7-1` = number 7, `z` zero, `m` −5, `r` reverse), so events stay small. Every random outcome (deal and reshuffle order) is in the log, so a replay never needs the random generator. Server outcomes (`total`, `lives`) are stored too: a replay recomputes them and flags any step where they disagree, which is exactly what an audit wants to catch.
 
-The events are derived in a pure function, `logEvents(before, after)` in the game's `match.ts`, from the state change of each move. `rules.ts` does not change.
+The events are derived in a pure function, `logEvents(before, after, auto)` in the game's `match.ts`, from the state change of each commit. `rules.ts` does not change.
 
 ## Hidden information
 
@@ -91,7 +93,7 @@ The log rides in the existing `POST /v1/matches` body as `log: { logVersion, eve
 Limits:
 - `POST /v1/matches` body up to **512 KB** (every other route keeps 16 KB).
 - At most **5,000 events**, each `data` up to 4 KB.
-- The platform checks the envelope (seq without gaps, `t` not decreasing, `seat` is one of the match's seats) and stores `data` as is.
+- The platform checks the envelope (`seq` without gaps from 0, `t` ≥ 0, `type` format, `seat` is one of the match's seats) and stores `data` as is.
 
 A report without `log` is rejected (400): every game must send one. Nothing is deployed yet, so no old outbox rows need it to be optional.
 
@@ -130,10 +132,5 @@ Each game provides a small renderer in `apps/backoffice/src/lib/games/<slug>.ts`
 
 - `logEvents`: a scripted Bust 31 game yields deal, play, bust, finished with the right seats, totals and `by`.
 - Replaying a full simulated game's log reproduces the final lives and winner.
-- Platform: a report with a log is stored with it; a retry is 200; a changed log is 409; a gap in `seq`, a `t` going backwards, or an unknown seat is 400; a body over 512 KB is 413.
-- Backoffice: the match page renders a stored log, and a match without one.
-
-## Open questions
-
-1. Should players get a replay of their own finished matches (in the game, after the match)? Proposed: not now, backoffice only.
-2. Is a timeline plus a step slider in the backoffice enough for "replay", or do you want an animated replay on the real table UI? Proposed: the timeline and slider now.
+- Platform: a report with a log is stored with it; a retry is 200; a changed log is 409; a missing log, a gap in `seq`, a negative `t` or an unknown seat is 400; a body over 512 KB is 413.
+- Backoffice: the replay of 20 random full games (built with the room's own code) never disagrees with the log; a tampered total is flagged; a match without a log loads as null.

@@ -39,7 +39,7 @@ All keys live in the root `.env` (template: `.env.example`); the package scripts
 | `PATCH /v1/players/me` | Player secret | Rename |
 | `POST /v1/play-tokens` | Player secret | 15-minute token for room actors |
 | `GET /v1/players/me/matches` | Player secret | Own match history, cursor paging |
-| `POST /v1/matches` | Server key | Report a finished match (idempotent by `matchId`) |
+| `POST /v1/matches` | Server key | Report a finished match with its move log (idempotent by `matchId`, body up to 512 KB) |
 
 Every response uses the `{ ok, data, error }` envelope described in the design.
 
@@ -59,7 +59,7 @@ apps/platform/
     auth.ts         # player secret + server key auth
     tokens.ts       # play token signing
     players.ts      # guest, me, play tokens
-    matches.ts      # match reports + history
+    matches.ts      # match reports (with move logs) + history
     games.ts        # games the platform accepts results for
     migrate.ts      # migration runner
     *.test.ts

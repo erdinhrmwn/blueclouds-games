@@ -7,7 +7,7 @@ Admin UI for staff: SvelteKit (`adapter-node`) running on Bun. It has no API of 
 | Screen | What |
 |---|---|
 | Players | Search by name or id; detail with status and recent matches; disable (with a reason) / enable |
-| Matches | Filter by game, player id and UTC date range; detail with every seat |
+| Matches | Filter by game, player id and UTC date range; detail with every seat and the move replay (timeline, step slider, JSON download) |
 | Audit log | Every admin sign-in and change, newest first |
 
 ## Running
@@ -47,7 +47,8 @@ apps/backoffice/
     lib/server/db.ts     # Bun.sql connection
     lib/server/auth.ts   # login, sessions, audit, createAdmin (+ auth.test.ts)
     lib/server/players.ts # search, detail, disable/enable (+ players.test.ts)
-    lib/server/matches.ts # match list with filters, match detail
+    lib/server/matches.ts # match list with filters, match detail, move log
+    lib/replay.ts         # turns a move log into timeline steps; per-game renderers in lib/games/
     lib/server/audit-log.ts
     lib/server/history.test.ts
     routes/              # login, logout, players, matches, audit
