@@ -1,27 +1,40 @@
-import { guestName, saveGuestName, savedUsername, saveUsername } from './guest.ts';
 import { fetchPlayToken, PlatformError, registerAccount, saveName, signIn, signOut } from './platform.ts';
 
 export const NAME_MAX = 20;
 
 /**
- * The guest's display name, shared by every page. `ready` turns true once it has been read
- * from storage in the browser; until then nothing should ask for it. `playing` is true while
- * a game runs at the open table, so the page can hide everything but the game.
+ * Who this browser plays as, shared by every page: `name` is empty for a new visitor, `username` empty for a guest.
+ * `ready` turns true once the server's answer is in; until then nothing should ask for it.
+ * `playing` is true while a game runs at the open table, so the page can hide everything but the game.
  */
 export const player = $state({ name: '', username: '', ready: false, editing: false, playing: false });
 
-export function loadPlayer(): void {
-	player.name = guestName();
-	player.username = savedUsername();
+/** Takes the server's answer (from the player cookie) as the truth; the browser keeps no copy of its own. */
+export function loadPlayer(me: { name: string; username: string | null } | null): void {
+	player.name = me?.name ?? '';
+	player.username = me?.username ?? '';
 	player.ready = true;
 }
+
+/** The parts of a page URL used here (SvelteKit's `page.url` has read-only search params). */
+type PageUrl = Pick<URL, 'origin' | 'pathname' | 'search'> & { searchParams: Pick<URLSearchParams, 'get'> };
+
+/** Where to go after logging in or signing up: the page it came from (same site only), else home. */
+export function nextPath(url: PageUrl): string {
+	const next = url.searchParams.get('next');
+	if (!next?.startsWith('/')) return '/';
+	const to = new URL(next, url.origin);
+	return to.origin === url.origin ? to.pathname + to.search : '/';
+}
+
+/** Link to a login or signup page that comes back here afterwards. */
+export const authHref = (to: 'login' | 'signup', url: PageUrl) =>
+	['/login', '/signup', '/account'].includes(url.pathname) ? `/${to}` : `/${to}?next=${encodeURIComponent(url.pathname + url.search)}`;
 
 /** What a failed account form shows: one message per field, or one for the whole form. */
 export type FormErrors = { form?: string; fields: Record<string, string> };
 
 function signedIn(p: { name: string; username: string | null }): void {
-	saveGuestName(p.name);
-	saveUsername(p.username);
 	player.name = p.name;
 	player.username = p.username ?? '';
 	player.editing = false;
@@ -48,8 +61,6 @@ export async function logOut(): Promise<string | null> {
 	} catch (e) {
 		return e instanceof Error ? e.message : 'Something went wrong. Try again.';
 	}
-	saveGuestName('');
-	saveUsername(null);
 	player.name = '';
 	player.username = '';
 	return null;
@@ -64,7 +75,6 @@ export async function setPlayerName(raw: string): Promise<string | null> {
 	} catch (e) {
 		return e instanceof Error ? e.message : 'Something went wrong. Try again.';
 	}
-	saveGuestName(name);
 	player.name = name;
 	player.editing = false;
 	return null;

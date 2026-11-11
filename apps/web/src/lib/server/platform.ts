@@ -59,6 +59,25 @@ async function newGuest(event: RequestEvent, name: string): Promise<string> {
 // A secret the platform no longer knows (e.g. a reset database): start a fresh guest.
 const lost = (e: unknown) => e instanceof PlatformError && e.code === 'unauthenticated';
 
+export type Me = { name: string; username: string | null };
+
+/**
+ * Who this browser plays as, asked from the platform on every page load so the page never trusts a stale copy.
+ * Null for a new visitor, a secret the platform forgot, or a disabled player.
+ */
+export async function whoAmI(event: RequestEvent): Promise<Me | null> {
+	const secret = secretOf(event.cookies);
+	if (!secret) return null;
+	try {
+		const { player } = await call<{ player: Me }>(event, '/players/me', { method: 'GET', secret });
+		return { name: player.name, username: player.username };
+	} catch (e) {
+		if (lost(e)) event.cookies.delete(SECRET_COOKIE, { path: '/' });
+		if (lost(e) || (e instanceof PlatformError && e.status === 403)) return null;
+		throw e;
+	}
+}
+
 type Account = { player: { name: string; username: string | null }; playerSecret?: string };
 
 /**

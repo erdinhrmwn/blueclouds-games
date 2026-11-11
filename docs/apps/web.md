@@ -25,8 +25,8 @@ apps/web/src/
   lib/rivet/client.ts  # typed Rivet client for one room, with tokens from our server
   lib/platform.ts      # browser side: calls our /api routes
   lib/server/platform.ts # server side: calls the platform, keeps the player secret in an httpOnly cookie
-  lib/guest.ts         # display name in localStorage
+  lib/guest.ts         # table code check (who you are comes from the server, see +layout.server.ts)
   lib/player.svelte.ts # player name shared by the name dialog; play tokens for rooms
   lib/motion.ts        # shared animations
-  routes/              # / (pick a game), /[game], /[game]/room/[code], api/player, api/play-token, api/[game]/rooms, api/[game]/rooms/[code]/token
+  routes/              # / (pick a game), /[game], /[game]/room/[code], /login, /signup, /account, api/player, api/play-token, api/[game]/rooms, api/[game]/rooms/[code]/token
 ```
