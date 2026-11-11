@@ -18,7 +18,8 @@ import {
 	takeSeat,
 	TURN_MS,
 } from "./rules";
-import { type Identity, verifyPlayToken } from "../../platform";
+import { type Identity, reportMatch, verifyPlayToken } from "../../platform";
+import { buildReport, type MatchState, noteMove, uuidv7 } from "./match";
 import { BotIdInput, ConnParams, PlayInput, SeatInput } from "./schema";
 
 /** How long a closed tab has to come back (a refresh) before its player leaves the table. */
@@ -26,11 +27,15 @@ const GONE_AFTER_MS = 15_000;
 /** A bot gets the same turn clock as a human; it just decides within this range (random). */
 const BOT_THINK_MS = [1500, 4000] as const;
 const BOT_NAMES = ["Bot Cloud", "Bot Rain", "Bot Thunder", "Bot Rainbow", "Bot Wind"];
+/** Wait before each retry of an unsent match result; the last one repeats forever. */
+const REPORT_RETRY_MS = [10_000, 60_000, 5 * 60_000, 30 * 60_000, 6 * 60 * 60_000];
 
 type Saved = {
 	game: Game;
 	/** Game position the current turn timer belongs to, when it runs out (epoch ms), and its full length. */
 	timer: { moves: number; endsAt: number; total: number } | null;
+	/** The game being played, for its result. Null in the lobby and once the result is queued. */
+	match: MatchState | null;
 };
 /** Not saved: who each open connection is, from its play token. Connections close when the actor sleeps. */
 type Vars = Saved & { who: Record<string, Identity> };
@@ -52,17 +57,25 @@ export const bust31Room = actor({
 	db: db({
 		onMigrate: async (d) => {
 			await d.execute("CREATE TABLE IF NOT EXISTS room (id INTEGER PRIMARY KEY CHECK (id = 1), data TEXT NOT NULL)");
+			// Outbox: finished match results waiting to reach the platform.
+			await d.execute(
+				"CREATE TABLE IF NOT EXISTS match_reports (match_id TEXT PRIMARY KEY, body TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0)",
+			);
 		},
 	}),
-	createVars: (): Vars => ({ game: createGame(), who: {}, timer: null }),
+	createVars: (): Vars => ({ game: createGame(), who: {}, timer: null, match: null }),
 	onWake: async (c) => {
 		const rows = await c.db.execute<{ data: string }>("SELECT data FROM room WHERE id = 1");
 		if (rows[0]) Object.assign(c.vars, JSON.parse(rows[0].data) as Saved);
 		c.vars.game.moves ??= 0; // rooms saved before move counting existed
 		c.vars.timer ??= null;
+		c.vars.match ??= null;
 		delete (c.vars as { tokens?: unknown }).tokens; // rooms saved before platform sign-in
 		c.vars.game.players.forEach((p, i) => (p.seat ??= i)); // rooms saved before fixed seats
 		await scheduleTurn(c, true);
+		// A send may have been cut off by the actor stopping; the platform ignores duplicates.
+		const [pending] = await c.db.execute<{ n: number }>("SELECT count(*) AS n FROM match_reports");
+		if (pending?.n) await c.schedule.after(REPORT_RETRY_MS[0]!, "sendReports");
 	},
 	onBeforeConnect: async (_c, params: unknown) => {
 		const parsed = ConnParams.safeParse(params);
@@ -129,6 +142,7 @@ export const bust31Room = actor({
 		start: async (c) => {
 			const me = requirePlayer(c);
 			c.vars.game = apply(() => startGame(c.vars.game, me, rng));
+			c.vars.match = { id: uuidv7(), startedAt: new Date().toISOString(), out: [] };
 			await commit(c);
 		},
 		play: async (c, input: unknown) => {
@@ -162,6 +176,27 @@ export const bust31Room = actor({
 				}
 			}
 			await commit(c);
+		},
+		/** Internal (scheduler only): sends queued match results to the platform, retrying with backoff. */
+		sendReports: async (c) => {
+			if (!c.scheduledFire) throw new UserError("Not allowed.", { code: "forbidden" });
+			const rows = await c.db.execute<{ match_id: string; body: string; attempts: number }>(
+				"SELECT match_id, body, attempts FROM match_reports",
+			);
+			let retryIn: number | null = null;
+			for (const row of rows) {
+				const { result, detail } = await reportMatch(JSON.parse(row.body));
+				if (result === "retry") {
+					await c.db.execute("UPDATE match_reports SET attempts = attempts + 1 WHERE match_id = ?", row.match_id);
+					const wait = REPORT_RETRY_MS[Math.min(row.attempts, REPORT_RETRY_MS.length - 1)]!;
+					retryIn = Math.min(retryIn ?? wait, wait);
+					c.log.warn({ msg: "match report failed, will retry", matchId: row.match_id, attempts: row.attempts + 1, detail });
+					continue;
+				}
+				if (result === "rejected") c.log.error({ msg: "match report rejected, dropped", matchId: row.match_id, body: row.body, detail });
+				await c.db.execute("DELETE FROM match_reports WHERE match_id = ?", row.match_id);
+			}
+			if (retryIn !== null) await c.schedule.after(retryIn, "sendReports");
 		},
 		/** Internal: fired by the scheduler, never by clients. Plays for a bot, or for a human whose time ran out. */
 		autoPlay: async (c, moves: unknown) => {
@@ -210,7 +245,8 @@ function requireHost(c: Ctx): void {
 /** Persist, then push the public view to everyone and each hand to its owner. */
 async function commit(c: Ctx): Promise<void> {
 	await scheduleTurn(c, false);
-	const saved: Saved = { game: c.vars.game, timer: c.vars.timer };
+	const finished = await trackMatch(c);
+	const saved: Saved = { game: c.vars.game, timer: c.vars.timer, match: c.vars.match };
 	await c.db.execute(
 		"INSERT INTO room (id, data) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET data = excluded.data",
 		JSON.stringify(saved),
@@ -221,6 +257,21 @@ async function commit(c: Ctx): Promise<void> {
 		if (id) conn.send("hand", handOf(c.vars.game, id));
 	}
 	await reportToDirectory(c); // after the players got their update, so the list never slows a move
+	if (finished) await c.schedule.after(0, "sendReports");
+}
+
+/** Follows eliminations; once the game is over, queues its result. Returns true when it queued one. */
+async function trackMatch(c: Ctx): Promise<boolean> {
+	const { game, match } = c.vars as Saved;
+	if (!match) return false;
+	if (game.phase !== "finished") {
+		c.vars.match = noteMove(match, game);
+		return false;
+	}
+	const report = buildReport(match, game, c.key[0] as string, new Date().toISOString());
+	await c.db.execute("INSERT OR IGNORE INTO match_reports (match_id, body) VALUES (?, ?)", report.matchId, JSON.stringify(report));
+	c.vars.match = null;
+	return true;
 }
 
 /**
