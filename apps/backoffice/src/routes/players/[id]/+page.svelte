@@ -60,7 +60,10 @@
 	{/if}
 </section>
 
-<h2 class="mt-8 font-semibold">Recent matches</h2>
+<div class="mt-8 flex items-baseline justify-between gap-4">
+	<h2 class="font-semibold">Recent matches</h2>
+	{#if data.matches.length}<a class="text-sm underline underline-offset-2" href="/matches?player={p.id}">All their matches</a>{/if}
+</div>
 {#if data.matches.length === 0}
 	<p class="mt-2 text-sm text-muted">No finished matches yet.</p>
 {:else}
@@ -77,7 +80,9 @@
 			<tbody>
 				{#each data.matches as m (m.id)}
 					<tr class="border-b border-line last:border-0">
-						<td class="px-3 py-2 whitespace-nowrap">{utc(m.endedAt)}</td>
+						<td class="px-3 py-2 whitespace-nowrap">
+							<a class="underline decoration-line underline-offset-2 hover:decoration-ink" href="/matches/{m.id}">{utc(m.endedAt)}</a>
+						</td>
 						<td class="px-3 py-2">{m.game}</td>
 						<td class="px-3 py-2 font-mono text-xs">{m.roomCode}</td>
 						<td class="px-3 py-2">{m.placement} of {m.players}</td>

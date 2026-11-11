@@ -2,6 +2,14 @@
 
 Admin UI for staff: SvelteKit (`adapter-node`) running on Bun. It has no API of its own and the platform has no admin API: pages read Postgres in `+page.server.ts` and change it through form actions, connected as the limited `backoffice` role. Design: [architecture/platform-api.md](../architecture/platform-api.md#backoffice-mvp).
 
+## Screens
+
+| Screen | What |
+|---|---|
+| Players | Search by name or id; detail with status and recent matches; disable (with a reason) / enable |
+| Matches | Filter by game, player id and UTC date range; detail with every seat |
+| Audit log | Every admin sign-in and change, newest first |
+
 ## Running
 
 ```sh
@@ -40,7 +48,10 @@ apps/backoffice/
     lib/server/db.ts     # Bun.sql connection
     lib/server/auth.ts   # login, sessions, audit, createAdmin (+ auth.test.ts)
     lib/server/players.ts # search, detail, disable/enable (+ players.test.ts)
-    routes/              # login, logout, players
+    lib/server/matches.ts # match list with filters, match detail
+    lib/server/audit-log.ts
+    lib/server/history.test.ts
+    routes/              # login, logout, players, matches, audit
   scripts/admin-create.ts
 ```
 

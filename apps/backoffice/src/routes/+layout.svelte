@@ -4,7 +4,11 @@
 	import type { LayoutProps } from './$types';
 
 	let { data, children }: LayoutProps = $props();
-	const nav = [{ href: '/players', label: 'Players' }];
+	const nav = [
+		{ href: '/players', label: 'Players' },
+		{ href: '/matches', label: 'Matches' },
+		{ href: '/audit', label: 'Audit log' }
+	];
 	const current = (href: string) => page.url.pathname === href || page.url.pathname.startsWith(href + '/');
 </script>
 
