@@ -20,13 +20,19 @@
 	});
 	$effect(() => () => void room?.dispose());
 
+	// Hide the site header once the game starts, so the screen is all table.
+	$effect(() => {
+		player.playing = !!room?.view && room.view.phase !== 'lobby';
+		return () => (player.playing = false);
+	});
+
 	async function leave() {
 		await room?.leave();
 		goto(`/${game.slug}`);
 	}
 </script>
 
-<div class="flex min-h-8 items-center justify-between pt-2">
+<div class="flex min-h-8 items-center justify-between {player.playing ? 'pt-3' : 'pt-2'}">
 	<h1 class="label">
 		{#if room?.view?.phase === 'playing'}Table {code}, round {room.view.round}{:else}Table {code}{/if}
 	</h1>

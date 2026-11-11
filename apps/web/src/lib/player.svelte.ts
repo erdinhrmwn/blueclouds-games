@@ -5,9 +5,10 @@ export const NAME_MAX = 20;
 
 /**
  * The guest's display name, shared by every page. `ready` turns true once it has been read
- * from storage in the browser; until then nothing should ask for it.
+ * from storage in the browser; until then nothing should ask for it. `playing` is true while
+ * a game runs at the open table, so the page can hide everything but the game.
  */
-export const player = $state({ name: '', username: '', ready: false, editing: false });
+export const player = $state({ name: '', username: '', ready: false, editing: false, playing: false });
 
 export function loadPlayer(): void {
 	player.name = guestName();
