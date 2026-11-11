@@ -1,4 +1,5 @@
 import type { SQL } from 'bun';
+import type { MatchLog } from '../replay.ts';
 import { isUuid, PAGE_SIZE } from './players.ts';
 
 export type MatchFilter = { game: string; player: string; from: string; to: string; before: string };
@@ -45,4 +46,11 @@ export async function matchDetail(sql: SQL, id: string): Promise<MatchDetail | n
 		FROM match_players mp LEFT JOIN players p ON p.id = mp.player_id
 		WHERE mp.match_id = ${id} ORDER BY mp.placement, mp.seat`) as Seat[];
 	return { ...m, seats };
+}
+
+/** The match's move log, or null for a match stored before logs existed. Holds every hand: backoffice only. */
+export async function matchLog(sql: SQL, id: string): Promise<MatchLog | null> {
+	if (!isUuid(id)) return null;
+	const [row] = await sql`SELECT log_version AS "logVersion", events FROM match_logs WHERE match_id = ${id}`;
+	return (row as MatchLog | undefined) ?? null;
 }
