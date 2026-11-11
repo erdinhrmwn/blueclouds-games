@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 // The real rules and log code, so the replay is checked against what the room actually records.
 import { chooseBotCard } from '../../../server/src/games/bust-31/bots';
-import { logEvents, type MatchState, stamp } from '../../../server/src/games/bust-31/match';
+import { logEvents, type MatchState } from '../../../server/src/games/bust-31/match';
+import { stamp } from '../../../server/src/games/shared/match';
 import { addPlayer, createGame, type Game, playCard, startGame } from '../../../server/src/games/bust-31/rules';
 import { type LogEvent, replay } from './replay.ts';
 

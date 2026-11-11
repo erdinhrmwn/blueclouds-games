@@ -1,43 +1,13 @@
 import type { Card, Game, Player } from "./rules";
+import type { LogEntry, LogEvent, MatchReport, MatchState as SharedMatch } from "../shared/match";
 
 /** Bump when a rule change makes old results incomparable to new ones. */
 export const RULES_VERSION = 1;
 /** Bump when the shape of a log event changes (see docs/architecture/match-log.md). */
 export const LOG_VERSION = 1;
 
-/**
- * The game in progress, as far as the platform needs it. `out` lists player ids in the order
- * they were eliminated; `seq` is the number of log events recorded so far.
- */
-export type MatchState = { id: string; startedAt: string; out: string[]; seq: number };
-
-/** One step of the move log, before it gets its place (`seq`) and time (`t`, ms since the start). */
-export type LogEntry = { type: string; seat?: number; data?: Record<string, unknown> };
-export type LogEvent = LogEntry & { seq: number; t: number };
-
-export type MatchReport = {
-	matchId: string;
-	game: "bust-31";
-	roomCode: string;
-	rulesVersion: number;
-	startedAt: string;
-	endedAt: string;
-	players: { seat: number; playerId: string | null; bot: boolean; botName?: string; placement: number; score: number }[];
-	log: { logVersion: number; events: LogEvent[] };
-};
-
-/**
- * A UUIDv7 (time-ordered), as the platform wants for match ids. Not Bun.randomUUIDv7():
- * the web app type-checks this file too, without Bun's types.
- */
-export function uuidv7(now = Date.now()): string {
-	const b = crypto.getRandomValues(new Uint8Array(16));
-	for (let i = 0; i < 6; i++) b[i] = Math.floor(now / 2 ** (8 * (5 - i))) & 0xff; // 48-bit ms timestamp
-	b[6] = (b[6]! & 0x0f) | 0x70; // version 7
-	b[8] = (b[8]! & 0x3f) | 0x80; // RFC 9562 variant
-	const hex = Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
-	return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
-}
+/** The game in progress. `out` lists player ids in the order they were eliminated. */
+export type MatchState = SharedMatch & { out: string[] };
 
 /** Notes who lost their last life on the move that produced `game`. Call after every move. */
 export function noteMove(match: MatchState, game: Game): MatchState {
@@ -67,13 +37,6 @@ export function buildReport(match: MatchState, game: Game, roomCode: string, end
 		})),
 		log: { logVersion: LOG_VERSION, events },
 	};
-}
-
-/** Gives new log entries their place and time. The clock may step back, so `t` never goes below 0. */
-export function stamp(match: MatchState, entries: LogEntry[], now: number): { match: MatchState; events: LogEvent[] } {
-	const t = Math.max(0, now - Date.parse(match.startedAt));
-	const events = entries.map((e, i) => ({ seq: match.seq + i, t, ...e }));
-	return { match: { ...match, seq: match.seq + entries.length }, events };
 }
 
 /**

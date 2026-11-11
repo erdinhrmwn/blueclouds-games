@@ -1,13 +1,13 @@
 <script lang="ts">
-	import type { RoomConnection } from './connection.svelte.ts';
-	import { MAX_PLAYERS, MIN_PLAYERS } from 'server/games/bust-31/rules';
-	import Felt from '#lib/components/Felt.svelte';
-	import Seat from '#lib/components/Seat.svelte';
+	import type { BaseView, RoomConnection } from '#lib/rivet/room.svelte.ts';
+	import Felt from './Felt.svelte';
+	import Seat from './Seat.svelte';
 	import Dealer from './Dealer.svelte';
 
-	let { room, code }: { room: RoomConnection; code: string } = $props();
+	/** Any game's lobby: the table code, fixed seats, bots, and the host's Play button. */
+	let { room, code, minPlayers, seats }: { room: RoomConnection<BaseView, unknown>; code: string; minPlayers: number; seats: number } = $props();
 	const view = $derived(room.view!);
-	const canStart = $derived(view.players.length >= MIN_PLAYERS);
+	const canStart = $derived(view.players.length >= minPlayers);
 	const inSeat = (s: number) => view.players.find((p) => p.seat === s) ?? null;
 
 	let copied = $state(false);
@@ -23,7 +23,7 @@
 </script>
 
 <!-- Spot 0 is the dealer at the head of the table; chairs 1–6 follow clockwise. -->
-<Felt count={MAX_PLAYERS + 1}>
+<Felt count={seats + 1}>
 	{#snippet seat(k)}
 		{#if k === 0}
 			<Dealer />
@@ -59,7 +59,7 @@
 			<button class="btn-brass" onclick={room.start} disabled={room.busy || !canStart}>Play</button>
 		</div>
 		<p class="text-sm text-paper/75">
-			{canStart ? `${view.players.length} players ready.` : `Needs at least ${MIN_PLAYERS} players. Invite a friend, or press + on an empty seat to add a bot.`}
+			{canStart ? `${view.players.length} players ready.` : `Needs at least ${minPlayers} players. Invite a friend, or press + on an empty seat to add a bot.`}
 		</p>
 	{:else}
 		<p class="text-sm text-paper/75">Waiting for {view.players.find((p) => p.id === view.hostId)?.name ?? 'the host'} to start…</p>

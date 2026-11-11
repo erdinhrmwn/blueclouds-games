@@ -1,8 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { z } from "zod";
 import { chooseBotCard } from "./bots";
-import { buildReport, type LogEntry, logEvents, type MatchState, noteMove, stamp, uuidv7 } from "./match";
-import { addPlayer, type Card, createGame, type Game, playCard, setAway, startGame } from "./rules";
+import { buildReport, logEvents, type MatchState, noteMove } from "./match";
+import { type LogEntry, stamp, uuidv7 } from "../shared/match";
+import { addPlayer, type Card, createGame, type Game, playCard, startGame } from "./rules";
+import { setAway } from "../shared/table";
 
 function table(lives: Record<string, number>, winnerId: string | null): Game {
 	let g = createGame();

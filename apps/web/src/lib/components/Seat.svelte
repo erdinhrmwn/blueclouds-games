@@ -1,15 +1,17 @@
 <script lang="ts">
 	import { countdown } from '#lib/motion.ts';
+	import type { Snippet } from 'svelte';
 
 	/** What any game shows about a player in a seat. */
-	type SeatPlayer = { id: string; name: string; lives: number; bot: boolean; away?: boolean };
+	type SeatPlayer = { id: string; name: string; bot: boolean; away?: boolean };
 
 	let {
 		player,
 		isTurn = false,
 		isHost = false,
 		isMe = false,
-		lives = 3,
+		out = false,
+		status,
 		timeLeft = null,
 		drain = null,
 		action,
@@ -21,7 +23,10 @@
 		isTurn?: boolean;
 		isHost?: boolean;
 		isMe?: boolean;
-		lives?: number;
+		/** Knocked out of the game: the seat is greyed. */
+		out?: boolean;
+		/** The game's own line under the name (lives, cards, points). */
+		status?: Snippet;
 		/** Share of the turn timer left (1 → 0), or null when no timer runs for this seat. */
 		timeLeft?: number | null;
 		/** Time left when this deadline arrived; the ring animates down from it. */
@@ -35,7 +40,6 @@
 		onAddBot?: () => void;
 	} = $props();
 
-	const out = $derived(!!player && player.lives === 0);
 	const initial = $derived(player?.name.trim().charAt(0).toUpperCase() ?? '');
 </script>
 
@@ -85,12 +89,12 @@
 		<div class="max-w-full truncate rounded-sm bg-black/45 px-2 py-0.5 text-xs font-medium">
 			{player.name}{#if isMe}<span class="text-paper/75">&nbsp;(you)</span>{/if}
 		</div>
-		<div class="flex items-center gap-1" aria-label="{player.lives} of {lives} lives">
-			{#each Array(lives) as _, i (i)}
-				<span class="size-2 rounded-full {i < player.lives ? 'bg-ember' : 'border border-paper/60'}"></span>
-			{/each}
-			{#if isHost}<span class="ml-1 text-[11px] font-semibold text-brass">host</span>{/if}
-		</div>
+		{#if status || isHost}
+			<div class="flex items-center gap-1">
+				{@render status?.()}
+				{#if isHost}<span class="ml-1 text-[11px] font-semibold text-brass">host</span>{/if}
+			</div>
+		{/if}
 		{#if action}
 			<button class="link-btn -my-2 text-xs" onclick={action.run}>
 				{action.label}

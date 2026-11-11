@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { RoomConnection } from './connection.svelte.ts';
+	import type { Bust31Connection } from './connection.svelte.ts';
 	import { dealCards, placeCard, seatRect, shake } from '#lib/motion.ts';
 	import type { Card } from 'server/games/bust-31/rules';
 	import { untrack } from 'svelte';
@@ -7,14 +7,14 @@
 	import { fly } from 'svelte/transition';
 	import BustStamp from './BustStamp.svelte';
 	import Felt from '#lib/components/Felt.svelte';
-	import WinCascade from './WinCascade.svelte';
+	import WinCascade from '#lib/components/WinCascade.svelte';
 	import PlayingCard from './PlayingCard.svelte';
 	import Seat from '#lib/components/Seat.svelte';
-	import { DEAL, HAND_SIZE, MAX_PLAYERS } from 'server/games/bust-31/rules';
-	import Dealer from './Dealer.svelte';
+	import { DEAL, HAND_SIZE, MAX_PLAYERS, START_LIVES } from 'server/games/bust-31/rules';
+	import Dealer from '#lib/components/Dealer.svelte';
 	import TotalGauge from './TotalGauge.svelte';
 
-	let { room }: { room: RoomConnection } = $props();
+	let { room }: { room: Bust31Connection } = $props();
 	const view = $derived(room.view!);
 
 	// Fixed chairs: everyone sees the same table, dealer at the head.
@@ -128,12 +128,21 @@
 				<Dealer deckCount={view.deckCount} />
 			{:else}
 				{@const p = inSeat(k - 1)}
+				{#snippet lives()}
+					<span class="flex items-center gap-1" role="img" aria-label="{p?.lives} of {START_LIVES} lives">
+						{#each Array(START_LIVES) as _, i (i)}
+							<span class="size-2 rounded-full {i < (p?.lives ?? 0) ? 'bg-ember' : 'border border-paper/60'}"></span>
+						{/each}
+					</span>
+				{/snippet}
 				<Seat
 					player={p}
 					number={k}
 					isTurn={!!p && (p.id === view.turnPlayerId || p.id === view.winnerId)}
 					isHost={!!p && p.id === view.hostId}
 					isMe={!!p && p.id === room.playerId}
+					out={!!p && p.lives === 0}
+					status={p ? lives : undefined}
 					timeLeft={p && p.id === view.turnPlayerId && msLeft !== null ? Math.min(1, msLeft / room.turnTotal) : null}
 					drain={p && p.id === view.turnPlayerId ? drain : null}
 				/>
