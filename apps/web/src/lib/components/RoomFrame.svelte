@@ -45,10 +45,22 @@
 	}
 </script>
 
-<div class="flex min-h-8 items-center justify-between {player.playing ? 'pt-3' : 'pt-2'}">
-	<h1 class="label">
-		{#if room?.view?.phase === 'playing'}Table {code}, round {room.view.round}{:else}Table {code}{/if}
-	</h1>
+<div class="flex min-h-8 items-center justify-between gap-3 {player.playing ? 'pt-3' : 'pt-2'}">
+	<!-- Game name, then the table code and round as small chips; phones keep just the chips. -->
+	<div class="flex min-w-0 items-center gap-2">
+		<h1 class="sr-only font-display text-lg font-bold text-paper sm:not-sr-only">{game.name}</h1>
+		<span class="rounded-md border border-paper/15 bg-black/35 px-2 py-0.5 text-xs text-paper/70">
+			<span class="sr-only sm:not-sr-only">Table</span>
+			<span class="font-semibold tracking-wider text-paper tabular-nums">{code}</span>
+		</span>
+		{#if room?.view?.phase === 'playing'}
+			<span
+				class="rounded-md border border-brass/40 bg-brass/10 px-2 py-0.5 text-xs font-semibold whitespace-nowrap text-brass"
+			>
+				Round {room.view.round}
+			</span>
+		{/if}
+	</div>
 	{#if room?.view}
 		<button class="link-btn" onclick={leave}>Leave table</button>
 	{/if}
