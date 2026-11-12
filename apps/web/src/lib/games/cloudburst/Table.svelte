@@ -577,7 +577,7 @@
 	</Felt>
 </div>
 
-<DealerLine text={dealerLine} />
+<DealerLine text={dealerLine} moveKey={view.moves} />
 
 {#if view.phase === 'playing' && room.me}
 	<section aria-label="Your hand" class="flex flex-col items-center gap-3">

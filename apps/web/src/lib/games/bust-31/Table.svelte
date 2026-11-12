@@ -323,7 +323,7 @@
 	</Felt>
 </div>
 
-<DealerLine text={dealerLine} />
+<DealerLine text={dealerLine} moveKey={view.moves} />
 
 {#if view.phase === 'playing'}
 	{#if room.me && room.me.lives > 0}

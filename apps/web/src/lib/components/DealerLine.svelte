@@ -1,24 +1,65 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
+	import { flip } from 'svelte/animate';
 	import { prefersReducedMotion } from 'svelte/motion';
 	import { fly } from 'svelte/transition';
 
-	/** What just happened at the table, as the dealer would say it. Empty shows nothing. */
-	let { text }: { text: string } = $props();
+	/**
+	 * The table's recent moves, as the dealer would say them: the newest in a pill, the ones before
+	 * it fading out underneath. `moveKey` (the game's move counter) tells a new move from a re-render,
+	 * so the same line twice in a row still counts twice; a lower one means a fresh table.
+	 */
+	let { text, moveKey }: { text: string; moveKey: number } = $props();
 
-	const ENTER_MS = 220;
+	const HISTORY_SIZE = 3;
+	const MOTION_MS = 220;
+
+	type Entry = { id: number; text: string };
+	let entries = $state<Entry[]>([]);
+	let lastKey = -1;
+
+	$effect(() => {
+		const key = moveKey;
+		const line = text;
+		if (key === lastKey) return;
+
+		const freshTable = key < lastKey;
+		lastKey = key;
+
+		const earlier = freshTable ? [] : untrack(() => entries);
+		if (!line) {
+			entries = earlier;
+			return;
+		}
+
+		entries = [{ id: key, text: line }, ...earlier].slice(0, HISTORY_SIZE);
+	});
+
+	const duration = $derived(prefersReducedMotion.current ? 0 : MOTION_MS);
+
+	/** Older lines fade further the longer ago they happened. */
+	const OLDER_TONE = ['text-paper/55', 'text-paper/35'];
 </script>
 
-<!-- Fixed height (room for two lines), so a longer line never pushes the hand down. -->
-<div class="mx-auto my-3 flex h-14 max-w-md items-center justify-center px-4" aria-live="polite">
-	{#key text}
-		{#if text}
-			<p
-				class="flex items-center gap-2 rounded-xl border border-paper/10 bg-black/35 px-3.5 py-1.5 text-center text-sm text-paper/85"
-				in:fly={{ y: 6, duration: prefersReducedMotion.current ? 0 : ENTER_MS }}
-			>
-				<span class="size-1.5 shrink-0 rounded-full bg-brass" aria-hidden="true"></span>
-				<span class="line-clamp-2">{text}</span>
-			</p>
-		{/if}
-	{/key}
-</div>
+<p class="sr-only" aria-live="polite">{entries[0]?.text ?? ''}</p>
+
+<!-- Fixed height, so the log never pushes the hand down as lines come and go. -->
+<ol
+	class="mx-auto my-3 flex h-24 max-w-md flex-col items-center gap-1 px-4"
+	aria-label="Recent moves"
+>
+	{#each entries as entry, index (entry.id)}
+		<li class="max-w-full" animate:flip={{ duration }} in:fly={{ y: -6, duration }}>
+			{#if index === 0}
+				<p
+					class="flex items-center gap-2 rounded-xl border border-paper/10 bg-black/35 px-3.5 py-1.5 text-center text-sm text-paper/90"
+				>
+					<span class="size-1.5 shrink-0 rounded-full bg-brass" aria-hidden="true"></span>
+					<span class="line-clamp-2">{entry.text}</span>
+				</p>
+			{:else}
+				<p class="truncate px-3 text-xs {OLDER_TONE[index - 1]}">{entry.text}</p>
+			{/if}
+		</li>
+	{/each}
+</ol>
