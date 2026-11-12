@@ -509,44 +509,35 @@ CREATE TABLE admin_audit_events (  -- append-only
 CREATE INDEX admin_audit_events_login_failed_idx ON admin_audit_events ((detail->>'username'), created_at DESC) WHERE action = 'login_failed';
 ```
 
-## Migration path
+## Migration files
 
-Four migrations, each applied by the runner in one transaction, so if any existing row breaks a new rule the migration rolls back and the platform refuses to start, with the offending constraint named in the log. Nothing is half applied. Each file ends with its roll-back statements, all tested.
+The schema is built by eight files, applied in order by the runner (`apps/platform/src/db/migrate.ts`), each in one
+transaction. They only create: every table appears once, in its final shape, after the tables it references.
+No file alters, renames or drops anything. Each ends with its roll-back.
 
 | File | What |
 |---|---|
-| `008_production_schema.sql` | Hardening only: `ALTER`s on the existing tables, the append-only triggers, index and name fixes. Existing rows stay. |
-| `009_rooms.sql` | `rooms`; one open room per distinct `room_code` already in `matches` (no known creator), `matches.room_id` filled from it, `room_code` dropped. The only edit of append-only rows, done openly with `DISABLE TRIGGER`. |
-| `010_tournaments.sql` | `tournaments`, `tournament_players`, `room_assignments`, the tournament columns on `rooms`, and the audit columns and actions. |
-| `011_player_accounts.sql` | `username`, `password_hash`, `is_active`, `is_bot`, `is_vip` on `players`, and the VIP audit actions. |
-| `012_guest_usernames.sql` | Guests get a `guest_…` username (existing ones backfilled), `is_guest`, and the guest-prefix check. |
-| `013_guest_cleanup.sql` | Deleting a player takes its `player_secrets` with it and clears `rooms.created_by_player_id`; indexes for the guest sweep. |
-| `014_room_invites.sql` | `rooms.visibility` (existing rooms public, new ones private), `room_invites`, `room_members` (openers backfilled as members). |
-| `015_drop_invite_codes.sql` | Invite codes removed: their rows deleted, `room_invites.kind` and `expires_at` dropped, secrets must be 32 hex characters. |
+| `001_functions.sql` | `set_updated_at()` and `forbid_change()` (append-only tables). |
+| `002_games.sql` | `games`, and the Bust 31 and Cloudburst rows. |
+| `003_players.sql` | `players` (guests, accounts, bots, VIP) and `player_secrets`. |
+| `004_admins.sql` | `admins` (roles: owner, admin, viewer) and `admin_sessions`. |
+| `005_tournaments.sql` | `tournaments` and `tournament_players`. |
+| `006_rooms.sql` | `rooms`, `room_assignments`, `room_invites`, `room_members`. |
+| `007_matches.sql` | `matches`, `match_players`, `match_logs` (append-only). |
+| `008_admin_audit_events.sql` | `admin_audit_events` (append-only). |
 
-Before deploying, run these on the live database. Each must return 0 (or the listed rows must be fixed first):
+The files were squashed on 2026-11-12, before any production database existed (Erdin): a database made from the old
+files (`001_init.sql` … `016_admin_management.sql`) is dropped and rebuilt from these. A later change gets its own
+new file after `008`.
 
-```sql
-SELECT count(*) FROM players WHERE display_name <> btrim(display_name) OR display_name ~ '[[:cntrl:]]';
-SELECT count(*) FROM players WHERE (disabled_at IS NULL) <> (disabled_reason IS NULL);
-SELECT count(*) FROM matches WHERE substr(id::text, 15, 1) <> '7' OR octet_length(body_hash) <> 32;
-SELECT count(*) FROM (SELECT match_id FROM match_players WHERE placement = 1 GROUP BY 1 HAVING count(*) > 1) x;
-SELECT count(*) FROM (SELECT match_id, player_id FROM match_players WHERE player_id IS NOT NULL GROUP BY 1, 2 HAVING count(*) > 1) x;
-SELECT count(*) FROM match_logs WHERE event_count <> jsonb_array_length(events);
-SELECT count(*) FROM (SELECT room_code FROM matches GROUP BY 1 HAVING count(DISTINCT game_slug) > 1) x;
-SELECT count(*) FROM admin_audit WHERE target_id IS NOT NULL AND target_id NOT IN (SELECT id FROM players);
-```
-
-Codes are unique across games now, so the second-to-last query must show no code used by two games (very unlikely with random codes; if it happens, that one match's code is fixed by hand first).
-
-### Invites: `room_invites` and `room_members` (migrations 014, 015)
+### Invites: `room_invites` and `room_members`
 
 Erdin, 2026-11-12: a table must not be joinable by typing its code. A private table is entered only through an invite:
 
 - **Invite link** `/invite/<token>`: 16 random bytes as 32 hex characters (letters and digits only), one live link per room, valid until reset. Anyone who may enter the table can copy it; only the player who opened the table can reset it, which kills the old link.
-- **No invite codes** (Erdin, 2026-11-12): the short typed codes from 014 were removed in 015; the link is the only way in.
+- **No invite codes** (Erdin, 2026-11-12): short typed codes were tried and removed; the link is the only way in.
 - Redeeming a link (`POST /v1/invites/redeem`, limited to 10 tries a minute per IP) adds the player to `room_members`, so reloads and reconnects keep working. The opener is a member from the start.
-- `rooms.visibility` is `public` or `private`. Rooms from before 014 stay public; new rooms (tournament rooms too) default to private. Room actors read it from `/v1/rooms/:code/seats` and only public, non-tournament tables report to the room list.
+- `rooms.visibility` is `public` or `private`. New rooms (tournament rooms too) default to private. Room actors read it from `/v1/rooms/:code/seats` and only public, non-tournament tables report to the room list.
 - Membership is not history: a deleted guest takes its `room_members` rows along, and its invites forget who made them.
 
 ## Where it lives in the code

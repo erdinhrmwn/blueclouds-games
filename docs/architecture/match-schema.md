@@ -1,6 +1,6 @@
 # Generic match schema
 
-Status: **built** (migration `006_generic_matches.sql`). Agreed with Erdin on 2026-11-11. The full, current schema with all its checks is in [database.md](database.md).
+Status: **built** (`002_games.sql` and `007_matches.sql`). Agreed with Erdin on 2026-11-11. The full, current schema with all its checks is in [database.md](database.md).
 
 Goal: one set of tables that every game (Bust 31, Cloudburst, and later ones) reports into without a schema change. A new game adds one row to `games`; everything game-specific lives in two places only: the meaning of `score`, and the move log's `data`.
 
@@ -69,7 +69,7 @@ CREATE TABLE match_logs (
 2. `matches.game_slug` gets a foreign key to `games`.
 3. `match_players.lives_left` becomes `score int` (the Cloudburst branch's rename, folded in here), and a seat must be either a player or a named bot.
 4. Platform reads seat limits from `games`; backoffice shows `games.name` and `score_label` instead of a label map in code.
-5. One migration (`006_generic_matches.sql`) after `005_match_logs.sql`. Existing rows only need the rename; an old bot seat without a name gets "Bot".
+5. One migration after the match log one. Existing rows only needed the rename; an old bot seat without a name got "Bot". (The migrations were later squashed: see database.md.)
 
 ## Left out on purpose
 

@@ -100,7 +100,7 @@ export type Seat = {
 	score: number;
 };
 
-/** Where the match was played: a tournament table, or an open table and who opened it (both null for tables older than 009). */
+/** Where the match was played: a tournament table, or an open table and who opened it (both null when the platform made it). */
 export type MatchTable = {
 	tournamentId: string | null;
 	tournamentName: string | null;
