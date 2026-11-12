@@ -39,6 +39,16 @@
 		};
 	});
 
+	/** A tournament table goes by its tournament's name; any other table by its host's. */
+	const roomName = $derived.by(() => {
+		const view = room?.view;
+		if (!view) return 'Table';
+		if (view.tournament) return view.tournament.name;
+
+		const host = view.players.find((p) => p.id === view.hostId);
+		return host ? `${host.name}’s table` : 'Table';
+	});
+
 	async function leave() {
 		await room?.leave();
 		goto(`/${game.slug}`);
@@ -46,12 +56,19 @@
 </script>
 
 <div class="flex min-h-8 items-center justify-between gap-3 {player.playing ? 'pt-3' : 'pt-2'}">
-	<!-- Game name on top, the table code and round underneath. -->
+	<!-- Game name on top; the room's name (and round, once dealt) underneath. -->
 	<div class="min-w-0">
 		<h1 class="font-display text-lg leading-tight font-bold text-paper">{game.name}</h1>
-		<p class="text-xs text-paper/70 tabular-nums">
-			Table <span class="font-semibold tracking-wider text-paper/90">{code}</span>
-			{#if room?.view && room.view.phase !== 'lobby'}- Round #{room.view.round}{/if}
+		<p class="flex min-w-0 items-center gap-1 text-xs text-paper/70">
+			{#if room?.view?.tournament}
+				<span class="shrink-0 rounded-sm bg-brass px-1 text-[10px] font-semibold text-ink"
+					>Tournament</span
+				>
+			{/if}
+			<span class="truncate font-semibold text-paper/90">{roomName}</span>
+			{#if room?.view && room.view.phase !== 'lobby'}
+				<span class="shrink-0 tabular-nums">- Round #{room.view.round}</span>
+			{/if}
 		</p>
 	</div>
 	{#if room?.view}
