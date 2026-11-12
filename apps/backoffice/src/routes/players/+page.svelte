@@ -6,12 +6,12 @@
 
 	let { data }: PageProps = $props();
 
+	const filter = $derived(data.filter);
+	const filtered = $derived(!!(filter.q || filter.type || filter.status));
+
 	const nextHref = $derived.by(() => {
-		const params = new URLSearchParams();
-		if (data.q) {
-			params.set('q', data.q);
-		}
-		params.set('before', data.next ?? '');
+		const fields = Object.entries({ ...filter, before: data.next ?? '' });
+		const params = new URLSearchParams(fields.filter(([, value]) => value));
 
 		return `?${params}`;
 	});
@@ -24,7 +24,7 @@
 	};
 
 	const emptyText = $derived.by(() => {
-		if (data.q) return `No players match “${data.q}”.`;
+		if (filtered) return 'No players fit these filters.';
 		if (data.paged) return 'No more players.';
 
 		return 'No players yet.';
@@ -39,10 +39,14 @@
 />
 
 <section class="panel" aria-label="Player list">
-	<div class="panel-head">
-		<form method="GET" class="flex w-full max-w-xl gap-2" role="search">
-			<div class="relative flex-1">
-				<label class="sr-only" for="q">Search players</label>
+	<form
+		method="GET"
+		role="search"
+		class="grid gap-3 border-b border-line px-5 py-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_repeat(2,minmax(0,1fr))_auto] lg:items-end"
+	>
+		<div class="sm:col-span-2 lg:col-span-1">
+			<label class="label" for="q">Search</label>
+			<div class="relative">
 				<span
 					class="pointer-events-none absolute inset-y-0 left-3 grid place-items-center text-muted"
 				>
@@ -52,17 +56,34 @@
 					class="field pl-9"
 					id="q"
 					name="q"
-					value={data.q}
+					value={filter.q}
 					placeholder="Name, username or player id"
 					maxlength="64"
 				/>
 			</div>
-			<button class="btn-primary">Search</button>
-		</form>
-		{#if data.q}
-			<a class="link text-sm" href="/players">Clear search</a>
-		{/if}
-	</div>
+		</div>
+		<div>
+			<label class="label" for="type">Type</label>
+			<select class="field" id="type" name="type" value={filter.type}>
+				<option value="">All types</option>
+				<option value="normal">Normal</option>
+				<option value="vip">VIP</option>
+				<option value="bot">Bot</option>
+			</select>
+		</div>
+		<div>
+			<label class="label" for="status">Status</label>
+			<select class="field" id="status" name="status" value={filter.status}>
+				<option value="">Active and disabled</option>
+				<option value="active">Active</option>
+				<option value="disabled">Disabled</option>
+			</select>
+		</div>
+		<div class="flex gap-2 sm:col-span-2 lg:col-span-1">
+			<button class="btn-primary">Filter</button>
+			{#if filtered}<a class="btn-quiet" href="/players">Clear</a>{/if}
+		</div>
+	</form>
 
 	{#if data.players.length === 0}
 		<p class="px-5 py-10 text-center text-sm text-muted">{emptyText}</p>

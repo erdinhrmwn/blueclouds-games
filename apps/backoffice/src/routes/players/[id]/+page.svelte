@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { auditActor, auditLabel, auditNote, isAlarming } from '#lib/audit-actions.ts';
 	import PageHeader from '#lib/components/PageHeader.svelte';
 	import { PLAYER_TYPE_TAG, playerType, utc } from '#lib/format.ts';
 	import { REASON_MAX } from '#lib/limits.ts';
@@ -13,6 +14,12 @@
 		if (player.isGuest) return player.username ? `Guest @${player.username}` : 'Guest';
 
 		return `@${player.username}`;
+	});
+	const winRate = $derived.by(() => {
+		const { played, won } = data.stats;
+		if (played === 0) return '–';
+
+		return `${Math.round((won / played) * 100)}%`;
 	});
 	let busy = $state(false);
 
@@ -55,6 +62,14 @@
 		<div class="panel-head">
 			<h2 id="details" class="font-semibold">Details</h2>
 		</div>
+		<dl class="grid grid-cols-3 divide-x divide-line border-b border-line">
+			{#each [['Matches played', data.stats.played], ['Won', data.stats.won], ['Win rate', winRate]] as [label, value] (label)}
+				<div class="px-5 py-4">
+					<dt class="text-sm text-muted">{label}</dt>
+					<dd class="mt-1 text-2xl font-semibold tracking-tight tabular-nums">{value}</dd>
+				</div>
+			{/each}
+		</dl>
 		<dl class="facts">
 			<dt>Player id</dt>
 			<dd class="font-mono text-xs leading-5 break-all">{player.id}</dd>
@@ -135,6 +150,35 @@
 					>
 				</form>
 			</div>
+		</section>
+
+		<section class="panel" aria-labelledby="history">
+			<div class="panel-head">
+				<h2 id="history" class="font-semibold">Admin history</h2>
+				{#if data.audit.length}
+					<a class="link text-sm" href="/audit?player={player.id}">Full history</a>
+				{/if}
+			</div>
+			{#if data.audit.length === 0}
+				<p class="px-5 py-6 text-sm text-muted">No admin has changed this player.</p>
+			{:else}
+				<ul class="divide-y divide-line">
+					{#each data.audit as row (row.id)}
+						{@const byline = [auditActor(row), auditNote(row)].filter(Boolean).join(' · ')}
+						<li class="px-5 py-3 text-sm">
+							<p class="flex flex-wrap items-baseline justify-between gap-x-3">
+								<span class="font-medium {isAlarming(row.action) ? 'text-danger' : ''}"
+									>{auditLabel(row.action)}</span
+								>
+								<span class="text-xs whitespace-nowrap text-muted">{utc(row.createdAt)}</span>
+							</p>
+							{#if byline}
+								<p class="mt-0.5 text-muted">{byline}</p>
+							{/if}
+						</li>
+					{/each}
+				</ul>
+			{/if}
 		</section>
 	</div>
 

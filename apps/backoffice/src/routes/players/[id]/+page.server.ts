@@ -1,5 +1,6 @@
 import { error, fail } from '@sveltejs/kit';
 import { auditIp } from '#lib/server/auth.ts';
+import { listAudit, NO_AUDIT_FILTER } from '#lib/server/audit-log.ts';
 import { sql } from '#lib/server/db.ts';
 import {
 	disablePlayer,
@@ -11,11 +12,17 @@ import {
 } from '#lib/server/players.ts';
 import type { Actions, PageServerLoad } from './$types';
 
+const AUDIT_ROWS = 10;
+
 export const load: PageServerLoad = async ({ params }) => {
-	const detail = await playerDetail(sql, params.id);
+	const filter = { ...NO_AUDIT_FILTER, player: params.id };
+	const [detail, audit] = await Promise.all([
+		playerDetail(sql, params.id),
+		listAudit(sql, filter, AUDIT_ROWS)
+	]);
 	if (!detail) error(404, 'Player not found');
 
-	return detail;
+	return { ...detail, audit };
 };
 
 export const actions: Actions = {

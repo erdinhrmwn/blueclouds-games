@@ -14,9 +14,10 @@
 	const chartTotal = $derived(data.days.reduce((sum, day) => sum + day.matches, 0));
 
 	const accounts = $derived([
-		{ label: 'Normal', count: players.total - players.vip, dot: 'bg-muted' },
-		{ label: 'VIP', count: players.vip, dot: 'bg-brass' },
-		{ label: 'Bot', count: players.bots, dot: 'bg-line' }
+		{ label: 'Normal', count: players.total - players.vip, dot: 'bg-muted', query: 'type=normal' },
+		{ label: 'VIP', count: players.vip, dot: 'bg-brass', query: 'type=vip' },
+		{ label: 'Bot', count: players.bots, dot: 'bg-line', query: 'type=bot' },
+		{ label: 'Disabled', count: players.disabled, dot: 'bg-danger', query: 'status=disabled' }
 	]);
 
 	/** "Nov 12", for a UTC day from the chart. */
@@ -113,22 +114,22 @@
 		<div class="panel-head">
 			<h2 id="accounts" class="font-semibold">Accounts by type</h2>
 		</div>
-		<ul class="divide-y divide-line px-5">
+		<ul class="divide-y divide-line px-2">
 			{#each accounts as account (account.label)}
-				<li class="flex items-center gap-3 py-3 text-sm">
-					<span class="size-2.5 rounded-full {account.dot}" aria-hidden="true"></span>
-					{account.label}
-					<span class="ml-auto font-semibold tabular-nums">{account.count}</span>
+				{@const alarming = account.label === 'Disabled' && account.count > 0}
+				<li>
+					<a
+						href="/players?{account.query}"
+						class="flex min-h-11 items-center gap-3 rounded-md px-3 py-1.5 text-sm hover:bg-subtle"
+					>
+						<span class="size-2.5 rounded-full {account.dot}" aria-hidden="true"></span>
+						{account.label}
+						<span class="ml-auto font-semibold tabular-nums {alarming ? 'text-danger' : ''}"
+							>{account.count}</span
+						>
+					</a>
 				</li>
 			{/each}
-			<li class="flex items-center gap-3 py-3 text-sm">
-				<span class="size-2.5 rounded-full bg-danger" aria-hidden="true"></span>
-				Disabled
-				<span
-					class="ml-auto font-semibold tabular-nums {players.disabled ? 'text-danger' : 'text-ink'}"
-					>{players.disabled}</span
-				>
-			</li>
 		</ul>
 		<p class="px-5 pb-5 text-xs text-muted">
 			Normal and VIP count people; disabled covers every type.

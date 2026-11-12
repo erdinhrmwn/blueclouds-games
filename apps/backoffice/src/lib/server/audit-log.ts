@@ -15,14 +15,37 @@ export type AuditRow = {
 	ip: string | null;
 };
 
-/** Newest first. `before` is the last id of the previous page (UUIDv7). */
+const DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+export type AuditFilter = {
+	/** An admin's username; empty for everyone. */
+	admin: string;
+	/** One action, e.g. 'player.disable'; empty for all. */
+	action: string;
+	/** Only rows about this player. */
+	player: string;
+	/** UTC days, `to` inclusive. */
+	from: string;
+	to: string;
+	/** The last id of the previous page (UUIDv7). */
+	before: string;
+};
+
+export const NO_AUDIT_FILTER: AuditFilter = {
+	admin: '',
+	action: '',
+	player: '',
+	from: '',
+	to: '',
+	before: ''
+};
+
+/** Newest first. Empty or malformed filter fields are ignored. */
 export async function listAudit(
 	sql: SQL,
-	before: string | null,
+	filter: AuditFilter,
 	limit = PAGE_SIZE
 ): Promise<AuditRow[]> {
-	const page = before && isUuid(before) ? sql`WHERE a.id < ${before}` : sql``;
-
 	const rows = await sql`
 		SELECT
 			a.id,
@@ -41,9 +64,48 @@ export async function listAudit(
 		LEFT JOIN players p ON p.id = a.player_id
 		LEFT JOIN tournaments t ON t.id = a.tournament_id
 		LEFT JOIN rooms r ON r.id = a.room_id
-		${page}
+		WHERE ${auditConditions(sql, filter)}
 		ORDER BY a.id DESC
 		LIMIT ${limit}`;
 
 	return rows as AuditRow[];
+}
+
+/** The filter's conditions joined with AND; each empty or malformed field adds nothing. */
+function auditConditions(sql: SQL, filter: AuditFilter) {
+	const conditions = [sql`TRUE`];
+
+	if (filter.admin) {
+		conditions.push(sql`ad.username = ${filter.admin}`);
+	}
+	if (filter.action) {
+		conditions.push(sql`a.action = ${filter.action}`);
+	}
+	if (isUuid(filter.player)) {
+		conditions.push(sql`a.player_id = ${filter.player}`);
+	}
+
+	// AT TIME ZONE 'UTC': a bare ::date compares in the session's TimeZone, not UTC.
+	if (DATE.test(filter.from)) {
+		conditions.push(sql`a.created_at >= ${filter.from}::date::timestamp AT TIME ZONE 'UTC'`);
+	}
+	if (DATE.test(filter.to)) {
+		conditions.push(sql`a.created_at < (${filter.to}::date + 1)::timestamp AT TIME ZONE 'UTC'`);
+	}
+
+	if (isUuid(filter.before)) {
+		conditions.push(sql`a.id < ${filter.before}`);
+	}
+
+	return conditions.reduce((left, right) => sql`${left} AND ${right}`);
+}
+
+/** Every admin's username, for the filter. */
+export async function auditAdmins(sql: SQL): Promise<string[]> {
+	const rows = await sql`
+		SELECT username
+		FROM admins
+		ORDER BY username`;
+
+	return rows.map((row: { username: string }) => row.username);
 }

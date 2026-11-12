@@ -2,9 +2,9 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import type { SQL } from 'bun';
 import { resetTestDatabase, room } from '../../../../platform/src/test-helpers';
 import { createAdmin } from './auth';
-import { listAudit } from './audit-log';
+import { listAudit, NO_AUDIT_FILTER } from './audit-log';
 import { listMatches, matchDetail, matchGames, matchLog } from './matches';
-import { disablePlayer } from './players';
+import { disablePlayer, playerDetail } from './players';
 
 let sql: SQL;
 let rina: string;
@@ -96,10 +96,15 @@ describe('matches', () => {
 	});
 });
 
+test('player stats count finished matches and wins', async () => {
+	const detail = await playerDetail(sql, rina);
+	expect(detail?.stats).toEqual({ played: 2, won: 1 });
+});
+
 test('audit log shows the admin and the target player by name', async () => {
 	const id = await createAdmin(sql, 'root', 'correct horse battery');
 	await disablePlayer(sql, { id, username: 'root' }, rina, 'Spam', '192.168.1.9');
-	const [row] = await listAudit(sql, null);
+	const [row] = await listAudit(sql, NO_AUDIT_FILTER);
 	expect(row).toMatchObject({
 		admin: 'root',
 		action: 'player.disable',
@@ -107,4 +112,15 @@ test('audit log shows the admin and the target player by name', async () => {
 		ip: '192.168.1.9',
 		detail: { reason: 'Spam' }
 	});
+
+	const today = new Date().toISOString().slice(0, 10);
+	const count = async (filter: Partial<typeof NO_AUDIT_FILTER>) => {
+		const rows = await listAudit(sql, { ...NO_AUDIT_FILTER, ...filter });
+		return rows.length;
+	};
+	expect(await count({ admin: 'root', action: 'player.disable', player: rina })).toBe(1);
+	expect(await count({ from: today, to: today, action: 'player.disable' })).toBe(1);
+	expect(await count({ admin: 'nobody' })).toBe(0);
+	expect(await count({ to: '2000-01-01' })).toBe(0);
+	expect(await count({ from: 'garbage', action: 'player.disable' })).toBe(1);
 });
