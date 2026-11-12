@@ -3,11 +3,18 @@
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
-	const f = $derived(data.filter);
-	const filtered = $derived(!!(f.game || f.player || f.from || f.to));
+	const filter = $derived(data.filter);
+	const filtered = $derived(!!(filter.game || filter.player || filter.from || filter.to));
+	const emptyText = $derived.by(() => {
+		if (filtered) return 'No matches fit these filters.';
+		if (filter.before) return 'No more matches.';
+		return 'No matches yet.';
+	});
 	const nextHref = $derived.by(() => {
-		const q = new URLSearchParams(Object.entries({ ...f, before: data.next ?? '' }).filter(([, v]) => v));
-		return `?${q}`;
+		const fields = Object.entries({ ...filter, before: data.next ?? '' });
+		const params = new URLSearchParams(fields.filter(([, value]) => value));
+
+		return `?${params}`;
 	});
 </script>
 
@@ -18,22 +25,28 @@
 <form method="GET" class="mt-4 grid gap-3 sm:grid-cols-[repeat(4,minmax(0,1fr))_auto] sm:items-end">
 	<div>
 		<label class="label" for="game">Game</label>
-		<select class="field" id="game" name="game" value={f.game}>
+		<select class="field" id="game" name="game" value={filter.game}>
 			<option value="">All games</option>
 			{#each data.games as g (g.slug)}<option value={g.slug}>{g.name}</option>{/each}
 		</select>
 	</div>
 	<div>
 		<label class="label" for="player">Player id</label>
-		<input class="field font-mono text-sm" id="player" name="player" value={f.player} maxlength="36" />
+		<input
+			class="field font-mono text-sm"
+			id="player"
+			name="player"
+			value={filter.player}
+			maxlength="36"
+		/>
 	</div>
 	<div>
 		<label class="label" for="from">Ended from (UTC)</label>
-		<input class="field" id="from" name="from" type="date" value={f.from} />
+		<input class="field" id="from" name="from" type="date" value={filter.from} />
 	</div>
 	<div>
 		<label class="label" for="to">Ended to (UTC)</label>
-		<input class="field" id="to" name="to" type="date" value={f.to} />
+		<input class="field" id="to" name="to" type="date" value={filter.to} />
 	</div>
 	<div class="flex gap-2">
 		<button class="btn-primary">Filter</button>
@@ -42,7 +55,9 @@
 </form>
 
 {#if data.matches.length === 0}
-	<p class="mt-6 text-muted">{filtered ? 'No matches fit these filters.' : f.before ? 'No more matches.' : 'No matches yet.'}</p>
+	<p class="mt-6 text-muted">
+		{emptyText}
+	</p>
 {:else}
 	<div class="mt-6 overflow-x-auto rounded-lg border border-line bg-surface">
 		<table class="w-full min-w-[36rem] text-left text-sm">
@@ -59,7 +74,10 @@
 				{#each data.matches as m (m.id)}
 					<tr class="border-b border-line last:border-0 hover:bg-page">
 						<td class="px-3 py-2 whitespace-nowrap">
-							<a class="underline decoration-line underline-offset-2 hover:decoration-ink" href="/matches/{m.id}">{utc(m.endedAt)}</a>
+							<a
+								class="underline decoration-line underline-offset-2 hover:decoration-ink"
+								href="/matches/{m.id}">{utc(m.endedAt)}</a
+							>
 						</td>
 						<td class="px-3 py-2">{m.gameName}</td>
 						<td class="px-3 py-2 font-mono text-xs">{m.roomCode}</td>

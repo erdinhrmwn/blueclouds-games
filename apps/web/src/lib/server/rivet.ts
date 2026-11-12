@@ -32,7 +32,10 @@ export const hasRooms = (game: string) => ROOMS.has(game);
  * Browsers can't reach other rooms, the room list, or anything else in the engine.
  * `game` must pass `hasRooms` first.
  */
-export async function issueRoomToken(game: string, code: string): Promise<{ actorId: string; token: string }> {
+export async function issueRoomToken(
+	game: string,
+	code: string
+): Promise<{ actorId: string; token: string }> {
 	const room = ROOMS.get(game)!(code);
 	const actorId = await room.resolve();
 	const { token } = await room.issueToken({
@@ -43,4 +46,5 @@ export async function issueRoomToken(game: string, code: string): Promise<{ acto
 	return { actorId, token };
 }
 
-export const listRooms = (game: string): Promise<RoomSummary[]> => admin.roomList.getOrCreate([game]).list();
+export const listRooms = (game: string): Promise<RoomSummary[]> =>
+	admin.roomList.getOrCreate([game]).list();

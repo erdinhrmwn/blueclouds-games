@@ -1,5 +1,5 @@
 import type { SQL } from "bun";
-import { Hono } from "hono";
+import { type Context, Hono } from "hono";
 import { z } from "zod";
 import { ok, parse } from "../lib/http";
 import { playerAuth, type PlayerVariables } from "../middleware/auth";
@@ -15,21 +15,27 @@ export function tournamentRoutes(sql: SQL) {
 
 	app.get("/tournaments", auth, async (c) => {
 		const { game } = parse(GameQuery, c.req.query());
-		return ok(c, { tournaments: await listOpen(sql, game, c.get("player").id) });
+		const tournaments = await listOpen(sql, game, c.get("player").id);
+
+		return ok(c, { tournaments });
 	});
 
 	/** POST signs the player up, DELETE signs them out. */
-	const register = (join: boolean) =>
-		app[join ? "post" : "delete"]("/tournaments/:id/registration", auth, async (c) => {
-			await setRegistration(sql, parse(Id, c.req.param("id")), c.get("player").id, join);
-			return ok(c, { registered: join });
-		});
-	register(true);
-	register(false);
+	const registration = (join: boolean) => async (c: Context<{ Variables: PlayerVariables }>) => {
+		const tournamentId = parse(Id, c.req.param("id"));
+		await setRegistration(sql, tournamentId, c.get("player").id, join);
+
+		return ok(c, { registered: join });
+	};
+
+	app.post("/tournaments/:id/registration", auth, registration(true));
+	app.delete("/tournaments/:id/registration", auth, registration(false));
 
 	app.get("/players/me/rooms", auth, async (c) => {
 		const { game } = parse(OptionalGame, c.req.query());
-		return ok(c, { rooms: await seatedRooms(sql, c.get("player").id, game) });
+		const rooms = await seatedRooms(sql, c.get("player").id, game);
+
+		return ok(c, { rooms });
 	});
 
 	return app;

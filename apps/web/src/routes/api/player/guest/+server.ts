@@ -5,8 +5,9 @@ import type { RequestHandler } from './$types';
 /** "Play as guest": a new guest for this browser, named by the platform. */
 export const POST: RequestHandler = async (event) => {
 	try {
-		return json({ player: await startGuest(event) }, { status: 201 });
-	} catch (e) {
-		return failure(e);
+		const player = await startGuest(event);
+		return json({ player }, { status: 201 });
+	} catch (err) {
+		return failure(err);
 	}
 };

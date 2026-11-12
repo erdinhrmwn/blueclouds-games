@@ -17,7 +17,10 @@
 </script>
 
 <section class="rounded-xl border border-paper/15 bg-[#1b1611] p-6" aria-label="Join a table">
-	<form class="space-y-3" onsubmit={(e) => (e.preventDefault(), run(() => newTable(game, visibility)))}>
+	<form
+		class="space-y-3"
+		onsubmit={(e) => (e.preventDefault(), run(() => newTable(game, visibility)))}
+	>
 		<fieldset class="space-y-1">
 			<legend class="label mb-1.5">Who can join?</legend>
 			<label class="flex min-h-11 items-center gap-3">
@@ -29,7 +32,9 @@
 				<span>Anyone, from Open tables</span>
 			</label>
 		</fieldset>
-		<button class="btn-brass w-full" type="submit" disabled={busy}>{busy ? 'Please wait…' : 'Open a new table'}</button>
+		<button class="btn-brass w-full" type="submit" disabled={busy}
+			>{busy ? 'Please wait…' : 'Open a new table'}</button
+		>
 	</form>
 
 	<hr class="my-6 border-paper/15" />

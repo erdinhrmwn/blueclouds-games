@@ -3,7 +3,13 @@ import { describe, expect, test } from 'bun:test';
 import { chooseBotCard } from '../../../server/src/games/bust-31/bots';
 import { logEvents, type MatchState } from '../../../server/src/games/bust-31/match';
 import { stamp } from '../../../server/src/games/shared/match';
-import { addPlayer, createGame, type Game, playCard, startGame } from '../../../server/src/games/bust-31/rules';
+import {
+	addPlayer,
+	createGame,
+	type Game,
+	playCard,
+	startGame
+} from '../../../server/src/games/bust-31/rules';
 import { type LogEvent, replay } from './replay.ts';
 
 /** A full 4-player bot game, logged the way the room logs it. */
@@ -36,25 +42,50 @@ describe('Bust 31 replay', () => {
 			expect(steps.filter((s) => s.mismatch)).toEqual([]);
 			const last = steps.at(-1)!;
 			expect(last.text).toBe(`${game.players.find((p) => p.id === game.winnerId)!.name} wins.`);
-			expect(last.state!.seats.map((s) => s.lives)).toEqual(game.players.map((p) => Math.max(0, p.lives)));
+			expect(last.state!.seats.map((s) => s.lives)).toEqual(
+				game.players.map((p) => Math.max(0, p.lives))
+			);
 		}
 	});
 
 	test('a tampered log is flagged', () => {
 		const { log, seats } = playedGame();
 		const i = log.events.findIndex((e) => e.type === 'play');
-		const tampered = log.events.map((e, j) => (j === i ? { ...e, data: { ...e.data, total: 99 } } : e));
+		const tampered = log.events.map((e, j) =>
+			j === i ? { ...e, data: { ...e.data, total: 99 } } : e
+		);
 		const steps = replay('bust-31', { ...log, events: tampered }, seats);
 		expect(steps[i]!.mismatch).toContain('Total: logged 99');
 	});
 
 	test('describes timeouts and away players', () => {
-		const seats = [{ seat: 0, name: 'Ann' }, { seat: 1, name: 'Bob' }];
-		const steps = replay('bust-31', { logVersion: 1, events: [
-			{ seq: 0, t: 0, type: 'deal', data: { round: 1, starter: 0, hands: { 0: ['n7-0'], 1: ['m-0'] }, deck: ['r-1'] } },
-			{ seq: 1, t: 20_000, type: 'play', seat: 0, data: { card: 'n7-0', total: 7, drew: 'r-1', by: 'timeout' } },
-			{ seq: 2, t: 21_000, type: 'away', seat: 1 }
-		] }, seats);
+		const seats = [
+			{ seat: 0, name: 'Ann' },
+			{ seat: 1, name: 'Bob' }
+		];
+		const steps = replay(
+			'bust-31',
+			{
+				logVersion: 1,
+				events: [
+					{
+						seq: 0,
+						t: 0,
+						type: 'deal',
+						data: { round: 1, starter: 0, hands: { 0: ['n7-0'], 1: ['m-0'] }, deck: ['r-1'] }
+					},
+					{
+						seq: 1,
+						t: 20_000,
+						type: 'play',
+						seat: 0,
+						data: { card: 'n7-0', total: 7, drew: 'r-1', by: 'timeout' }
+					},
+					{ seq: 2, t: 21_000, type: 'away', seat: 1 }
+				]
+			},
+			seats
+		);
 		expect(steps.map((s) => s.text)).toEqual([
 			'Round 1 dealt. Ann starts.',
 			'Ann played 7. Total 7. (time ran out, played for them)',
@@ -66,6 +97,12 @@ describe('Bust 31 replay', () => {
 });
 
 test('a game without a renderer shows its raw events', () => {
-	const steps = replay('chess', { logVersion: 1, events: [{ seq: 0, t: 0, type: 'move', seat: 1, data: { from: 'e2' } }] }, [{ seat: 1, name: 'Bob' }]);
-	expect(steps).toEqual([{ event: expect.any(Object), text: 'Bob: move {"from":"e2"}', state: null }]);
+	const steps = replay(
+		'chess',
+		{ logVersion: 1, events: [{ seq: 0, t: 0, type: 'move', seat: 1, data: { from: 'e2' } }] },
+		[{ seat: 1, name: 'Bob' }]
+	);
+	expect(steps).toEqual([
+		{ event: expect.any(Object), text: 'Bob: move {"from":"e2"}', state: null }
+	]);
 });

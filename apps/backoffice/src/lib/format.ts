@@ -1,2 +1,8 @@
 /** Dates in the backoffice are shown in UTC, the same as the database and the logs. */
-export const utc = (d: Date | string | null) => (d ? new Date(d).toISOString().slice(0, 16).replace('T', ' ') + ' UTC' : '');
+export function utc(date: Date | string | null): string {
+	if (!date) return '';
+
+	// "2026-11-12T06:12:04.000Z" → "2026-11-12 06:12 UTC"
+	const minutes = new Date(date).toISOString().slice(0, 16);
+	return `${minutes.replace('T', ' ')} UTC`;
+}

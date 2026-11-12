@@ -6,28 +6,48 @@ import { createAdmin } from '../src/lib/server/auth.ts';
 
 /** Reads one line from the terminal without echoing it. */
 function askHidden(question: string): Promise<string> {
-	if (!process.stdin.isTTY) return Promise.reject(new Error('Run this in an interactive terminal (docker compose exec -it ...).'));
+	if (!process.stdin.isTTY) {
+		const error = new Error('Run this in an interactive terminal (docker compose exec -it ...).');
+		return Promise.reject(error);
+	}
+
 	process.stdout.write(question);
 	process.stdin.setRawMode(true);
 	process.stdin.resume();
+
 	return new Promise((resolve, reject) => {
 		let value = '';
+
 		const done = (err?: Error) => {
 			process.stdin.off('data', onData);
 			process.stdin.setRawMode(false);
 			process.stdin.pause();
 			process.stdout.write('\n');
-			if (err) reject(err);
-			else resolve(value);
-		};
-		const onData = (chunk: Buffer) => {
-			for (const ch of chunk.toString('utf8')) {
-				if (ch === '\r' || ch === '\n') return done();
-				if (ch === '\u0003') return done(new Error('Cancelled.')); // Ctrl+C
-				if (ch === '\u007f') value = value.slice(0, -1); // backspace
-				else value += ch;
+
+			if (err) {
+				reject(err);
+			} else {
+				resolve(value);
 			}
 		};
+
+		const onData = (chunk: Buffer) => {
+			for (const ch of chunk.toString('utf8')) {
+				const isEnter = ch === '\r' || ch === '\n';
+				const isCtrlC = ch === '\u0003';
+				const isBackspace = ch === '\u007f';
+
+				if (isEnter) return done();
+				if (isCtrlC) return done(new Error('Cancelled.'));
+
+				if (isBackspace) {
+					value = value.slice(0, -1);
+				} else {
+					value += ch;
+				}
+			}
+		};
+
 		process.stdin.on('data', onData);
 	});
 }
@@ -49,7 +69,11 @@ const sql = new SQL({
 
 try {
 	const password = await askHidden('Password: ');
-	if ((await askHidden('Repeat password: ')) !== password) throw new Error('The passwords do not match.');
+	const repeated = await askHidden('Repeat password: ');
+	if (repeated !== password) {
+		throw new Error('The passwords do not match.');
+	}
+
 	await createAdmin(sql, username, password);
 	console.log(`Admin "${username}" created.`);
 } catch (err) {

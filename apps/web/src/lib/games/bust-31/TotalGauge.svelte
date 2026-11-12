@@ -10,31 +10,40 @@
 	/** Points within this distance of the limit count as danger. */
 	const DANGER = 5;
 
-	const angleOf = (v: number) => -SWEEP / 2 + (SWEEP * v) / limit;
+	const angleOf = (value: number) => -SWEEP / 2 + (SWEEP * value) / limit;
 	// Angle 0 points up, positive goes clockwise.
 	const at = (deg: number, r: number) => {
 		const rad = (deg * Math.PI) / 180;
 		return { x: 60 + r * Math.sin(rad), y: 60 - r * Math.cos(rad) };
 	};
 	const arc = (from: number, to: number, r: number) => {
-		const a = at(angleOf(from), r);
-		const b = at(angleOf(to), r);
+		const start = at(angleOf(from), r);
+		const end = at(angleOf(to), r);
+		// SVG's large-arc flag: 1 when the arc spans more than half a circle.
 		const large = angleOf(to) - angleOf(from) > 180 ? 1 : 0;
-		return `M ${a.x} ${a.y} A ${r} ${r} 0 ${large} 1 ${b.x} ${b.y}`;
+
+		return `M ${start.x} ${start.y} A ${r} ${r} 0 ${large} 1 ${end.x} ${end.y}`;
 	};
 
 	const ticks = $derived(
 		Array.from({ length: limit + 1 }, (_, v) => {
 			const major = v % 5 === 0 || v === limit;
-			return { v, inner: at(angleOf(v), major ? 36.5 : 38.5), outer: at(angleOf(v), 41), danger: v > limit - DANGER };
+			return {
+				v,
+				inner: at(angleOf(v), major ? 36.5 : 38.5),
+				outer: at(angleOf(v), 41),
+				danger: v > limit - DANGER
+			};
 		})
 	);
 	const ratio = $derived(Math.min(Math.max(total, 0) / limit, 1));
 	const left = $derived(limit - total);
 	// calm → warning → about to bust
-	const tone = $derived(
-		left < DANGER ? 'var(--color-ember)' : left < DANGER * 2 + 2 ? 'var(--color-brass)' : 'var(--color-paper)'
-	);
+	const tone = $derived.by(() => {
+		if (left < DANGER) return 'var(--color-ember)';
+		if (left < DANGER * 2 + 2) return 'var(--color-brass)';
+		return 'var(--color-paper)';
+	});
 	const leftText = $derived(left >= 0 ? `${left} left` : 'bust');
 </script>
 
@@ -49,10 +58,30 @@
 	>
 		<svg viewBox="0 0 120 120" class="size-full" aria-hidden="true">
 			<!-- brass bezel and the dark dial face -->
-			<circle cx="60" cy="60" r="57" fill="rgb(0 0 0 / 0.38)" stroke="var(--color-brass-dim)" stroke-width="1.5" />
+			<circle
+				cx="60"
+				cy="60"
+				r="57"
+				fill="rgb(0 0 0 / 0.38)"
+				stroke="var(--color-brass-dim)"
+				stroke-width="1.5"
+			/>
 			<circle cx="60" cy="60" r="54" fill="none" stroke="rgb(0 0 0 / 0.35)" stroke-width="1" />
-			<path d={arc(0, limit, R)} fill="none" stroke="rgb(243 234 214 / 0.1)" stroke-width="5" stroke-linecap="round" />
-			<path d={arc(limit - DANGER, limit, R)} fill="none" stroke="var(--color-ember)" stroke-opacity="0.35" stroke-width="5" stroke-linecap="round" />
+			<path
+				d={arc(0, limit, R)}
+				fill="none"
+				stroke="rgb(243 234 214 / 0.1)"
+				stroke-width="5"
+				stroke-linecap="round"
+			/>
+			<path
+				d={arc(limit - DANGER, limit, R)}
+				fill="none"
+				stroke="var(--color-ember)"
+				stroke-opacity="0.35"
+				stroke-width="5"
+				stroke-linecap="round"
+			/>
 			{#each ticks as t (t.v)}
 				<line
 					x1={t.inner.x}
@@ -89,9 +118,15 @@
 			<span class="mt-0.5 text-xs text-paper/70">of {limit}</span>
 		</div>
 		<!-- sits in the open bottom of the dial -->
-		<span class="absolute inset-x-0 bottom-[7%] text-center text-xs font-semibold tabular-nums" style="color: {tone}">{leftText}</span>
+		<span
+			class="absolute inset-x-0 bottom-[7%] text-center text-xs font-semibold tabular-nums"
+			style="color: {tone}">{leftText}</span
+		>
 	</div>
-	<span class="text-xs text-paper/75" aria-label="Turn order {direction === 1 ? 'clockwise' : 'counterclockwise'}">
+	<span
+		class="text-xs text-paper/75"
+		aria-label="Turn order {direction === 1 ? 'clockwise' : 'counterclockwise'}"
+	>
 		{direction === 1 ? '↻ Clockwise' : '↺ Reversed'}
 	</span>
 </div>

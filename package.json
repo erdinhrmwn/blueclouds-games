@@ -10,6 +10,11 @@
     "dev:platform": "bun run --filter platform dev",
     "dev:backoffice": "bun run --filter backoffice dev",
     "test": "bun run --filter server test && bun run --filter platform test && bun run --filter backoffice test",
-    "check": "bun run --filter '*' check"
+    "check": "prettier --check \"apps/**/*.{ts,js,svelte}\" && bun run --filter '*' check",
+    "format": "prettier --write \"apps/**/*.{ts,js,svelte}\""
+  },
+  "devDependencies": {
+    "prettier": "^3.10.0",
+    "prettier-plugin-svelte": "^4.1.1"
   }
 }

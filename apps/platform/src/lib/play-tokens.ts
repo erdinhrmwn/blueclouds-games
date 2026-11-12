@@ -15,18 +15,21 @@ const ED25519_PKCS8_PREFIX = Buffer.from("302e020100300506032b657004220420", "he
 export async function createSigner(privateKey: string): Promise<Signer> {
 	const der = Buffer.concat([ED25519_PKCS8_PREFIX, Buffer.from(privateKey, "base64url")]);
 	const key = createPrivateKey({ key: der, format: "der", type: "pkcs8" });
+
 	return {
 		async sign(player) {
-			const iat = Math.floor(Date.now() / 1000);
-			const exp = iat + PLAY_TOKEN_TTL_SECONDS;
+			const issuedAt = Math.floor(Date.now() / 1000);
+			const expiresAt = issuedAt + PLAY_TOKEN_TTL_SECONDS;
+
 			const token = await new SignJWT({ name: player.name })
 				.setProtectedHeader({ alg: "EdDSA" })
 				.setSubject(player.id)
 				.setAudience(PLAY_TOKEN_AUDIENCE)
-				.setIssuedAt(iat)
-				.setExpirationTime(exp)
+				.setIssuedAt(issuedAt)
+				.setExpirationTime(expiresAt)
 				.sign(key);
-			return { token, expiresAt: new Date(exp * 1000).toISOString() };
+
+			return { token, expiresAt: new Date(expiresAt * 1000).toISOString() };
 		},
 	};
 }

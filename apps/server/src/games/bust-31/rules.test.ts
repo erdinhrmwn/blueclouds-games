@@ -17,7 +17,11 @@ import {
 import { removePlayer, RuleError, setAway, takeSeat } from "../shared/table";
 
 const rng = () => 0.42;
-const card = (kind: Card["kind"], value: number, id = `${kind}${value}`): Card => ({ id, kind, value });
+const card = (kind: Card["kind"], value: number, id = `${kind}${value}`): Card => ({
+	id,
+	kind,
+	value,
+});
 
 function twoPlayerGame(): Game {
 	let g = createGame();
@@ -56,7 +60,11 @@ describe("seats", () => {
 		let g = addPlayer(createGame(), "a", "Ann");
 		g = addPlayer(g, "bot", "Bot", true, 4);
 		g = addPlayer(g, "b", "Bob");
-		expect(g.players.map((p) => [p.id, p.seat])).toEqual([["a", 0], ["b", 1], ["bot", 4]]);
+		expect(g.players.map((p) => [p.id, p.seat])).toEqual([
+			["a", 0],
+			["b", 1],
+			["bot", 4],
+		]);
 		expect(() => addPlayer(g, "c", "Cleo", false, 4)).toThrow("taken");
 		expect(() => addPlayer(g, "c", "Cleo", false, 6)).toThrow("does not exist");
 	});
@@ -162,9 +170,19 @@ describe("deal pause", () => {
 		const g = twoPlayerGame();
 		const dealing = 2 * 3 * DEAL.stepMs + DEAL.flightMs + 100;
 		expect(dealPauseMs(g)).toBe(dealing);
-		const played = playCard(withHand(g, [card("number", 1)], 0), g.players[g.turn]!.id, "number1", rng);
+		const played = playCard(
+			withHand(g, [card("number", 1)], 0),
+			g.players[g.turn]!.id,
+			"number1",
+			rng,
+		);
 		expect(dealPauseMs(played)).toBe(0);
-		const bust = playCard(withHand(g, [card("number", 9)], 30), g.players[g.turn]!.id, "number9", rng);
+		const bust = playCard(
+			withHand(g, [card("number", 9)], 30),
+			g.players[g.turn]!.id,
+			"number9",
+			rng,
+		);
 		expect(dealPauseMs(bust)).toBe(DEAL.afterBustMs + dealing);
 	});
 });
@@ -173,7 +191,12 @@ describe("move counter", () => {
 	test("counts every deal and play, and survives going back to the lobby", () => {
 		const g = withHand(twoPlayerGame(), [card("number", 9)], 30);
 		expect(g.moves).toBe(1);
-		const afterBust = playCard({ ...g, players: g.players.map((p, i) => (i === g.turn ? { ...p, lives: 1 } : p)) }, g.players[g.turn]!.id, "number9", rng);
+		const afterBust = playCard(
+			{ ...g, players: g.players.map((p, i) => (i === g.turn ? { ...p, lives: 1 } : p)) },
+			g.players[g.turn]!.id,
+			"number9",
+			rng,
+		);
 		expect(afterBust.moves).toBe(2);
 		expect(resetToLobby(afterBust, "a").moves).toBe(2);
 	});

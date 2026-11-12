@@ -41,10 +41,20 @@
 	} = $props();
 
 	const initial = $derived(player?.name.trim().charAt(0).toUpperCase() ?? '');
+
+	/** Knocked out: greyed out. Away: a little faded. */
+	const dimClass = $derived.by(() => {
+		if (out) return 'opacity-40 grayscale';
+		if (player?.away) return 'opacity-60';
+		return '';
+	});
 </script>
 
 {#if player}
-	<div data-seat={player.id} class="flex w-24 flex-col items-center gap-1 text-center sm:w-28 {out ? 'opacity-40 grayscale' : player.away ? 'opacity-60' : ''}">
+	<div
+		data-seat={player.id}
+		class="flex w-24 flex-col items-center gap-1 text-center sm:w-28 {dimClass}"
+	>
 		<div class="relative">
 			<div
 				class="relative grid size-12 place-items-center rounded-full border-2 font-display text-xl font-bold sm:size-14
@@ -52,7 +62,17 @@
 			>
 				{#if player.bot}
 					<!-- robot head: bots get an icon instead of a monogram -->
-					<svg viewBox="0 0 24 24" class="size-6 sm:size-7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Bot">
+					<svg
+						viewBox="0 0 24 24"
+						class="size-6 sm:size-7"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="1.8"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						role="img"
+						aria-label="Bot"
+					>
 						<path d="M12 3v3" />
 						<circle cx="12" cy="2.6" r="0.9" fill="currentColor" stroke="none" />
 						<rect x="4.5" y="6.5" width="15" height="12" rx="3" />
@@ -65,7 +85,11 @@
 					{initial}
 				{/if}
 				{#if timeLeft !== null}
-					<svg class="pointer-events-none absolute -inset-1.5 size-[calc(100%+0.75rem)] -rotate-90" viewBox="0 0 40 40" aria-hidden="true">
+					<svg
+						class="pointer-events-none absolute -inset-1.5 size-[calc(100%+0.75rem)] -rotate-90"
+						viewBox="0 0 40 40"
+						aria-hidden="true"
+					>
 						<circle
 							cx="20"
 							cy="20"
@@ -82,7 +106,10 @@
 					</svg>
 				{/if}
 				{#if player.away}
-					<span class="absolute -right-2 -bottom-1 rounded-sm bg-paper px-1 text-[10px] font-semibold text-ink">away</span>
+					<span
+						class="absolute -right-2 -bottom-1 rounded-sm bg-paper px-1 text-[10px] font-semibold text-ink"
+						>away</span
+					>
 				{/if}
 			</div>
 		</div>
@@ -102,7 +129,11 @@
 		{/if}
 	</div>
 {:else}
-	<div class="flex w-24 flex-col items-center gap-1 sm:w-28" role="group" aria-label="Seat {number ?? ''}, empty">
+	<div
+		class="flex w-24 flex-col items-center gap-1 sm:w-28"
+		role="group"
+		aria-label="Seat {number ?? ''}, empty"
+	>
 		{#if onAddBot}
 			<button
 				class="grid size-12 place-items-center rounded-full border-2 border-dashed border-brass/70 text-2xl leading-none text-brass transition hover:border-solid hover:bg-brass/10 disabled:opacity-40 sm:size-14"

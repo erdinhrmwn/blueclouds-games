@@ -21,7 +21,11 @@ export function startJobs(sql: SQL): { stop: () => Promise<void> } {
 	const running = new Set<Promise<unknown>>();
 
 	/** `run` returns log fields when the run did something worth logging. */
-	const schedule = (name: string, cron: string, run: () => Promise<Record<string, unknown> | null>) =>
+	const schedule = (
+		name: string,
+		cron: string,
+		run: () => Promise<Record<string, unknown> | null>,
+	) =>
 		Bun.cron(
 			cron,
 			() => {

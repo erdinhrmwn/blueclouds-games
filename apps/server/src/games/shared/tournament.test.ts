@@ -7,9 +7,13 @@ mock.module("../../platform", () => ({
 	verifyPlayToken: async () => null,
 	reportMatch: async () => ({ result: "sent" }),
 	fetchRoomSeats: async () => seats,
-	markRoom: async (code: string, change: string) => (marked.push(`${code}:${change}`), { ok: true }),
+	markRoom: async (code: string, change: string) => (
+		marked.push(`${code}:${change}`),
+		{ ok: true }
+	),
 }));
-const { LATE_GRACE_MS, loadTournament, requireOpenTable, seatFor, tournamentTick } = await import("./room");
+const { LATE_GRACE_MS, loadTournament, requireOpenTable, seatFor, tournamentTick } =
+	await import("./room");
 const { addPlayer, createGame } = await import("../bust-31/rules");
 
 const START = Date.parse("2026-11-11T20:00:00Z");
@@ -42,7 +46,8 @@ function runner(c: Room) {
 	};
 }
 
-const sit = (c: Room, ...ids: string[]) => ids.forEach((id, i) => (c.vars.game = addPlayer(c.vars.game, id, `P${i}`, false, i)));
+const sit = (c: Room, ...ids: string[]) =>
+	ids.forEach((id, i) => (c.vars.game = addPlayer(c.vars.game, id, `P${i}`, false, i)));
 
 beforeEach(() => {
 	marked.length = 0;
@@ -63,7 +68,9 @@ afterEach(() => setSystemTime());
 test("only assigned players sit, each on their own seat; host controls are off", async () => {
 	const c = room();
 	expect(await seatFor(c, { id: BEN, name: "Ben" })).toBe(1);
-	expect(seatFor(c, { id: "01900000-0000-7000-8000-0000000000ff", name: "Dee" })).rejects.toThrow("This table is for players of Friday Cup.");
+	expect(seatFor(c, { id: "01900000-0000-7000-8000-0000000000ff", name: "Dee" })).rejects.toThrow(
+		"This table is for players of Friday Cup.",
+	);
 	expect(() => requireOpenTable(c)).toThrow("A tournament table starts on its own.");
 });
 
@@ -76,7 +83,10 @@ test("an open room lets anyone sit anywhere", async () => {
 
 test("only a public open room goes on the room list", async () => {
 	const open = { minPlayers: 2, startedAt: null, closedAt: null, tournament: null, seats: [] };
-	for (const [visibility, listed] of [["public", true], ["private", false]] as const) {
+	for (const [visibility, listed] of [
+		["public", true],
+		["private", false],
+	] as const) {
 		seats = { ...open, visibility };
 		const c = room();
 		await loadTournament(c);

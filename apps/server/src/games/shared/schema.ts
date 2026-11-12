@@ -6,7 +6,11 @@ export const ConnParams = z.object({ playToken: z.string().min(1).max(2048) });
 export type ConnParams = z.infer<typeof ConnParams>;
 
 export const BotIdInput = z.string().min(1).max(64);
-export const SeatInput = z.number().int().min(0).max(SEATS - 1);
+export const SeatInput = z
+	.number()
+	.int()
+	.min(0)
+	.max(SEATS - 1);
 
 /** Room codes are the actor key: short, uppercase, easy to read aloud. */
 export const RoomCode = z.string().regex(/^[A-Z0-9]{4,8}$/);

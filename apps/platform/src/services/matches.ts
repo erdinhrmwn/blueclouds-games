@@ -13,9 +13,12 @@ const Seat = z
 		/** Game-defined final number (Bust 31: lives left, Cloudburst: points); its label is in `games`. */
 		score: z.number().int().min(-1_000_000).max(1_000_000),
 	})
-	.refine((s) => s.bot === (s.playerId === null) && s.bot === (s.botName !== undefined), {
-		message: "A seat is either a player (playerId) or a bot (botName).",
-	});
+	.refine(
+		(seat) => seat.bot === (seat.playerId === null) && seat.bot === (seat.botName !== undefined),
+		{
+			message: "A seat is either a player (playerId) or a bot (botName).",
+		},
+	);
 
 /** Limits of a match's move log. The request body limit for reports is in app.ts. */
 export const MAX_LOG_EVENTS = 5_000;
@@ -29,7 +32,10 @@ const LogEvent = z.object({
 	seat: z.number().int().min(0).max(31).optional(),
 	data: z
 		.record(z.string(), z.unknown())
-		.refine((d) => JSON.stringify(d).length <= MAX_EVENT_DATA_BYTES, `Must be at most ${MAX_EVENT_DATA_BYTES} bytes.`)
+		.refine(
+			(data) => JSON.stringify(data).length <= MAX_EVENT_DATA_BYTES,
+			`Must be at most ${MAX_EVENT_DATA_BYTES} bytes.`,
+		)
 		.optional(),
 });
 
@@ -50,100 +56,204 @@ export const MatchReport = z
 		players: z.array(Seat).min(1).max(32),
 		log: MatchLog,
 	})
-	.superRefine((m, ctx) => {
-		const issue = (message: string, path: string) => ctx.addIssue({ code: "custom", message, path: [path] });
-		if (new Set(m.players.map((p) => p.seat)).size !== m.players.length) issue("Seats must be unique.", "players");
-		const ids = m.players.flatMap((p) => (p.playerId ? [p.playerId] : []));
-		if (new Set(ids).size !== ids.length) issue("A player can only sit once.", "players");
-		if (m.players.filter((p) => p.placement === 1).length !== 1) issue("Exactly one player must place first.", "players");
-		if (Date.parse(m.endedAt) < Date.parse(m.startedAt)) issue("Must not be before startedAt.", "endedAt");
-		const seats = new Set(m.players.map((p) => p.seat));
-		const bad = m.log.events.findIndex((e, i) => e.seq !== i || (e.seat !== undefined && !seats.has(e.seat)));
-		if (bad >= 0) issue(`Event ${bad} must have seq ${bad} and a seat from players.`, "log");
+	.superRefine((match, ctx) => {
+		const issue = (message: string, path: string) => {
+			ctx.addIssue({ code: "custom", message, path: [path] });
+		};
+
+		const seats = new Set(match.players.map((player) => player.seat));
+		if (seats.size !== match.players.length) {
+			issue("Seats must be unique.", "players");
+		}
+
+		const playerIds = humanPlayerIds(match.players);
+		if (new Set(playerIds).size !== playerIds.length) {
+			issue("A player can only sit once.", "players");
+		}
+
+		const winners = match.players.filter((player) => player.placement === 1);
+		if (winners.length !== 1) {
+			issue("Exactly one player must place first.", "players");
+		}
+
+		if (Date.parse(match.endedAt) < Date.parse(match.startedAt)) {
+			issue("Must not be before startedAt.", "endedAt");
+		}
+
+		const badEvent = match.log.events.findIndex((event, index) => {
+			const outOfOrder = event.seq !== index;
+			const unknownSeat = event.seat !== undefined && !seats.has(event.seat);
+			return outOfOrder || unknownSeat;
+		});
+		if (badEvent >= 0) {
+			issue(`Event ${badEvent} must have seq ${badEvent} and a seat from players.`, "log");
+		}
 	});
 export type MatchReport = z.output<typeof MatchReport>;
 
-/** Same report → same hash. Built from the parsed report, so key order and seat order are fixed. */
-function hashReport(m: MatchReport): Buffer {
-	const canonical = { ...m, players: [...m.players].sort((a, b) => a.seat - b.seat) };
-	return new Bun.CryptoHasher("sha256").update(JSON.stringify(canonical)).digest();
+const HISTORY_PAGE = 20;
+
+/** The ids of the seats a person (not a bot) sat in. */
+function humanPlayerIds(players: { playerId: string | null }[]): string[] {
+	return players.flatMap((player) => (player.playerId ? [player.playerId] : []));
 }
 
-const HISTORY_PAGE = 20;
+/** Same report → same hash. Built from the parsed report, so key order and seat order are fixed. */
+function hashReport(match: MatchReport): Buffer {
+	const players = [...match.players].sort((a, b) => a.seat - b.seat);
+	const canonical = { ...match, players };
+
+	return new Bun.CryptoHasher("sha256").update(JSON.stringify(canonical)).digest();
+}
 
 /**
  * Stores a reported match with its move log. Idempotent by matchId: a retry with the same body returns
  * false (already stored); the same id with a different body is a conflict.
  */
-export async function recordMatch(sql: SQL, m: MatchReport): Promise<boolean> {
+export async function recordMatch(sql: SQL, match: MatchReport): Promise<boolean> {
 	// The game catalog lives in the database: a new game only adds its row to `games`.
-	const [game] = await sql`SELECT min_players, max_players FROM games WHERE slug = ${m.game}`;
-	if (!game) throw new ApiError("bad_input", 400, "Some fields are invalid.", { game: "Unknown game." });
-	if (m.players.length < game.min_players || m.players.length > game.max_players) {
-		throw new ApiError("bad_input", 400, "Some fields are invalid.", { players: `Needs ${game.min_players}–${game.max_players} players.` });
+	const [game] = await sql`SELECT min_players, max_players FROM games WHERE slug = ${match.game}`;
+	if (!game) {
+		throw new ApiError("bad_input", 400, "Some fields are invalid.", { game: "Unknown game." });
 	}
-	const hash = hashReport(m);
+
+	const playerCount = match.players.length;
+	if (playerCount < game.min_players || playerCount > game.max_players) {
+		throw new ApiError("bad_input", 400, "Some fields are invalid.", {
+			players: `Needs ${game.min_players}–${game.max_players} players.`,
+		});
+	}
+
+	const hash = hashReport(match);
+
 	return sql.begin(async (tx) => {
-		// A retry of a stored match is answered from the stored hash, before anything else is looked up.
-		const stored = async () => (await tx`SELECT body_hash FROM matches WHERE id = ${m.matchId}`)[0]?.body_hash as Uint8Array | undefined;
-		const retry = (existing: Uint8Array) => {
-			if (!Buffer.from(existing).equals(hash)) throw new ApiError("conflict", 409, "This match was already reported with different results.");
+		const storedHash = async () => {
+			const [row] = await tx`SELECT body_hash FROM matches WHERE id = ${match.matchId}`;
+			return row?.body_hash as Uint8Array | undefined;
+		};
+
+		/** A retry of a stored match: fine when the body is the same, a conflict otherwise. */
+		const answerRetry = (existing: Uint8Array) => {
+			if (!Buffer.from(existing).equals(hash)) {
+				throw new ApiError(
+					"conflict",
+					409,
+					"This match was already reported with different results.",
+				);
+			}
 			return false;
 		};
-		const before = await stored();
-		if (before) return retry(before);
-		const [room] = await tx`SELECT id, tournament_id FROM rooms WHERE code = ${m.roomCode} AND game_slug = ${m.game}`;
-		if (!room) throw new ApiError("unknown_room", 422, "The match names a room that does not exist.");
+
+		// A retry of a stored match is answered from the stored hash, before anything else is looked up.
+		const before = await storedHash();
+		if (before) return answerRetry(before);
+
+		const [room] = await tx`
+			SELECT id, tournament_id
+			FROM rooms
+			WHERE code = ${match.roomCode} AND game_slug = ${match.game}`;
+
+		if (!room) {
+			throw new ApiError("unknown_room", 422, "The match names a room that does not exist.");
+		}
+
 		const inserted = await tx`
 			INSERT INTO matches (id, game_slug, room_id, rules_version, started_at, ended_at, body_hash)
-			VALUES (${m.matchId}, ${m.game}, ${room.id}, ${m.rulesVersion}, ${m.startedAt}, ${m.endedAt}, ${hash})
-			ON CONFLICT (id) DO NOTHING RETURNING id`;
-		if (inserted.length === 0) return retry((await stored())!); // a concurrent retry got there first
-		const ids = m.players.flatMap((p) => (p.playerId ? [p.playerId] : []));
-		if (ids.length) {
-			const [{ n }] = await tx`SELECT count(*)::int AS n FROM players WHERE id IN ${tx(ids)}`;
-			if (n !== ids.length) throw new ApiError("unknown_player", 422, "The match lists a player that does not exist.");
+			VALUES (
+				${match.matchId},
+				${match.game},
+				${room.id},
+				${match.rulesVersion},
+				${match.startedAt},
+				${match.endedAt},
+				${hash}
+			)
+			ON CONFLICT (id) DO NOTHING
+			RETURNING id`;
+
+		// A concurrent retry got there first.
+		if (inserted.length === 0) {
+			return answerRetry((await storedHash())!);
 		}
-		const rows = m.players.map((p) => ({
-			match_id: m.matchId,
-			seat: p.seat,
-			player_id: p.playerId,
-			bot_name: p.botName ?? null,
-			placement: p.placement,
-			score: p.score,
+
+		const playerIds = humanPlayerIds(match.players);
+		if (playerIds.length > 0) {
+			const [{ n: known }] = await tx`
+				SELECT count(*)::int AS n
+				FROM players
+				WHERE id IN ${tx(playerIds)}`;
+
+			if (known !== playerIds.length) {
+				throw new ApiError("unknown_player", 422, "The match lists a player that does not exist.");
+			}
+		}
+
+		const seatRows = match.players.map((player) => ({
+			match_id: match.matchId,
+			seat: player.seat,
+			player_id: player.playerId,
+			bot_name: player.botName ?? null,
+			placement: player.placement,
+			score: player.score,
 		}));
-		await tx`INSERT INTO match_players ${tx(rows)}`;
+		await tx`INSERT INTO match_players ${tx(seatRows)}`;
+
 		// A tournament room plays one match: its report closes the room (and the tournament, if it was the last).
-		if (room.tournament_id) await closeRoom(tx, room.id, "finished", m.startedAt);
+		if (room.tournament_id) {
+			await closeRoom(tx, room.id, "finished", match.startedAt);
+		}
+
+		const events = JSON.stringify(match.log.events);
 		await tx`
 			INSERT INTO match_logs (match_id, log_version, event_count, events)
-			VALUES (${m.matchId}, ${m.log.logVersion}, ${m.log.events.length}, ${JSON.stringify(m.log.events)}::text::jsonb)`;
+			VALUES (
+				${match.matchId},
+				${match.log.logVersion},
+				${match.log.events.length},
+				${events}::text::jsonb
+			)`;
+
 		return true;
 	});
 }
 
 /** The player's own history, newest first. Cursor = last match id of the previous page. */
 export async function history(sql: SQL, playerId: string, cursor: string | undefined) {
+	const afterCursor = cursor ? sql`AND mp.match_id < ${cursor}` : sql``;
+
 	const rows = await sql`
-		SELECT m.id, m.game_slug, r.code AS room_code, m.started_at, m.ended_at, mp.seat, mp.placement, mp.score,
-		       (SELECT count(*)::int FROM match_players x WHERE x.match_id = m.id) AS players
-		FROM match_players mp JOIN matches m ON m.id = mp.match_id JOIN rooms r ON r.id = m.room_id
-		WHERE mp.player_id = ${playerId} ${cursor ? sql`AND mp.match_id < ${cursor}` : sql``}
+		SELECT
+			m.id,
+			m.game_slug,
+			r.code AS room_code,
+			m.started_at,
+			m.ended_at,
+			mp.seat,
+			mp.placement,
+			mp.score,
+			(SELECT count(*)::int FROM match_players x WHERE x.match_id = m.id) AS players
+		FROM match_players mp
+		JOIN matches m ON m.id = mp.match_id
+		JOIN rooms r ON r.id = m.room_id
+		WHERE mp.player_id = ${playerId} ${afterCursor}
 		ORDER BY mp.match_id DESC
 		LIMIT ${HISTORY_PAGE + 1}`;
+
 	const page = rows.slice(0, HISTORY_PAGE);
+	const hasMore = rows.length > HISTORY_PAGE;
+
 	return {
-		matches: page.map((r: any) => ({
-			id: r.id,
-			game: r.game_slug,
-			roomCode: r.room_code,
-			startedAt: r.started_at.toISOString(),
-			endedAt: r.ended_at.toISOString(),
-			players: r.players,
-			seat: r.seat,
-			placement: r.placement,
-			score: r.score,
+		matches: page.map((row: any) => ({
+			id: row.id,
+			game: row.game_slug,
+			roomCode: row.room_code,
+			startedAt: row.started_at.toISOString(),
+			endedAt: row.ended_at.toISOString(),
+			players: row.players,
+			seat: row.seat,
+			placement: row.placement,
+			score: row.score,
 		})),
-		nextCursor: rows.length > HISTORY_PAGE ? (page.at(-1)?.id ?? null) : null,
+		nextCursor: hasMore ? (page.at(-1)?.id ?? null) : null,
 	};
 }

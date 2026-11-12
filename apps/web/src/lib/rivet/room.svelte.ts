@@ -28,7 +28,13 @@ export type BaseView = {
 	turn: { left: number; total: number } | null;
 	round: number;
 	/** Set at a tournament table: it starts by itself. Times are ms from when the view was sent. */
-	tournament: { name: string; startsIn: number; waitEndsIn: number; seats: number; closed: boolean } | null;
+	tournament: {
+		name: string;
+		startsIn: number;
+		waitEndsIn: number;
+		seats: number;
+		closed: boolean;
+	} | null;
 };
 
 /**
@@ -64,50 +70,63 @@ export class RoomConnection<View extends BaseView, Hand> {
 		emptyHand: Hand
 	) {
 		this.hand = emptyHand;
-		this.#open(code).catch((e) => {
-			this.status = e instanceof RoomRefused ? 'refused' : 'error';
-			this.error = message(e);
+		this.#open(code).catch((err) => {
+			this.status = err instanceof RoomRefused ? 'refused' : 'error';
+			this.error = message(err);
 		});
 	}
 
 	async #open(code: string) {
 		const { client, actorId } = await roomClient(this.game, code);
 		this.#client = client;
+
 		// A fresh play token on every (re)connect: they only last 15 minutes.
 		const getParams = async () => {
 			try {
 				this.#tokenError = null;
 				return { playToken: await playToken() };
-			} catch (e) {
-				this.#tokenError = message(e);
-				throw e;
+			} catch (err) {
+				this.#tokenError = message(err);
+				throw err;
 			}
 		};
+
 		// ponytail: the actor is picked by name, so its typed actions are lost; `Conn` lists the shared ones.
-		const handle = (client as unknown as Record<string, RoomClient['bust31Room']>)[this.actor]!;
-		const conn = (this.#conn = handle.getForId(actorId, { getParams }).connect() as unknown as Conn);
+		const handles = client as unknown as Record<string, RoomClient['bust31Room']>;
+		const handle = handles[this.actor]!;
+		const conn = handle.getForId(actorId, { getParams }).connect() as unknown as Conn;
+		this.#conn = conn;
+
 		this.#stop.push(
-			conn.on('view', (v: View) => this.#setView(v)),
-			conn.on('hand', (h: Hand) => (this.hand = h)),
+			conn.on('view', (view: View) => this.#setView(view)),
+			conn.on('hand', (hand: Hand) => {
+				this.hand = hand;
+			}),
 			conn.onOpen(() => {
 				this.status = 'connected';
 				void this.#join();
 			}),
-			conn.onClose(() => (this.status = 'reconnecting')),
-			conn.onError((e) => {
+			conn.onClose(() => {
+				this.status = 'reconnecting';
+			}),
+			conn.onError((err) => {
 				this.status = 'error';
-				this.error = this.#tokenError ?? message(e);
+				this.error = this.#tokenError ?? message(err);
 			})
 		);
-		if (this.#disposed) await this.dispose(); // the page closed while we were fetching the token
+
+		// The page closed while we were fetching the token.
+		if (this.#disposed) await this.dispose();
 	}
 
 	get me(): View['players'][number] | null {
 		return this.view?.players.find((p) => p.id === this.playerId) ?? null;
 	}
+
 	get isHost() {
 		return !!this.playerId && this.view?.hostId === this.playerId;
 	}
+
 	get myTurn() {
 		return !!this.playerId && this.view?.turnPlayerId === this.playerId;
 	}
@@ -122,12 +141,15 @@ export class RoomConnection<View extends BaseView, Hand> {
 		});
 
 	// The server sends time left, not a timestamp, so a wrong device clock can't skew the countdown.
-	#setView(v: View) {
-		this.view = v;
-		this.turnEndsAt = v.turn ? Date.now() + v.turn.left : null;
-		if (v.turn) this.turnTotal = v.turn.total;
-		this.startsAt = v.tournament ? Date.now() + v.tournament.startsIn : null;
-		this.waitEndsAt = v.tournament ? Date.now() + v.tournament.waitEndsIn : null;
+	#setView(view: View) {
+		const now = Date.now();
+		this.view = view;
+
+		this.turnEndsAt = view.turn ? now + view.turn.left : null;
+		if (view.turn) this.turnTotal = view.turn.total;
+
+		this.startsAt = view.tournament ? now + view.tournament.startsIn : null;
+		this.waitEndsAt = view.tournament ? now + view.tournament.waitEndsIn : null;
 	}
 
 	start = () => this.#run(() => this.#c.start());
@@ -139,7 +161,10 @@ export class RoomConnection<View extends BaseView, Hand> {
 
 	/** Calls a game-specific action, with the same busy and error handling as the shared ones. */
 	protected call(action: string, ...args: unknown[]): Promise<void> {
-		return this.#run(() => (this.#c as unknown as Record<string, (...a: unknown[]) => Promise<unknown>>)[action]!(...args));
+		return this.#run(() => {
+			const actions = this.#c as unknown as Record<string, (...a: unknown[]) => Promise<unknown>>;
+			return actions[action]!(...args);
+		});
 	}
 
 	async #run(fn: () => Promise<unknown>): Promise<void> {
@@ -147,8 +172,8 @@ export class RoomConnection<View extends BaseView, Hand> {
 		this.error = null;
 		try {
 			await fn();
-		} catch (e) {
-			this.error = message(e);
+		} catch (err) {
+			this.error = message(err);
 		} finally {
 			this.busy = false;
 		}
@@ -168,6 +193,8 @@ export class RoomConnection<View extends BaseView, Hand> {
 	}
 }
 
-function message(e: unknown): string {
-	return e instanceof Error && e.message ? e.message : 'Something went wrong. Try again.';
+function message(err: unknown): string {
+	if (err instanceof Error && err.message) return err.message;
+
+	return 'Something went wrong. Try again.';
 }

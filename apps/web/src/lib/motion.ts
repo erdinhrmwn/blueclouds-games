@@ -2,22 +2,49 @@ import { prefersReducedMotion } from 'svelte/motion';
 import { cubicOut } from 'svelte/easing';
 import type { TransitionConfig } from 'svelte/transition';
 
+const PLACE_MS = 420;
+const SHAKE_MS = 450;
+/** A countdown restarts only when its deadline moved by more than this. */
+const DEADLINE_JITTER_MS = 300;
+/** Size of a flying face-down card in the deal. */
+const DEAL_CARD = { width: 28, height: 40 };
+
+const centerOf = (rect: DOMRect) => ({
+	x: rect.left + rect.width / 2,
+	y: rect.top + rect.height / 2
+});
+
 /**
  * Places a card on the pile: it travels from `from` (the card in your hand, or the seat of whoever
  * played it) along a small arc, lifts slightly mid-air and lands at its resting size.
  */
-export function placeCard(node: Element, { from, tilt = 0 }: { from: DOMRect | null; tilt?: number }): TransitionConfig {
+export function placeCard(
+	node: Element,
+	{ from, tilt = 0 }: { from: DOMRect | null; tilt?: number }
+): TransitionConfig {
 	if (!from || prefersReducedMotion.current) return { duration: 0 };
+
 	const to = node.getBoundingClientRect();
-	const dx = from.left + from.width / 2 - (to.left + to.width / 2);
-	const dy = from.top + from.height / 2 - (to.top + to.height / 2);
+	const start = centerOf(from);
+	const end = centerOf(to);
+	const dx = start.x - end.x;
+	const dy = start.y - end.y;
+
 	const startScale = Math.min(1.4, Math.max(0.35, from.width / to.width));
 	const arc = Math.min(80, Math.hypot(dx, dy) * 0.25);
+
 	return {
-		duration: 420,
+		duration: PLACE_MS,
 		easing: cubicOut,
-		css: (t, u) =>
-			`transform: translate(${dx * u}px, ${dy * u - arc * Math.sin(Math.PI * t)}px) rotate(${tilt * u}deg) scale(${(startScale * u + t) * (1 + 0.08 * Math.sin(Math.PI * t))}); z-index: 5`
+		// t runs 0 → 1, u = 1 - t. sin(πt) peaks mid-flight: the arc height and the slight lift.
+		css: (t, u) => {
+			const lift = Math.sin(Math.PI * t);
+			const x = dx * u;
+			const y = dy * u - arc * lift;
+			const scale = (startScale * u + t) * (1 + 0.08 * lift);
+
+			return `transform: translate(${x}px, ${y}px) rotate(${tilt * u}deg) scale(${scale}); z-index: 5`;
+		}
 	};
 }
 
@@ -30,10 +57,10 @@ export function seatRect(playerId: string | null): DOMRect | null {
 /** Short horizontal shake, used when someone busts. */
 export function shake(node: HTMLElement | undefined): void {
 	if (!node || prefersReducedMotion.current) return;
-	node.animate(
-		[0, -10, 9, -7, 5, -3, 0].map((x) => ({ transform: `translateX(${x}px)` })),
-		{ duration: 450, easing: 'ease-out' }
-	);
+
+	const offsets = [0, -10, 9, -7, 5, -3, 0];
+	const frames = offsets.map((x) => ({ transform: `translateX(${x}px)` }));
+	node.animate(frames, { duration: SHAKE_MS, easing: 'ease-out' });
 }
 
 type Countdown = { ms: number; total: number; kind: 'bar' | 'ring' } | null;
@@ -47,24 +74,35 @@ export function countdown(node: Element, params: Countdown) {
 	let anim: Animation | undefined;
 	let endsAt = 0;
 
-	function run(p: Countdown) {
-		if (!p) {
+	function run(timer: Countdown) {
+		if (!timer) {
 			anim?.cancel();
 			anim = undefined;
 			return;
 		}
-		if (anim && Math.abs(endsAt - performance.now() - p.ms) < 300) return;
+
+		const deadlineMoved = Math.abs(endsAt - performance.now() - timer.ms) >= DEADLINE_JITTER_MS;
+		if (anim && !deadlineMoved) return;
+
 		anim?.cancel();
-		endsAt = performance.now() + p.ms;
+		endsAt = performance.now() + timer.ms;
+
 		// More time than the turn length means the clock has not started yet (the dealer is dealing):
 		// stay full for the difference, then drain.
-		const delay = Math.max(0, p.ms - p.total);
-		const left = Math.min(1, p.ms / p.total);
+		const delay = Math.max(0, timer.ms - timer.total);
+		const left = Math.min(1, timer.ms / timer.total);
+
 		const frames =
-			p.kind === 'bar'
+			timer.kind === 'bar'
 				? [{ transform: `scaleX(${left})` }, { transform: 'scaleX(0)' }]
 				: [{ strokeDashoffset: `${100 * (1 - left)}` }, { strokeDashoffset: '100' }];
-		anim = node.animate(frames, { delay, duration: p.ms - delay, easing: 'linear', fill: 'both' });
+
+		anim = node.animate(frames, {
+			delay,
+			duration: timer.ms - delay,
+			easing: 'linear',
+			fill: 'both'
+		});
 	}
 
 	run(params);
@@ -81,31 +119,52 @@ export function dealCards(
 	seats: (DOMRect | null)[],
 	{ passes, stepMs, flightMs }: { passes: number; stepMs: number; flightMs: number }
 ): void {
-	const targets = seats.filter((r): r is DOMRect => r !== null);
+	const targets = seats.filter((rect): rect is DOMRect => rect !== null);
 	if (!from || targets.length === 0 || prefersReducedMotion.current) return;
+
 	const layer = document.createElement('div');
 	layer.setAttribute('aria-hidden', 'true');
 	layer.style.cssText = 'position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:30';
 	document.body.append(layer);
-	const W = 28, H = 40;
+
+	const { width, height } = DEAL_CARD;
+	const start = centerOf(from);
 	let last: Animation | undefined;
+
 	for (let pass = 0; pass < passes; pass++) {
-		targets.forEach((to, i) => {
+		targets.forEach((to, index) => {
 			const card = document.createElement('span');
 			card.className = 'card-back';
-			card.style.cssText = `position:absolute;width:${W}px;height:${H}px;left:${from.left + from.width / 2 - W / 2}px;top:${from.top + from.height / 2 - H / 2}px;opacity:0`;
+			card.style.cssText = [
+				'position:absolute',
+				`width:${width}px`,
+				`height:${height}px`,
+				`left:${start.x - width / 2}px`,
+				`top:${start.y - height / 2}px`,
+				'opacity:0'
+			].join(';');
 			layer.append(card);
-			const dx = to.left + to.width / 2 - (from.left + from.width / 2);
-			const dy = to.top + to.height / 2 - (from.top + from.height / 2);
-			last = card.animate(
-				[
-					{ transform: 'translate(0, 0) rotate(0deg) scale(0.9)', opacity: 1 },
-					{ transform: `translate(${dx}px, ${dy}px) rotate(${(i % 2 ? 1 : -1) * 200}deg) scale(0.7)`, opacity: 1, offset: 0.9 },
-					{ transform: `translate(${dx}px, ${dy}px) rotate(${(i % 2 ? 1 : -1) * 200}deg) scale(0.5)`, opacity: 0 }
-				],
-				{ delay: (pass * targets.length + i) * stepMs, duration: flightMs, easing: 'cubic-bezier(0.2, 0.7, 0.3, 1)', fill: 'both' }
-			);
+
+			const end = centerOf(to);
+			const move = `translate(${end.x - start.x}px, ${end.y - start.y}px)`;
+			// Cards spin alternately left and right.
+			const spin = `rotate(${(index % 2 ? 1 : -1) * 200}deg)`;
+
+			const frames = [
+				{ transform: 'translate(0, 0) rotate(0deg) scale(0.9)', opacity: 1 },
+				{ transform: `${move} ${spin} scale(0.7)`, opacity: 1, offset: 0.9 },
+				{ transform: `${move} ${spin} scale(0.5)`, opacity: 0 }
+			];
+
+			last = card.animate(frames, {
+				delay: (pass * targets.length + index) * stepMs,
+				duration: flightMs,
+				easing: 'cubic-bezier(0.2, 0.7, 0.3, 1)',
+				fill: 'both'
+			});
 		});
 	}
-	last?.finished.then(() => layer.remove(), () => layer.remove());
+
+	const cleanUp = () => layer.remove();
+	last?.finished.then(cleanUp, cleanUp);
 }

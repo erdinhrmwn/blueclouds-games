@@ -21,12 +21,20 @@
 		'room.unassign': 'Took player off table'
 	};
 	/** The one detail worth showing per action. */
-	const note = (r: (typeof data.rows)[number]) => {
-		if (r.action === 'login_failed') return `as “${r.detail.username}”`;
-		if (typeof r.detail.reason === 'string') return `Reason: ${r.detail.reason}`;
-		if (r.action === 'tournament.distribute') return `${r.detail.players} players, ${r.detail.rooms} tables${r.detail.auto ? ', automatic' : ''}`;
-		if (r.action === 'tournament.register') return `${r.detail.players} players`;
-		return r.roomCode ? `Table ${r.roomCode}` : '';
+	const note = (row: (typeof data.rows)[number]) => {
+		const { action, detail } = row;
+
+		if (action === 'login_failed') return `as “${detail.username}”`;
+		if (typeof detail.reason === 'string') return `Reason: ${detail.reason}`;
+
+		if (action === 'tournament.distribute') {
+			const automatic = detail.auto ? ', automatic' : '';
+			return `${detail.players} players, ${detail.rooms} tables${automatic}`;
+		}
+
+		if (action === 'tournament.register') return `${detail.players} players`;
+
+		return row.roomCode ? `Table ${row.roomCode}` : '';
 	};
 </script>
 
@@ -55,16 +63,28 @@
 				{#each data.rows as r (r.id)}
 					<tr class="border-b border-line last:border-0">
 						<td class="px-3 py-2 whitespace-nowrap">{utc(r.createdAt)}</td>
-						<td class="px-3 py-2">{r.admin ?? (r.action === 'tournament.distribute' ? 'Platform' : '')}</td>
-						<td class="px-3 py-2 {r.action === 'login_failed' || r.action === 'player.disable' ? 'text-danger' : ''}">{ACTIONS[r.action] ?? r.action}</td>
+						<td class="px-3 py-2"
+							>{r.admin ?? (r.action === 'tournament.distribute' ? 'Platform' : '')}</td
+						>
+						<td
+							class="px-3 py-2 {r.action === 'login_failed' || r.action === 'player.disable'
+								? 'text-danger'
+								: ''}">{ACTIONS[r.action] ?? r.action}</td
+						>
 						<td class="px-3 py-2">
 							{#if r.playerId}
-								<a class="underline decoration-line underline-offset-2 hover:decoration-ink" href="/players/{r.playerId}">{r.playerName ?? r.playerId}</a>
+								<a
+									class="underline decoration-line underline-offset-2 hover:decoration-ink"
+									href="/players/{r.playerId}">{r.playerName ?? r.playerId}</a
+								>
 							{/if}
 						</td>
 						<td class="px-3 py-2">
 							{#if r.tournamentId}
-								<a class="underline decoration-line underline-offset-2 hover:decoration-ink" href="/tournaments/{r.tournamentId}">{r.tournamentName}</a>
+								<a
+									class="underline decoration-line underline-offset-2 hover:decoration-ink"
+									href="/tournaments/{r.tournamentId}">{r.tournamentName}</a
+								>
 							{/if}
 						</td>
 						<td class="px-3 py-2">{note(r)}</td>

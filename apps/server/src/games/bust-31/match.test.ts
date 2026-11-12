@@ -25,7 +25,13 @@ test("placements follow the elimination order, winner first", () => {
 	// Cy goes out first; the bot goes out on the final move, which also ends the game.
 	let match = noteMove(start, table({ a: 2, "bot-1": 1, c: 0 }, null));
 	expect(match.out).toEqual(["c"]);
-	const report = buildReport(match, table({ a: 2, "bot-1": 0, c: 0 }, "a"), "ABCD", "2026-11-11T10:05:00.000Z", []);
+	const report = buildReport(
+		match,
+		table({ a: 2, "bot-1": 0, c: 0 }, "a"),
+		"ABCD",
+		"2026-11-11T10:05:00.000Z",
+		[],
+	);
 	const byWho = Object.fromEntries(report.players.map((p) => [p.playerId ?? p.botName, p]));
 	expect(byWho.a).toMatchObject({ placement: 1, score: 2, bot: false });
 	expect(byWho["Bot Rain"]).toMatchObject({ placement: 2, playerId: null, bot: true });
@@ -81,13 +87,21 @@ describe("logEvents", () => {
 		const g = withHand(started(), [card("number", 7, "n7-0")], 10);
 		const next = playCard(g, "a", "n7-0", rng);
 		expect(logEvents(g, next)).toEqual([
-			{ type: "play", seat: 0, data: { card: "n7-0", total: 17, drew: g.deck[0]!.id, by: "player" } },
+			{
+				type: "play",
+				seat: 0,
+				data: { card: "n7-0", total: 17, drew: g.deck[0]!.id, by: "player" },
+			},
 		]);
 		expect(logEvents(g, next, true)[0]!.data!.by).toBe("timeout");
 	});
 
 	test("an empty deck logs the reshuffle before the play", () => {
-		const g = { ...withHand(started(), [card("number", 2, "n2-0")]), deck: [], discard: [card("number", 5, "n5-0"), card("number", 6, "n6-0")] };
+		const g = {
+			...withHand(started(), [card("number", 2, "n2-0")]),
+			deck: [],
+			discard: [card("number", 5, "n5-0"), card("number", 6, "n6-0")],
+		};
 		const entries = logEvents(g, playCard(g, "a", "n2-0", rng));
 		expect(entries.map((e) => e.type)).toEqual(["reshuffle", "play"]);
 		expect([...(entries[0]!.data!.deck as string[])].sort()).toEqual(["n5-0", "n6-0"]);
@@ -107,7 +121,11 @@ describe("logEvents", () => {
 		const last = { ...g, players: g.players.map((p) => (p.id === "a" ? { ...p, lives: 1 } : p)) };
 		const end = playCard(last, "a", "n9-0", rng);
 		expect(logEvents(last, end, true)).toEqual([
-			{ type: "bust", seat: 0, data: { card: "n9-0", total: 39, lives: 0, eliminated: true, by: "timeout" } },
+			{
+				type: "bust",
+				seat: 0,
+				data: { card: "n9-0", total: 39, lives: 0, eliminated: true, by: "timeout" },
+			},
 			{ type: "finished", data: { winner: 1 } },
 		]);
 	});
@@ -141,14 +159,21 @@ describe("logEvents", () => {
 		const count = (type: string) => entries.filter((e) => e.type === type).length;
 		expect(count("deal")).toBe(g.round);
 		expect(count("bust")).toBe(g.players.reduce((n, p) => n + 3 - Math.max(0, p.lives), 0));
-		expect(entries.at(-1)).toEqual({ type: "finished", data: { winner: g.players.find((p) => p.id === g.winnerId)!.seat } });
+		expect(entries.at(-1)).toEqual({
+			type: "finished",
+			data: { winner: g.players.find((p) => p.id === g.winnerId)!.seat },
+		});
 		expect(JSON.stringify(entries).length).toBeLessThan(100_000);
 	});
 });
 
 test("stamp numbers events after the ones already logged", () => {
 	const match = { ...start, seq: 4 };
-	const { match: next, events } = stamp(match, [{ type: "a" }, { type: "b" }], Date.parse(start.startedAt) + 1500);
+	const { match: next, events } = stamp(
+		match,
+		[{ type: "a" }, { type: "b" }],
+		Date.parse(start.startedAt) + 1500,
+	);
 	expect(events).toEqual([
 		{ seq: 4, t: 1500, type: "a" },
 		{ seq: 5, t: 1500, type: "b" },

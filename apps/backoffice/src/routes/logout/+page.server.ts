@@ -8,7 +8,10 @@ export const load: PageServerLoad = () => redirect(303, '/');
 export const actions: Actions = {
 	default: async ({ cookies, locals, getClientAddress }) => {
 		const token = cookies.get(SESSION_COOKIE);
-		if (token && locals.admin) await logout(sql, token, locals.admin, auditIp(getClientAddress()));
+		if (token && locals.admin) {
+			await logout(sql, token, locals.admin, auditIp(getClientAddress()));
+		}
+
 		cookies.delete(SESSION_COOKIE, { path: '/' });
 		redirect(303, '/login');
 	}

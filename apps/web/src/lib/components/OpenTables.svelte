@@ -7,6 +7,12 @@
 	let { game }: { game: string } = $props();
 	let list = $state<RoomList | null>(null);
 
+	const phaseLabel = (phase: string, open: boolean) => {
+		if (phase === 'playing') return 'Playing';
+		if (phase === 'finished') return 'Finished';
+		return open ? 'In lobby' : 'Full';
+	};
+
 	onMount(() => {
 		const rooms = new RoomList(game);
 		list = rooms;
@@ -19,7 +25,9 @@
 	{#if !list || list.status === 'loading'}
 		<p class="mt-3 text-paper/75" aria-live="polite">Looking for tables…</p>
 	{:else if list.status === 'error'}
-		<p class="mt-3 text-paper/75">Could not load the tables. You can still join with an invite code.</p>
+		<p class="mt-3 text-paper/75">
+			Could not load the tables. You can still join with an invite code.
+		</p>
 	{:else if list.rooms.length === 0}
 		<p class="mt-3 text-paper/75">No public tables right now. Open one and invite friends.</p>
 	{:else}
@@ -32,10 +40,15 @@
 						<span class="block truncate font-medium">{r.host ? `${r.host}’s table` : 'Table'}</span>
 						<span class="block text-sm text-paper/75">
 							{r.players}/{r.maxPlayers} players ·
-							{r.phase === 'playing' ? 'Playing' : r.phase === 'finished' ? 'Finished' : open ? 'In lobby' : 'Full'}
+							{phaseLabel(r.phase, open)}
 						</span>
 					</span>
-					<button class="btn-ghost shrink-0" onclick={() => enterTable(game, r.code)} disabled={!open} aria-label="Join table {r.code}">
+					<button
+						class="btn-ghost shrink-0"
+						onclick={() => enterTable(game, r.code)}
+						disabled={!open}
+						aria-label="Join table {r.code}"
+					>
 						Join
 					</button>
 				</li>

@@ -4,7 +4,10 @@ import { type BaseView, RoomConnection } from '#lib/rivet/room.svelte.ts';
 export type Hand = { cards: Card[]; drawnId: string | null };
 
 /** A Cloudburst room: the shared actions plus play, draw and pass. */
-export class CloudburstConnection extends RoomConnection<PublicView & Pick<BaseView, 'tournament'>, Hand> {
+export class CloudburstConnection extends RoomConnection<
+	PublicView & Pick<BaseView, 'tournament'>,
+	Hand
+> {
 	constructor(code: string) {
 		super('cloudburst', 'cloudburstRoom', code, { cards: [], drawnId: null });
 	}

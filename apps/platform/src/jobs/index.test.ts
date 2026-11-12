@@ -2,7 +2,8 @@ import { expect, test } from "bun:test";
 import { SCHEDULES } from "./index";
 
 test("every job schedule is a valid cron expression with a next run", () => {
-	for (const cron of Object.values(SCHEDULES)) expect(Bun.cron.parse(cron, Date.now(), { tz: "UTC" })).toBeInstanceOf(Date);
+	for (const cron of Object.values(SCHEDULES))
+		expect(Bun.cron.parse(cron, Date.now(), { tz: "UTC" })).toBeInstanceOf(Date);
 });
 
 test("the guest sweep runs at 03:00 WIB", () => {

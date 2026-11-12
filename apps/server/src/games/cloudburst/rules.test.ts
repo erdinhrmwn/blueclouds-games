@@ -23,8 +23,18 @@ import {
 import { RuleError } from "../shared/table";
 
 const rng = () => 0.42;
-const num = (suit: Card["suit"], value: number, copy = 0): Card => ({ id: `${suit}-${value}-${copy}`, kind: "number", suit, value });
-const act = (suit: Card["suit"], kind: "calm" | "swirl" | "gust", copy = 0): Card => ({ id: `${suit}-${kind}-${copy}`, kind, suit, value: 0 });
+const num = (suit: Card["suit"], value: number, copy = 0): Card => ({
+	id: `${suit}-${value}-${copy}`,
+	kind: "number",
+	suit,
+	value,
+});
+const act = (suit: Card["suit"], kind: "calm" | "swirl" | "gust", copy = 0): Card => ({
+	id: `${suit}-${kind}-${copy}`,
+	kind,
+	suit,
+	value: 0,
+});
 const rainbow: Card = { id: "rainbow-0", kind: "rainbow", suit: null, value: 0 };
 
 function table(n = 3): Game {
@@ -35,7 +45,12 @@ function table(n = 3): Game {
 
 /** Sets hands (by player index), the pile top and the suit, so a test controls the play. */
 function setup(g: Game, hands: Card[][], top: Card, suit = top.suit!): Game {
-	return { ...g, players: g.players.map((p, i) => ({ ...p, hand: hands[i] ?? p.hand })), discard: [top], suit };
+	return {
+		...g,
+		players: g.players.map((p, i) => ({ ...p, hand: hands[i] ?? p.hand })),
+		discard: [top],
+		suit,
+	};
 }
 
 describe("deck and fitting", () => {
@@ -74,7 +89,11 @@ describe("a round", () => {
 	});
 
 	test("playing a fitting card moves the turn on; a wrong card or turn is refused", () => {
-		let g = setup(table(), [[num("sun", 6), num("rain", 1)], [num("wind", 2)], [num("wind", 3)]], num("sun", 5));
+		let g = setup(
+			table(),
+			[[num("sun", 6), num("rain", 1)], [num("wind", 2)], [num("wind", 3)]],
+			num("sun", 5),
+		);
 		expect(() => playCard(g, "a", { cardId: "rain-1-0" }, rng)).toThrow(RuleError);
 		expect(() => playCard(g, "b", { cardId: "wind-2-0" }, rng)).toThrow(RuleError);
 		g = playCard(g, "a", { cardId: "sun-6-0" }, rng);
@@ -101,7 +120,11 @@ describe("a round", () => {
 	});
 
 	test("Gust hands a chosen card to the next player, and needs one", () => {
-		let g = setup(table(), [[act("sun", "gust"), num("rain", 1), num("wind", 8)], [num("storm", 3)]], num("sun", 5));
+		let g = setup(
+			table(),
+			[[act("sun", "gust"), num("rain", 1), num("wind", 8)], [num("storm", 3)]],
+			num("sun", 5),
+		);
 		expect(() => playCard(g, "a", { cardId: "sun-gust-0" }, rng)).toThrow(RuleError);
 		g = playCard(g, "a", { cardId: "sun-gust-0", giveId: "wind-8-0" }, rng);
 		expect(g.players[0]!.hand.map((c) => c.id)).toEqual(["rain-1-0"]);
@@ -147,12 +170,23 @@ describe("a round", () => {
 
 describe("rounds and points", () => {
 	test("going out scores a point per card left for the others, then deals the next round", () => {
-		let g = setup(table(), [[num("sun", 6)], [num("rain", 1), num("rain", 2)], [num("wind", 3)]], num("sun", 5));
+		let g = setup(
+			table(),
+			[[num("sun", 6)], [num("rain", 1), num("rain", 2)], [num("wind", 3)]],
+			num("sun", 5),
+		);
 		g = playCard(g, "a", { cardId: "sun-6-0" }, rng);
 		expect(g.players.map((p) => p.points)).toEqual([0, 2, 1]);
-		expect(g.lastEvent).toMatchObject({ type: "roundEnd", outId: "a", gained: { a: 0, b: 2, c: 1 }, next: "round" });
+		expect(g.lastEvent).toMatchObject({
+			type: "roundEnd",
+			outId: "a",
+			gained: { a: 0, b: 2, c: 1 },
+			next: "round",
+		});
 		// The leftover hands are revealed with the event, not the freshly dealt ones.
-		expect(g.lastEvent).toMatchObject({ left: { a: [], b: [num("rain", 1), num("rain", 2)], c: [num("wind", 3)] } });
+		expect(g.lastEvent).toMatchObject({
+			left: { a: [], b: [num("rain", 1), num("rain", 2)], c: [num("wind", 3)] },
+		});
 		expect(g.round).toBe(2);
 		expect(g.turn).toBe(1); // the first turn moves one seat each round
 		expect(g.players.every((p) => p.hand.length === HAND_SIZE)).toBe(true);
@@ -165,8 +199,18 @@ describe("rounds and points", () => {
 		expect(g.phase).toBe("finished");
 		expect(g.winnerId).toBe("a");
 		expect([...placements(g).values()]).toEqual([1, 3, 2]);
-		const report = buildReport({ id: "m", startedAt: "2026-11-11T00:00:00.000Z", seq: 0 }, g, "ABCD", "2026-11-11T00:10:00.000Z", []);
-		expect(report.players.map((p) => [p.placement, p.score])).toEqual([[1, 3], [3, BURST_AT], [2, 4]]);
+		const report = buildReport(
+			{ id: "m", startedAt: "2026-11-11T00:00:00.000Z", seq: 0 },
+			g,
+			"ABCD",
+			"2026-11-11T00:10:00.000Z",
+			[],
+		);
+		expect(report.players.map((p) => [p.placement, p.score])).toEqual([
+			[1, 3],
+			[3, BURST_AT],
+			[2, 4],
+		]);
 	});
 
 	test("a tie for fewest at the limit plays one more round", () => {
@@ -188,7 +232,11 @@ describe("rounds and points", () => {
 
 describe("bots", () => {
 	test("slow down a player about to go out with a Calm", () => {
-		const g = setup(table(), [[num("sun", 1), act("sun", "calm")], [num("rain", 1)]], num("sun", 5));
+		const g = setup(
+			table(),
+			[[num("sun", 1), act("sun", "calm")], [num("rain", 1)]],
+			num("sun", 5),
+		);
 		expect(chooseBotMove(g)).toEqual({ type: "play", input: { cardId: "sun-calm-0" } });
 	});
 
@@ -197,12 +245,24 @@ describe("bots", () => {
 		expect(chooseBotMove(g)).toEqual({ type: "play", input: { cardId: "rain-4-0" } });
 		g = setup(table(), [[num("rain", 1)]], num("sun", 5));
 		expect(chooseBotMove(g)).toEqual({ type: "draw" });
-		expect(chooseBotMove(drawCard({ ...g, deck: [num("wind", 8)] }, "a", rng))).toEqual({ type: "pass" });
+		expect(chooseBotMove(drawCard({ ...g, deck: [num("wind", 8)] }, "a", rng))).toEqual({
+			type: "pass",
+		});
 	});
 
 	test("Gust gives away a card of the suit held fewest of, never a Rainbow", () => {
-		const g = setup(table(), [[act("sun", "gust"), rainbow, num("rain", 1), num("rain", 2), num("wind", 7)], [num("sun", 1), num("sun", 2), num("sun", 3)]], num("sun", 5));
-		expect(chooseBotMove(g)).toEqual({ type: "play", input: { cardId: "sun-gust-0", giveId: "wind-7-0" } });
+		const g = setup(
+			table(),
+			[
+				[act("sun", "gust"), rainbow, num("rain", 1), num("rain", 2), num("wind", 7)],
+				[num("sun", 1), num("sun", 2), num("sun", 3)],
+			],
+			num("sun", 5),
+		);
+		expect(chooseBotMove(g)).toEqual({
+			type: "play",
+			input: { cardId: "sun-gust-0", giveId: "wind-7-0" },
+		});
 	});
 
 	test("bots finish whole matches with valid results and a complete move log", () => {
@@ -219,7 +279,12 @@ describe("bots", () => {
 			while (g.phase === "playing" && steps++ < 5000) {
 				const id = g.players[g.turn]!.id;
 				const move = chooseBotMove(g);
-				const next = move.type === "play" ? playCard(g, id, move.input, random) : move.type === "draw" ? drawCard(g, id, random) : pass(g, id);
+				const next =
+					move.type === "play"
+						? playCard(g, id, move.input, random)
+						: move.type === "draw"
+							? drawCard(g, id, random)
+							: pass(g, id);
 				log.push(...logEvents(g, next, true));
 				g = next;
 			}
@@ -229,8 +294,18 @@ describe("bots", () => {
 			expect(log.filter((e) => e.type === "deal")).toHaveLength(g.round);
 			expect(log.filter((e) => e.type === "round_end")).toHaveLength(g.round);
 			expect(log.filter((e) => ["play", "draw", "pass"].includes(e.type))).toHaveLength(steps);
-			expect(log.every((e) => !("by" in (e.data ?? {})) || e.data!.by === (e.seat === 0 ? "timeout" : "bot"))).toBe(true);
-			expect(log.at(-1)).toEqual({ type: "finished", data: { winner: g.players.find((p) => p.id === g.winnerId)!.seat, points: Object.fromEntries(g.players.map((p) => [p.seat, p.points])) } });
+			expect(
+				log.every(
+					(e) => !("by" in (e.data ?? {})) || e.data!.by === (e.seat === 0 ? "timeout" : "bot"),
+				),
+			).toBe(true);
+			expect(log.at(-1)).toEqual({
+				type: "finished",
+				data: {
+					winner: g.players.find((p) => p.id === g.winnerId)!.seat,
+					points: Object.fromEntries(g.players.map((p) => [p.seat, p.points])),
+				},
+			});
 			expect([...placements(g).values()].filter((p) => p === 1)).toHaveLength(1);
 			expect(Math.max(...g.players.map((p) => p.points))).toBeGreaterThanOrEqual(BURST_AT);
 		}
