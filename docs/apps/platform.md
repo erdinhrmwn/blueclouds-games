@@ -63,7 +63,7 @@ apps/platform/
     services/       # business rules + SQL, as plain functions taking `sql` first
       players.ts  guests.ts  rooms.ts  tournaments.ts  matches.ts
     middleware/     # auth.ts (player secret, server key), rate-limit.ts
-    jobs/           # in-process loops: tournament-job.ts (30 s), guest-sweep.ts (daily)
+    jobs/           # index.ts: Bun.cron schedules, tournament job (every minute), guest sweep (daily)
     lib/            # http.ts (envelope, ApiError, parse), log.ts, secrets.ts, play-tokens.ts
     db/             # migrate.ts (runner), schema.test.ts
   migrations/       # NNN_name.sql, applied in order
