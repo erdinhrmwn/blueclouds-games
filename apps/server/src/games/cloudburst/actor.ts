@@ -48,7 +48,7 @@ import {
 } from "../shared/room";
 import { type MatchState, newMatch } from "../shared/match";
 import { BotIdInput } from "../shared/schema";
-import { removePlayer, setAway, takeSeat } from "../shared/table";
+import { markBack, removePlayer, takeSeat } from "../shared/table";
 
 const SLUG = "cloudburst";
 /** After a bot (or the timer) draws, it plays or passes this much later, so the draw shows first. */
@@ -63,7 +63,7 @@ export const cloudburstRoom = actor({
 	createVars: () => roomVars(createGame()),
 	onWake: async (c) => {
 		await loadRoom(c);
-		await scheduleTurn(c, true);
+		await resumeTurn(c);
 		await resumeReports(c);
 		await wakeTournament(c);
 	},
@@ -93,7 +93,7 @@ export const cloudburstRoom = actor({
 				await tournamentTick(c, tournament(c));
 			} else if (seated.away) {
 				// Back from a closed tab.
-				c.vars.game = setAway(c.vars.game, who.id, false);
+				c.vars.game = markBack(c.vars.game, who.id);
 				await commit(c);
 			}
 
@@ -224,7 +224,7 @@ const commit = (c: Ctx, auto = false) =>
 		c,
 		{
 			slug: SLUG,
-			scheduleTurn: () => scheduleTurn(c, false),
+			scheduleTurn: () => scheduleTurn(c),
 			logEvents,
 			buildReport,
 			view: () => viewOf(c),
@@ -250,8 +250,14 @@ const tournament = (c: Ctx) => ({
 	commit: () => commit(c),
 });
 
+/** Arms the clock when a new turn starts; a no-op while the same turn runs. */
+const scheduleTurn = (c: Ctx) => armTurnClock(c, { resume: false });
+
+/** After a wake: re-arms the running turn and keeps the deadline players already saw. */
+const resumeTurn = (c: Ctx) => armTurnClock(c, { resume: true });
+
 /** Everyone gets TURN_MS; a fresh round's clock starts after the round summary and the deal. */
-function scheduleTurn(c: Ctx, resume: boolean): Promise<void> {
+function armTurnClock(c: Ctx, { resume }: { resume: boolean }): Promise<void> {
 	const game = c.vars.game as Game;
 	const current = game.phase === "playing" ? game.players[game.turn] : undefined;
 	return armTurn(c, current, {

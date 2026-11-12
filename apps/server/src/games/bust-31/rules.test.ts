@@ -14,7 +14,7 @@ import {
 	START_LIVES,
 	startGame,
 } from "./rules";
-import { removePlayer, RuleError, setAway, takeSeat } from "../shared/table";
+import { markAway, markBack, removePlayer, RuleError, takeSeat } from "../shared/table";
 
 const rng = () => 0.42;
 const card = (kind: Card["kind"], value: number, id = `${kind}${value}`): Card => ({
@@ -157,11 +157,11 @@ describe("playing", () => {
 
 describe("away players", () => {
 	test("a player who left mid-game keeps the seat, then is not taken back to the lobby", () => {
-		const g = setAway(twoPlayerGame(), "b", true);
+		const g = markAway(twoPlayerGame(), "b");
 		expect(g.players.find((p) => p.id === "b")?.away).toBe(true);
 		const done = { ...g, phase: "finished" as const };
 		expect(resetToLobby(done, "a").players.map((p) => p.id)).toEqual(["a"]);
-		expect(setAway(g, "b", false).players.find((p) => p.id === "b")?.away).toBe(false);
+		expect(markBack(g, "b").players.find((p) => p.id === "b")?.away).toBe(false);
 	});
 });
 

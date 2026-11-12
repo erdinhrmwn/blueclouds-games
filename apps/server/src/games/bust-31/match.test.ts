@@ -4,7 +4,7 @@ import { chooseBotCard } from "./bots";
 import { buildReport, logEvents, type MatchState, noteMove } from "./match";
 import { type LogEntry, stamp, uuidv7 } from "../shared/match";
 import { addPlayer, type Card, createGame, type Game, playCard, startGame } from "./rules";
-import { setAway } from "../shared/table";
+import { markAway, markBack } from "../shared/table";
 
 function table(lives: Record<string, number>, winnerId: string | null): Game {
 	let g = createGame();
@@ -132,9 +132,9 @@ describe("logEvents", () => {
 
 	test("bots, away players and lobby changes", () => {
 		const g = started();
-		const away = setAway(g, "a", true);
+		const away = markAway(g, "a");
 		expect(logEvents(g, away)).toEqual([{ type: "away", seat: 0 }]);
-		expect(logEvents(away, setAway(away, "a", false))).toEqual([{ type: "back", seat: 0 }]);
+		expect(logEvents(away, markBack(away, "a"))).toEqual([{ type: "back", seat: 0 }]);
 		const botTurn = { ...g, turn: 1 };
 		const bot = botTurn.players[1]!;
 		const played = playCard(botTurn, bot.id, chooseBotCard(bot.hand, 0)!.id, rng);

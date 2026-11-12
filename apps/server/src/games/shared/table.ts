@@ -94,7 +94,12 @@ export function removePlayer<G extends Table>(game: G, id: string): G {
 }
 
 /** A human who closed the game mid-match: their turns are played for them until they return. */
-export function setAway<G extends Table>(game: G, id: string, away: boolean): G {
+export const markAway = <G extends Table>(game: G, id: string): G => withAway(game, id, true);
+
+/** The away player is back and plays their own turns again. */
+export const markBack = <G extends Table>(game: G, id: string): G => withAway(game, id, false);
+
+function withAway<G extends Table>(game: G, id: string, away: boolean): G {
 	return {
 		...game,
 		players: game.players.map((p) => (p.id === id && !p.bot ? { ...p, away } : p)),

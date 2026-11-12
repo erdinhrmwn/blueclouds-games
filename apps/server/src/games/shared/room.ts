@@ -10,7 +10,7 @@ import {
 } from "../../platform";
 import { type LogEntry, type LogEvent, type MatchReport, type MatchState, stamp } from "./match";
 import { ConnParams, SeatInput } from "./schema";
-import { removePlayer, RuleError, SEATS, setAway, type Table } from "./table";
+import { markAway, removePlayer, RuleError, SEATS, type Table } from "./table";
 
 /** How long a closed tab has to come back (a refresh) before its player leaves the table. */
 export const GONE_AFTER_MS = 15_000;
@@ -327,7 +327,7 @@ export async function dropIfGone(
 		return true;
 	}
 
-	c.vars.game = setAway(game, player.id, true);
+	c.vars.game = markAway(game, player.id);
 
 	// Their turn may be running on the full human clock: play it at bot speed instead.
 	if (game.phase === "playing" && turn.playerId === player.id) {
@@ -474,15 +474,21 @@ export async function sendReports(c: Ctx): Promise<void> {
 	if (retryIn !== null) await c.schedule.after(retryIn, "sendReports");
 }
 
-/**
- * The room's tournament and whether it is listed, read from the platform once and again on every wake (to see a cancel).
- * If the platform can't be reached, the last known answer stands; with none yet, joining is refused.
- */
-export async function loadTournament(c: Ctx, refresh = false): Promise<TournamentRoom | null> {
+/** The room's tournament and whether it is listed: the known answer, else asked from the platform. */
+export async function loadTournament(c: Ctx): Promise<TournamentRoom | null> {
 	const known = c.vars.tournament as TournamentRoom | null | undefined;
 	// `listed` is undefined in rooms saved before private tables existed: ask once more.
-	if (known !== undefined && c.vars.listed !== undefined && !refresh) return known;
+	if (known !== undefined && c.vars.listed !== undefined) return known;
 
+	return refreshTournament(c);
+}
+
+/**
+ * Asks the platform again for the room's tournament and whether it is listed (on every wake, to see a cancel).
+ * If the platform can't be reached, the last known answer stands; with none yet, joining is refused.
+ */
+export async function refreshTournament(c: Ctx): Promise<TournamentRoom | null> {
+	const known = c.vars.tournament as TournamentRoom | null | undefined;
 	const code = c.key[0] as string;
 	let room: Awaited<ReturnType<typeof fetchRoomSeats>>;
 	try {
@@ -518,7 +524,7 @@ export async function loadTournament(c: Ctx, refresh = false): Promise<Tournamen
 
 /** onWake: refreshes the tournament and arms its start and the end of the wait for late players. */
 export async function wakeTournament(c: Ctx): Promise<void> {
-	const tournament = await loadTournament(c, true).catch(() => null);
+	const tournament = await refreshTournament(c).catch(() => null);
 	if (!tournament || tournament.closed || tournament.cancelled) return;
 	if ((c.vars.game as Table).phase !== "lobby") return;
 
@@ -536,7 +542,7 @@ export async function wakeTournament(c: Ctx): Promise<void> {
  * Asks the platform again first, since an admin may have seated or removed someone by hand.
  */
 export async function seatFor(c: Ctx, who: Identity): Promise<number | undefined> {
-	const tournament = c.vars.tournament === null ? null : await loadTournament(c, true);
+	const tournament = c.vars.tournament === null ? null : await refreshTournament(c);
 	if (!tournament) return undefined;
 
 	if (tournament.cancelled) {
