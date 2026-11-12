@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { utc } from '#lib/format.ts';
-	import { duration, tournamentStatus } from '#lib/tournament-status.ts';
+	import PageHeader from '#lib/components/PageHeader.svelte';
+	import { duration, statusTag, tournamentStatus } from '#lib/tournament-status.ts';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
@@ -40,44 +41,65 @@
 
 <svelte:head><title>{tournament.name} · Tournaments · Backoffice</title></svelte:head>
 
-<a href="/tournaments" class="text-sm text-muted underline-offset-2 hover:underline">Tournaments</a>
-<h1 class="mt-1 text-2xl font-semibold">{tournament.name}</h1>
+<PageHeader title={tournament.name} parent={{ href: '/tournaments', label: 'Tournaments' }}>
+	{#snippet actions()}
+		<span class={statusTag(status)}>{status.label}</span>
+	{/snippet}
+</PageHeader>
 
-<dl class="mt-4 grid max-w-2xl grid-cols-[auto_1fr] gap-x-6 gap-y-1 text-sm">
-	<dt class="text-muted">Status</dt>
-	<dd class={status.bad ? 'font-medium text-danger' : ''}>{status.label}</dd>
-	<dt class="text-muted">Game</dt>
-	<dd>{tournament.gameName}, {tournament.playersPerRoom} per table</dd>
-	<dt class="text-muted">Starts</dt>
-	<dd>{utc(tournament.startsAt)}</dd>
-	<dt class="text-muted">Sign-up</dt>
-	<dd>{utc(tournament.registrationOpensAt)} to {utc(tournament.registrationClosesAt)}</dd>
-	{#if tournament.distributedAt}<dt class="text-muted">Tables handed out</dt>
-		<dd>{utc(tournament.distributedAt)}</dd>{/if}
-	{#if tournament.endedAt}<dt class="text-muted">Ended</dt>
-		<dd>{utc(tournament.endedAt)}, ran {duration(tournament.startsAt, tournament.endedAt)}</dd>{/if}
-	{#if tournament.cancelledAt}<dt class="text-muted">Cancelled</dt>
-		<dd>{utc(tournament.cancelledAt)}</dd>{/if}
-	<dt class="text-muted">Tournament id</dt>
-	<dd class="font-mono text-xs leading-5 break-all">{tournament.id}</dd>
-</dl>
+<section class="panel max-w-3xl" aria-labelledby="details">
+	<div class="panel-head">
+		<h2 id="details" class="font-semibold">Details</h2>
+	</div>
+	<dl class="facts">
+		<dt>Status</dt>
+		<dd class={status.bad ? 'font-medium text-danger' : ''}>{status.label}</dd>
+		<dt>Game</dt>
+		<dd>{tournament.gameName}, {tournament.playersPerRoom} per table</dd>
+		<dt>Starts</dt>
+		<dd>{utc(tournament.startsAt)}</dd>
+		<dt>Sign-up</dt>
+		<dd>{utc(tournament.registrationOpensAt)} to {utc(tournament.registrationClosesAt)}</dd>
+		{#if tournament.distributedAt}<dt>Tables handed out</dt>
+			<dd>{utc(tournament.distributedAt)}</dd>{/if}
+		{#if tournament.endedAt}<dt>Ended</dt>
+			<dd>
+				{utc(tournament.endedAt)}, ran {duration(tournament.startsAt, tournament.endedAt)}
+			</dd>{/if}
+		{#if tournament.cancelledAt}<dt>Cancelled</dt>
+			<dd>{utc(tournament.cancelledAt)}</dd>{/if}
+		<dt>Tournament id</dt>
+		<dd class="font-mono text-xs leading-5 break-all">{tournament.id}</dd>
+	</dl>
+</section>
 
 {#if tournament.distributeError && !tournament.distributedAt && !tournament.cancelledAt}
 	<p
-		class="mt-4 max-w-2xl rounded-md border border-danger/40 px-3 py-2 text-sm text-danger"
+		class="panel mt-6 max-w-3xl border-danger/30 bg-danger-soft px-4 py-3 text-sm text-danger"
 		role="alert"
 	>
 		The tables couldn't be handed out: {tournament.distributeError} The platform tries again every minute.
 	</p>
 {/if}
-{#if form?.message}<p class="mt-4 text-sm" role="status">{form.message}</p>{/if}
-{#if form?.error}<p class="mt-4 text-sm text-danger" role="alert">{form.error}</p>{/if}
+{#if form?.message}
+	<p
+		class="panel mt-6 max-w-3xl border-felt/30 bg-felt-soft px-4 py-3 text-sm text-felt"
+		role="status"
+	>
+		{form.message}
+	</p>
+{/if}
+{#if form?.error}
+	<p
+		class="panel mt-6 max-w-3xl border-danger/30 bg-danger-soft px-4 py-3 text-sm text-danger"
+		role="alert"
+	>
+		{form.error}
+	</p>
+{/if}
 
 {#if live && !tournament.distributedAt}
-	<section
-		class="mt-6 max-w-2xl rounded-lg border border-line bg-surface p-4"
-		aria-labelledby="register"
-	>
+	<section class="mt-6 max-w-3xl panel p-5" aria-labelledby="register">
 		<h2 id="register" class="font-semibold">Register players</h2>
 		<p class="mt-1 text-sm text-muted">
 			Paste player ids, one per line or separated by commas. Players can also sign up themselves on
@@ -92,10 +114,7 @@
 		</form>
 	</section>
 
-	<section
-		class="mt-6 max-w-2xl rounded-lg border border-line bg-surface p-4"
-		aria-labelledby="distribute"
-	>
+	<section class="mt-6 max-w-3xl panel p-5" aria-labelledby="distribute">
 		<h2 id="distribute" class="font-semibold">Hand out tables</h2>
 		<p class="mt-1 text-sm text-muted">
 			This happens by itself at {utc(tournament.registrationClosesAt)}. Doing it now closes sign-up
@@ -111,9 +130,9 @@
 
 {#if data.rooms.length}
 	<h2 class="mt-8 font-semibold">Tables</h2>
-	<div class="mt-2 grid gap-4 sm:grid-cols-2">
+	<div class="mt-3 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
 		{#each data.rooms as r (r.id)}
-			<section class="rounded-lg border border-line bg-surface p-4" aria-label="Table {r.code}">
+			<section class="panel p-5" aria-label="Table {r.code}">
 				<p class="flex items-baseline justify-between gap-2">
 					<span class="font-mono text-lg tracking-[0.15em]">{r.code}</span>
 					<span class="text-sm text-muted">{r.players}/{tournament.playersPerRoom}</span>
@@ -126,10 +145,7 @@
 						<li class="flex items-center justify-between gap-2">
 							<span>
 								<span class="text-muted tabular-nums">{(p.seat ?? 0) + 1}.</span>
-								<a
-									class="underline decoration-line underline-offset-2 hover:decoration-ink"
-									href="/players/{p.playerId}">{p.name}</a
-								>
+								<a class="link" href="/players/{p.playerId}">{p.name}</a>
 								{#if p.disabled}<span class="text-danger">(disabled)</span>{/if}
 							</span>
 							{#if live && !r.startedAt && !r.closedAt}
@@ -151,10 +167,7 @@
 {/if}
 
 {#if live && seatable.length}
-	<section
-		class="mt-6 max-w-2xl rounded-lg border border-line bg-surface p-4"
-		aria-labelledby="assign"
-	>
+	<section class="mt-6 max-w-3xl panel p-5" aria-labelledby="assign">
 		<h2 id="assign" class="font-semibold">Seat a player by hand</h2>
 		<p class="mt-1 text-sm text-muted">
 			For a latecomer, or after taking someone off. They get the table's first free seat and are
@@ -199,14 +212,11 @@
 		{tournament.distributedAt ? 'Everyone has a table.' : 'Nobody yet.'}
 	</p>
 {:else}
-	<ul class="mt-2 max-w-2xl divide-y divide-line rounded-lg border border-line bg-surface text-sm">
+	<ul class="panel mt-3 max-w-3xl divide-y divide-line text-sm">
 		{#each tournament.distributedAt ? waiting : data.players as p (p.playerId)}
-			<li class="flex items-center justify-between gap-3 px-3 py-2">
+			<li class="flex items-center justify-between gap-3 px-5 py-2.5">
 				<span>
-					<a
-						class="underline decoration-line underline-offset-2 hover:decoration-ink"
-						href="/players/{p.playerId}">{p.name}</a
-					>
+					<a class="link" href="/players/{p.playerId}">{p.name}</a>
 					<span class="text-muted">{p.byAdmin ? 'added by an admin' : 'signed up'}</span>
 					{#if p.disabled}<span class="text-danger">(disabled, gets no table)</span>{/if}
 				</span>
@@ -226,10 +236,7 @@
 {/if}
 
 {#if live}
-	<section
-		class="mt-8 max-w-2xl rounded-lg border border-line bg-surface p-4"
-		aria-labelledby="cancel"
-	>
+	<section class="mt-8 max-w-3xl panel p-5" aria-labelledby="cancel">
 		<h2 id="cancel" class="font-semibold">Cancel tournament</h2>
 		<p class="mt-1 text-sm text-muted">
 			Its tables stop letting anyone in. Matches already played stay in the history. This can't be

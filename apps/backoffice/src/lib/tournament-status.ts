@@ -1,4 +1,7 @@
-/** Where a tournament is in its life, from its timestamps. `bad` marks the ones that need an admin. */
+/** `bad` marks the ones that need an admin, `running` the ones players can sign up for or are playing in. */
+export type TournamentStatus = { label: string; bad?: boolean; running?: boolean };
+
+/** Where a tournament is in its life, from its timestamps. */
 export function tournamentStatus(
 	tournament: {
 		cancelledAt: Date | null;
@@ -10,18 +13,18 @@ export function tournamentStatus(
 		registrationClosesAt: Date;
 	},
 	now = new Date()
-): { label: string; bad?: boolean } {
+): TournamentStatus {
 	if (tournament.cancelledAt) return { label: 'Cancelled' };
 	if (tournament.endedAt) return { label: 'Ended' };
 
 	if (tournament.distributedAt) {
 		const started = tournament.startsAt <= now;
-		return { label: started ? 'Playing' : 'Tables handed out' };
+		return started ? { label: 'Playing', running: true } : { label: 'Tables handed out' };
 	}
 
 	if (tournament.distributeError) return { label: 'Needs attention', bad: true };
 	if (tournament.registrationClosesAt <= now) return { label: 'Handing out tables' };
-	if (tournament.registrationOpensAt <= now) return { label: 'Sign-up open' };
+	if (tournament.registrationOpensAt <= now) return { label: 'Sign-up open', running: true };
 
 	return { label: 'Sign-up opens later' };
 }
@@ -34,4 +37,12 @@ export function duration(from: Date, to: Date): string {
 
 	const hours = Math.floor(minutes / 60);
 	return `${hours} h ${minutes % 60} min`;
+}
+
+/** The pill for a status: red when it needs an admin, green while it's running, plain otherwise. */
+export function statusTag(status: TournamentStatus): string {
+	if (status.bad) return 'tag-bad';
+	if (status.running) return 'tag-good';
+
+	return 'tag';
 }

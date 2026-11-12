@@ -16,7 +16,11 @@ export type AuditRow = {
 };
 
 /** Newest first. `before` is the last id of the previous page (UUIDv7). */
-export async function listAudit(sql: SQL, before: string | null): Promise<AuditRow[]> {
+export async function listAudit(
+	sql: SQL,
+	before: string | null,
+	limit = PAGE_SIZE
+): Promise<AuditRow[]> {
 	const page = before && isUuid(before) ? sql`WHERE a.id < ${before}` : sql``;
 
 	const rows = await sql`
@@ -39,7 +43,7 @@ export async function listAudit(sql: SQL, before: string | null): Promise<AuditR
 		LEFT JOIN rooms r ON r.id = a.room_id
 		${page}
 		ORDER BY a.id DESC
-		LIMIT ${PAGE_SIZE}`;
+		LIMIT ${limit}`;
 
 	return rows as AuditRow[];
 }

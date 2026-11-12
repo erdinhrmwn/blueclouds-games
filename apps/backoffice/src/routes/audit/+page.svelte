@@ -1,98 +1,62 @@
 <script lang="ts">
+	import { auditActor, auditLabel, auditNote, isAlarming } from '#lib/audit-actions.ts';
+	import PageHeader from '#lib/components/PageHeader.svelte';
 	import { utc } from '#lib/format.ts';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
-
-	const ACTIONS: Record<string, string> = {
-		login: 'Signed in',
-		login_failed: 'Failed sign-in',
-		logout: 'Signed out',
-		'player.disable': 'Disabled player',
-		'player.enable': 'Enabled player',
-		'player.vip_grant': 'Made player VIP',
-		'player.vip_revoke': 'Took VIP away',
-		'tournament.create': 'Created tournament',
-		'tournament.cancel': 'Cancelled tournament',
-		'tournament.register': 'Registered players',
-		'tournament.unregister': 'Unregistered player',
-		'tournament.distribute': 'Handed out tables',
-		'room.assign': 'Seated player',
-		'room.unassign': 'Took player off table'
-	};
-	/** The one detail worth showing per action. */
-	const note = (row: (typeof data.rows)[number]) => {
-		const { action, detail } = row;
-
-		if (action === 'login_failed') return `as “${detail.username}”`;
-		if (typeof detail.reason === 'string') return `Reason: ${detail.reason}`;
-
-		if (action === 'tournament.distribute') {
-			const automatic = detail.auto ? ', automatic' : '';
-			return `${detail.players} players, ${detail.rooms} tables${automatic}`;
-		}
-
-		if (action === 'tournament.register') return `${detail.players} players`;
-
-		return row.roomCode ? `Table ${row.roomCode}` : '';
-	};
 </script>
 
 <svelte:head><title>Audit log · Backoffice</title></svelte:head>
 
-<h1 class="text-2xl font-semibold">Audit log</h1>
-<p class="mt-1 text-sm text-muted">Every admin sign-in and change, newest first.</p>
+<PageHeader title="Audit log" description="Every admin sign-in and change, newest first." />
 
-{#if data.rows.length === 0}
-	<p class="mt-6 text-muted">{data.paged ? 'No older entries.' : 'Nothing logged yet.'}</p>
-{:else}
-	<div class="mt-6 overflow-x-auto rounded-lg border border-line bg-surface">
-		<table class="w-full min-w-[52rem] text-left text-sm">
-			<thead class="border-b border-line text-muted">
-				<tr>
-					<th class="px-3 py-2 font-medium">When</th>
-					<th class="px-3 py-2 font-medium">Admin</th>
-					<th class="px-3 py-2 font-medium">Action</th>
-					<th class="px-3 py-2 font-medium">Player</th>
-					<th class="px-3 py-2 font-medium">Tournament</th>
-					<th class="px-3 py-2 font-medium">Note</th>
-					<th class="px-3 py-2 font-medium">IP</th>
-				</tr>
-			</thead>
-			<tbody>
-				{#each data.rows as r (r.id)}
-					<tr class="border-b border-line last:border-0">
-						<td class="px-3 py-2 whitespace-nowrap">{utc(r.createdAt)}</td>
-						<td class="px-3 py-2"
-							>{r.admin ?? (r.action === 'tournament.distribute' ? 'Platform' : '')}</td
-						>
-						<td
-							class="px-3 py-2 {r.action === 'login_failed' || r.action === 'player.disable'
-								? 'text-danger'
-								: ''}">{ACTIONS[r.action] ?? r.action}</td
-						>
-						<td class="px-3 py-2">
-							{#if r.playerId}
-								<a
-									class="underline decoration-line underline-offset-2 hover:decoration-ink"
-									href="/players/{r.playerId}">{r.playerName ?? r.playerId}</a
-								>
-							{/if}
-						</td>
-						<td class="px-3 py-2">
-							{#if r.tournamentId}
-								<a
-									class="underline decoration-line underline-offset-2 hover:decoration-ink"
-									href="/tournaments/{r.tournamentId}">{r.tournamentName}</a
-								>
-							{/if}
-						</td>
-						<td class="px-3 py-2">{note(r)}</td>
-						<td class="px-3 py-2 font-mono text-xs text-muted">{r.ip ?? ''}</td>
+<section class="panel" aria-label="Audit entries">
+	{#if data.rows.length === 0}
+		<p class="px-5 py-10 text-center text-sm text-muted">
+			{data.paged ? 'No older entries.' : 'Nothing logged yet.'}
+		</p>
+	{:else}
+		<div class="overflow-x-auto">
+			<table class="data-table min-w-[56rem]">
+				<thead>
+					<tr>
+						<th>When</th>
+						<th>Admin</th>
+						<th>Action</th>
+						<th>Player</th>
+						<th>Tournament</th>
+						<th>Note</th>
+						<th>IP</th>
 					</tr>
-				{/each}
-			</tbody>
-		</table>
-	</div>
-	{#if data.next}<a class="btn-quiet mt-4" href="?before={data.next}">Older entries</a>{/if}
-{/if}
+				</thead>
+				<tbody>
+					{#each data.rows as row (row.id)}
+						<tr>
+							<td class="whitespace-nowrap">{utc(row.createdAt)}</td>
+							<td>{auditActor(row)}</td>
+							<td class="font-medium {isAlarming(row.action) ? 'text-danger' : ''}"
+								>{auditLabel(row.action)}</td
+							>
+							<td>
+								{#if row.playerId}
+									<a class="link" href="/players/{row.playerId}">{row.playerName ?? row.playerId}</a
+									>
+								{/if}
+							</td>
+							<td>
+								{#if row.tournamentId}
+									<a class="link" href="/tournaments/{row.tournamentId}">{row.tournamentName}</a>
+								{/if}
+							</td>
+							<td class="text-muted">{auditNote(row)}</td>
+							<td class="font-mono text-xs text-muted">{row.ip ?? ''}</td>
+						</tr>
+					{/each}
+				</tbody>
+			</table>
+		</div>
+	{/if}
+</section>
+
+{#if data.next}<a class="btn-quiet mt-4" href="?before={data.next}">Older entries</a>{/if}

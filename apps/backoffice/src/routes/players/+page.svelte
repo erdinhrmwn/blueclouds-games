@@ -1,79 +1,112 @@
 <script lang="ts">
-	import { playerType, utc } from '#lib/format.ts';
+	import Icon from '#lib/components/Icon.svelte';
+	import PageHeader from '#lib/components/PageHeader.svelte';
+	import { PLAYER_TYPE_TAG, playerType, utc } from '#lib/format.ts';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
+
 	const nextHref = $derived.by(() => {
 		const params = new URLSearchParams();
-		if (data.q) params.set('q', data.q);
+		if (data.q) {
+			params.set('q', data.q);
+		}
 		params.set('before', data.next ?? '');
 
 		return `?${params}`;
+	});
+
+	const accountOf = (player: (typeof data.players)[number]) => {
+		if (player.isBot) return 'System';
+		if (player.isGuest) return 'Guest';
+
+		return `@${player.username}`;
+	};
+
+	const emptyText = $derived.by(() => {
+		if (data.q) return `No players match “${data.q}”.`;
+		if (data.paged) return 'No more players.';
+
+		return 'No players yet.';
 	});
 </script>
 
 <svelte:head><title>Players · Backoffice</title></svelte:head>
 
-<h1 class="text-2xl font-semibold">Players</h1>
+<PageHeader
+	title="Players"
+	description="Everyone who has played, newest first. Open a player to disable them or change VIP."
+/>
 
-<form method="GET" class="mt-4 flex max-w-xl gap-2" role="search">
-	<label class="sr-only" for="q">Search players</label>
-	<input
-		class="field"
-		id="q"
-		name="q"
-		value={data.q}
-		placeholder="Name, username or player id"
-		maxlength="64"
-	/>
-	<button class="btn-primary">Search</button>
-</form>
-
-{#if data.players.length === 0}
-	<p class="mt-6 text-muted">
-		{#if data.q}No players match “{data.q}”.{:else if data.paged}No more players.{:else}No players
-			yet.{/if}
-	</p>
-{:else}
-	<div class="mt-6 overflow-x-auto rounded-lg border border-line bg-surface">
-		<table class="w-full min-w-[48rem] text-left text-sm">
-			<thead class="border-b border-line text-muted">
-				<tr>
-					<th class="px-3 py-2 font-medium">Name</th>
-					<th class="px-3 py-2 font-medium">Type</th>
-					<th class="px-3 py-2 font-medium">Account</th>
-					<th class="px-3 py-2 font-medium">Player id</th>
-					<th class="px-3 py-2 font-medium">Joined</th>
-					<th class="px-3 py-2 font-medium">Last seen</th>
-					<th class="px-3 py-2 font-medium">Status</th>
-				</tr>
-			</thead>
-			<tbody>
-				{#each data.players as p (p.id)}
-					<tr class="border-b border-line last:border-0 hover:bg-page">
-						<td class="px-3 py-2"
-							><a
-								class="font-medium underline decoration-line underline-offset-2 hover:decoration-ink"
-								href="/players/{p.id}">{p.name}</a
-							></td
-						>
-						<td class="px-3 py-2">{playerType(p)}</td>
-						<td class="px-3 py-2">
-							{p.isBot ? 'System' : p.isGuest ? 'Guest' : `@${p.username}`}
-						</td>
-						<td class="px-3 py-2 font-mono text-xs text-muted">{p.id}</td>
-						<td class="px-3 py-2 whitespace-nowrap">{utc(p.createdAt)}</td>
-						<td class="px-3 py-2 whitespace-nowrap">{utc(p.lastSeenAt)}</td>
-						<td class="px-3 py-2"
-							>{#if !p.isActive}<span class="font-medium text-danger">Disabled</span
-								>{:else}Active{/if}</td
-						>
-					</tr>
-				{/each}
-			</tbody>
-		</table>
+<section class="panel" aria-label="Player list">
+	<div class="panel-head">
+		<form method="GET" class="flex w-full max-w-xl gap-2" role="search">
+			<div class="relative flex-1">
+				<label class="sr-only" for="q">Search players</label>
+				<span
+					class="pointer-events-none absolute inset-y-0 left-3 grid place-items-center text-muted"
+				>
+					<Icon name="search" class="size-4" />
+				</span>
+				<input
+					class="field pl-9"
+					id="q"
+					name="q"
+					value={data.q}
+					placeholder="Name, username or player id"
+					maxlength="64"
+				/>
+			</div>
+			<button class="btn-primary">Search</button>
+		</form>
+		{#if data.q}
+			<a class="link text-sm" href="/players">Clear search</a>
+		{/if}
 	</div>
-	{#if data.next}
-		<a class="btn-quiet mt-4" href={nextHref}>Older players</a>
+
+	{#if data.players.length === 0}
+		<p class="px-5 py-10 text-center text-sm text-muted">{emptyText}</p>
+	{:else}
+		<div class="overflow-x-auto">
+			<table class="data-table min-w-[52rem]">
+				<thead>
+					<tr>
+						<th>Name</th>
+						<th>Type</th>
+						<th>Account</th>
+						<th>Player id</th>
+						<th>Joined</th>
+						<th>Last seen</th>
+						<th>Status</th>
+					</tr>
+				</thead>
+				<tbody>
+					{#each data.players as player (player.id)}
+						{@const type = playerType(player)}
+						<tr>
+							<td>
+								<a class="link font-medium" href="/players/{player.id}">{player.name}</a>
+							</td>
+							<td><span class={PLAYER_TYPE_TAG[type]}>{type}</span></td>
+							<td>{accountOf(player)}</td>
+							<td class="font-mono text-xs text-muted">{player.id}</td>
+							<td class="whitespace-nowrap">{utc(player.createdAt)}</td>
+							<td class="whitespace-nowrap">{utc(player.lastSeenAt)}</td>
+							<td>
+								{#if player.isActive}
+									<span class="tag-good">Active</span>
+								{:else}
+									<span class="tag-bad">Disabled</span>
+								{/if}
+							</td>
+						</tr>
+					{/each}
+				</tbody>
+			</table>
+		</div>
 	{/if}
+</section>
+
+{#if data.next}
+	<a class="btn-quiet mt-4" href={nextHref}>Older players</a>
 {/if}

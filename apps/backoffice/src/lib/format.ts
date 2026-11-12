@@ -14,3 +14,10 @@ export function playerType(player: { isBot: boolean; isVip: boolean }): 'Bot' | 
 
 	return 'Normal';
 }
+
+/** The pill style for each player type, the same on the list and the detail page. */
+export const PLAYER_TYPE_TAG = {
+	Normal: 'tag',
+	VIP: 'tag-vip',
+	Bot: 'tag bg-subtle text-muted'
+} as const;

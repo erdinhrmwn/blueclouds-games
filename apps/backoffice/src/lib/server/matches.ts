@@ -23,7 +23,11 @@ export type MatchRow = {
 };
 
 /** Newest matches first. Empty or malformed filters are ignored; dates are UTC days, `to` inclusive. */
-export async function listMatches(sql: SQL, filter: MatchFilter): Promise<MatchRow[]> {
+export async function listMatches(
+	sql: SQL,
+	filter: MatchFilter,
+	limit = PAGE_SIZE
+): Promise<MatchRow[]> {
 	const rows = await sql`
 		SELECT
 			m.id,
@@ -44,7 +48,7 @@ export async function listMatches(sql: SQL, filter: MatchFilter): Promise<MatchR
 		JOIN rooms r ON r.id = m.room_id
 		WHERE ${matchConditions(sql, filter)}
 		ORDER BY m.id DESC
-		LIMIT ${PAGE_SIZE}`;
+		LIMIT ${limit}`;
 
 	return rows as MatchRow[];
 }

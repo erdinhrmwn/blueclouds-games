@@ -1,4 +1,5 @@
 <script lang="ts">
+	import PageHeader from '#lib/components/PageHeader.svelte';
 	import { utc } from '#lib/format.ts';
 	import type { PageProps } from './$types';
 
@@ -8,6 +9,7 @@
 	const emptyText = $derived.by(() => {
 		if (filtered) return 'No matches fit these filters.';
 		if (filter.before) return 'No more matches.';
+
 		return 'No matches yet.';
 	});
 	const nextHref = $derived.by(() => {
@@ -20,73 +22,77 @@
 
 <svelte:head><title>Matches · Backoffice</title></svelte:head>
 
-<h1 class="text-2xl font-semibold">Matches</h1>
+<PageHeader
+	title="Matches"
+	description="Finished matches, newest first. Open one to replay it move by move."
+/>
 
-<form method="GET" class="mt-4 grid gap-3 sm:grid-cols-[repeat(4,minmax(0,1fr))_auto] sm:items-end">
-	<div>
-		<label class="label" for="game">Game</label>
-		<select class="field" id="game" name="game" value={filter.game}>
-			<option value="">All games</option>
-			{#each data.games as g (g.slug)}<option value={g.slug}>{g.name}</option>{/each}
-		</select>
-	</div>
-	<div>
-		<label class="label" for="player">Player id</label>
-		<input
-			class="field font-mono text-sm"
-			id="player"
-			name="player"
-			value={filter.player}
-			maxlength="36"
-		/>
-	</div>
-	<div>
-		<label class="label" for="from">Ended from (UTC)</label>
-		<input class="field" id="from" name="from" type="date" value={filter.from} />
-	</div>
-	<div>
-		<label class="label" for="to">Ended to (UTC)</label>
-		<input class="field" id="to" name="to" type="date" value={filter.to} />
-	</div>
-	<div class="flex gap-2">
-		<button class="btn-primary">Filter</button>
-		{#if filtered}<a class="btn-quiet" href="/matches">Clear</a>{/if}
-	</div>
-</form>
+<section class="panel" aria-label="Match list">
+	<form
+		method="GET"
+		class="grid gap-3 border-b border-line px-5 py-4 sm:grid-cols-2 lg:grid-cols-[repeat(4,minmax(0,1fr))_auto] lg:items-end"
+	>
+		<div>
+			<label class="label" for="game">Game</label>
+			<select class="field" id="game" name="game" value={filter.game}>
+				<option value="">All games</option>
+				{#each data.games as game (game.slug)}<option value={game.slug}>{game.name}</option>{/each}
+			</select>
+		</div>
+		<div>
+			<label class="label" for="player">Player id</label>
+			<input
+				class="field font-mono text-sm"
+				id="player"
+				name="player"
+				value={filter.player}
+				maxlength="36"
+			/>
+		</div>
+		<div>
+			<label class="label" for="from">Ended from (UTC)</label>
+			<input class="field" id="from" name="from" type="date" value={filter.from} />
+		</div>
+		<div>
+			<label class="label" for="to">Ended to (UTC)</label>
+			<input class="field" id="to" name="to" type="date" value={filter.to} />
+		</div>
+		<div class="flex gap-2 sm:col-span-2 lg:col-span-1">
+			<button class="btn-primary">Filter</button>
+			{#if filtered}<a class="btn-quiet" href="/matches">Clear</a>{/if}
+		</div>
+	</form>
 
-{#if data.matches.length === 0}
-	<p class="mt-6 text-muted">
-		{emptyText}
-	</p>
-{:else}
-	<div class="mt-6 overflow-x-auto rounded-lg border border-line bg-surface">
-		<table class="w-full min-w-[36rem] text-left text-sm">
-			<thead class="border-b border-line text-muted">
-				<tr>
-					<th class="px-3 py-2 font-medium">Ended</th>
-					<th class="px-3 py-2 font-medium">Game</th>
-					<th class="px-3 py-2 font-medium">Table</th>
-					<th class="px-3 py-2 font-medium">Players</th>
-					<th class="px-3 py-2 font-medium">Winner</th>
-				</tr>
-			</thead>
-			<tbody>
-				{#each data.matches as m (m.id)}
-					<tr class="border-b border-line last:border-0 hover:bg-page">
-						<td class="px-3 py-2 whitespace-nowrap">
-							<a
-								class="underline decoration-line underline-offset-2 hover:decoration-ink"
-								href="/matches/{m.id}">{utc(m.endedAt)}</a
-							>
-						</td>
-						<td class="px-3 py-2">{m.gameName}</td>
-						<td class="px-3 py-2 font-mono text-xs">{m.roomCode}</td>
-						<td class="px-3 py-2">{m.players}</td>
-						<td class="px-3 py-2">{m.winner ?? ''}</td>
+	{#if data.matches.length === 0}
+		<p class="px-5 py-10 text-center text-sm text-muted">{emptyText}</p>
+	{:else}
+		<div class="overflow-x-auto">
+			<table class="data-table min-w-[36rem]">
+				<thead>
+					<tr>
+						<th>Ended</th>
+						<th>Game</th>
+						<th>Table</th>
+						<th>Players</th>
+						<th>Winner</th>
 					</tr>
-				{/each}
-			</tbody>
-		</table>
-	</div>
-	{#if data.next}<a class="btn-quiet mt-4" href={nextHref}>Older matches</a>{/if}
-{/if}
+				</thead>
+				<tbody>
+					{#each data.matches as match (match.id)}
+						<tr>
+							<td class="whitespace-nowrap">
+								<a class="link" href="/matches/{match.id}">{utc(match.endedAt)}</a>
+							</td>
+							<td>{match.gameName}</td>
+							<td class="font-mono text-xs">{match.roomCode}</td>
+							<td class="tabular-nums">{match.players}</td>
+							<td>{match.winner ?? ''}</td>
+						</tr>
+					{/each}
+				</tbody>
+			</table>
+		</div>
+	{/if}
+</section>
+
+{#if data.next}<a class="btn-quiet mt-4" href={nextHref}>Older matches</a>{/if}
