@@ -3,7 +3,7 @@
 	import type { Snippet } from 'svelte';
 
 	/** What any game shows about a player in a seat. */
-	type SeatPlayer = { id: string; name: string; bot: boolean; away?: boolean };
+	type SeatPlayer = { id: string; name: string; bot: boolean; away?: boolean; vip?: boolean };
 
 	let {
 		player,
@@ -42,23 +42,53 @@
 
 	const initial = $derived(player?.name.trim().charAt(0).toUpperCase() ?? '');
 
-	/** Knocked out: greyed out. Away: a little faded. */
-	const dimClass = $derived.by(() => {
-		if (out) return 'opacity-40 grayscale';
-		if (player?.away) return 'opacity-60';
-		return '';
+	/** Knocked out: the whole seat greys. Away fades only the avatar and status, so the Away tag stays readable. */
+	const outClass = $derived(out ? 'opacity-40 grayscale' : '');
+	const awayFade = $derived(player?.away ? 'opacity-50' : '');
+
+	const avatarLook = $derived.by(() => {
+		if (isTurn) return 'turn border-brass bg-brass text-ink';
+		if (player?.away) return 'border-dashed border-paper/55 bg-[#2a1d13] text-paper';
+		return 'border-rim-light bg-[#2a1d13] text-paper';
+	});
+
+	/** One label for screen readers; the avatar and tags are hidden from them. */
+	const seatLabel = $derived.by(() => {
+		if (!player) return '';
+
+		const parts = [isMe ? `${player.name} (you)` : player.name];
+		if (number) {
+			parts.unshift(`Seat ${number}`);
+		}
+		if (isHost) {
+			parts.push('host');
+		}
+		if (player.vip) {
+			parts.push('VIP');
+		}
+		if (player.bot) {
+			parts.push('bot');
+		}
+		if (player.away) {
+			parts.push('away');
+		}
+
+		return parts.join(', ');
 	});
 </script>
 
 {#if player}
 	<div
 		data-seat={player.id}
-		class="flex w-24 flex-col items-center gap-1 text-center sm:w-28 {dimClass}"
+		class="flex w-24 flex-col items-center gap-1 text-center sm:w-28 {outClass}"
+		role="group"
+		aria-label={seatLabel}
 	>
-		<div class="relative">
+		<!-- Room below for the Away tag, kept on every seat so all their lines stay level. -->
+		<div class="relative mb-1.5" aria-hidden="true">
 			<div
 				class="relative grid size-12 place-items-center rounded-full border-2 font-display text-xl font-bold sm:size-14
-					{isTurn ? 'turn border-brass bg-brass text-ink' : 'border-rim-light bg-[#2a1d13] text-paper'}"
+					{avatarLook} {awayFade}"
 			>
 				{#if player.bot}
 					<!-- robot head: bots get an icon instead of a monogram -->
@@ -70,8 +100,6 @@
 						stroke-width="1.8"
 						stroke-linecap="round"
 						stroke-linejoin="round"
-						role="img"
-						aria-label="Bot"
 					>
 						<path d="M12 3v3" />
 						<circle cx="12" cy="2.6" r="0.9" fill="currentColor" stroke="none" />
@@ -105,26 +133,33 @@
 						/>
 					</svg>
 				{/if}
-				<!-- Host and away sit on the avatar as small tags, so every seat's lines below stay the same. -->
-				{#if isHost}
-					<span
-						class="absolute -top-1 -left-2 rounded-sm bg-brass px-1 text-[10px] font-semibold text-ink"
-						>host</span
-					>
-				{/if}
-				{#if player.away}
-					<span
-						class="absolute -right-2 -bottom-1 rounded-sm bg-paper px-1 text-[10px] font-semibold text-ink"
-						>away</span
-					>
-				{/if}
 			</div>
+			<!-- Roles on the top edge (Host left, VIP right), away at the bottom middle. The ring cuts a gap over the avatar and timer. -->
+			{#if isHost}
+				<span class="seat-tag -top-2 -left-3.5 bg-brass text-ink">Host</span>
+			{/if}
+			{#if player.vip}
+				<span class="seat-tag -top-2 -right-3.5 border border-brass/70 bg-ink text-brass">VIP</span>
+			{/if}
+			{#if player.away}
+				<span class="seat-tag -bottom-2 left-1/2 -translate-x-1/2 bg-paper text-ink">
+					<!-- moon -->
+					<svg viewBox="0 0 24 24" class="size-2.5" fill="currentColor">
+						<path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z" />
+					</svg>
+					Away
+				</span>
+			{/if}
 		</div>
-		<div class="max-w-full truncate rounded-sm bg-black/45 px-2 py-0.5 text-xs font-medium">
+		<div
+			class="max-w-full truncate rounded-sm bg-black/45 px-2 py-0.5 text-xs font-medium
+				{player.away ? 'text-paper/70' : ''}"
+			aria-hidden="true"
+		>
 			{player.name}{#if isMe}<span class="text-paper/75">&nbsp;(you)</span>{/if}
 		</div>
 		{#if status}
-			<div class="flex items-center gap-1">
+			<div class="flex items-center gap-1 {awayFade}">
 				{@render status()}
 			</div>
 		{/if}
@@ -157,6 +192,21 @@
 {/if}
 
 <style>
+	.seat-tag {
+		position: absolute;
+		z-index: 10;
+		display: inline-flex;
+		height: 1.125rem;
+		align-items: center;
+		gap: 0.125rem;
+		border-radius: 9999px;
+		padding-inline: 0.375rem;
+		font-size: 10px;
+		font-weight: 600;
+		line-height: 1;
+		white-space: nowrap;
+		box-shadow: 0 0 0 2px var(--color-felt-deep);
+	}
 	.turn {
 		animation: pulse 1.6s ease-in-out infinite;
 	}
