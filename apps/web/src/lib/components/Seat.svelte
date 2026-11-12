@@ -105,6 +105,13 @@
 						/>
 					</svg>
 				{/if}
+				<!-- Host and away sit on the avatar as small tags, so every seat's lines below stay the same. -->
+				{#if isHost}
+					<span
+						class="absolute -top-1 -left-2 rounded-sm bg-brass px-1 text-[10px] font-semibold text-ink"
+						>host</span
+					>
+				{/if}
 				{#if player.away}
 					<span
 						class="absolute -right-2 -bottom-1 rounded-sm bg-paper px-1 text-[10px] font-semibold text-ink"
@@ -116,10 +123,9 @@
 		<div class="max-w-full truncate rounded-sm bg-black/45 px-2 py-0.5 text-xs font-medium">
 			{player.name}{#if isMe}<span class="text-paper/75">&nbsp;(you)</span>{/if}
 		</div>
-		{#if status || isHost}
+		{#if status}
 			<div class="flex items-center gap-1">
-				{@render status?.()}
-				{#if isHost}<span class="ml-1 text-[11px] font-semibold text-brass">host</span>{/if}
+				{@render status()}
 			</div>
 		{/if}
 		{#if action}
