@@ -201,7 +201,7 @@ Player accounts (migration `011`). Register takes `{ "name", "username", "passwo
 
 ### Rooms and tournaments
 
-`POST /v1/rooms`, `GET /v1/rooms/:code`, `GET /v1/tournaments?game=`, `POST`/`DELETE /v1/tournaments/:id/registration` and `GET /v1/players/me/rooms` take the player secret; the room actor uses `GET /v1/rooms/:code/seats`, `POST /v1/rooms/:code/start` and `POST /v1/rooms/:code/close` with the server key. What each does is in [database.md](database.md#where-it-lives-in-the-code).
+`POST /v1/rooms`, `GET /v1/rooms/:code`, `POST /v1/rooms/:code/invites`, `DELETE /v1/rooms/:code/invites/link`, `POST /v1/invites/redeem`, `GET /v1/tournaments?game=`, `POST`/`DELETE /v1/tournaments/:id/registration` and `GET /v1/players/me/rooms` take the player secret; the room actor uses `GET /v1/rooms/:code/seats`, `POST /v1/rooms/:code/start` and `POST /v1/rooms/:code/close` with the server key. What each does is in [database.md](database.md#where-it-lives-in-the-code).
 
 ### `GET /v1/players/me/matches?cursor=…`
 

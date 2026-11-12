@@ -74,6 +74,20 @@ test("an open room lets anyone sit anywhere", async () => {
 	expect(() => requireOpenTable(c)).not.toThrow();
 });
 
+test("only a public open room goes on the room list", async () => {
+	const open = { minPlayers: 2, startedAt: null, closedAt: null, tournament: null, seats: [] };
+	for (const [visibility, listed] of [["public", true], ["private", false]] as const) {
+		seats = { ...open, visibility };
+		const c = room();
+		await loadTournament(c);
+		expect((c.vars as { listed?: boolean }).listed).toBe(listed);
+	}
+	seats = null; // a room the platform doesn't know
+	const c = room();
+	await loadTournament(c);
+	expect((c.vars as { listed?: boolean }).listed).toBe(false);
+});
+
 test("nothing happens before the start time, even with everyone in", async () => {
 	const c = room();
 	await loadTournament(c);

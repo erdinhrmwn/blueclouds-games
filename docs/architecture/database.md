@@ -115,6 +115,7 @@ CREATE TABLE rooms (
   id                    uuid PRIMARY KEY DEFAULT uuidv7(),
   game_slug             text NOT NULL REFERENCES games(slug),
   code                  text NOT NULL UNIQUE CHECK (code ~ '^[A-Z0-9]{4,8}$'),
+  visibility            text NOT NULL DEFAULT 'private' CHECK (visibility IN ('public', 'private')),  -- 014
   tournament_id              uuid,                          -- null = an open room anyone with the code can join
   created_by_player_id  uuid REFERENCES players(id),   -- a player pressed "New table"
   created_by_admin_id   uuid REFERENCES admins(id),    -- an admin made it in the backoffice (null for tournament rooms the job made)
@@ -202,12 +203,12 @@ LIMIT 10;
 
 The same tick also closes tournament rooms nobody opened (see "When a tournament ends"). Each picked tournament is distributed inside that same transaction, so a crash halfway leaves nothing behind and the next tick simply tries again. The loop logs each run and each failure. ponytail: a 30-second loop in the platform process is enough for one VPS; if the platform ever runs on several machines it still works (the `SKIP LOCKED` makes that safe), and only a much larger number of jobs would call for a real queue.
 
-How the code is generated: 5 characters from `ABCDEFGHJKLMNPQRSTUVWXYZ23456789` (no 0/O, 1/I), the same alphabet as today, now in the platform with `crypto.getRandomValues`. The insert uses `ON CONFLICT (code) DO NOTHING` and tries a new code if it collides (up to 5 times). A code is never reused, so an old link or match always means one room. ponytail: 32^5 is about 33 million codes; past ~1 million rooms collisions get frequent, and the fix is a 6th character.
+How the code is generated: 8 characters from `ABCDEFGHJKLMNPQRSTUVWXYZ23456789` (no 0/O, 1/I), the same alphabet as today, now in the platform with `crypto.getRandomValues`. The insert uses `ON CONFLICT (code) DO NOTHING` and tries a new code if it collides (up to 5 times). A code is never reused, so an old link or match always means one room. 32^8 is about 1.1 trillion codes, so a retry stays rare even at 10 million rooms. Rooms made before this kept their 5-character codes, which stay valid (the CHECK allows 4 to 8).
 
 How it flows (the parts outside the schema, for the build):
 
-1. **New table:** browser → game server `POST /api/<game>/rooms` → platform `POST /v1/rooms {game}` (player secret) → returns the code. The browser no longer makes codes.
-2. **Join by code:** before the game server issues a room token, it asks the platform `GET /v1/rooms/<code>` with the player's secret. Unknown code or wrong game → 404; a tournament room the player isn't assigned to, or of a cancelled tournament → 403. So a typed-in code can no longer create a room.
+1. **New table:** browser → game server `POST /api/<game>/rooms` → platform `POST /v1/rooms {game, visibility}` (player secret) → returns the code. The browser no longer makes codes. The opener picks **private** (the default: invite only) or **public** (listed in "Open tables", anyone may join); see "Invites" below.
+2. **Entering a room:** before the game server issues a room token, it asks the platform `GET /v1/rooms/<code>` with the player's secret. Unknown code or wrong game → 404; a tournament room the player isn't assigned to, or of a cancelled tournament → 403; a private room the player isn't a member of → 403. So a typed-in code can neither create a room nor open a private one.
 3. **Inside the room:** when the room actor starts, it reads its room from the platform with the server key (tournament, start time, assignments). In a tournament room only assigned players can take a seat, each on their fixed seat, and nobody presses Start: the room **starts by itself at `starts_at`** (Erdin, 2026-11-11), with `c.schedule` like the turn timer. **Late players** (Erdin, 2026-11-11): the room waits up to **3 minutes** after `starts_at` so everyone can arrive. It starts as soon as every assigned player is connected, or when the 3 minutes are up, with whoever is there, if that is at least the game's minimum (2 for both games today). Assigned players who still aren't there then lose their seat for that match. Below the minimum at 3 minutes, the room closes the table with "Not enough players showed up". The wait is one constant (`LATE_GRACE_MS`) in the shared room code. Tournament rooms don't report to the public room list.
 4. **Players find tournaments:** platform `GET /v1/tournaments?game=<slug>` lists tournaments with open registration (name, start time, players registered); `POST` / `DELETE /v1/tournaments/:id/registration` signs the player up or out, refused outside the window or for a disabled player.
 5. **Assigned players find their room:** platform `GET /v1/players/me/rooms` returns the tournament rooms the player is assigned to, with the tournament's name and start time, so the game's home page can show "Friday Cup, 20:00, your table: K7QXM, Join".
@@ -414,6 +415,7 @@ CREATE TABLE rooms (
   id                    uuid PRIMARY KEY DEFAULT uuidv7(),
   game_slug             text NOT NULL REFERENCES games(slug),
   code                  text NOT NULL UNIQUE CHECK (code ~ '^[A-Z0-9]{4,8}$'),
+  visibility            text NOT NULL DEFAULT 'private' CHECK (visibility IN ('public', 'private')),  -- 014
   tournament_id              uuid,
   created_by_player_id  uuid REFERENCES players(id),
   created_by_admin_id   uuid REFERENCES admins(id),
@@ -519,6 +521,7 @@ Four migrations, each applied by the runner in one transaction, so if any existi
 | `011_player_accounts.sql` | `username`, `password_hash`, `is_active`, `is_bot`, `is_vip` on `players`, and the VIP audit actions. |
 | `012_guest_usernames.sql` | Guests get a `guest_…` username (existing ones backfilled), `is_guest`, and the guest-prefix check. |
 | `013_guest_cleanup.sql` | Deleting a player takes its `player_secrets` with it and clears `rooms.created_by_player_id`; indexes for the guest sweep. |
+| `014_room_invites.sql` | `rooms.visibility` (existing rooms public, new ones private), `room_invites`, `room_members` (openers backfilled as members). |
 
 Before deploying, run these on the live database. Each must return 0 (or the listed rows must be fixed first):
 
@@ -535,16 +538,26 @@ SELECT count(*) FROM admin_audit WHERE target_id IS NOT NULL AND target_id NOT I
 
 Codes are unique across games now, so the second-to-last query must show no code used by two games (very unlikely with random codes; if it happens, that one match's code is fixed by hand first).
 
+### Invites: `room_invites` and `room_members` (migration 014)
+
+Erdin, 2026-11-12: a table must not be joinable by typing its code. A private table is entered only through an invite:
+
+- **Invite link** `/invite/<token>`: 16 random bytes as 32 hex characters (letters and digits only), one live link per room, valid until reset. Anyone who may enter the table can copy it; only the player who opened the table can reset it, which kills the old link.
+- **Invite code**: 6 characters from the room code alphabet, made on demand by anyone at the table, valid 10 minutes (`INVITE_CODE_TTL_MS`). Redeeming is limited to 10 tries a minute per IP, so a code can't be guessed in a row. Codes stay unique forever (32^6 is about a billion); sweep expired ones if the table ever passes ~10 million rows.
+- Redeeming either (`POST /v1/invites/redeem`) adds the player to `room_members`, so reloads and reconnects keep working. The opener is a member from the start.
+- `rooms.visibility` is `public` or `private`. Rooms from before 014 stay public; new rooms (tournament rooms too) default to private. Room actors read it from `/v1/rooms/:code/seats` and only public, non-tournament tables report to the room list.
+- Membership is not history: a deleted guest takes its `room_members` rows along, and its invites forget who made them.
+
 ## Where it lives in the code
 
 - **Platform** (`apps/platform/src`):
-  - `rooms.ts`: `POST /v1/rooms` (new table), `GET /v1/rooms/:code` (may this player enter: 404 unknown, 403 for a tournament room they aren't assigned to or a cancelled tournament; assigned players may still enter a closed table to see how it ended), and for the actor with the server key `GET /v1/rooms/:code/seats`, `POST /v1/rooms/:code/start`, `POST /v1/rooms/:code/close`.
+  - `rooms.ts`: `POST /v1/rooms` (new table, public or private), `GET /v1/rooms/:code` (may this player enter: 404 unknown, 403 for a tournament room they aren't assigned to or a cancelled tournament, or a private room they aren't a member of; assigned players may still enter a closed table to see how it ended), `POST /v1/rooms/:code/invites` (`link` or `code`), `DELETE /v1/rooms/:code/invites/link` (opener only), `POST /v1/invites/redeem`, and for the actor with the server key `GET /v1/rooms/:code/seats`, `POST /v1/rooms/:code/start`, `POST /v1/rooms/:code/close`.
   - `tournaments.ts`: `planRooms` (the even split), `distributeIn` (shared with the backoffice), the 30-second job started in `index.ts`, `GET /v1/tournaments?game=`, `POST`/`DELETE /v1/tournaments/:id/registration`, `GET /v1/players/me/rooms`.
   - `matches.ts`: a report names its room by code; a tournament room's report closes the room, and the tournament with its last room.
   - `players.ts`: `POST /v1/players/register` (upgrades the guest whose secret is sent, or makes a new player), `POST /v1/players/login` (a new secret for this device; 5 wrong passwords lock the username for 15 minutes), `POST /v1/players/logout` (revokes this device's secret).
   - Creating and changing tournaments has no platform API: only the backoffice does that.
 - **Room actors** (`apps/server/src/games/shared/room.ts`, one place for both games): read the room's seats from the platform, let only assigned players sit (on their seat), turn off host controls, start by themselves at `starts_at` (early once everyone is in, otherwise after the 3-minute wait with whoever came), close the table when fewer than the game's minimum came, and stay off the public room list.
-- **Game web**: the tournaments panel on each game's home page (sign up, "Go to your table"), the countdown in a tournament table's lobby, and the account page (`/account`: create account, sign in, sign out).
+- **Game web**: the tournaments panel on each game's home page (sign up, "Go to your table"), the countdown in a tournament table's lobby, the new-table choice (private or public) and invite code box on each home page, the invite link page (`/invite/<token>`) and the invite buttons in a table's lobby, and the account page (`/account`: create account, sign in, sign out).
 - **Backoffice**: Tournaments list and create form; a tournament's page registers players by pasted ids, hands out tables now, seats a player by hand or takes them off, and cancels; players show their account, bot and VIP flags, and VIP can be granted or taken back. Every change is an audit event. A match's page shows its table: the code, and the tournament it belongs to or who opened it.
 
 Decisions made while building, on top of the design above:
@@ -561,7 +574,6 @@ Each of these has a point at which it becomes worth doing:
 |---|---|
 | Tournament results and brackets (standings across rooms, next round) | A tournament has more than one round. Today its results are the matches of its rooms. |
 | Seeding or skill-based distribution | Players have a rating. Distribute is random today. |
-| Player-made private rooms | Players want a table that isn't in "Open tables". One more column on `rooms`. |
 | Trigram index for player name search (`pg_trgm`) | `players` passes ~100k rows and the backoffice search gets slow. Today the `ILIKE` scan is a few milliseconds. |
 | Cleaning up guests who never played | Abandoned guests become a noticeable share of the table. It would delete players with no matches and no visit for a year; the only deletion in the schema, so it gets its own design. |
 | Name change history | Moderation needs "who was called X last week". |

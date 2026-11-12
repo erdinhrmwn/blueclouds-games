@@ -1,5 +1,5 @@
 import { json } from '@sveltejs/kit';
-import { createRoom, failure } from '#lib/server/platform.ts';
+import { createRoom, failure, type Visibility } from '#lib/server/platform.ts';
 import { hasRooms, listRooms } from '#lib/server/rivet.ts';
 import type { RequestHandler } from './$types';
 
@@ -15,13 +15,15 @@ export const GET: RequestHandler = async ({ params }) => {
 	}
 };
 
-/** Opens a new table. The platform picks the code; the browser never makes one up. */
+/** Opens a new table, private unless `{ visibility: 'public' }`. The platform picks the code; the browser never makes one up. */
 export const POST: RequestHandler = async (event) => {
 	if (!hasRooms(event.params.game)) {
 		return json({ error: { code: 'not_found', message: 'There is no such game.' } }, { status: 404 });
 	}
+	const body = (await event.request.json().catch(() => null)) as { visibility?: unknown } | null;
+	const visibility: Visibility = body?.visibility === 'public' ? 'public' : 'private';
 	try {
-		const { code } = await createRoom(event, event.params.game);
+		const { code } = await createRoom(event, event.params.game, visibility);
 		return json({ code }, { status: 201 });
 	} catch (e) {
 		return failure(e);

@@ -47,7 +47,10 @@
 	</p>
 {/if}
 
-{#if !room || !room.view}
+{#if room?.status === 'refused'}
+	<p class="pt-24 text-center font-display text-lg text-paper/75 italic">You can't join this table.</p>
+	<p class="mt-4 text-center"><a class="btn-ghost" href="/{game.slug}">Back to {game.name}</a></p>
+{:else if !room || !room.view}
 	<p class="pt-24 text-center font-display text-lg text-paper/75 italic" aria-live="polite">
 		{room?.status === 'error' ? 'Could not reach the table.' : 'Setting up the table…'}
 	</p>

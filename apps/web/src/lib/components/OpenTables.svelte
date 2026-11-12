@@ -19,9 +19,9 @@
 	{#if !list || list.status === 'loading'}
 		<p class="mt-3 text-paper/75" aria-live="polite">Looking for tables…</p>
 	{:else if list.status === 'error'}
-		<p class="mt-3 text-paper/75">Could not load the tables. You can still join with a code.</p>
+		<p class="mt-3 text-paper/75">Could not load the tables. You can still join with an invite code.</p>
 	{:else if list.rooms.length === 0}
-		<p class="mt-3 text-paper/75">No tables open right now. Open one and share the code.</p>
+		<p class="mt-3 text-paper/75">No public tables right now. Open one and invite friends.</p>
 	{:else}
 		<ul class="mt-4 divide-y divide-paper/10 rounded-xl border border-paper/15 bg-[#1b1611]">
 			{#each list.rooms as r (r.code)}

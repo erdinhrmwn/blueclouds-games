@@ -1,7 +1,7 @@
 import { playToken } from '#lib/player.svelte.ts';
-import { roomClient } from '#lib/rivet/client.ts';
+import { roomClient, RoomRefused } from '#lib/rivet/client.ts';
 
-type Status = 'connecting' | 'connected' | 'reconnecting' | 'error';
+type Status = 'connecting' | 'connected' | 'reconnecting' | 'error' | 'refused';
 type RoomClient = Awaited<ReturnType<typeof roomClient>>['client'];
 /** Every game's room actor has these actions; games add their own on top (see `call`). */
 type Conn = {
@@ -65,7 +65,7 @@ export class RoomConnection<View extends BaseView, Hand> {
 	) {
 		this.hand = emptyHand;
 		this.#open(code).catch((e) => {
-			this.status = 'error';
+			this.status = e instanceof RoomRefused ? 'refused' : 'error';
 			this.error = message(e);
 		});
 	}
