@@ -12,6 +12,7 @@
 		"keys:generate": "bun scripts/keys-generate.ts"
 	},
 	"dependencies": {
+		"@hono/bun": "^1.0.1",
 		"hono": "^4.13.18",
 		"jose": "^6.2.17",
 		"zod": "^4.1.0"
