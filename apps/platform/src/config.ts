@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+/** A raw 32-byte Ed25519 key in base64url, as `bun run --filter platform keys:generate` prints it. */
+const Ed25519Key = z.string().regex(/^[A-Za-z0-9_-]{43}$/, "must be a 43-character base64url Ed25519 key; run `bun run --filter platform keys:generate`");
+
 const DbEnv = z.object({
 	DATABASE_HOST: z.string().min(1),
 	DATABASE_PORT: z.coerce.number().int().min(1).max(65535).default(5432),
@@ -10,8 +13,8 @@ const DbEnv = z.object({
 });
 
 const Env = DbEnv.extend({
-	/** Ed25519 private key as a JWK (JSON). `bun run keys:generate` prints one. */
-	PLAY_TOKEN_PRIVATE_KEY: z.string().min(1),
+	/** Ed25519 private key (32-byte seed, base64url) that signs play tokens. */
+	PLAY_TOKEN_PRIVATE_KEY: Ed25519Key,
 	/** Bearer key the actor server sends with match reports. */
 	PLATFORM_SERVER_KEY: z.string().min(32, "must be at least 32 characters"),
 	/** Interface to listen on. 127.0.0.1 = this machine only; use 0.0.0.0 inside a container. */

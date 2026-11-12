@@ -285,9 +285,9 @@ The full schema, its rules and the migration path are in [database.md](database.
 | Variable | Where | Purpose |
 |---|---|---|
 | `DATABASE_HOST`, `DATABASE_PORT`, `DATABASE_USER`, `DATABASE_PASSWORD`, `DATABASE_NAME` | platform + backoffice | Postgres connection |
-| `PLAY_TOKEN_PRIVATE_KEY` | platform | Ed25519 private key (JWK) that signs play tokens |
+| `PLAY_TOKEN_PRIVATE_KEY` | platform | Ed25519 private key (32-byte seed, base64url) that signs play tokens |
 | `PLATFORM_SERVER_KEY` | platform + actor server | Bearer key for actor → platform calls |
-| `PLAY_TOKEN_PUBLIC_KEY` | actor server | Public key that verifies play tokens |
+| `PLAY_TOKEN_PUBLIC_KEY` | actor server | Ed25519 public key (32 bytes, base64url) that verifies play tokens |
 | `PLATFORM_URL` | game frontend (server side) + actor server | `http://platform:3000` (private network) |
 | `RIVET_TOKEN` | game frontend (server side) + actor server | Engine admin token; the game's server turns it into per-room browser tokens |
 | `PUBLIC_RIVET_ENDPOINT` | game frontend | `https://engine.nblueclouds.online` (already exists) |

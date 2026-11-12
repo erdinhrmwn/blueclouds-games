@@ -10,8 +10,8 @@ import { z } from "zod";
 const PLAY_TOKEN_AUDIENCE = "blueclouds-rooms";
 
 const Env = z.object({
-	/** Ed25519 public JWK (JSON) matching the platform's PLAY_TOKEN_PRIVATE_KEY. */
-	PLAY_TOKEN_PUBLIC_KEY: z.string().min(1),
+	/** Ed25519 public key (32 bytes, base64url) matching the platform's PLAY_TOKEN_PRIVATE_KEY. */
+	PLAY_TOKEN_PUBLIC_KEY: z.string().regex(/^[A-Za-z0-9_-]{43}$/, "must be a 43-character base64url Ed25519 key; run `bun run --filter platform keys:generate`"),
 	/** Where the actor server reaches the platform API (server to server, not the public URL). */
 	PLATFORM_URL: z.url().default("http://127.0.0.1:3000").transform((u) => u.replace(/\/+$/, "")),
 	/** Bearer key for calls to the platform (match reports, tournament rooms); same value as the platform's. */
@@ -34,16 +34,7 @@ export function loadPlatformConfig(env: Record<string, string | undefined> = pro
 		const issues = parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ");
 		throw new Error(`Invalid actor server config: ${issues}`);
 	}
-	let jwk: Record<string, unknown>;
-	try {
-		jwk = JSON.parse(parsed.data.PLAY_TOKEN_PUBLIC_KEY);
-	} catch {
-		throw new Error("PLAY_TOKEN_PUBLIC_KEY must be a JSON JWK");
-	}
-	if (jwk.kty !== "OKP" || jwk.crv !== "Ed25519" || "d" in jwk) {
-		throw new Error("PLAY_TOKEN_PUBLIC_KEY must be an Ed25519 public JWK");
-	}
-	publicKey = importJWK(jwk, "EdDSA");
+	publicKey = importJWK({ kty: "OKP", crv: "Ed25519", x: parsed.data.PLAY_TOKEN_PUBLIC_KEY }, "EdDSA");
 	config = parsed.data;
 	return config;
 }
