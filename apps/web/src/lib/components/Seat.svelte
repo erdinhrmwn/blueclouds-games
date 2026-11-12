@@ -211,16 +211,17 @@
 		white-space: nowrap;
 		box-shadow: 0 0 0 2px var(--color-felt-deep);
 	}
+	/* The turn pulse brightens the avatar inside its own edge, so the seat stays 64px. */
 	.turn {
 		animation: pulse 1.6s ease-in-out infinite;
 	}
 	@keyframes pulse {
 		0%,
 		100% {
-			box-shadow: 0 0 0 0 rgb(210 165 76 / 0.6);
+			filter: brightness(1);
 		}
 		50% {
-			box-shadow: 0 0 0 10px rgb(210 165 76 / 0);
+			filter: brightness(1.2);
 		}
 	}
 	.ring {
@@ -229,7 +230,6 @@
 	@media (prefers-reduced-motion: reduce) {
 		.turn {
 			animation: none;
-			box-shadow: 0 0 0 4px rgb(210 165 76 / 0.5);
 		}
 	}
 </style>
