@@ -88,7 +88,7 @@
 		<!-- Room below for the Away tag, kept on every seat so all their lines stay level. -->
 		<div class="relative mb-1.5" aria-hidden="true">
 			<div
-				class="relative grid size-16 place-items-center rounded-full border-2 font-display text-2xl font-bold
+				class="relative grid size-16 place-items-center rounded-2xl border-2 font-display text-2xl font-bold
 					{avatarLook}"
 			>
 				{#if player.bot}
@@ -114,16 +114,15 @@
 					{initial}
 				{/if}
 				{#if timeLeft !== null}
-					<!-- The timer runs on the avatar's own edge, so the seat on turn is no bigger than the others. -->
+					<!-- The timer runs on the avatar's own edge, so the seat on turn is no bigger than the others.
+						 It follows the rounded square clockwise from the top middle. -->
 					<svg
-						class="pointer-events-none absolute -inset-0.5 size-16 -rotate-90"
+						class="pointer-events-none absolute -inset-0.5 size-16"
 						viewBox="0 0 40 40"
 						aria-hidden="true"
 					>
-						<circle
-							cx="20"
-							cy="20"
-							r="19"
+						<path
+							d="M20 1 H30 A9 9 0 0 1 39 10 V30 A9 9 0 0 1 30 39 H10 A9 9 0 0 1 1 30 V10 A9 9 0 0 1 10 1 Z"
 							fill="none"
 							stroke={timeLeft < 0.25 ? 'var(--color-ember)' : 'var(--color-paper)'}
 							stroke-width="2"
@@ -136,12 +135,13 @@
 					</svg>
 				{/if}
 			</div>
-			<!-- Roles on the top edge (Host left, VIP right), away at the bottom middle. The ring cuts a gap over the avatar and timer. -->
+			<!-- Tags sit on the avatar's edge lines: roles on the top one (Host left, VIP right), away on the bottom one.
+				 The ring cuts a gap where a tag crosses the edge or the timer. -->
 			{#if isHost}
-				<span class="seat-tag -top-2 -left-3.5 bg-brass text-ink">Host</span>
+				<span class="seat-tag -top-2 -left-1.5 bg-brass text-ink">Host</span>
 			{/if}
 			{#if player.vip}
-				<span class="seat-tag -top-2 -right-3.5 border border-brass/70 bg-ink text-brass">VIP</span>
+				<span class="seat-tag -top-2 -right-1.5 border border-brass/70 bg-ink text-brass">VIP</span>
 			{/if}
 			{#if player.away}
 				<span class="seat-tag -bottom-2 left-1/2 -translate-x-1/2 bg-paper text-ink">
@@ -179,12 +179,12 @@
 	>
 		{#if onAddBot}
 			<button
-				class="mb-1.5 grid size-16 place-items-center rounded-full border-2 border-dashed border-brass/70 text-2xl leading-none text-brass transition hover:border-solid hover:bg-brass/10 disabled:opacity-40"
+				class="mb-1.5 grid size-16 place-items-center rounded-2xl border-2 border-dashed border-brass/70 text-2xl leading-none text-brass transition hover:border-solid hover:bg-brass/10 disabled:opacity-40"
 				onclick={onAddBot}
 				aria-label="Add a bot to seat {number ?? ''}">+</button
 			>
 		{:else}
-			<div class="mb-1.5 size-16 rounded-full border-2 border-dashed border-paper/40"></div>
+			<div class="mb-1.5 size-16 rounded-2xl border-2 border-dashed border-paper/40"></div>
 		{/if}
 		<div class="text-xs text-paper/70">Seat {number ?? ''}</div>
 		{#if onSit}
