@@ -302,44 +302,55 @@ export async function listOpen(sql: SQL, game: string, playerId: string) {
 	}));
 }
 
-/** Signs the player up (or out) while registration is open. FOR SHARE waits for a distribute run on the same tournament. */
-export async function setRegistration(
-	sql: SQL,
-	tournamentId: string,
-	playerId: string,
-	join: boolean,
-): Promise<void> {
+/** Signs the player up. Signing up twice is a no-op. */
+export async function joinTournament(sql: SQL, tournamentId: string, playerId: string) {
 	await sql.begin(async (tx) => {
-		const [tournament] = await tx`
-			SELECT
-				cancelled_at,
-				distributed_at,
-				registration_opens_at <= now() AND registration_closes_at > now() AS open
-			FROM tournaments
-			WHERE id = ${tournamentId}
-			FOR SHARE`;
+		await lockOpenRegistration(tx, tournamentId);
 
-		if (!tournament) {
-			throw new ApiError("not_found", 404, "There is no such tournament.");
-		}
-		if (tournament.cancelled_at) {
-			throw new ApiError("conflict", 409, "This tournament was cancelled.");
-		}
-		if (!tournament.open || tournament.distributed_at) {
-			throw new ApiError("conflict", 409, "Registration for this tournament is closed.");
-		}
-
-		if (join) {
-			await tx`
-				INSERT INTO tournament_players (tournament_id, player_id)
-				VALUES (${tournamentId}, ${playerId})
-				ON CONFLICT DO NOTHING`;
-		} else {
-			await tx`
-				DELETE FROM tournament_players
-				WHERE tournament_id = ${tournamentId} AND player_id = ${playerId}`;
-		}
+		await tx`
+			INSERT INTO tournament_players (tournament_id, player_id)
+			VALUES (${tournamentId}, ${playerId})
+			ON CONFLICT DO NOTHING`;
 	});
+}
+
+/** Signs the player out. Signing out when not signed up is a no-op. */
+export async function leaveTournament(sql: SQL, tournamentId: string, playerId: string) {
+	await sql.begin(async (tx) => {
+		await lockOpenRegistration(tx, tournamentId);
+
+		await tx`
+			DELETE FROM tournament_players
+			WHERE tournament_id = ${tournamentId}
+				AND player_id = ${playerId}`;
+	});
+}
+
+/**
+ * Stops unless the tournament's registration is open. FOR SHARE holds the row for the transaction,
+ * so a distribute run on the same tournament waits.
+ */
+async function lockOpenRegistration(tx: SQL, tournamentId: string) {
+	const [tournament] = await tx`
+		SELECT
+			cancelled_at,
+			distributed_at,
+			registration_opens_at <= now() AND registration_closes_at > now() AS open
+		FROM tournaments
+		WHERE id = ${tournamentId}
+		FOR SHARE`;
+
+	if (!tournament) {
+		throw new ApiError("not_found", 404, "There is no such tournament.");
+	}
+
+	if (tournament.cancelled_at) {
+		throw new ApiError("conflict", 409, "This tournament was cancelled.");
+	}
+
+	if (!tournament.open || tournament.distributed_at) {
+		throw new ApiError("conflict", 409, "Registration for this tournament is closed.");
+	}
 }
 
 /** The open tournament tables the player is seated at, so the game's home page can show "your table". */

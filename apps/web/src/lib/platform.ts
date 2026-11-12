@@ -74,8 +74,13 @@ export const fetchTournaments = (game: string) =>
 		'GET',
 		`/api/${encodeURIComponent(game)}/tournaments`
 	);
-export const setRegistration = (id: string, join: boolean) =>
+export const joinTournament = (id: string) =>
 	request<{ registered: boolean }>(
-		join ? 'POST' : 'DELETE',
+		'POST',
+		`/api/tournaments/${encodeURIComponent(id)}/registration`
+	);
+export const leaveTournament = (id: string) =>
+	request<{ registered: boolean }>(
+		'DELETE',
 		`/api/tournaments/${encodeURIComponent(id)}/registration`
 	);

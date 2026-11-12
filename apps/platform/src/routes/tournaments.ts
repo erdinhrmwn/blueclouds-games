@@ -4,7 +4,7 @@ import type { AppEnv } from "../app";
 import { z } from "zod";
 import { ok, validate } from "../lib/http";
 import { playerAuth } from "../middleware/auth";
-import { listOpen, seatedRooms, setRegistration } from "../services/tournaments";
+import { joinTournament, leaveTournament, listOpen, seatedRooms } from "../services/tournaments";
 
 const GameQuery = z.object({ game: z.string().regex(/^[a-z0-9-]{2,32}$/, "Unknown game.") });
 const OptionalGame = z.object({ game: GameQuery.shape.game.optional() });
@@ -13,7 +13,6 @@ const TournamentParam = z.object({ id: z.uuid("Not a tournament id.") });
 export function tournamentRoutes(sql: SQL) {
 	const app = new Hono<AppEnv>();
 	const auth = playerAuth(sql);
-	const tournamentParam = validate("param", TournamentParam);
 
 	app.get("/tournaments", auth, validate("query", GameQuery), async (c) => {
 		const { game } = c.req.valid("query");
@@ -22,16 +21,18 @@ export function tournamentRoutes(sql: SQL) {
 		return ok(c, { tournaments });
 	});
 
+	const tournamentParam = validate("param", TournamentParam);
+
 	app.post("/tournaments/:id/registration", auth, tournamentParam, async (c) => {
 		const { id: tournamentId } = c.req.valid("param");
-		await setRegistration(sql, tournamentId, c.get("player").id, true);
+		await joinTournament(sql, tournamentId, c.get("player").id);
 
 		return ok(c, { registered: true });
 	});
 
 	app.delete("/tournaments/:id/registration", auth, tournamentParam, async (c) => {
 		const { id: tournamentId } = c.req.valid("param");
-		await setRegistration(sql, tournamentId, c.get("player").id, false);
+		await leaveTournament(sql, tournamentId, c.get("player").id);
 
 		return ok(c, { registered: false });
 	});

@@ -1,7 +1,8 @@
 <script lang="ts">
 	import {
 		fetchTournaments,
-		setRegistration,
+		joinTournament,
+		leaveTournament,
 		type Tournament,
 		type TournamentTable
 	} from '#lib/platform.ts';
@@ -36,7 +37,12 @@
 		error = null;
 
 		try {
-			await setRegistration(tournament.id, !tournament.joined);
+			if (tournament.joined) {
+				await leaveTournament(tournament.id);
+			} else {
+				await joinTournament(tournament.id);
+			}
+
 			await load();
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Something went wrong. Try again.';

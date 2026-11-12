@@ -322,16 +322,22 @@ export async function tournamentsFor(
 	}
 }
 
-/** Signs the player up for a tournament, or out of it. */
-export async function setRegistration(
-	event: RequestEvent,
-	id: string,
-	join: boolean
-): Promise<void> {
+/** Signs the player up for a tournament. */
+export async function joinTournament(event: RequestEvent, id: string): Promise<void> {
 	const secret = secretOrNameFirst(event.cookies);
 
 	await call(event, `/tournaments/${encodeURIComponent(id)}/registration`, {
-		method: join ? 'POST' : 'DELETE',
+		method: 'POST',
+		secret
+	});
+}
+
+/** Signs the player out of a tournament, while sign-up is open. */
+export async function leaveTournament(event: RequestEvent, id: string): Promise<void> {
+	const secret = secretOrNameFirst(event.cookies);
+
+	await call(event, `/tournaments/${encodeURIComponent(id)}/registration`, {
+		method: 'DELETE',
 		secret
 	});
 }
