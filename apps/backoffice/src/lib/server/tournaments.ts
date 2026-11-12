@@ -528,7 +528,8 @@ export type TournamentTable = {
 	gameName: string;
 	tournamentId: string;
 	tournamentName: string;
-	maxPlayers: number;
+	/** Seats at the game's table, filled or not. */
+	seatCount: number;
 	startedAt: Date | null;
 	seats: { playerId: string; name: string; seat: number | null }[];
 };
@@ -543,7 +544,7 @@ export async function tournamentTables(sql: SQL): Promise<TournamentTable[]> {
 			g.name AS "gameName",
 			t.id AS "tournamentId",
 			t.name AS "tournamentName",
-			t.players_per_room AS "maxPlayers",
+			g.max_players AS "seatCount",
 			r.started_at AS "startedAt",
 			coalesce(
 				(

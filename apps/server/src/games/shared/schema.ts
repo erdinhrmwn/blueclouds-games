@@ -18,6 +18,14 @@ export const RoomCode = z.string().regex(/^[A-Z0-9]{4,8}$/);
 /** Game slugs key the room lists, one list per game. */
 export const GameSlug = z.string().regex(/^[a-z0-9-]{1,32}$/);
 
+/** Who sits in one seat, for the backoffice's Live tables. No ids: the list is read by servers only. */
+export const SeatSummary = z.object({
+	seat: SeatInput,
+	name: z.string().max(20),
+	bot: z.boolean(),
+});
+export type SeatSummary = z.infer<typeof SeatSummary>;
+
 /** What the room list shows about one table. Sent by room actors to their game's list. */
 export const RoomSummary = z.object({
 	code: RoomCode,
@@ -25,5 +33,7 @@ export const RoomSummary = z.object({
 	players: z.number().int().min(0).max(SEATS),
 	maxPlayers: z.number().int().min(1).max(SEATS),
 	phase: z.enum(["lobby", "playing", "finished"]),
+	// Rooms running older code don't send seats yet.
+	seats: z.array(SeatSummary).max(SEATS).default([]),
 });
 export type RoomSummary = z.infer<typeof RoomSummary>;

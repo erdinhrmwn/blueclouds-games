@@ -60,10 +60,11 @@ export type LiveTable = {
 	kind: 'open' | 'tournament';
 	phase: 'lobby' | 'playing' | 'finished';
 	players: number;
-	maxPlayers: number;
+	/** Seats at the table, filled or not: every one shows. */
+	seatCount: number;
 	/** Open tables: who opened it. */
 	host: string | null;
 	tournament: { id: string; name: string } | null;
-	/** Tournament tables only: the room list keeps no names for open tables. */
-	seats: { playerId: string; name: string }[];
+	/** Who sits where. Open tables have no player ids; a tournament player's seat is null until the room seats them. */
+	seats: { seat: number | null; name: string; playerId: string | null; bot: boolean }[];
 };

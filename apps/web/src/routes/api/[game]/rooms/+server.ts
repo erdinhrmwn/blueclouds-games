@@ -15,7 +15,16 @@ export const GET: RequestHandler = async ({ params }) => {
 	}
 
 	try {
-		const rooms = await listRooms(params.game);
+		const list = await listRooms(params.game);
+		// Seats are for the backoffice; the public list shows only counts and the host.
+		const rooms = list.map(({ code, host, players, maxPlayers, phase }) => ({
+			code,
+			host,
+			players,
+			maxPlayers,
+			phase
+		}));
+
 		return json({ rooms }, { headers: { 'Cache-Control': 'no-store' } });
 	} catch (err) {
 		console.error('room list failed', String(err));

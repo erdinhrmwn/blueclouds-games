@@ -423,6 +423,7 @@ export async function reportToDirectory(c: Ctx, slug: string, leaving?: string):
 			players: game.players.length,
 			maxPlayers: SEATS,
 			phase: game.phase,
+			seats: game.players.map((p) => ({ seat: p.seat, name: p.name, bot: p.bot })),
 		});
 	} catch (err) {
 		c.log.warn({ msg: "room list update failed", code, err: String(err) });

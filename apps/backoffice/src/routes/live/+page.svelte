@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { invalidateAll } from '$app/navigation';
 	import PageHeader from '#lib/components/PageHeader.svelte';
+	import { seatSlots } from '#lib/seat-slots.ts';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -112,9 +113,11 @@
 	</p>
 {/if}
 
-<section class="panel mt-6" aria-labelledby="tables">
-	<div class="panel-head">
-		<h2 id="tables" class="font-semibold">Tables</h2>
+<section class="mt-8" aria-labelledby="tables">
+	<div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+		<h2 id="tables" class="font-semibold">
+			Tables <span class="font-normal text-muted tabular-nums">({tables.length})</span>
+		</h2>
 		<div class="flex flex-wrap gap-2">
 			<div class="flex rounded-lg border border-line p-0.5" role="group" aria-label="Game">
 				{#each [{ slug: '', name: 'All games' }, ...data.games] as option (option.slug)}
@@ -138,99 +141,88 @@
 	</div>
 
 	{#if tables.length === 0}
-		<p class="px-5 py-12 text-center text-sm text-muted">
+		<p class="panel px-5 py-12 text-center text-sm text-muted">
 			{data.tables.length ? 'No table fits these filters.' : 'Nobody is at a table right now.'}
 		</p>
 	{:else}
-		<!-- Phones: one card per table -->
-		<ul class="divide-y divide-line sm:hidden">
+		<ul class="grid gap-4 sm:grid-cols-2 2xl:grid-cols-3">
 			{#each tables as table (table.code)}
 				{@const phase = PHASES[table.phase]}
-				<li class="px-5 py-4">
-					<div class="flex items-center gap-2">
-						<span class="font-mono text-base tracking-wider">{table.code}</span>
-						<span class={phase.tag}>{phase.label}</span>
-						<span class="ml-auto text-sm text-muted tabular-nums"
-							>{table.players} of {table.maxPlayers}</span
-						>
-					</div>
-					<p class="mt-1 text-sm text-muted">
-						{table.gameName} ·
-						{#if table.tournament}
-							<a class="link" href="/tournaments/{table.tournament.id}">{table.tournament.name}</a>
-						{:else}
-							Open table, host {table.host ?? 'unknown'}
-						{/if}
-					</p>
-					{#if table.seats.length}
-						<p class="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-sm">
-							{#each table.seats as seat (seat.playerId)}
-								<a class="link" href="/players/{seat.playerId}">{seat.name}</a>
-							{/each}
-						</p>
-					{/if}
-				</li>
-			{/each}
-		</ul>
-
-		<!-- Wider screens: a table -->
-		<div class="hidden overflow-x-auto sm:block">
-			<table class="data-table min-w-[48rem]">
-				<thead>
-					<tr>
-						<th>Table</th>
-						<th>Game</th>
-						<th>Phase</th>
-						<th>Seats</th>
-						<th>Where from</th>
-						<th>Players</th>
-					</tr>
-				</thead>
-				<tbody>
-					{#each tables as table (table.code)}
-						{@const phase = PHASES[table.phase]}
-						<tr>
-							<td class="font-mono text-sm tracking-wider">{table.code}</td>
-							<td class="whitespace-nowrap">{table.gameName}</td>
-							<td><span class={phase.tag}>{phase.label}</span></td>
-							<td>
-								<span class="flex items-center gap-2">
-									<span class="tabular-nums">{table.players}/{table.maxPlayers}</span>
-									<span class="h-1.5 w-12 overflow-hidden rounded-full bg-line" aria-hidden="true">
-										<span
-											class="block h-full rounded-full bg-felt"
-											style:width="{(table.players / Math.max(1, table.maxPlayers)) * 100}%"
-										></span>
-									</span>
-								</span>
-							</td>
-							<td>
+				{@const slots = seatSlots(table.seatCount, table.seats)}
+				<li class="panel flex flex-col">
+					<div class="flex items-start justify-between gap-3 px-5 pt-4">
+						<div class="min-w-0">
+							<p class="font-mono text-lg tracking-[0.15em]">{table.code}</p>
+							<p class="mt-0.5 truncate text-sm text-muted">
+								{table.gameName} ·
 								{#if table.tournament}
-									<span class="tag mr-1.5">Tournament</span>
 									<a class="link" href="/tournaments/{table.tournament.id}"
 										>{table.tournament.name}</a
 									>
 								{:else}
-									<span class="tag mr-1.5">Open</span>
-									<span class="text-muted">host</span>
-									{table.host ?? 'unknown'}
+									Open table
 								{/if}
-							</td>
-							<td>
-								{#if table.seats.length}
-									<span class="flex flex-wrap gap-x-2.5 gap-y-1">
-										{#each table.seats as seat (seat.playerId)}
-											<a class="link" href="/players/{seat.playerId}">{seat.name}</a>
-										{/each}
-									</span>
+							</p>
+						</div>
+						<span class="{phase.tag} mt-1">{phase.label}</span>
+					</div>
+
+					<ol
+						class="grid grid-cols-2 gap-2 px-5 py-4 sm:grid-cols-3"
+						aria-label="Seats at {table.code}"
+					>
+						{#each slots as player, seat (seat)}
+							<li>
+								{#if player}
+									<div
+										class="flex h-full min-h-14 items-center gap-2 rounded-lg border border-line bg-subtle px-2.5 py-2"
+									>
+										<span
+											class="grid size-8 shrink-0 place-items-center rounded-md text-xs font-semibold uppercase {player.bot
+												? 'bg-line text-muted'
+												: 'bg-felt-soft text-felt'}"
+											aria-hidden="true">{player.name.slice(0, 1)}</span
+										>
+										<span class="min-w-0 text-sm leading-tight">
+											<span class="block text-[0.6875rem] text-muted">Seat {seat + 1}</span>
+											{#if player.playerId}
+												<a class="link block truncate font-medium" href="/players/{player.playerId}"
+													>{player.name}</a
+												>
+											{:else}
+												<span class="block truncate font-medium">{player.name}</span>
+											{/if}
+											{#if player.bot}<span class="sr-only">(bot)</span>{/if}
+										</span>
+									</div>
 								{:else}
-									<span class="text-muted">–</span>
+									<div
+										class="flex h-full min-h-14 items-center rounded-lg border border-dashed border-line px-2.5 py-2 text-sm text-muted"
+									>
+										<span class="leading-tight">
+											<span class="block text-[0.6875rem]">Seat {seat + 1}</span>
+											Empty
+										</span>
+									</div>
 								{/if}
-							</td>
-						</tr>
-					{/each}
-				</tbody>
-			</table>
-		</div>
+							</li>
+						{/each}
+					</ol>
+
+					<div class="mt-auto flex items-center gap-3 border-t border-line px-5 py-3 text-sm">
+						<span class="tabular-nums">{table.players} of {table.seatCount} seats taken</span>
+						<span class="h-1.5 flex-1 overflow-hidden rounded-full bg-line" aria-hidden="true">
+							<span
+								class="block h-full rounded-full bg-felt"
+								style:width="{(table.players / Math.max(1, table.seatCount)) * 100}%"
+							></span>
+						</span>
+						{#if !table.tournament}
+							<span class="truncate text-muted">Host {table.host ?? 'unknown'}</span>
+						{/if}
+					</div>
+				</li>
+			{/each}
+		</ul>
 	{/if}
 </section>

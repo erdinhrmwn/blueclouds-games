@@ -16,10 +16,11 @@ export const load: PageServerLoad = async () => {
 			kind: 'open' as const,
 			phase: room.phase,
 			players: room.players,
-			maxPlayers: room.maxPlayers,
+			seatCount: room.maxPlayers,
 			host: room.host,
 			tournament: null,
-			seats: []
+			// Rooms on older code report no seats.
+			seats: (room.seats ?? []).map((seat) => ({ ...seat, playerId: null }))
 		}))
 	);
 
@@ -30,10 +31,10 @@ export const load: PageServerLoad = async () => {
 		kind: 'tournament' as const,
 		phase: table.startedAt ? 'playing' : 'lobby',
 		players: table.seats.length,
-		maxPlayers: table.maxPlayers,
+		seatCount: table.seatCount,
 		host: null,
 		tournament: { id: table.tournamentId, name: table.tournamentName },
-		seats: table.seats
+		seats: table.seats.map((seat) => ({ ...seat, bot: false }))
 	}));
 
 	const unreachable = lists.filter((list) => list.rooms === null).map((list) => list.gameName);
