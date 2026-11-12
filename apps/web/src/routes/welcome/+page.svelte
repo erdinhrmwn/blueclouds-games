@@ -235,13 +235,11 @@
 		</div>
 
 		<div class="space-y-3">
-			<div class="rounded-xl border border-brass/20 bg-black/30 py-3 pr-3 pl-5">
+			<div class="rounded-md border border-paper/20 bg-black/30 py-2 pr-2 pl-4">
 				{#if editingGuestName}
 					<form class="flex items-center gap-2" onsubmit={saveGuestName}>
 						<label class="min-w-0 flex-1 py-1">
-							<span class="block text-xs font-semibold tracking-[0.2em] text-brass/75 uppercase"
-								>Display name</span
-							>
+							<span class="label block">Display name</span>
 							<input
 								class="field mt-1 py-1.5"
 								bind:this={guestNameInput}
@@ -262,16 +260,14 @@
 				{:else}
 					<div class="flex items-end gap-2">
 						<div class="min-w-0 flex-1 py-1">
-							<span class="block text-xs font-semibold tracking-[0.2em] text-brass/75 uppercase"
-								>Display name</span
-							>
-							<p class="mt-1 truncate text-2xl font-bold">
+							<span class="label block">Display name</span>
+							<p class="truncate font-display text-xl font-bold">
 								{guestName}
 							</p>
 						</div>
 						<button
 							type="button"
-							class="inline-flex min-h-11 items-center rounded-md px-3 text-base font-semibold text-brass hover:brightness-110 disabled:opacity-40"
+							class="inline-flex min-h-11 items-center rounded-md px-3 text-sm font-semibold text-brass hover:brightness-110 disabled:opacity-40"
 							bind:this={changeButton}
 							onclick={editGuestName}
 							disabled={busy}
@@ -280,11 +276,7 @@
 					</div>
 				{/if}
 			</div>
-			<button
-				class="btn-brass min-h-14 w-full rounded-xl bg-linear-to-b from-[#ecd38c] to-[#b8903f] text-lg font-bold shadow-[0_4px_0_var(--color-brass-dim)]"
-				onclick={guest}
-				disabled={busy}>Play as Guest</button
-			>
+			<button class="btn-brass w-full" onclick={guest} disabled={busy}>Play as guest</button>
 			{#if guestError}<p class="text-sm text-ember" role="alert">{guestError}</p>{/if}
 		</div>
 	</div>
