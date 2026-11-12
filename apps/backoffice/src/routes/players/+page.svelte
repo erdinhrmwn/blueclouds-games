@@ -58,7 +58,7 @@
 						>
 						<td class="px-3 py-2">
 							{p.isBot ? 'Bot' : p.isGuest ? 'Guest' : `@${p.username}`}{#if p.isVip}<span
-									class="ml-2 rounded border border-line px-1.5 text-xs font-medium">VIP</span
+									class="tag ml-2">VIP</span
 								>{/if}
 						</td>
 						<td class="px-3 py-2 font-mono text-xs text-muted">{p.id}</td>

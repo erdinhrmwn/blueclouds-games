@@ -46,6 +46,10 @@
 @utility field {
 	@apply min-h-11 w-full rounded-md border border-line bg-surface px-3 text-base;
 }
+/* Small word tag on a player or seat (VIP, Away, Turn): a pill, like the seat tags in the game. */
+@utility tag {
+	@apply inline-flex h-5 items-center rounded-full border border-line px-2 text-xs leading-none font-medium;
+}
 @utility label {
 	@apply mb-1 block text-sm font-medium;
 }

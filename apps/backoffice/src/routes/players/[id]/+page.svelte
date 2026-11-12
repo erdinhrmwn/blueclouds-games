@@ -32,9 +32,7 @@
 	<dd class="font-mono text-xs leading-5 break-all">{player.id}</dd>
 	<dt class="text-muted">Account</dt>
 	<dd>
-		{account}{#if player.isVip}<span
-				class="ml-2 rounded border border-line px-1.5 text-xs font-medium">VIP</span
-			>{/if}
+		{account}{#if player.isVip}<span class="tag ml-2">VIP</span>{/if}
 	</dd>
 	<dt class="text-muted">Joined</dt>
 	<dd>{utc(player.createdAt)}</dd>

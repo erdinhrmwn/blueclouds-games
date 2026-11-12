@@ -187,10 +187,9 @@
 								<div class="flex flex-wrap items-center gap-2">
 									<span class="font-medium">{nameOf(s.seat)}</span>
 									{#if t.turnSeat === s.seat}<span
-											class="rounded bg-felt px-1.5 text-xs font-semibold text-white">Turn</span
+											class="tag border-felt bg-felt font-semibold text-white">Turn</span
 										>{/if}
-									{#if s.away}<span class="rounded border border-line px-1.5 text-xs">Away</span
-										>{/if}
+									{#if s.away}<span class="tag">Away</span>{/if}
 									<span class="ml-auto tabular-nums"
 										>{s.lives === 0
 											? 'Out'
