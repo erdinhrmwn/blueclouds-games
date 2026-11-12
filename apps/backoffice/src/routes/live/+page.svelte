@@ -51,6 +51,16 @@
 		}
 	]);
 
+	/**
+	 * Where a seat sits around the oval table, in percent of the scene: seat 1 top left, then clockwise like the
+	 * game's own table. Names go above the seats on the top half, so they never sit on the felt.
+	 */
+	const seatPlace = (seat: number, count: number) => {
+		const angle = ((-90 - 180 / count + (seat * 360) / count) * Math.PI) / 180;
+
+		return { left: 50 + 40 * Math.cos(angle), top: 50 + 37 * Math.sin(angle) };
+	};
+
 	const updated = $derived.by(() => {
 		const seconds = Math.max(0, Math.round((now - new Date(data.checkedAt).getTime()) / 1000));
 		if (seconds < 5) return 'Updated just now';
@@ -145,16 +155,15 @@
 			{data.tables.length ? 'No table fits these filters.' : 'Nobody is at a table right now.'}
 		</p>
 	{:else}
-		<ul class="grid gap-4 sm:grid-cols-2 2xl:grid-cols-3">
+		<ul class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
 			{#each tables as table (table.code)}
 				{@const phase = PHASES[table.phase]}
 				{@const slots = seatSlots(table.seatCount, table.seats)}
 				<li class="panel flex flex-col">
-					<div class="flex items-start justify-between gap-3 px-5 pt-4">
+					<div class="flex items-center justify-between gap-3 px-5 pt-4">
 						<div class="min-w-0">
-							<p class="font-mono text-lg tracking-[0.15em]">{table.code}</p>
-							<p class="mt-0.5 truncate text-sm text-muted">
-								{table.gameName} ·
+							<p class="truncate text-sm">
+								<span class="font-medium">{table.gameName}</span> ·
 								{#if table.tournament}
 									<a class="link" href="/tournaments/{table.tournament.id}"
 										>{table.tournament.name}</a
@@ -164,50 +173,48 @@
 								{/if}
 							</p>
 						</div>
-						<span class="{phase.tag} mt-1">{phase.label}</span>
+						<span class={phase.tag}>{phase.label}</span>
 					</div>
 
-					<ol
-						class="grid grid-cols-2 gap-2 px-5 py-4 sm:grid-cols-3"
-						aria-label="Seats at {table.code}"
-					>
+					<!-- The table seen from above: felt in the middle, a round seat for every chair around it. -->
+					<div class="relative mx-5 my-4 h-64" role="group" aria-label="Seats at {table.code}">
+						<div
+							class="absolute inset-x-[22%] inset-y-[28%] grid place-items-center rounded-[50%] border-4 border-felt-deep bg-felt text-center text-white shadow-inner"
+						>
+							<span class="font-mono text-sm tracking-[0.15em] text-white/90">{table.code}</span>
+						</div>
+
 						{#each slots as player, seat (seat)}
-							<li>
+							{@const place = seatPlace(seat, slots.length)}
+							<div
+								class="absolute flex w-20 -translate-x-1/2 -translate-y-1/2 items-center gap-1 {place.top <
+								50
+									? 'flex-col-reverse'
+									: 'flex-col'}"
+								style:left="{place.left}%"
+								style:top="{place.top}%"
+							>
 								{#if player}
-									<div
-										class="flex h-full min-h-14 items-center gap-2 rounded-lg border border-line bg-subtle px-2.5 py-2"
+									<svelte:element
+										this={player.playerId ? 'a' : 'span'}
+										href={player.playerId ? `/players/${player.playerId}` : undefined}
+										class="grid size-11 place-items-center rounded-full text-sm font-semibold uppercase shadow-sm ring-2 ring-surface {player.bot
+											? 'bg-line text-muted'
+											: 'bg-felt-soft text-felt hover:bg-felt hover:text-white'}"
+										title="Seat {seat + 1}: {player.name}{player.bot ? ' (bot)' : ''}"
+										>{player.name.slice(0, 1)}</svelte:element
 									>
-										<span
-											class="grid size-8 shrink-0 place-items-center rounded-md text-xs font-semibold uppercase {player.bot
-												? 'bg-line text-muted'
-												: 'bg-felt-soft text-felt'}"
-											aria-hidden="true">{player.name.slice(0, 1)}</span
-										>
-										<span class="min-w-0 text-sm leading-tight">
-											<span class="block text-[0.6875rem] text-muted">Seat {seat + 1}</span>
-											{#if player.playerId}
-												<a class="link block truncate font-medium" href="/players/{player.playerId}"
-													>{player.name}</a
-												>
-											{:else}
-												<span class="block truncate font-medium">{player.name}</span>
-											{/if}
-											{#if player.bot}<span class="sr-only">(bot)</span>{/if}
-										</span>
-									</div>
+									<span class="max-w-full truncate text-xs font-medium">{player.name}</span>
 								{:else}
-									<div
-										class="flex h-full min-h-14 items-center rounded-lg border border-dashed border-line px-2.5 py-2 text-sm text-muted"
+									<span
+										class="grid size-11 place-items-center rounded-full border-2 border-dashed border-line bg-surface text-xs text-muted"
+										title="Seat {seat + 1}: empty">{seat + 1}</span
 									>
-										<span class="leading-tight">
-											<span class="block text-[0.6875rem]">Seat {seat + 1}</span>
-											Empty
-										</span>
-									</div>
+									<span class="text-xs text-muted">Empty</span>
 								{/if}
-							</li>
+							</div>
 						{/each}
-					</ol>
+					</div>
 
 					<div class="mt-auto flex items-center gap-3 border-t border-line px-5 py-3 text-sm">
 						<span class="tabular-nums">{table.players} of {table.seatCount} seats taken</span>
