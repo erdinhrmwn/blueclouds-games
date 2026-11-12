@@ -38,7 +38,8 @@ CMD ["bun", "build/index.js"]
 
 FROM source AS backoffice
 WORKDIR /app/apps/backoffice
-RUN DATABASE_HOST=build DATABASE_USER=build DATABASE_NAME=build bun --bun vite build
+RUN DATABASE_HOST=build DATABASE_USER=build DATABASE_NAME=build \
+    RIVET_TOKEN=build-placeholder-not-used-at-runtime bun --bun vite build
 USER bun
 EXPOSE 3000
 CMD ["bun", "build/index.js"]

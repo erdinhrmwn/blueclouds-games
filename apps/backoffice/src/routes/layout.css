@@ -88,7 +88,8 @@
 
 /* Every list of rows in the backoffice: put `data-table` on the <table>, wrap it in a scrolling panel. */
 @utility data-table {
-	@apply w-full text-left text-sm;
+	/* relative: keeps sr-only labels in cells inside the scroll box instead of widening the page. */
+	@apply relative w-full text-left text-sm;
 
 	& th {
 		@apply bg-subtle px-4 py-2.5 text-xs font-medium tracking-wide whitespace-nowrap text-muted uppercase;

@@ -72,8 +72,8 @@
 	</p>
 {/if}
 
-<div class="grid gap-6 xl:grid-cols-3 xl:items-start">
-	<section class="panel min-w-0 xl:col-span-2" aria-labelledby="list">
+<div class="grid gap-6">
+	<section class="panel min-w-0" aria-labelledby="list">
 		<div class="panel-head">
 			<h2 id="list" class="font-semibold">All admins</h2>
 		</div>
@@ -119,7 +119,9 @@
 												<option value={option.value}>{option.label}</option>
 											{/each}
 										</select>
-										<button class="btn-quiet min-h-9 px-3" disabled={busy}>Save</button>
+										<button class="btn-quiet min-h-9 px-3 whitespace-nowrap" disabled={busy}
+											>Save</button
+										>
 									</form>
 								{/if}
 							</td>
@@ -140,7 +142,7 @@
 										<form method="POST" action="?/resetPassword" use:enhance={submit}>
 											<input type="hidden" name="id" value={admin.id} />
 											<button
-												class="btn-quiet min-h-9 px-3"
+												class="btn-quiet min-h-9 px-3 whitespace-nowrap"
 												disabled={busy}
 												aria-label="Reset the password of {admin.username}">Reset password</button
 											>
@@ -149,7 +151,7 @@
 											<form method="POST" action="?/enable" use:enhance={submit}>
 												<input type="hidden" name="id" value={admin.id} />
 												<button
-													class="btn-quiet min-h-9 px-3"
+													class="btn-quiet min-h-9 px-3 whitespace-nowrap"
 													disabled={busy}
 													aria-label="Enable {admin.username}">Enable</button
 												>
@@ -170,7 +172,7 @@
 											>
 												<input type="hidden" name="id" value={admin.id} />
 												<button
-													class="btn-quiet min-h-9 px-3 text-danger"
+													class="btn-quiet min-h-9 px-3 whitespace-nowrap text-danger"
 													disabled={busy}
 													aria-label="Disable {admin.username}">Disable</button
 												>
@@ -186,7 +188,7 @@
 		</div>
 	</section>
 
-	<section class="panel" aria-labelledby="add">
+	<section class="panel max-w-xl" aria-labelledby="add">
 		<div class="panel-head">
 			<div>
 				<h2 id="add" class="font-semibold">Add admin</h2>

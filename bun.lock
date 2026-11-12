@@ -13,6 +13,8 @@
       "name": "backoffice",
       "version": "0.0.1",
       "dependencies": {
+        "rivetkit": "3.0.7",
+        "server": "workspace:*",
         "zod": "^4.1.0",
       },
       "devDependencies": {

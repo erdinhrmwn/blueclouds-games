@@ -45,7 +45,7 @@ No soft delete (`deleted_at`) anywhere. A soft-deleted row has to be filtered ou
 | `rooms` | Never deleted: matches point to them | Forever (one small row per table opened) |
 | `room_assignments` | Deleted when an admin takes a player out of a room (audited) | While the assignment holds |
 | `matches`, `match_players`, `match_logs` | Append-only | Forever (Erdin's decision) |
-| `admins` | Disabled (`disabled_at`); `root` can never be disabled | Forever |
+| `admins` | Disabled (`disabled_at`); `root` can never be disabled and is always an owner. Roles: owner, admin, viewer | Forever |
 | `admin_sessions` | Deleted on logout; expired ones are deleted at the next login | Until expiry |
 | `admin_audit_events` | Append-only | Forever |
 
