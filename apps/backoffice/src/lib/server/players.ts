@@ -181,29 +181,45 @@ export async function enablePlayer(
 	});
 }
 
-/** Marks a player as VIP or takes it back, with its audit row. Returns false if nothing changed. */
-export async function setVip(
+/** Marks a player as VIP, with its audit row. Returns false if they already are one. */
+export async function grantVip(
 	sql: SQL,
 	admin: Admin,
 	id: string,
-	vip: boolean,
 	ip: string | null
 ): Promise<boolean> {
 	return sql.begin(async (tx) => {
 		const [row] = await tx`
 			UPDATE players
-			SET is_vip = ${vip}
-			WHERE id = ${id} AND is_vip <> ${vip}
+			SET is_vip = true
+			WHERE id = ${id} AND NOT is_vip
 			RETURNING id`;
 
 		if (!row) return false;
 
-		await audit(tx, {
-			adminId: admin.id,
-			action: vip ? 'player.vip_grant' : 'player.vip_revoke',
-			playerId: id,
-			ip
-		});
+		await audit(tx, { adminId: admin.id, action: 'player.vip_grant', playerId: id, ip });
+
+		return true;
+	});
+}
+
+/** Takes VIP away, with its audit row. Returns false if the player is not a VIP. */
+export async function revokeVip(
+	sql: SQL,
+	admin: Admin,
+	id: string,
+	ip: string | null
+): Promise<boolean> {
+	return sql.begin(async (tx) => {
+		const [row] = await tx`
+			UPDATE players
+			SET is_vip = false
+			WHERE id = ${id} AND is_vip
+			RETURNING id`;
+
+		if (!row) return false;
+
+		await audit(tx, { adminId: admin.id, action: 'player.vip_revoke', playerId: id, ip });
 
 		return true;
 	});

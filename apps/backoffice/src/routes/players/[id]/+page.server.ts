@@ -4,9 +4,10 @@ import { sql } from '#lib/server/db.ts';
 import {
 	disablePlayer,
 	enablePlayer,
+	grantVip,
 	playerDetail,
 	REASON_MAX,
-	setVip
+	revokeVip
 } from '#lib/server/players.ts';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -41,17 +42,18 @@ export const actions: Actions = {
 
 		return { message: 'Player enabled. They start a new guest session next time they play.' };
 	},
-	vip: async ({ params, request, locals, getClientAddress }) => {
-		const form = await request.formData();
-		const vip = form.get('vip') === 'true';
-
+	grantVip: async ({ params, locals, getClientAddress }) => {
 		const ip = auditIp(getClientAddress());
-		const done = await setVip(sql, locals.admin!, params.id, vip, ip);
-		if (!done) {
-			const error = vip ? 'This player is already a VIP.' : 'This player is not a VIP.';
-			return fail(409, { error });
-		}
+		const done = await grantVip(sql, locals.admin!, params.id, ip);
+		if (!done) return fail(409, { error: 'This player is already a VIP.' });
 
-		return { message: vip ? 'Player is now a VIP.' : 'VIP taken away.' };
+		return { message: 'Player is now a VIP.' };
+	},
+	revokeVip: async ({ params, locals, getClientAddress }) => {
+		const ip = auditIp(getClientAddress());
+		const done = await revokeVip(sql, locals.admin!, params.id, ip);
+		if (!done) return fail(409, { error: 'This player is not a VIP.' });
+
+		return { message: 'VIP taken away.' };
 	}
 };

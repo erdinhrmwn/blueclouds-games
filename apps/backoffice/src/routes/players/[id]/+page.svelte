@@ -94,8 +94,12 @@
 			? 'This player is a VIP.'
 			: 'Mark a player as VIP. The change is kept in the audit log.'}
 	</p>
-	<form method="POST" action="?/vip" class="mt-3" use:enhance={submit}>
-		<input type="hidden" name="vip" value={player.isVip ? 'false' : 'true'} />
+	<form
+		method="POST"
+		action={player.isVip ? '?/revokeVip' : '?/grantVip'}
+		class="mt-3"
+		use:enhance={submit}
+	>
 		<button class={player.isVip ? 'btn-quiet' : 'btn-primary'} disabled={busy}
 			>{player.isVip ? 'Take VIP away' : 'Make VIP'}</button
 		>

@@ -2,7 +2,14 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import type { SQL } from 'bun';
 import { resetTestDatabase } from '../../../../platform/src/test-helpers';
 import { type Admin, createAdmin } from './auth';
-import { disablePlayer, enablePlayer, playerDetail, searchPlayers, setVip } from './players';
+import {
+	disablePlayer,
+	enablePlayer,
+	grantVip,
+	playerDetail,
+	revokeVip,
+	searchPlayers
+} from './players';
 
 let sql: SQL;
 let admin: Admin;
@@ -65,15 +72,15 @@ describe('accounts and VIP', () => {
 		const id = await newPlayer('Nia');
 		await sql`UPDATE players SET username = 'nia_plays', password_hash = '$argon2id$v=19$test' WHERE id = ${id}`;
 		expect((await searchPlayers(sql, 'PLAYS', null)).map((p) => p.id)).toEqual([id]);
-		expect(await setVip(sql, admin, id, true, null)).toBe(true);
-		expect(await setVip(sql, admin, id, true, null)).toBe(false);
+		expect(await grantVip(sql, admin, id, null)).toBe(true);
+		expect(await grantVip(sql, admin, id, null)).toBe(false);
 		expect((await playerDetail(sql, id))!.player).toMatchObject({
 			username: 'nia_plays',
 			isVip: true,
 			isBot: false,
 			isActive: true
 		});
-		expect(await setVip(sql, admin, id, false, null)).toBe(true);
+		expect(await revokeVip(sql, admin, id, null)).toBe(true);
 		const actions =
 			await sql`SELECT action FROM admin_audit_events WHERE player_id = ${id} ORDER BY id`;
 		expect(actions.map((a: { action: string }) => a.action)).toEqual([
