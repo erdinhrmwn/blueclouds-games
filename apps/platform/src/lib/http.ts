@@ -1,4 +1,5 @@
-import type { Context } from "hono";
+import { zValidator } from "@hono/zod-validator";
+import type { Context, ValidationTargets } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import type { z } from "zod";
 
@@ -41,25 +42,22 @@ export function fail(c: Context, err: ApiError) {
 	return c.json({ ok: false, data: null, error }, err.status);
 }
 
-/** Validates input; on failure throws `bad_input` with one message per field. */
-export function parse<S extends z.ZodType>(schema: S, input: unknown): z.output<S> {
-	const result = schema.safeParse(input);
-	if (result.success) return result.data;
+/**
+ * Validator middleware: the handler reads the result with `c.req.valid(target)`.
+ * A failure throws `bad_input` with one message per field; malformed JSON is a 400 from Hono.
+ */
+export const validate = <Target extends keyof ValidationTargets, Schema extends z.ZodType>(
+	target: Target,
+	schema: Schema,
+) =>
+	zValidator(target, schema, (result) => {
+		if (result.success) return;
 
-	const fields: Record<string, string> = {};
-	for (const issue of result.error.issues) {
-		const key = issue.path.join(".") || "_";
-		fields[key] ??= issue.message;
-	}
+		const fields: Record<string, string> = {};
+		for (const issue of result.error.issues) {
+			const key = issue.path.join(".") || "_";
+			fields[key] ??= issue.message;
+		}
 
-	throw new ApiError("bad_input", 400, "Some fields are invalid.", fields);
-}
-
-/** Reads a JSON body; a missing or malformed body is the caller's mistake, not ours. */
-export async function readJson(c: Context): Promise<unknown> {
-	try {
-		return await c.req.json();
-	} catch {
-		throw new ApiError("bad_input", 400, "Body must be valid JSON.");
-	}
-}
+		throw new ApiError("bad_input", 400, "Some fields are invalid.", fields);
+	});

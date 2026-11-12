@@ -2,7 +2,7 @@ import type { SQL } from "bun";
 import { Hono } from "hono";
 import type { AppEnv } from "../app";
 import { z } from "zod";
-import { ok, parse, readJson } from "../lib/http";
+import { ok, validate } from "../lib/http";
 import { playerAuth, serverAuth } from "../middleware/auth";
 import { rateLimit } from "../middleware/rate-limit";
 import * as rooms from "../services/rooms";
@@ -16,7 +16,7 @@ const REDEEM_LIMIT = { perIp: 10, windowMs: 60_000 };
 
 const Game = z.string().regex(/^[a-z0-9-]{2,32}$/, "Unknown game.");
 const Visibility = z.enum(["public", "private"]);
-const Code = z.string().regex(/^[A-Z0-9]{4,8}$/, "Not a room code.");
+const RoomParam = z.object({ code: z.string().regex(/^[A-Z0-9]{4,8}$/, "Not a room code.") });
 
 const NewRoom = z.object({ game: Game, visibility: Visibility.default("private") });
 const Redeem = z.object({
@@ -31,17 +31,24 @@ export function roomRoutes(sql: SQL, serverKey: string) {
 	const app = new Hono<AppEnv>();
 	const auth = playerAuth(sql);
 	const server = serverAuth(serverKey);
+	const roomParam = validate("param", RoomParam);
 
-	app.post("/rooms", rateLimit(ROOM_LIMIT.perIp, ROOM_LIMIT.windowMs), auth, async (c) => {
-		const { game, visibility } = parse(NewRoom, await readJson(c));
-		const room = await rooms.openRoom(sql, game, visibility, c.get("player").id);
+	app.post(
+		"/rooms",
+		rateLimit(ROOM_LIMIT.perIp, ROOM_LIMIT.windowMs),
+		auth,
+		validate("json", NewRoom),
+		async (c) => {
+			const { game, visibility } = c.req.valid("json");
+			const room = await rooms.openRoom(sql, game, visibility, c.get("player").id);
 
-		return ok(c, { room }, 201);
-	});
+			return ok(c, { room }, 201);
+		},
+	);
 
 	/** Whether the signed-in player may enter this room. The game's server asks before it hands out a room token. */
-	app.get("/rooms/:code", auth, async (c) => {
-		const code = parse(Code, c.req.param("code"));
+	app.get("/rooms/:code", auth, roomParam, async (c) => {
+		const { code } = c.req.valid("param");
 		const { opener: _, ...room } = await rooms.enterable(sql, code, c.get("player").id);
 
 		return ok(c, { room });
@@ -52,16 +59,17 @@ export function roomRoutes(sql: SQL, serverKey: string) {
 		"/rooms/:code/invites",
 		rateLimit(INVITE_LIMIT.perIp, INVITE_LIMIT.windowMs),
 		auth,
+		roomParam,
 		async (c) => {
-			const code = parse(Code, c.req.param("code"));
+			const { code } = c.req.valid("param");
 			const invite = await rooms.createInvite(sql, code, c.get("player").id);
 
 			return ok(c, { invite });
 		},
 	);
 
-	app.delete("/rooms/:code/invites/link", auth, async (c) => {
-		const code = parse(Code, c.req.param("code"));
+	app.delete("/rooms/:code/invites/link", auth, roomParam, async (c) => {
+		const { code } = c.req.valid("param");
 		await rooms.resetInviteLink(sql, code, c.get("player").id);
 
 		return ok(c, { revoked: true });
@@ -71,8 +79,9 @@ export function roomRoutes(sql: SQL, serverKey: string) {
 		"/invites/redeem",
 		rateLimit(REDEEM_LIMIT.perIp, REDEEM_LIMIT.windowMs),
 		auth,
+		validate("json", Redeem),
 		async (c) => {
-			const { invite } = parse(Redeem, await readJson(c));
+			const { invite } = c.req.valid("json");
 			const room = await rooms.redeemInvite(sql, invite, c.get("player").id);
 
 			return ok(c, { room });
@@ -81,23 +90,23 @@ export function roomRoutes(sql: SQL, serverKey: string) {
 
 	// For the room actor, with the server key.
 
-	app.get("/rooms/:code/seats", server, async (c) => {
-		const code = parse(Code, c.req.param("code"));
+	app.get("/rooms/:code/seats", server, roomParam, async (c) => {
+		const { code } = c.req.valid("param");
 		const room = await rooms.roomSeats(sql, code);
 
 		return ok(c, { room });
 	});
 
-	app.post("/rooms/:code/start", server, async (c) => {
-		const code = parse(Code, c.req.param("code"));
+	app.post("/rooms/:code/start", server, roomParam, async (c) => {
+		const { code } = c.req.valid("param");
 		const room = await rooms.startRoom(sql, code);
 
 		return ok(c, { room });
 	});
 
-	app.post("/rooms/:code/close", server, async (c) => {
-		const code = parse(Code, c.req.param("code"));
-		const { reason } = parse(CloseBody, await readJson(c));
+	app.post("/rooms/:code/close", server, roomParam, validate("json", CloseBody), async (c) => {
+		const { code } = c.req.valid("param");
+		const { reason } = c.req.valid("json");
 		await rooms.closeTournamentRoom(sql, code, reason);
 
 		return ok(c, { room: { code, closed: true } });

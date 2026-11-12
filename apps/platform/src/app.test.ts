@@ -51,6 +51,15 @@ describe("envelope", () => {
 		});
 	});
 
+	test("malformed JSON is a bad_input envelope", async () => {
+		const res = await call(t.app, "POST", "/v1/players/guest", {
+			body: "{not json",
+			headers: { "x-forwarded-for": crypto.randomUUID() },
+		});
+		expect(res.status).toBe(400);
+		expect(res.json.error.code).toBe("bad_input");
+	});
+
 	test("sends no CORS headers: browsers never call the platform", async () => {
 		const res = await call(t.app, "GET", "/v1/health", { headers: { origin: "http://evil.test" } });
 		expect(res.headers.get("access-control-allow-origin")).toBeNull();

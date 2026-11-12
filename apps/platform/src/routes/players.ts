@@ -2,7 +2,7 @@ import type { SQL } from "bun";
 import { Hono } from "hono";
 import type { AppEnv } from "../app";
 import { z } from "zod";
-import { ApiError, ok, parse, readJson } from "../lib/http";
+import { ApiError, ok, validate } from "../lib/http";
 import type { Signer } from "../lib/play-tokens";
 import { bearer, playerAuth } from "../middleware/auth";
 import { rateLimit } from "../middleware/rate-limit";
@@ -52,29 +52,44 @@ export function playerRoutes(sql: SQL, signer: Signer) {
 	const auth = playerAuth(sql);
 
 	/** New guest player. The secret is returned only here. */
-	app.post("/players/guest", rateLimit(GUEST_LIMIT.perIp, GUEST_LIMIT.windowMs), async (c) => {
-		const { name } = parse(GuestBody, await readJson(c));
-		const signedIn = await players.createGuest(sql, name);
+	app.post(
+		"/players/guest",
+		rateLimit(GUEST_LIMIT.perIp, GUEST_LIMIT.windowMs),
+		validate("json", GuestBody),
+		async (c) => {
+			const { name } = c.req.valid("json");
+			const signedIn = await players.createGuest(sql, name);
 
-		return ok(c, signedIn, 201);
-	});
+			return ok(c, signedIn, 201);
+		},
+	);
 
 	/** With the current guest's secret, that guest becomes the account; without one, a new player is made (201). */
-	app.post("/players/register", rateLimit(GUEST_LIMIT.perIp, GUEST_LIMIT.windowMs), async (c) => {
-		const input = parse(Register, await readJson(c));
-		const current = await players.findBySecret(sql, bearer(c.req.header("authorization")));
-		const result = await players.register(sql, current, input);
-		const status = result.playerSecret ? 201 : 200;
+	app.post(
+		"/players/register",
+		rateLimit(GUEST_LIMIT.perIp, GUEST_LIMIT.windowMs),
+		validate("json", Register),
+		async (c) => {
+			const input = c.req.valid("json");
+			const current = await players.findBySecret(sql, bearer(c.req.header("authorization")));
+			const result = await players.register(sql, current, input);
+			const status = result.playerSecret ? 201 : 200;
 
-		return ok(c, result, status);
-	});
+			return ok(c, result, status);
+		},
+	);
 
-	app.post("/players/login", rateLimit(LOGIN_LIMIT.perIp, LOGIN_LIMIT.windowMs), async (c) => {
-		const { username, password } = parse(Login, await readJson(c));
-		const signedIn = await players.login(sql, username, password);
+	app.post(
+		"/players/login",
+		rateLimit(LOGIN_LIMIT.perIp, LOGIN_LIMIT.windowMs),
+		validate("json", Login),
+		async (c) => {
+			const { username, password } = c.req.valid("json");
+			const signedIn = await players.login(sql, username, password);
 
-		return ok(c, signedIn);
-	});
+			return ok(c, signedIn);
+		},
+	);
 
 	app.post("/players/logout", auth, async (c) => {
 		await players.logout(sql, c.get("player"), c.get("playerSecret"));
@@ -91,13 +106,13 @@ export function playerRoutes(sql: SQL, signer: Signer) {
 	});
 
 	/** Accounts only: a guest keeps its generated name until it links an account. */
-	app.patch("/players/me", auth, async (c) => {
+	app.patch("/players/me", auth, validate("json", NameBody), async (c) => {
 		const player = c.get("player");
 		if (player.guest) {
 			throw new ApiError("forbidden", 403, "Link an account to choose your name.");
 		}
 
-		const { name } = parse(NameBody, await readJson(c));
+		const { name } = c.req.valid("json");
 		const renamed = await players.rename(sql, player.id, name);
 
 		return ok(c, { player: renamed });
