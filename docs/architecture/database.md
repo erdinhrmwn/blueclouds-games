@@ -176,7 +176,7 @@ Rules the database holds, so neither app can get them wrong:
 | The room starts its match at `starts_at` | The room tells the platform (`POST /v1/rooms/:code/start`, server key) → `rooms.started_at` |
 | That match is reported (`POST /v1/matches`) | Same transaction: `rooms.closed_at`, `close_reason = 'finished'` |
 | The room gives up (below the game's minimum after the 3-minute wait) | The room tells the platform (`POST /v1/rooms/:code/close`) → `close_reason = 'not_enough_players'` |
-| Nobody ever opened the room (no assigned player connected, so the actor never woke) | The 30-second job closes it at `starts_at + 4 min` (the 3-minute wait plus a margin) with `not_enough_players` |
+| Nobody ever opened the room (no assigned player connected, so the actor never woke) | The every-minute job closes it at `starts_at + 4 min` (the 3-minute wait plus a margin) with `not_enough_players` |
 | The last room of a tournament closes | Same transaction: `tournaments.ended_at = now()` |
 
 A started room is never closed by the job: its match always reaches the platform through the room's outbox, however long it takes. If the room's start call got lost and the job closed it as `not_enough_players`, the match report still switches it to `finished`. ponytail: a room whose actor dies for good mid-match keeps its tournament open; if that ever happens, add a "close table" button to the tournament page.
@@ -190,7 +190,7 @@ Watching a tournament table as a spectator isn't part of this design; it would b
 
 Tournament lifecycle, same pattern as players: `cancelled_at` instead of a delete or a status column. A cancelled tournament's rooms refuse new joins. Tournaments, rooms and assignments of past tournaments stay, so results can always be traced back to the tournament (`matches.room_id` → `rooms.tournament_id`).
 
-**The distribute job.** There is no cron service on the VPS, and none is needed: the platform process runs a small loop every 30 seconds.
+**The distribute job.** There is no cron service on the VPS, and none is needed: the platform process schedules it with `Bun.cron` every minute (`src/jobs/index.ts`).
 
 ```sql
 -- Picks due tournaments without blocking or double-running, even with more than one platform instance.
@@ -201,7 +201,7 @@ FOR UPDATE SKIP LOCKED
 LIMIT 10;
 ```
 
-The same tick also closes tournament rooms nobody opened (see "When a tournament ends"). Each picked tournament is distributed inside that same transaction, so a crash halfway leaves nothing behind and the next tick simply tries again. The loop logs each run and each failure. ponytail: a 30-second loop in the platform process is enough for one VPS; if the platform ever runs on several machines it still works (the `SKIP LOCKED` makes that safe), and only a much larger number of jobs would call for a real queue.
+The same tick also closes tournament rooms nobody opened (see "When a tournament ends"). Each picked tournament is distributed inside that same transaction, so a crash halfway leaves nothing behind and the next tick simply tries again. The loop logs each run and each failure. ponytail: an every-minute `Bun.cron` job in the platform process is enough for one VPS; if the platform ever runs on several machines it still works (the `SKIP LOCKED` makes that safe), and only a much larger number of jobs would call for a real queue.
 
 How the code is generated: 8 characters from `ABCDEFGHJKLMNPQRSTUVWXYZ23456789` (no 0/O, 1/I), the same alphabet as today, now in the platform with `crypto.getRandomValues`. The insert uses `ON CONFLICT (code) DO NOTHING` and tries a new code if it collides (up to 5 times). A code is never reused, so an old link or match always means one room. 32^8 is about 1.1 trillion codes, so a retry stays rare even at 10 million rooms. Rooms made before this kept their 5-character codes, which stay valid (the CHECK allows 4 to 8).
 
@@ -552,7 +552,7 @@ Erdin, 2026-11-12: a table must not be joinable by typing its code. A private ta
 
 - **Platform** (`apps/platform/src`, each feature as `routes/<feature>.ts` + `services/<feature>.ts`):
   - rooms: `POST /v1/rooms` (new table, public or private), `GET /v1/rooms/:code` (may this player enter: 404 unknown, 403 for a tournament room they aren't assigned to or a cancelled tournament, or a private room they aren't a member of; assigned players may still enter a closed table to see how it ended), `POST /v1/rooms/:code/invites` (`link` or `code`), `DELETE /v1/rooms/:code/invites/link` (opener only), `POST /v1/invites/redeem`, and for the actor with the server key `GET /v1/rooms/:code/seats`, `POST /v1/rooms/:code/start`, `POST /v1/rooms/:code/close`.
-  - tournaments: `planRooms` (the even split) and `distributeIn` (shared with the backoffice) in `services/tournaments.ts`, the 30-second job in `jobs/tournament-job.ts` started by `index.ts`, `GET /v1/tournaments?game=`, `POST`/`DELETE /v1/tournaments/:id/registration`, `GET /v1/players/me/rooms`.
+  - tournaments: `planRooms` (the even split) and `distributeIn` (shared with the backoffice) in `services/tournaments.ts`, the every-minute job in `jobs/index.ts` started by `index.ts`, `GET /v1/tournaments?game=`, `POST`/`DELETE /v1/tournaments/:id/registration`, `GET /v1/players/me/rooms`.
   - matches: a report names its room by code; a tournament room's report closes the room, and the tournament with its last room.
   - players: `POST /v1/players/register` (upgrades the guest whose secret is sent, or makes a new player), `POST /v1/players/login` (a new secret for this device; 5 wrong passwords lock the username for 15 minutes), `POST /v1/players/logout` (revokes this device's secret).
   - Creating and changing tournaments has no platform API: only the backoffice does that.

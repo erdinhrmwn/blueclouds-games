@@ -53,7 +53,7 @@
 
 {#if t.distributeError && !t.distributedAt && !t.cancelledAt}
 	<p class="mt-4 max-w-2xl rounded-md border border-danger/40 px-3 py-2 text-sm text-danger" role="alert">
-		The tables couldn't be handed out: {t.distributeError} The platform tries again every 30 seconds.
+		The tables couldn't be handed out: {t.distributeError} The platform tries again every minute.
 	</p>
 {/if}
 {#if form?.message}<p class="mt-4 text-sm" role="status">{form.message}</p>{/if}

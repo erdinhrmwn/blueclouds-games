@@ -125,7 +125,7 @@ export async function runTournamentJob(sql: SQL): Promise<{ distributed: number;
 				failed++;
 				const known = err instanceof DistributeError;
 				if (!known) log.error({ msg: "tournament distribute failed", tournamentId: id, err: String(err) });
-				const reason = known ? err.message : "Something went wrong. The platform tries again every 30 seconds.";
+				const reason = known ? err.message : "Something went wrong. The platform tries again every minute.";
 				await tx`UPDATE tournaments SET distribute_error = ${reason} WHERE id = ${id} AND distribute_error IS DISTINCT FROM ${reason}`;
 			}
 		}
