@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { Bust31Connection } from './connection.svelte.ts';
-	import { dealCards, placeCard, seatRect, shake } from '#lib/motion.ts';
+	import { dealCards, placeCard, seatRect, shake, whenDealt } from '#lib/motion.ts';
 	import type { Card } from 'server/games/bust-31/rules';
 	import { untrack } from 'svelte';
 	import { prefersReducedMotion } from 'svelte/motion';
@@ -31,8 +31,10 @@
 	const inSeat = (seat: number) => view.players.find((p) => p.seat === seat) ?? null;
 
 	// The dealer deals every new round (game start, or after a bust once its stamp has shown).
-	// The server holds the first turn until this ends; your hand appears when the deal is done.
+	// The server holds the first turn until this ends; your cards turn up one by one as they land.
 	let dealing = $state(false);
+	/** While dealing: how many of your cards have landed in your hand so far. */
+	let dealtCount = $state(HAND_SIZE);
 	let dealtMoves: number | null = null;
 	$effect(() => {
 		const event = view.lastEvent;
@@ -47,12 +49,18 @@
 		const wait = event.type === 'bust' ? DEAL.afterBustMs : 0;
 		const dealMs = seats.length * HAND_SIZE * DEAL.stepMs + DEAL.flightMs;
 		dealing = true;
+		dealtCount = 0;
 
 		// Timers are not cleared on re-run: every server update re-runs this effect, and the deal must finish.
 		setTimeout(() => {
 			const deck = document.querySelector('[data-deck]')?.getBoundingClientRect() ?? null;
 			dealCards(deck, seats.map(seatRect), { passes: HAND_SIZE, ...DEAL });
 		}, wait);
+
+		const mine = seats.indexOf(room.playerId ?? '');
+		whenDealt(mine, seats.length, { passes: HAND_SIZE, ...DEAL }, wait, (count) => {
+			dealtCount = count;
+		});
 
 		setTimeout(() => {
 			dealing = false;
@@ -205,7 +213,7 @@
 	<Felt count={MAX_PLAYERS + 1}>
 		{#snippet seat(k)}
 			{#if k === 0}
-				<Dealer deckCount={view.deckCount} />
+				<Dealer deckCount={view.deckCount} direction={view.direction} />
 			{:else}
 				{@const p = inSeat(k - 1)}
 				{#snippet lives()}
@@ -265,38 +273,39 @@
 				{/if}
 			</div>
 		{:else}
-			<div class="flex flex-col items-center gap-4 sm:flex-row sm:gap-8">
-				<TotalGauge total={view.total} limit={view.limit} direction={view.direction} />
-				<div class="flex items-end gap-5">
-					<div
-						class="grid h-20 w-14 place-items-center rounded-lg sm:h-[6.75rem] sm:w-[4.75rem] border border-dashed border-paper/40"
-					>
-						{#each under as u (u.id)}
+			<!-- From tablet width the pile sits dead centre with the gauge beside it; phones stack them. -->
+			<div class="flex flex-col items-center gap-4 sm:relative sm:block">
+				<div class="sm:absolute sm:top-1/2 sm:right-full sm:mr-8 sm:-translate-y-1/2">
+					<TotalGauge total={view.total} limit={view.limit} />
+				</div>
+				<div
+					class="grid h-20 w-14 place-items-center rounded-lg sm:h-[6.75rem] sm:w-[4.75rem] border border-dashed border-paper/40"
+				>
+					{#each under as u (u.id)}
+						<div
+							class="col-start-1 row-start-1"
+							style="rotate: {tiltOf(u.id)}deg"
+							aria-hidden="true"
+						>
+							<PlayingCard card={u} size={pileSize} />
+						</div>
+					{/each}
+					{#key view.topCard?.id}
+						{#if view.topCard}
 							<div
 								class="col-start-1 row-start-1"
-								style="rotate: {tiltOf(u.id)}deg"
-								aria-hidden="true"
+								data-pile-top
+								in:placeCard|global={{
+									from: flightFrom(view.topCard.id),
+									tilt: flightTilt(view.topCard.id)
+								}}
 							>
-								<PlayingCard card={u} size={pileSize} />
-							</div>
-						{/each}
-						{#key view.topCard?.id}
-							{#if view.topCard}
-								<div
-									class="col-start-1 row-start-1"
-									data-pile-top
-									in:placeCard|global={{
-										from: flightFrom(view.topCard.id),
-										tilt: flightTilt(view.topCard.id)
-									}}
-								>
-									<div style="rotate: {tiltOf(view.topCard.id)}deg">
-										<PlayingCard card={view.topCard} size={pileSize} />
-									</div>
+								<div style="rotate: {tiltOf(view.topCard.id)}deg">
+									<PlayingCard card={view.topCard} size={pileSize} />
 								</div>
-							{/if}
-						{/key}
-					</div>
+							</div>
+						{/if}
+					{/key}
 				</div>
 			</div>
 		{/if}
@@ -333,14 +342,12 @@
 			{#if room.myTurn && secondsLeft !== null && secondsLeft <= 5}
 				<p class="sr-only" role="alert">Time is almost up.</p>
 			{/if}
-			<div
-				class="flex justify-center px-4 pt-2 transition-opacity duration-300 {dealing
-					? 'pointer-events-none opacity-0'
-					: ''}"
-			>
+			<div class="flex justify-center px-4 pt-2" class:pointer-events-none={dealing}>
 				{#each room.hand as card, i (card.id)}
+					{@const landed = !dealing || i < dealtCount}
 					<div
-						class="-mx-1.5 sm:mx-0.5 {placing?.id === card.id ? 'invisible' : ''}"
+						class="-mx-1.5 sm:mx-0.5 {dealing && landed ? 'dealt-in' : ''}"
+						class:invisible={placing?.id === card.id || !landed}
 						style={fan(i, room.hand.length)}
 						data-card={card.id}
 					>

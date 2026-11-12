@@ -165,3 +165,22 @@ export function dealCards(
 	const cleanUp = () => layer.remove();
 	last?.finished.then(cleanUp, cleanUp);
 }
+
+/**
+ * Calls `land(n)` as the n-th card of a `dealCards` deal (started `delayMs` from now) reaches the
+ * seat at `seatIndex`, so your hand can fill one card at a time. Does nothing for a seat not dealt to.
+ */
+export function whenDealt(
+	seatIndex: number,
+	seatCount: number,
+	{ passes, stepMs, flightMs }: { passes: number; stepMs: number; flightMs: number },
+	delayMs: number,
+	land: (count: number) => void
+): void {
+	if (seatIndex < 0) return;
+
+	for (let pass = 0; pass < passes; pass += 1) {
+		const landsAt = delayMs + (pass * seatCount + seatIndex) * stepMs + flightMs;
+		setTimeout(() => land(pass + 1), landsAt);
+	}
+}

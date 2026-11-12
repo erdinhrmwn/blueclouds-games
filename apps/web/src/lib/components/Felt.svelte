@@ -67,8 +67,9 @@
 	}
 </script>
 
+<!-- Phones get a taller top gutter so the badge above the dealer clears the room header. -->
 <div
-	class="relative mx-auto aspect-[3/4] w-full max-w-3xl px-10 py-14 sm:aspect-[16/10] sm:px-16 sm:py-16"
+	class="relative mx-auto aspect-[3/4] w-full max-w-3xl px-10 pt-20 pb-14 sm:aspect-[16/10] sm:px-16 sm:py-16"
 >
 	<div class="table-rim u relative h-full w-full p-3 sm:p-4">
 		<div class="felt u relative grid h-full w-full place-items-center">
@@ -76,7 +77,7 @@
 		</div>
 	</div>
 	<div
-		class="pointer-events-none absolute inset-x-12 inset-y-14 sm:inset-x-16 sm:inset-y-16"
+		class="pointer-events-none absolute inset-x-12 top-20 bottom-14 sm:inset-x-16 sm:inset-y-16"
 		bind:clientWidth={width}
 		bind:clientHeight={height}
 	>

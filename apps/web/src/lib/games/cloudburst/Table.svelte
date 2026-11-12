@@ -3,7 +3,7 @@
 	import Felt from '#lib/components/Felt.svelte';
 	import Seat from '#lib/components/Seat.svelte';
 	import WinCascade from '#lib/components/WinCascade.svelte';
-	import { dealCards, placeCard, seatRect, shake } from '#lib/motion.ts';
+	import { dealCards, placeCard, seatRect, shake, whenDealt } from '#lib/motion.ts';
 	import {
 		type Card,
 		DEAL,
@@ -45,6 +45,8 @@
 	);
 
 	let dealing = $state(false);
+	/** While dealing: how many of your cards have landed in your hand so far. */
+	let dealtCount = $state(HAND_SIZE);
 	const canMove = $derived(room.myTurn && !room.busy && !dealing);
 
 	/** After drawing, only the drawn card may be played. */
@@ -251,9 +253,18 @@
 			const dealMs = seats.length * HAND_SIZE * DEAL.stepMs + DEAL.flightMs;
 
 			dealing = true;
+			dealtCount = still ? HAND_SIZE : 0;
 			setTimeout(() => {
 				dealCards(deck(), seats.map(seatRect), { passes: HAND_SIZE, ...DEAL });
 			}, wait);
+
+			if (!still) {
+				const mine = seats.indexOf(room.playerId ?? '');
+				whenDealt(mine, seats.length, { passes: HAND_SIZE, ...DEAL }, wait, (count) => {
+					dealtCount = count;
+				});
+			}
+
 			setTimeout(() => {
 				dealing = false;
 			}, wait + dealMs);
@@ -399,7 +410,7 @@
 	<Felt count={MAX_PLAYERS + 1}>
 		{#snippet seat(k)}
 			{#if k === 0}
-				<Dealer deckCount={view.deckCount} />
+				<Dealer deckCount={view.deckCount} direction={view.direction} />
 			{:else}
 				{@const p = inSeat(k - 1)}
 				{#snippet status()}
@@ -525,42 +536,32 @@
 					</p>{/if}
 			</div>
 		{:else}
-			<div class="flex items-center gap-2 sm:gap-6">
-				<div class="flex flex-col items-center gap-1 text-[11px] text-paper/75">
-					<span
-						class="direction text-2xl leading-none text-paper/80"
-						class:ccw={view.direction === -1}
-						aria-hidden="true">↻</span
-					>
-					<!-- Phones show only the arrow, so the pile stays clear of the side seats. -->
-					<span class="sr-only sm:not-sr-only"
-						>{view.direction === 1 ? 'Clockwise' : 'Counter-clockwise'}</span
-					>
-				</div>
-				<div class="flex flex-col items-center gap-2">
-					<div class="grid h-[4.6rem] w-[3.25rem] place-items-center sm:h-[6.75rem] sm:w-[4.75rem]">
-						{#each view.pileUnder as u (u.id)}
+			<!-- The pile sits dead centre; the suit badge hangs below it, clear of a tilted card's corners. -->
+			<div class="relative">
+				<div class="grid h-[4.6rem] w-[3.25rem] place-items-center sm:h-[6.75rem] sm:w-[4.75rem]">
+					{#each view.pileUnder as u (u.id)}
+						<div
+							class="col-start-1 row-start-1"
+							style="rotate: {tiltOf(u.id)}deg"
+							aria-hidden="true"
+						>
+							<CloudCard card={u} size={pileSize} />
+						</div>
+					{/each}
+					{#key view.topCard?.id}
+						{#if view.topCard}
 							<div
 								class="col-start-1 row-start-1"
-								style="rotate: {tiltOf(u.id)}deg"
-								aria-hidden="true"
+								in:placeCard|global={{ from: flightFrom(view.topCard.id), tilt: -20 }}
 							>
-								<CloudCard card={u} size={pileSize} />
-							</div>
-						{/each}
-						{#key view.topCard?.id}
-							{#if view.topCard}
-								<div
-									class="col-start-1 row-start-1"
-									in:placeCard|global={{ from: flightFrom(view.topCard.id), tilt: -20 }}
-								>
-									<div style="rotate: {tiltOf(view.topCard.id)}deg">
-										<CloudCard card={view.topCard} size={pileSize} />
-									</div>
+								<div style="rotate: {tiltOf(view.topCard.id)}deg">
+									<CloudCard card={view.topCard} size={pileSize} />
 								</div>
-							{/if}
-						{/key}
-					</div>
+							</div>
+						{/if}
+					{/key}
+				</div>
+				<div class="absolute top-full left-1/2 mt-4 -translate-x-1/2 sm:mt-5">
 					<p
 						class="suit-ring flex items-center gap-1.5 rounded-full bg-paper px-2.5 py-1 text-xs font-semibold whitespace-nowrap sm:px-3 sm:text-sm {SUIT_TEXT[
 							view.suit
@@ -636,22 +637,23 @@
 
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div
-			class="hand flex max-w-full justify-start overflow-x-auto px-4 pt-4 pb-2 transition-opacity duration-300 sm:justify-center {dealing
-				? 'pointer-events-none opacity-0'
-				: ''}"
+			class="hand flex max-w-full justify-start overflow-x-auto px-4 pt-4 pb-2 sm:justify-center"
+			class:pointer-events-none={dealing}
 			onkeydown={arrows}
 		>
-			{#each hand as card (card.id)}
+			{#each hand as card, index (card.id)}
 				{@const giving = pending?.needs === 'give'}
 				{@const isPending = pending?.card.id === card.id}
+				{@const landed = !dealing || index < dealtCount}
 				<div
-					class="hand-card shrink-0 {placing?.id === card.id ? 'invisible' : ''}"
+					class="hand-card shrink-0 {dealing && landed ? 'dealt-in' : ''}"
+					class:invisible={placing?.id === card.id || !landed}
 					data-card={card.id}
 				>
 					<CloudCard
 						{card}
 						size="lg"
-						fits={giving ? !isPending : playable(card)}
+						fits={room.myTurn && (giving ? !isPending : playable(card))}
 						selected={isPending || (card.id === room.hand.drawnId && view.drew)}
 						disabled={!canMove || (giving ? isPending : !playable(card))}
 						label={giving ? 'Give' : 'Play'}
@@ -679,12 +681,6 @@
 	}
 	.hand {
 		scrollbar-width: thin;
-	}
-	.direction {
-		transition: transform 500ms cubic-bezier(0.3, 0.7, 0.3, 1.2);
-	}
-	.direction.ccw {
-		transform: scaleX(-1);
 	}
 	.suit-ring {
 		transition: color 400ms ease;
@@ -721,7 +717,6 @@
 		.burst {
 			animation: none;
 		}
-		.direction,
 		.suit-ring {
 			transition: none;
 		}
