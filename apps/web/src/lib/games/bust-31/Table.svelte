@@ -13,6 +13,7 @@
 	import Seat from '#lib/components/Seat.svelte';
 	import { DEAL, HAND_SIZE, MAX_PLAYERS, START_LIVES } from 'server/games/bust-31/rules';
 	import Dealer from '#lib/components/Dealer.svelte';
+	import DealerLine from '#lib/components/DealerLine.svelte';
 	import TotalGauge from './TotalGauge.svelte';
 
 	let { room }: { room: Bust31Connection } = $props();
@@ -322,12 +323,7 @@
 	</Felt>
 </div>
 
-<p
-	class="mx-auto mt-4 mb-4 min-h-6 max-w-md text-center font-display text-base text-paper/80 italic"
-	aria-live="polite"
->
-	{dealerLine}
-</p>
+<DealerLine text={dealerLine} />
 
 {#if view.phase === 'playing'}
 	{#if room.me && room.me.lives > 0}

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Dealer from '#lib/components/Dealer.svelte';
+	import DealerLine from '#lib/components/DealerLine.svelte';
 	import Felt from '#lib/components/Felt.svelte';
 	import Seat from '#lib/components/Seat.svelte';
 	import WinCascade from '#lib/components/WinCascade.svelte';
@@ -576,12 +577,7 @@
 	</Felt>
 </div>
 
-<p
-	class="mx-auto mt-4 mb-2 min-h-6 max-w-md text-center font-display text-base text-paper/80 italic"
-	aria-live="polite"
->
-	{dealerLine}
-</p>
+<DealerLine text={dealerLine} />
 
 {#if view.phase === 'playing' && room.me}
 	<section aria-label="Your hand" class="flex flex-col items-center gap-3">
