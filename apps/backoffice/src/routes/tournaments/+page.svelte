@@ -63,101 +63,103 @@
 		{/if}
 	</section>
 
-	<section class="panel self-start" aria-labelledby="new">
-		<div class="panel-head">
-			<div>
-				<h2 id="new" class="font-semibold">New tournament</h2>
-				<p class="text-sm text-muted">Times are in UTC, like everywhere in the backoffice.</p>
+	{#if data.admin?.role !== 'viewer'}
+		<section class="panel self-start" aria-labelledby="new">
+			<div class="panel-head">
+				<div>
+					<h2 id="new" class="font-semibold">New tournament</h2>
+					<p class="text-sm text-muted">Times are in UTC, like everywhere in the backoffice.</p>
+				</div>
 			</div>
-		</div>
-		{#if form?.error}<p class="mx-5 mt-4 text-sm text-danger" role="alert">{form.error}</p>{/if}
-		<form
-			method="POST"
-			action="?/create"
-			class="grid gap-4 px-5 py-5 sm:grid-cols-2 xl:grid-cols-1"
-			use:enhance={() => {
-				busy = true;
-				return async ({ update }) => {
-					await update({ reset: false });
-					busy = false;
-				};
-			}}
-		>
-			<div>
-				<label class="label" for="game">Game</label>
-				<select
-					class="field"
-					id="game"
-					name="game"
-					value={values.game ?? data.games[0]?.slug}
-					onchange={(e) => (game = e.currentTarget.value)}
-				>
-					{#each data.games as g (g.slug)}<option value={g.slug}>{g.name}</option>{/each}
-				</select>
-			</div>
-			<div>
-				<label class="label" for="name">Name</label>
-				<input
-					class="field"
-					id="name"
-					name="name"
-					value={values.name ?? ''}
-					maxlength="80"
-					required
-					placeholder="Friday Cup"
-				/>
-			</div>
-			<div>
-				<label class="label" for="startsAt">Starts (UTC)</label>
-				<input
-					class="field"
-					id="startsAt"
-					name="startsAt"
-					type="datetime-local"
-					value={values.startsAt ?? ''}
-					required
-				/>
-			</div>
-			<div>
-				<label class="label" for="playersPerRoom">Players per table</label>
-				<input
-					class="field"
-					id="playersPerRoom"
-					name="playersPerRoom"
-					type="number"
-					min={picked?.minPlayers}
-					max={picked?.maxPlayers}
-					value={values.playersPerRoom ?? picked?.maxPlayers}
-					required
-				/>
-			</div>
-			<div>
-				<label class="label" for="registrationOpensAt">Sign-up opens (UTC, empty = now)</label>
-				<input
-					class="field"
-					id="registrationOpensAt"
-					name="registrationOpensAt"
-					type="datetime-local"
-					value={values.registrationOpensAt ?? ''}
-				/>
-			</div>
-			<div>
-				<label class="label" for="registrationClosesAt"
-					>Sign-up closes (UTC, empty = 10 min before start)</label
-				>
-				<input
-					class="field"
-					id="registrationClosesAt"
-					name="registrationClosesAt"
-					type="datetime-local"
-					value={values.registrationClosesAt ?? ''}
-				/>
-			</div>
-			<div class="sm:col-span-2 xl:col-span-1">
-				<button class="btn-primary w-full sm:w-auto xl:w-full" disabled={busy}
-					>Create tournament</button
-				>
-			</div>
-		</form>
-	</section>
+			{#if form?.error}<p class="mx-5 mt-4 text-sm text-danger" role="alert">{form.error}</p>{/if}
+			<form
+				method="POST"
+				action="?/create"
+				class="grid gap-4 px-5 py-5 sm:grid-cols-2 xl:grid-cols-1"
+				use:enhance={() => {
+					busy = true;
+					return async ({ update }) => {
+						await update({ reset: false });
+						busy = false;
+					};
+				}}
+			>
+				<div>
+					<label class="label" for="game">Game</label>
+					<select
+						class="field"
+						id="game"
+						name="game"
+						value={values.game ?? data.games[0]?.slug}
+						onchange={(e) => (game = e.currentTarget.value)}
+					>
+						{#each data.games as g (g.slug)}<option value={g.slug}>{g.name}</option>{/each}
+					</select>
+				</div>
+				<div>
+					<label class="label" for="name">Name</label>
+					<input
+						class="field"
+						id="name"
+						name="name"
+						value={values.name ?? ''}
+						maxlength="80"
+						required
+						placeholder="Friday Cup"
+					/>
+				</div>
+				<div>
+					<label class="label" for="startsAt">Starts (UTC)</label>
+					<input
+						class="field"
+						id="startsAt"
+						name="startsAt"
+						type="datetime-local"
+						value={values.startsAt ?? ''}
+						required
+					/>
+				</div>
+				<div>
+					<label class="label" for="playersPerRoom">Players per table</label>
+					<input
+						class="field"
+						id="playersPerRoom"
+						name="playersPerRoom"
+						type="number"
+						min={picked?.minPlayers}
+						max={picked?.maxPlayers}
+						value={values.playersPerRoom ?? picked?.maxPlayers}
+						required
+					/>
+				</div>
+				<div>
+					<label class="label" for="registrationOpensAt">Sign-up opens (UTC, empty = now)</label>
+					<input
+						class="field"
+						id="registrationOpensAt"
+						name="registrationOpensAt"
+						type="datetime-local"
+						value={values.registrationOpensAt ?? ''}
+					/>
+				</div>
+				<div>
+					<label class="label" for="registrationClosesAt"
+						>Sign-up closes (UTC, empty = 10 min before start)</label
+					>
+					<input
+						class="field"
+						id="registrationClosesAt"
+						name="registrationClosesAt"
+						type="datetime-local"
+						value={values.registrationClosesAt ?? ''}
+					/>
+				</div>
+				<div class="sm:col-span-2 xl:col-span-1">
+					<button class="btn-primary w-full sm:w-auto xl:w-full" disabled={busy}
+						>Create tournament</button
+					>
+				</div>
+			</form>
+		</section>
+	{/if}
 </div>

@@ -7,7 +7,7 @@ let admin: string;
 beforeAll(async () => {
 	t = await setupTestApp();
 	[{ id: admin }] =
-		await t.sql`INSERT INTO admins (username, password_hash) VALUES ('root', '$argon2id$v=19$test') RETURNING id`;
+		await t.sql`INSERT INTO admins (username, password_hash, role) VALUES ('root', '$argon2id$v=19$test', 'owner') RETURNING id`;
 });
 afterAll(() => t.sql.close());
 

@@ -520,3 +520,51 @@ export async function unassignPlayer(
 		});
 	});
 }
+
+export type TournamentTable = {
+	id: string;
+	code: string;
+	game: string;
+	gameName: string;
+	tournamentId: string;
+	tournamentName: string;
+	/** Seats at the game's table, filled or not. */
+	seatCount: number;
+	startedAt: Date | null;
+	seats: { playerId: string; name: string; seat: number | null }[];
+};
+
+/** Tournament tables that are handed out and not closed yet, with who is seated at each. */
+export async function tournamentTables(sql: SQL): Promise<TournamentTable[]> {
+	const rows = await sql`
+		SELECT
+			r.id,
+			r.code,
+			r.game_slug AS game,
+			g.name AS "gameName",
+			t.id AS "tournamentId",
+			t.name AS "tournamentName",
+			g.max_players AS "seatCount",
+			r.started_at AS "startedAt",
+			coalesce(
+				(
+					SELECT json_agg(
+						json_build_object('playerId', p.id, 'name', p.display_name, 'seat', ra.seat)
+						ORDER BY ra.seat NULLS LAST, p.display_name
+					)
+					FROM room_assignments ra
+					JOIN players p ON p.id = ra.player_id
+					WHERE ra.room_id = r.id
+				),
+				'[]'
+			) AS seats
+		FROM rooms r
+		JOIN tournaments t ON t.id = r.tournament_id
+		JOIN games g ON g.slug = r.game_slug
+		WHERE r.closed_at IS NULL
+			AND t.cancelled_at IS NULL
+			AND t.distributed_at IS NOT NULL
+		ORDER BY t.starts_at, r.code`;
+
+	return rows as TournamentTable[];
+}

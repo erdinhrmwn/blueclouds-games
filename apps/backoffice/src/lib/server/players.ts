@@ -40,26 +40,61 @@ const PLAYER_COLUMNS = (sql: SQL) => sql`
 	is_bot AS "isBot",
 	is_vip AS "isVip"`;
 
+export const PLAYER_TYPES = ['normal', 'vip', 'bot'] as const;
+export const PLAYER_STATUSES = ['active', 'disabled'] as const;
+
+export type PlayerFilter = {
+	/** Part of a name or username, or an exact id. */
+	q: string;
+	/** Empty for every type. */
+	type: (typeof PLAYER_TYPES)[number] | '';
+	/** Empty for both. */
+	status: (typeof PLAYER_STATUSES)[number] | '';
+};
+
 /**
- * Newest players first. `q` matches an exact id, or part of a name or username. `before` is the last id of the
- * previous page (ids are UUIDv7, so they sort by creation time).
+ * Newest players first, narrowed by the filter. `before` is the last id of the previous page (ids are UUIDv7, so
+ * they sort by creation time).
  */
 export async function searchPlayers(
 	sql: SQL,
-	q: string,
+	filter: PlayerFilter,
 	before: string | null
 ): Promise<PlayerRow[]> {
-	const term = q.trim();
 	const page = before && isUuid(before) ? sql`AND id < ${before}` : sql``;
 
 	const rows = await sql`
 		SELECT ${PLAYER_COLUMNS(sql)}
 		FROM players
-		WHERE ${searchFilter(sql, term)} ${page}
+		WHERE ${playerConditions(sql, filter)} ${page}
 		ORDER BY id DESC
 		LIMIT ${PAGE_SIZE}`;
 
 	return rows as PlayerRow[];
+}
+
+/** The filter's conditions joined with AND; each empty field adds nothing. */
+function playerConditions(sql: SQL, filter: PlayerFilter) {
+	const conditions = [searchFilter(sql, filter.q.trim())];
+
+	if (filter.type === 'bot') {
+		conditions.push(sql`is_bot`);
+	}
+	if (filter.type === 'vip') {
+		conditions.push(sql`is_vip AND NOT is_bot`);
+	}
+	if (filter.type === 'normal') {
+		conditions.push(sql`NOT is_vip AND NOT is_bot`);
+	}
+
+	if (filter.status === 'active') {
+		conditions.push(sql`is_active`);
+	}
+	if (filter.status === 'disabled') {
+		conditions.push(sql`NOT is_active`);
+	}
+
+	return conditions.reduce((left, right) => sql`${left} AND ${right}`);
 }
 
 /** Nothing typed: everyone. An id: that player. Anything else: part of a name or username. */
@@ -88,10 +123,16 @@ export type PlayerMatch = {
 	players: number;
 };
 
+/** Finished matches a player sat in, and how many of them they won (placed first). */
+export type PlayerStats = {
+	played: number;
+	won: number;
+};
+
 export async function playerDetail(
 	sql: SQL,
 	id: string
-): Promise<{ player: PlayerRow; matches: PlayerMatch[] } | null> {
+): Promise<{ player: PlayerRow; matches: PlayerMatch[]; stats: PlayerStats } | null> {
 	if (!isUuid(id)) return null;
 
 	const [player] = (await sql`
@@ -118,7 +159,14 @@ export async function playerDetail(
 		ORDER BY m.id DESC
 		LIMIT ${PLAYER_MATCHES_LIMIT}`) as PlayerMatch[];
 
-	return { player, matches };
+	const [stats] = (await sql`
+		SELECT
+			count(*)::int AS played,
+			count(*) FILTER (WHERE placement = 1)::int AS won
+		FROM match_players
+		WHERE player_id = ${id}`) as PlayerStats[];
+
+	return { player, matches, stats: stats! };
 }
 
 /**

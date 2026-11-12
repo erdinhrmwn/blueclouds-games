@@ -14,7 +14,7 @@ beforeAll(async () => {
 	sql = (await resetTestDatabase()).sql;
 	[{ id: player }] = await sql`INSERT INTO players (display_name) VALUES ('Rina') RETURNING id`;
 	[{ id: admin }] =
-		await sql`INSERT INTO admins (username, password_hash) VALUES ('root', '$argon2id$v=19$test') RETURNING id`;
+		await sql`INSERT INTO admins (username, password_hash, role) VALUES ('root', '$argon2id$v=19$test', 'owner') RETURNING id`;
 	roomId = await room(sql, "bust-31", "ABCD");
 	await sql`INSERT INTO matches (id, game_slug, room_id, rules_version, started_at, ended_at, body_hash)
 	          VALUES (${MATCH}, 'bust-31', ${roomId}, 1, now() - interval '5 min', now(), ${hash()})`;
@@ -73,6 +73,14 @@ describe("admins and audit", () => {
 		);
 		await sql`INSERT INTO admins (username, password_hash) VALUES ('ops', '$argon2id$v=19$test')`;
 		await sql`UPDATE admins SET disabled_at = now() WHERE username = 'ops'`;
+	});
+
+	test("root is always an owner", async () => {
+		await refused(
+			sql`UPDATE admins SET role = 'viewer' WHERE username = 'root'`,
+			/root_owner_check/,
+		);
+		await refused(sql`UPDATE admins SET role = 'superuser' WHERE username = 'ops'`, /role_check/);
 	});
 
 	test("a password that isn't an argon2id hash is refused", async () => {

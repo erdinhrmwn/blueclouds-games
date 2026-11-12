@@ -7,6 +7,7 @@ import {
 	cancelTournament,
 	createTournament,
 	distributeNow,
+	tournamentTables,
 	parseIds,
 	registerPlayers,
 	tournamentDetail,
@@ -31,7 +32,11 @@ const newCup = (perRoom = 6) =>
 
 beforeAll(async () => {
 	sql = (await resetTestDatabase()).sql;
-	admin = { id: await createAdmin(sql, 'root', 'correct horse battery'), username: 'root' };
+	admin = {
+		id: await createAdmin(sql, 'root', 'correct horse battery'),
+		username: 'root',
+		role: 'owner'
+	};
 });
 afterAll(() => sql.close());
 
@@ -85,6 +90,14 @@ describe('tournaments', () => {
 		await expect(registerPlayers(sql, admin, id, [ids[7]!], null)).rejects.toThrow(
 			'already handed out'
 		);
+		const tables = (await tournamentTables(sql)).filter((table) => table.tournamentId === id);
+		expect(tables.map((table) => table.seats.length).sort()).toEqual([3, 4]);
+		expect(tables[0]!.seats[0]).toEqual({
+			playerId: expect.any(String),
+			name: expect.any(String),
+			seat: expect.any(Number)
+		});
+
 		const { tournament, rooms } = (await tournamentDetail(sql, id))!;
 		expect(tournament.registrationClosesAt.getTime()).toBeLessThanOrEqual(Date.now());
 		expect(rooms.map((r) => r.players).sort()).toEqual([3, 4]);

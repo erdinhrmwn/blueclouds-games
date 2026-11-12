@@ -16,5 +16,24 @@ export const variables = defineEnvVars({
 	},
 	DATABASE_USER: { schema: z.string().min(1) },
 	DATABASE_PASSWORD: { schema: z.string().default('') },
-	DATABASE_NAME: { schema: z.string().min(1) }
+	DATABASE_NAME: { schema: z.string().min(1) },
+	RIVET_TOKEN: {
+		description: "The engine's admin token, for reading each game's list of open tables.",
+		schema: (value) => {
+			if (!value || value.length < 32) {
+				throw new Error('RIVET_TOKEN must be at least 32 characters');
+			}
+
+			return value;
+		}
+	},
+	RIVET_ENDPOINT: {
+		description: 'The engine as this server reaches it.',
+		schema: (value) => {
+			const url = value || 'http://127.0.0.1:6420';
+			if (!URL.canParse(url)) throw new Error('RIVET_ENDPOINT must be a URL');
+
+			return url;
+		}
+	}
 });

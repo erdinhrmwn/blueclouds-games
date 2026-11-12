@@ -1,4 +1,4 @@
-import { listAudit } from '#lib/server/audit-log.ts';
+import { listAudit, NO_AUDIT_FILTER } from '#lib/server/audit-log.ts';
 import { sql } from '#lib/server/db.ts';
 import { listMatches } from '#lib/server/matches.ts';
 import { matchesPerDay, overviewStats } from '#lib/server/overview.ts';
@@ -12,7 +12,7 @@ export const load: PageServerLoad = async () => {
 		overviewStats(sql),
 		matchesPerDay(sql),
 		listMatches(sql, NO_FILTER, RECENT_ROWS),
-		listAudit(sql, null, RECENT_ROWS)
+		listAudit(sql, NO_AUDIT_FILTER, RECENT_ROWS)
 	]);
 
 	return { stats, days, matches, audit };

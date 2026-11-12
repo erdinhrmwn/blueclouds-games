@@ -16,6 +16,8 @@
 		"admin:create": "bun --env-file=../../.env scripts/admin-create.ts"
 	},
 	"dependencies": {
+		"rivetkit": "3.0.7",
+		"server": "workspace:*",
 		"zod": "^4.1.0"
 	},
 	"devDependencies": {

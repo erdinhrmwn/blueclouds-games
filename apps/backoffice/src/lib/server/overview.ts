@@ -34,7 +34,7 @@ export async function overviewStats(sql: SQL): Promise<OverviewStats> {
 					AS "joinedLastDay",
 				count(*) FILTER (WHERE NOT is_bot AND last_seen_at > now() - interval '24 hours')::int
 					AS "seenLastDay",
-				count(*) FILTER (WHERE is_vip)::int AS vip,
+				count(*) FILTER (WHERE is_vip AND NOT is_bot)::int AS vip,
 				count(*) FILTER (WHERE is_bot)::int AS bots,
 				count(*) FILTER (WHERE NOT is_active)::int AS disabled
 			FROM players`,

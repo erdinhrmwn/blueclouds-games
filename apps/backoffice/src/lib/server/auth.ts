@@ -1,7 +1,15 @@
 import type { SQL } from 'bun';
 import { isIP } from 'node:net';
 
-export type Admin = { id: string; username: string };
+export const ADMIN_ROLES = ['owner', 'admin', 'viewer'] as const;
+
+/** owner: manages admins and everything else; admin: players and tournaments; viewer: reads only. */
+export type AdminRole = (typeof ADMIN_ROLES)[number];
+
+export type Admin = { id: string; username: string; role: AdminRole };
+
+/** The first admin. Always an owner, and never disabled (both enforced by the database). */
+export const ROOT = 'root';
 
 export const SESSION_COOKIE = 'bo_session';
 export const SESSION_HOURS = 8;
@@ -36,7 +44,12 @@ export type AuditAction =
 	| 'tournament.unregister'
 	| 'tournament.distribute'
 	| 'room.assign'
-	| 'room.unassign';
+	| 'room.unassign'
+	| 'admin.create'
+	| 'admin.disable'
+	| 'admin.enable'
+	| 'admin.password_reset'
+	| 'admin.role_change';
 
 export async function audit(
 	sql: SQL,
@@ -46,18 +59,29 @@ export async function audit(
 		playerId?: string | null;
 		tournamentId?: string | null;
 		roomId?: string | null;
+		targetAdminId?: string | null;
 		detail?: Record<string, unknown>;
 		ip: string | null;
 	}
 ): Promise<void> {
 	await sql`
-		INSERT INTO admin_audit_events (admin_id, action, player_id, tournament_id, room_id, detail, ip)
+		INSERT INTO admin_audit_events (
+			admin_id,
+			action,
+			player_id,
+			tournament_id,
+			room_id,
+			target_admin_id,
+			detail,
+			ip
+		)
 		VALUES (
 			${entry.adminId},
 			${entry.action},
 			${entry.playerId ?? null},
 			${entry.tournamentId ?? null},
 			${entry.roomId ?? null},
+			${entry.targetAdminId ?? null},
 			${entry.detail ?? {}},
 			${entry.ip}::inet
 		)`;
@@ -83,7 +107,7 @@ export async function login(
 	if (failures >= LOCKOUT.tries) return { ok: false, reason: 'locked' };
 
 	const [row] = await sql`
-		SELECT id, username, password_hash
+		SELECT id, username, role, password_hash
 		FROM admins
 		WHERE username = ${name} AND disabled_at IS NULL`;
 
@@ -112,7 +136,7 @@ export async function login(
 		await audit(tx, { adminId: row.id, action: 'login', ip });
 	});
 
-	return { ok: true, token, admin: { id: row.id, username: row.username } };
+	return { ok: true, token, admin: { id: row.id, username: row.username, role: row.role } };
 }
 
 /** The admin a session cookie belongs to, or null if it is unknown, expired or the admin was disabled. */
@@ -120,7 +144,7 @@ export async function sessionAdmin(sql: SQL, token: string | undefined): Promise
 	if (!token || token.length > MAX_TOKEN_LENGTH) return null;
 
 	const [row] = await sql`
-		SELECT a.id, a.username
+		SELECT a.id, a.username, a.role
 		FROM admin_sessions s
 		JOIN admins a ON a.id = s.admin_id
 		WHERE s.token_hash = ${sha256(token)}
@@ -129,7 +153,7 @@ export async function sessionAdmin(sql: SQL, token: string | undefined): Promise
 
 	if (!row) return null;
 
-	return { id: row.id, username: row.username };
+	return { id: row.id, username: row.username, role: row.role };
 }
 
 export async function logout(
@@ -155,9 +179,11 @@ export async function createAdmin(sql: SQL, username: string, password: string):
 
 	const hash = await Bun.password.hash(password); // argon2id
 
+	const role: AdminRole = username === ROOT ? 'owner' : 'admin';
+
 	const [row] = await sql`
-		INSERT INTO admins (username, password_hash)
-		VALUES (${username}, ${hash})
+		INSERT INTO admins (username, password_hash, role)
+		VALUES (${username}, ${hash}, ${role})
 		ON CONFLICT (username) DO NOTHING
 		RETURNING id`;
 

@@ -53,6 +53,8 @@ services:
     build: { context: .., dockerfile: Dockerfile, target: backoffice }
     environment:
       <<: [*proxied, *db-env]
+      RIVET_ENDPOINT: http://rivet-engine:6420 # reads the open-table lists for Live tables
+      RIVET_TOKEN: ${RIVET_TOKEN:?}
     depends_on:
       platform: { condition: service_healthy } # it runs the migrations
 
