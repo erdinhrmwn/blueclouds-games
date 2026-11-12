@@ -122,6 +122,6 @@ Only what both games do the same way is shared, with no generic game engine:
 | Room tokens and room list on the web server, by game slug | `apps/web/src/lib/server/rivet.ts`, `/api/:game/rooms`, `/api/:game/rooms/:code/token` |
 | Web: connection, lobby, room frame, felt, seat, dealer, join panel, open tables | `apps/web/src/lib/rivet/room.svelte.ts`, `apps/web/src/lib/components/` |
 
-Cloudburst itself: `apps/server/src/games/cloudburst/{rules,bots,match,schema,actor}.ts` (actor `cloudburstRoom`: `play({ cardId, suit?, giveId? })`, `draw`, `pass`), tests in `rules.test.ts`, the web table in `apps/web/src/lib/games/cloudburst/`, its catalog entry, and its `games` row (`apps/platform/migrations/007_cloudburst.sql`).
+Cloudburst itself: `apps/server/src/games/cloudburst/{rules,bots,match,schema,actor}.ts` (actor `cloudburstRoom`: `play({ cardId, suit?, giveId? })`, `draw`, `pass`), tests in `rules.test.ts`, the web table in `apps/web/src/lib/games/cloudburst/`, its catalog entry, and its `games` row (`apps/platform/migrations/002_games.sql`).
 
 UI design reasoning: [design.md](design.md).

@@ -1,6 +1,6 @@
 # Generic match schema
 
-Status: **built** (migration `006_generic_matches.sql`). Agreed with Erdin on 2026-11-11. The full, current schema with all its checks is in [database.md](database.md).
+Status: **built** (`002_games.sql` and `007_matches.sql`). Agreed with Erdin on 2026-11-11. The full, current schema with all its checks is in [database.md](database.md).
 
 Goal: one set of tables that every game (Bust 31, Cloudburst, and later ones) reports into without a schema change. A new game adds one row to `games`; everything game-specific lives in two places only: the meaning of `score`, and the move log's `data`.
 
