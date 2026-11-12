@@ -50,7 +50,7 @@ const invitesPath = (game: string, code: string) =>
 
 export const saveName = (name: string) => post<{ name: string }>('/api/player', { name });
 export const fetchPlayToken = () => post<{ token: string }>('/api/play-token', {});
-export const startGuest = () => post<AccountPlayer>('/api/player/guest', {});
+export const startGuest = (name: string) => post<AccountPlayer>('/api/player/guest', { name });
 export const registerAccount = (body: { name: string; username: string; password: string }) =>
 	post<AccountPlayer>('/api/account/register', body);
 export const signIn = (body: { username: string; password: string }) =>

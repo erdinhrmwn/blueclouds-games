@@ -67,8 +67,18 @@ export const createAccount = (body: { name: string; username: string; password: 
 
 export const logIn = (body: { username: string; password: string }) => attempt(() => signIn(body));
 
-/** "Play as guest": the platform makes up the name and username. */
-export const playAsGuest = () => attempt(startGuest);
+/** Checks a display name the way the platform does; returns the message to show, or null. */
+export function nameError(name: string): string | null {
+	const length = name.trim().length;
+	if (length < 1 || length > NAME_MAX) {
+		return `Enter a name of 1–${NAME_MAX} characters.`;
+	}
+
+	return null;
+}
+
+/** "Play as guest" under the picked name; the platform makes up the username. */
+export const playAsGuest = (name: string) => attempt(() => startGuest(name.trim()));
 
 /** Signs out; the next game starts as a new guest. */
 export async function logOut(): Promise<string | null> {
@@ -85,8 +95,9 @@ export async function logOut(): Promise<string | null> {
 /** Renames an account (a guest keeps its generated name until it links one). Returns an error message, or null. */
 export async function setPlayerName(raw: string): Promise<string | null> {
 	const name = raw.trim();
-	if (name.length < 1 || name.length > NAME_MAX) {
-		return `Enter a name of 1–${NAME_MAX} characters.`;
+	const invalid = nameError(name);
+	if (invalid) {
+		return invalid;
 	}
 
 	try {

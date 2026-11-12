@@ -77,12 +77,12 @@ const saveSecret = (cookies: Cookies, secret: string) =>
 		maxAge: SECRET_MAX_AGE
 	});
 
-/** "Play as guest": a new guest for this browser. The platform picks the name and username; a guest can't choose them. */
-export async function startGuest(event: RequestEvent): Promise<Me> {
+/** "Play as guest": a new guest for this browser under the name it picked; the platform makes up the username. */
+export async function startGuest(event: RequestEvent, name: string): Promise<Me> {
 	const { player, playerSecret } = await call<{ player: Me; playerSecret: string }>(
 		event,
 		'/players/guest',
-		{ method: 'POST', body: {} }
+		{ method: 'POST', body: { name } }
 	);
 
 	saveSecret(event.cookies, playerSecret);

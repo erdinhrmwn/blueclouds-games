@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { tick } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { nextPath } from '#lib/guest.ts';
@@ -7,8 +8,11 @@
 		type FormErrors,
 		logIn,
 		NAME_MAX,
+		nameError,
 		playAsGuest
 	} from '#lib/player.svelte.ts';
+
+	let { data } = $props();
 
 	/** First stop for anyone without a player: log in, sign up, or play as a guest. */
 	let tab = $state<'login' | 'signup'>('login');
@@ -19,7 +23,15 @@
 	let name = $state('');
 	let errors = $state<FormErrors | null>(null);
 
+	// Only the starting name is wanted: the visitor edits it here.
+	// svelte-ignore state_referenced_locally
+	let guestName = $state(data.guestName);
+	let guestDraft = $state('');
+	let editingGuestName = $state(false);
 	let guestError = $state<string | null>(null);
+
+	let guestNameInput = $state<HTMLInputElement>();
+	let changeButton = $state<HTMLButtonElement>();
 
 	const enter = () => goto(nextPath(page.url), { invalidateAll: true });
 
@@ -52,13 +64,67 @@
 		});
 	}
 
-	const guest = () =>
-		run(async () => {
-			const failed = await playAsGuest();
+	async function editGuestName() {
+		guestDraft = guestName;
+		guestError = null;
+		editingGuestName = true;
+
+		await tick();
+		guestNameInput?.select();
+	}
+
+	async function closeGuestName() {
+		editingGuestName = false;
+
+		await tick();
+		changeButton?.focus();
+	}
+
+	/** Keeps the typed name; returns false (and shows why) when it isn't a valid one. */
+	function keepGuestName(): boolean {
+		guestError = nameError(guestDraft);
+		if (guestError) {
+			guestNameInput?.focus();
+			return false;
+		}
+
+		guestName = guestDraft.trim();
+		return true;
+	}
+
+	function saveGuestName(event: SubmitEvent) {
+		event.preventDefault();
+
+		if (keepGuestName()) {
+			closeGuestName();
+		}
+	}
+
+	function cancelOnEscape(event: KeyboardEvent) {
+		if (event.key !== 'Escape') {
+			return;
+		}
+
+		event.preventDefault();
+		guestError = null;
+		closeGuestName();
+	}
+
+	function guest() {
+		// Playing while still editing uses the typed name.
+		if (editingGuestName && !keepGuestName()) {
+			return;
+		}
+
+		editingGuestName = false;
+
+		return run(async () => {
+			const failed = await playAsGuest(guestName);
 			// Show the form message, or else the first field message.
 			guestError = failed && (failed.form ?? Object.values(failed.fields)[0]);
 			return !failed;
 		});
+	}
 </script>
 
 <svelte:head><title>Welcome · BlueClouds Games</title></svelte:head>
@@ -169,11 +235,49 @@
 		</div>
 
 		<div class="space-y-3">
-			<button class="btn-ghost w-full" onclick={guest} disabled={busy}>Play as guest</button>
+			<div class="rounded-lg border border-paper/10 bg-black/30 py-2 pr-2 pl-4">
+				{#if editingGuestName}
+					<form class="flex items-center gap-2" onsubmit={saveGuestName}>
+						<label class="min-w-0 flex-1 py-1">
+							<span class="label block tracking-wider uppercase">Display name</span>
+							<input
+								class="field mt-1 py-1.5"
+								bind:this={guestNameInput}
+								bind:value={guestDraft}
+								maxlength={NAME_MAX}
+								autocomplete="nickname"
+								required
+								aria-invalid={!!guestError}
+								onkeydown={cancelOnEscape}
+							/>
+						</label>
+						<button
+							type="submit"
+							class="inline-flex min-h-11 items-center self-end rounded-md px-3 text-sm font-semibold text-brass hover:brightness-110"
+							>Save</button
+						>
+					</form>
+				{:else}
+					<div class="flex items-center gap-2">
+						<div class="min-w-0 flex-1 py-1">
+							<span class="label block tracking-wider uppercase">Display name</span>
+							<p class="truncate font-display text-lg font-bold">
+								{guestName}
+							</p>
+						</div>
+						<button
+							type="button"
+							class="inline-flex min-h-11 items-center rounded-md px-3 text-sm font-semibold text-brass hover:brightness-110 disabled:opacity-40"
+							bind:this={changeButton}
+							onclick={editGuestName}
+							disabled={busy}
+							aria-label="Change display name">Change</button
+						>
+					</div>
+				{/if}
+			</div>
+			<button class="btn-brass w-full" onclick={guest} disabled={busy}>Play as Guest</button>
 			{#if guestError}<p class="text-sm text-ember" role="alert">{guestError}</p>{/if}
-			<p class="text-sm text-paper/75">
-				You get a name like Guest 482193. Link an account later to pick your own.
-			</p>
 		</div>
 	</div>
 </section>
