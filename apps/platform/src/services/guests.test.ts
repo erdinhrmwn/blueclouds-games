@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { GUEST_UNUSED_DAYS, sweepGuests } from "./guests";
-import { call, guest, room, SERVER_KEY, setupTestApp } from "./test-helpers";
+import { call, guest, room, SERVER_KEY, setupTestApp } from "../test-helpers";
 
 let t: Awaited<ReturnType<typeof setupTestApp>>;
 beforeAll(async () => {

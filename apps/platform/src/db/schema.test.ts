@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import type { SQL } from "bun";
-import { call, resetTestDatabase, room, setupTestApp } from "./test-helpers";
+import { call, resetTestDatabase, room, setupTestApp } from "../test-helpers";
 
 // Rules the database holds on its own (docs/architecture/database.md), checked with plain SQL.
 let sql: SQL;

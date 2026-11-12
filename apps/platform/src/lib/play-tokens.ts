@@ -1,13 +1,12 @@
 import { createPrivateKey } from "node:crypto";
 import { SignJWT } from "jose";
-import type { Player } from "./auth";
 
 /** Room actors only accept tokens with this audience. */
 export const PLAY_TOKEN_AUDIENCE = "blueclouds-rooms";
 export const PLAY_TOKEN_TTL_SECONDS = 15 * 60;
 
 export type PlayToken = { token: string; expiresAt: string };
-export type Signer = { sign: (player: Player) => Promise<PlayToken> };
+export type Signer = { sign: (player: { id: string; name: string }) => Promise<PlayToken> };
 
 /** PKCS#8 DER header for a raw 32-byte Ed25519 seed (RFC 8410). */
 const ED25519_PKCS8_PREFIX = Buffer.from("302e020100300506032b657004220420", "hex");

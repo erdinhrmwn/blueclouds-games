@@ -2,8 +2,8 @@ import { SQL } from "bun";
 import { exportJWK, generateKeyPair } from "jose";
 import { createApp } from "./app";
 import { type Config, loadDbConfig } from "./config";
-import { migrate } from "./migrate";
-import { createSigner } from "./tokens";
+import { migrate } from "./db/migrate";
+import { createSigner } from "./lib/play-tokens";
 
 // Postgres 18 has uuidv7() built in. Older test databases get this stand-in (tests only).
 const UUIDV7_POLYFILL = `

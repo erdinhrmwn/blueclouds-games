@@ -1,6 +1,6 @@
 import type { SQL } from 'bun';
 import { z } from 'zod';
-import { DistributeError, distributeIn } from '../../../../platform/src/tournaments.ts';
+import { DistributeError, distributeIn } from '../../../../platform/src/services/tournaments.ts';
 import type { Admin } from './auth.ts';
 import { audit } from './auth.ts';
 import { isUuid } from './players.ts';

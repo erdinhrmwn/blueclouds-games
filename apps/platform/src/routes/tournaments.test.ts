@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { DistributeError, planRooms, runTournamentJob } from "./tournaments";
-import { call, guest, SERVER_KEY, setupTestApp } from "./test-helpers";
+import { DistributeError, planRooms, runTournamentJob } from "../services/tournaments";
+import { call, guest, SERVER_KEY, setupTestApp } from "../test-helpers";
 
 let t: Awaited<ReturnType<typeof setupTestApp>>;
 let admin: string;
