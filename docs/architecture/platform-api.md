@@ -88,7 +88,7 @@ One VPS, one Docker Compose project. Caddy is the only thing listening on the in
 | Part | Choice | Notes |
 |---|---|---|
 | Platform runtime | Bun 1.3 | |
-| HTTP framework | Hono 4 (`hono/bun`) | Built-in middleware covers body limit, request id and secure headers; `app.onError` / `app.notFound` force the envelope; `app.request()` makes route tests easy. Zero transitive deps. |
+| HTTP framework | Hono 4 (`@hono/bun` adapter) | Built-in middleware covers body limit, request id and secure headers; `app.onError` / `app.notFound` force the envelope; `app.request()` makes route tests easy. Zero transitive deps. |
 | Language | TypeScript | Same as the rest of the repo |
 | Validation | Zod 4 | Already used by the actor server |
 | Database | Postgres 18 | Built-in `uuidv7()` |
