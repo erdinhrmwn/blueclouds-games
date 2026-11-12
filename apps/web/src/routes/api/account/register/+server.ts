@@ -5,16 +5,18 @@ import type { RequestHandler } from './$types';
 /** Creates an account; the platform checks the fields and answers with one message per field. */
 export const POST: RequestHandler = async (event) => {
 	const body = (await event.request.json().catch(() => null)) as Record<string, unknown> | null;
-	const text = (k: string) => (typeof body?.[k] === 'string' ? (body[k] as string) : '');
+	const text = (key: string) => (typeof body?.[key] === 'string' ? (body[key] as string) : '');
+
+	const fields = {
+		name: text('name').trim(),
+		username: text('username'),
+		password: text('password')
+	};
+
 	try {
-		return json({
-			player: await register(event, {
-				name: text('name').trim(),
-				username: text('username'),
-				password: text('password')
-			})
-		});
-	} catch (e) {
-		return failure(e);
+		const player = await register(event, fields);
+		return json({ player });
+	} catch (err) {
+		return failure(err);
 	}
 };

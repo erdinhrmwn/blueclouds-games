@@ -9,16 +9,20 @@
 
 	$effect(() => {
 		if (!dialog) return;
+
 		if (player.editing && !dialog.open) {
 			draft = player.name;
 			error = null;
 			dialog.showModal();
-		} else if (!player.editing && dialog.open) dialog.close();
+		} else if (!player.editing && dialog.open) {
+			dialog.close();
+		}
 	});
 
-	async function submit(e: SubmitEvent) {
-		e.preventDefault();
+	async function submit(event: SubmitEvent) {
+		event.preventDefault();
 		if (saving) return;
+
 		saving = true;
 		error = await setPlayerName(draft);
 		saving = false;

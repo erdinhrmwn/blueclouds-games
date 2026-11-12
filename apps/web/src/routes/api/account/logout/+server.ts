@@ -6,7 +6,7 @@ export const POST: RequestHandler = async (event) => {
 	try {
 		await logout(event);
 		return json({ signedOut: true });
-	} catch (e) {
-		return failure(e);
+	} catch (err) {
+		return failure(err);
 	}
 };

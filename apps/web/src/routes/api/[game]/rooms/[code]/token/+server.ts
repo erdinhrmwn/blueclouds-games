@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import { isRoomCode } from '#lib/guest.ts';
-import { failure, roomFor } from '#lib/server/platform.ts';
+import { apiError, BUSY_MESSAGE, failure, roomFor } from '#lib/server/platform.ts';
 import { hasRooms, issueRoomToken } from '#lib/server/rivet.ts';
 import type { RequestHandler } from './$types';
 
@@ -8,33 +8,24 @@ import type { RequestHandler } from './$types';
 export const POST: RequestHandler = async (event) => {
 	const { params } = event;
 	if (!hasRooms(params.game)) {
-		return json(
-			{ error: { code: 'not_found', message: 'There is no such game.' } },
-			{ status: 404 }
-		);
+		return apiError(404, 'not_found', 'There is no such game.');
 	}
 	if (!isRoomCode(params.code)) {
-		return json(
-			{ error: { code: 'bad_input', message: 'A table code is 4–8 letters or digits.' } },
-			{ status: 400 }
-		);
+		return apiError(400, 'bad_input', 'A table code is 4–8 letters or digits.');
 	}
+
+	// The platform decides who may enter; only then does the engine hand out a token.
 	try {
 		await roomFor(event, params.game, params.code);
-	} catch (e) {
-		return failure(e);
+	} catch (err) {
+		return failure(err);
 	}
+
 	try {
-		return json(await issueRoomToken(params.game, params.code), {
-			headers: { 'Cache-Control': 'no-store' }
-		});
+		const access = await issueRoomToken(params.game, params.code);
+		return json(access, { headers: { 'Cache-Control': 'no-store' } });
 	} catch (err) {
 		console.error('room token failed', String(err));
-		return json(
-			{
-				error: { code: 'unavailable', message: 'The game server is busy. Try again in a moment.' }
-			},
-			{ status: 503 }
-		);
+		return apiError(503, 'unavailable', BUSY_MESSAGE);
 	}
 };

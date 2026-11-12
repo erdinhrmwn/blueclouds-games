@@ -7,6 +7,12 @@
 	let { game }: { game: string } = $props();
 	let list = $state<RoomList | null>(null);
 
+	const phaseLabel = (phase: string, open: boolean) => {
+		if (phase === 'playing') return 'Playing';
+		if (phase === 'finished') return 'Finished';
+		return open ? 'In lobby' : 'Full';
+	};
+
 	onMount(() => {
 		const rooms = new RoomList(game);
 		list = rooms;
@@ -34,13 +40,7 @@
 						<span class="block truncate font-medium">{r.host ? `${r.host}’s table` : 'Table'}</span>
 						<span class="block text-sm text-paper/75">
 							{r.players}/{r.maxPlayers} players ·
-							{r.phase === 'playing'
-								? 'Playing'
-								: r.phase === 'finished'
-									? 'Finished'
-									: open
-										? 'In lobby'
-										: 'Full'}
+							{phaseLabel(r.phase, open)}
 						</span>
 					</span>
 					<button

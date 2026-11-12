@@ -24,17 +24,14 @@
 	const [glyph, caption, ink] = $derived(LOOK[card.kind]);
 	const label = $derived(card.kind === 'number' ? String(card.value) : glyph);
 	const spoken = $derived(card.kind === 'number' ? `plus ${card.value}` : caption);
+
+	const LABEL_SIZE = { lg: 'text-6xl', md: 'text-5xl', sm: 'text-4xl' } as const;
+	const labelSize = $derived(LABEL_SIZE[size]);
 </script>
 
 {#snippet face()}
 	<span class="corner top-1.5 left-2">{label}</span>
-	<span
-		class="font-display font-black {size === 'lg'
-			? 'text-6xl'
-			: size === 'sm'
-				? 'text-4xl'
-				: 'text-5xl'} leading-none">{label}</span
-	>
+	<span class="font-display font-black {labelSize} leading-none">{label}</span>
 	{#if caption}<span class="mt-1 text-[11px] font-medium opacity-80">{caption}</span>{/if}
 	<span class="corner right-2 bottom-1.5 rotate-180">{label}</span>
 {/snippet}

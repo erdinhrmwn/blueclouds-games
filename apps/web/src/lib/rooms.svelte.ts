@@ -18,15 +18,17 @@ export class RoomList {
 	}
 
 	async #load() {
+		const url = `/api/${encodeURIComponent(this.#game)}/rooms`;
+
 		try {
-			const res = await fetch(`/api/${encodeURIComponent(this.#game)}/rooms`, {
-				cache: 'no-store'
-			});
+			const res = await fetch(url, { cache: 'no-store' });
 			if (!res.ok) throw new Error(`room list ${res.status}`);
-			this.rooms = ((await res.json()) as { rooms: RoomSummary[] }).rooms;
+
+			const body = (await res.json()) as { rooms: RoomSummary[] };
+			this.rooms = body.rooms;
 			this.status = 'ready';
-		} catch (e) {
-			console.error('room list failed', e);
+		} catch (err) {
+			console.error('room list failed', err);
 			this.status = 'error';
 		}
 	}

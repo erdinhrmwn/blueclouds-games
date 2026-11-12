@@ -22,34 +22,44 @@
 	import { SUIT_NAME, SUIT_TEXT } from './suits.ts';
 
 	let { room }: { room: CloudburstConnection } = $props();
+
 	/** Phones get a smaller pile so the middle of the table stays clear of the seats. */
 	const wide = new MediaQuery('min-width: 640px');
 	const pileSize = $derived(wide.current ? 'md' : 'sm');
+
 	const view = $derived(room.view!);
-	const inSeat = (s: number) => view.players.find((p) => p.seat === s) ?? null;
+	const inSeat = (seat: number) => view.players.find((p) => p.seat === seat) ?? null;
 	const nameOf = (id: string | null | undefined) =>
 		view.players.find((p) => p.id === id)?.name ?? '?';
 
 	// Your hand, sorted by suit, then numbers before actions; Rainbows last.
 	const ORDER = { number: 0, calm: 1, swirl: 2, gust: 3, rainbow: 4 } as const;
+	/** Rainbows have no suit and sort after every suit. */
+	const NO_SUIT_RANK = 9;
+	const suitRank = (card: Card) => (card.suit ? SUITS.indexOf(card.suit) : NO_SUIT_RANK);
+
 	const hand = $derived(
 		[...room.hand.cards].sort(
-			(a, b) =>
-				(a.suit ? SUITS.indexOf(a.suit) : 9) - (b.suit ? SUITS.indexOf(b.suit) : 9) ||
-				ORDER[a.kind] - ORDER[b.kind] ||
-				a.value - b.value
+			(a, b) => suitRank(a) - suitRank(b) || ORDER[a.kind] - ORDER[b.kind] || a.value - b.value
 		)
 	);
+
 	let dealing = $state(false);
 	const canMove = $derived(room.myTurn && !room.busy && !dealing);
-	const playable = (c: Card) =>
-		!!view.topCard &&
-		fits(c, view.topCard, view.suit) &&
-		(!view.drew || c.id === room.hand.drawnId);
+
+	/** After drawing, only the drawn card may be played. */
+	const playable = (card: Card) => {
+		if (!view.topCard || !fits(card, view.topCard, view.suit)) return false;
+		return !view.drew || card.id === room.hand.drawnId;
+	};
+
+	/** The player after you, in the current direction. */
 	const next = $derived.by(() => {
-		const i = view.players.findIndex((p) => p.id === room.playerId);
-		const n = view.players.length;
-		return view.players[(((i + view.direction) % n) + n) % n] ?? null;
+		const mine = view.players.findIndex((p) => p.id === room.playerId);
+		const count = view.players.length;
+		const index = (((mine + view.direction) % count) + count) % count;
+
+		return view.players[index] ?? null;
 	});
 
 	// A Gust or Rainbow needs a second pick before anything is sent.
@@ -60,30 +70,51 @@
 
 	// Your own card flies from where it sat in your hand, so remember that spot on click.
 	let placing = $state.raw<{ id: string; rect: DOMRect } | null>(null);
+
 	function send(card: Card, extra: { suit?: Suit; giveId?: string } = {}) {
 		const el = document.querySelector(`[data-card="${CSS.escape(card.id)}"]`);
 		if (el) placing = { id: card.id, rect: el.getBoundingClientRect() };
+
 		pending = null;
 		room.play({ cardId: card.id, ...extra }).then(() => {
 			if (room.error) placing = null;
 		});
 	}
+
 	function choose(card: Card) {
 		if (pending?.needs === 'give') return send(pending.card, { giveId: card.id });
 		if (!playable(card)) return;
-		if (card.kind === 'rainbow') pending = { card, needs: 'suit' };
-		else if (card.kind === 'gust' && hand.length > 1) pending = { card, needs: 'give' };
-		else send(card);
+
+		if (card.kind === 'rainbow') {
+			pending = { card, needs: 'suit' };
+		} else if (card.kind === 'gust' && hand.length > 1) {
+			pending = { card, needs: 'give' };
+		} else {
+			send(card);
+		}
 	}
-	const lastPlayer = $derived(
-		view.lastEvent?.type === 'played' || view.lastEvent?.type === 'roundEnd'
-			? view.lastEvent.type === 'played'
-				? view.lastEvent.playerId
-				: view.lastEvent.outId
-			: null
-	);
+
+	/** Who played the top card: the player, or whoever went out with it. */
+	const lastPlayer = $derived.by(() => {
+		const event = view.lastEvent;
+		if (event?.type === 'played') return event.playerId;
+		if (event?.type === 'roundEnd') return event.outId;
+		return null;
+	});
+
 	const flightFrom = (id: string) => (placing?.id === id ? placing.rect : seatRect(lastPlayer));
-	const tiltOf = (id: string) => ([...id].reduce((h, ch) => h * 31 + ch.charCodeAt(0), 7) % 13) - 6;
+
+	/** A cloud-meter segment: filled, filled and close to bursting, or empty. */
+	const segmentClass = (index: number, points: number) => {
+		if (index >= points) return 'bg-paper/20';
+		return points >= view.burstAt - 2 ? 'bg-ember' : 'bg-paper/85';
+	};
+
+	/** A steady tilt of -6..6 degrees per card, from a hash of its id. */
+	const tiltOf = (id: string) => {
+		const hash = [...id].reduce((h, ch) => h * 31 + ch.charCodeAt(0), 7);
+		return (hash % 13) - 6;
+	};
 
 	// Round end: each seat's leftover cards fan open face up over it, then drip one by one into its
 	// cloud meter, filling a segment as each lands. A seat that reaches the burst limit shakes once.
@@ -96,31 +127,56 @@
 		fallMs: 380,
 		clearMs: 3600
 	};
+	const BURST_SHAKE_MS = 900;
+	const SKIPPED_BADGE_MS = 1600;
+	/** How long a played card keeps its own flight start after it left your hand. */
+	const PLACING_CLEAR_MS = 500;
+	const DRAW_FLIGHT_MS = 450;
+	const GIVE_FLIGHT_MS = 550;
+	const CLOCK_TICK_MS = 250;
+
 	/** Width of an `xs` card, and of the whole fan so it stays inside a phone seat. */
 	const FAN = { cardPx: 28, maxPx: 88, stepPx: 14 };
-	const overlap = (n: number) =>
-		FAN.cardPx - Math.min(FAN.stepPx, (FAN.maxPx - FAN.cardPx) / Math.max(1, n - 1));
+	const overlap = (count: number) => {
+		const step = Math.min(FAN.stepPx, (FAN.maxPx - FAN.cardPx) / Math.max(1, count - 1));
+		return FAN.cardPx - step;
+	};
+
 	let reveal = $state<{
 		moves: number;
 		left: Record<string, Card[]>;
 		landed: Record<string, number>;
 	} | null>(null);
 	let bursting = $state<string[]>([]);
+
 	/** The points a seat's meter shows: during the reveal, the old total plus the drops landed so far. */
-	const shownPoints = (p: (typeof view.players)[number]) =>
-		reveal ? p.points - (reveal.left[p.id]?.length ?? 0) + (reveal.landed[p.id] ?? 0) : p.points;
+	const shownPoints = (player: (typeof view.players)[number]) => {
+		if (!reveal) return player.points;
+
+		const stillToLand = reveal.left[player.id]?.length ?? 0;
+		const landed = reveal.landed[player.id] ?? 0;
+		return player.points - stillToLand + landed;
+	};
 
 	function land(playerId: string) {
 		if (!reveal) return;
+
 		const landed = (reveal.landed[playerId] ?? 0) + 1;
 		reveal.landed[playerId] = landed;
-		const p = view.players.find((q) => q.id === playerId);
-		if (!p || landed < (reveal.left[playerId]?.length ?? 0) || p.points < view.burstAt) return;
-		shake(
-			document.querySelector<HTMLElement>(`[data-seat="${CSS.escape(playerId)}"]`) ?? undefined
-		);
+
+		// Shake the seat once its last card landed and it reached the burst limit.
+		const player = view.players.find((p) => p.id === playerId);
+		if (!player) return;
+		if (landed < (reveal.left[playerId]?.length ?? 0)) return;
+		if (player.points < view.burstAt) return;
+
+		const seat = document.querySelector<HTMLElement>(`[data-seat="${CSS.escape(playerId)}"]`);
+		shake(seat ?? undefined);
+
 		bursting = [...bursting, playerId];
-		setTimeout(() => (bursting = bursting.filter((id) => id !== playerId)), 900);
+		setTimeout(() => {
+			bursting = bursting.filter((id) => id !== playerId);
+		}, BURST_SHAKE_MS);
 	}
 
 	/** One revealed card: fans out from the seat, waits, then falls into its meter segment. */
@@ -129,156 +185,210 @@
 		{ playerId, i, n, from }: { playerId: string; i: number; n: number; from: number }
 	) {
 		const meter = node.closest('[data-meter]');
-		const seg =
-			meter?.querySelector(`[data-seg="${Math.min(from + i, view.burstAt - 1)}"]`) ?? meter;
-		if (!seg) return;
-		const a = node.getBoundingClientRect();
-		const b = seg.getBoundingClientRect();
-		const dx = b.left + b.width / 2 - (a.left + a.width / 2);
-		const dy = b.top + b.height / 2 - (a.top + a.height / 2);
+		const segmentIndex = Math.min(from + i, view.burstAt - 1);
+		const segment = meter?.querySelector(`[data-seg="${segmentIndex}"]`) ?? meter;
+		if (!segment) return;
+
+		const start = node.getBoundingClientRect();
+		const end = segment.getBoundingClientRect();
+		const dx = end.left + end.width / 2 - (start.left + start.width / 2);
+		const dy = end.top + end.height / 2 - (start.top + start.height / 2);
+
 		const fallAt = REVEAL.holdMs + i * Math.min(REVEAL.stepMs, REVEAL.spreadMs / n);
 		const total = fallAt + REVEAL.fallMs;
 		const spread = (i - (n - 1) / 2) * 6;
-		const anim = node.animate(
-			[
-				{
-					offset: 0,
-					transform: `translateX(${-spread}px) scale(0.6)`,
-					opacity: 0,
-					easing: 'ease-out'
-				},
-				{ offset: REVEAL.fanMs / total, transform: 'none', opacity: 1 },
-				{
-					offset: fallAt / total,
-					transform: 'none',
-					opacity: 1,
-					easing: 'cubic-bezier(0.55, 0, 0.9, 0.45)'
-				},
-				{ offset: 1, transform: `translate(${dx}px, ${dy}px) scale(0.25)`, opacity: 0 }
-			],
-			{ duration: total, fill: 'both' }
-		);
+
+		const frames = [
+			{
+				offset: 0,
+				transform: `translateX(${-spread}px) scale(0.6)`,
+				opacity: 0,
+				easing: 'ease-out'
+			},
+			{ offset: REVEAL.fanMs / total, transform: 'none', opacity: 1 },
+			{
+				offset: fallAt / total,
+				transform: 'none',
+				opacity: 1,
+				easing: 'cubic-bezier(0.55, 0, 0.9, 0.45)'
+			},
+			{ offset: 1, transform: `translate(${dx}px, ${dy}px) scale(0.25)`, opacity: 0 }
+		];
+
+		const anim = node.animate(frames, { duration: total, fill: 'both' });
 		anim.onfinish = () => land(playerId);
+
 		return { destroy: () => anim.cancel() };
 	}
 
 	// Table events, each handled once (by `moves`): deals, draws, gusts, skips and the round summary.
+	type RoundEnd = Extract<NonNullable<typeof view.lastEvent>, { type: 'roundEnd' }>;
 	let skipped = $state<string | null>(null);
-	let summary = $state<Extract<NonNullable<typeof view.lastEvent>, { type: 'roundEnd' }> | null>(
-		null
-	);
+	let summary = $state<RoundEnd | null>(null);
 	let handled = -1;
+
 	$effect(() => {
-		const e = view.lastEvent;
-		if (view.moves === handled || !e) return;
+		const event = view.lastEvent;
+		if (view.moves === handled || !event) return;
 		handled = view.moves;
+
 		const still = prefersReducedMotion.current;
 		const deck = () => document.querySelector('[data-deck]')?.getBoundingClientRect() ?? null;
-		if (e.type === 'roundEnd') {
-			summary = e;
-			if (e.next === 'round') setTimeout(() => (summary = null), DEAL.roundEndMs);
+
+		if (event.type === 'roundEnd') {
+			summary = event;
+			if (event.next === 'round') {
+				setTimeout(() => {
+					summary = null;
+				}, DEAL.roundEndMs);
+			}
 		}
-		if (view.phase === 'playing' && (e.type === 'dealt' || e.type === 'roundEnd')) {
-			const wait = e.type === 'roundEnd' ? DEAL.roundEndMs : 0;
+
+		const newRound = event.type === 'dealt' || event.type === 'roundEnd';
+		if (view.phase === 'playing' && newRound) {
+			const wait = event.type === 'roundEnd' ? DEAL.roundEndMs : 0;
 			const seats = view.players.map((p) => p.id);
+			const dealMs = seats.length * HAND_SIZE * DEAL.stepMs + DEAL.flightMs;
+
 			dealing = true;
-			setTimeout(
-				() => dealCards(deck(), seats.map(seatRect), { passes: HAND_SIZE, ...DEAL }),
-				wait
-			);
-			setTimeout(
-				() => (dealing = false),
-				wait + seats.length * HAND_SIZE * DEAL.stepMs + DEAL.flightMs
-			);
+			setTimeout(() => {
+				dealCards(deck(), seats.map(seatRect), { passes: HAND_SIZE, ...DEAL });
+			}, wait);
+			setTimeout(() => {
+				dealing = false;
+			}, wait + dealMs);
 		}
+
 		if (still) return;
-		if (e.type === 'roundEnd' && e.left) {
+
+		if (event.type === 'roundEnd' && event.left) {
 			const moves = view.moves;
-			reveal = { moves, left: e.left, landed: {} };
-			setTimeout(() => reveal?.moves === moves && (reveal = null), REVEAL.clearMs);
+			reveal = { moves, left: event.left, landed: {} };
+			setTimeout(() => {
+				if (reveal?.moves === moves) reveal = null;
+			}, REVEAL.clearMs);
 		}
-		if (e.type === 'drew' && e.got)
-			dealCards(deck(), [seatRect(e.playerId)], { passes: 1, stepMs: 0, flightMs: 450 });
-		if (e.type === 'played' && e.gaveTo)
-			dealCards(seatRect(e.playerId), [seatRect(e.gaveTo)], {
+
+		if (event.type === 'drew' && event.got) {
+			dealCards(deck(), [seatRect(event.playerId)], {
 				passes: 1,
 				stepMs: 0,
-				flightMs: 550
+				flightMs: DRAW_FLIGHT_MS
 			});
-		if (e.type === 'played' && e.skipped) {
-			const id = e.skipped;
+		}
+
+		if (event.type === 'played' && event.gaveTo) {
+			dealCards(seatRect(event.playerId), [seatRect(event.gaveTo)], {
+				passes: 1,
+				stepMs: 0,
+				flightMs: GIVE_FLIGHT_MS
+			});
+		}
+
+		if (event.type === 'played' && event.skipped) {
+			const id = event.skipped;
 			skipped = id;
-			setTimeout(() => skipped === id && (skipped = null), 1600);
+			setTimeout(() => {
+				if (skipped === id) skipped = null;
+			}, SKIPPED_BADGE_MS);
 		}
 	});
+
 	$effect(() => {
-		if (placing && !room.hand.cards.some((c) => c.id === placing!.id)) {
-			const id = placing.id;
-			setTimeout(() => placing?.id === id && (placing = null), 500);
-		}
+		if (!placing) return;
+
+		const stillInHand = room.hand.cards.some((card) => card.id === placing!.id);
+		if (stillInHand) return;
+
+		const id = placing.id;
+		setTimeout(() => {
+			if (placing?.id === id) placing = null;
+		}, PLACING_CLEAR_MS);
 	});
 
 	// Ticks while a turn timer runs; the deadline itself comes from the server.
 	let now = $state(Date.now());
 	$effect(() => {
 		if (room.turnEndsAt === null) return;
-		const id = setInterval(() => (now = Date.now()), 250);
+
+		const id = setInterval(() => {
+			now = Date.now();
+		}, CLOCK_TICK_MS);
 		return () => clearInterval(id);
 	});
+
 	const msLeft = $derived(room.turnEndsAt === null ? null : Math.max(0, room.turnEndsAt - now));
 	const secondsLeft = $derived(msLeft === null ? null : Math.ceil(msLeft / 1000));
-	const drain = $derived(
-		room.turnEndsAt === null
-			? null
-			: { ms: Math.max(0, room.turnEndsAt - Date.now()), total: room.turnTotal }
-	);
+	const drain = $derived.by(() => {
+		if (room.turnEndsAt === null) return null;
+		return { ms: Math.max(0, room.turnEndsAt - Date.now()), total: room.turnTotal };
+	});
 
-	const cardName = (c: Card) =>
-		c.kind === 'rainbow'
-			? 'a Rainbow'
-			: `${SUIT_NAME[c.suit!]} ${c.kind === 'number' ? c.value : c.kind[0]!.toUpperCase() + c.kind.slice(1)}`;
+	/** "Sun 7", "Rain Gust", or "a Rainbow". */
+	function cardName(card: Card): string {
+		if (card.kind === 'rainbow') return 'a Rainbow';
+
+		const face =
+			card.kind === 'number'
+				? String(card.value)
+				: card.kind[0]!.toUpperCase() + card.kind.slice(1);
+		return `${SUIT_NAME[card.suit!]} ${face}`;
+	}
+
 	const dealerLine = $derived.by(() => {
-		const e = view.lastEvent;
-		if (!e) return '';
-		const auto = 'auto' in e && e.auto ? ' (time ran out)' : '';
-		switch (e.type) {
+		const event = view.lastEvent;
+		if (!event) return '';
+
+		const auto = 'auto' in event && event.auto ? ' (time ran out)' : '';
+
+		switch (event.type) {
 			case 'joined':
-				return `${nameOf(e.playerId)} sat down.`;
+				return `${nameOf(event.playerId)} sat down.`;
 			case 'dealt':
-				return `Round ${e.round}. Seven cards each.`;
-			case 'played':
-				return `${nameOf(e.playerId)} played ${cardName(e.card)}${e.card.kind === 'rainbow' ? `, ${SUIT_NAME[view.suit]} next` : ''}${e.skipped ? `. ${nameOf(e.skipped)} is skipped` : ''}${e.gaveTo ? ` and handed ${nameOf(e.gaveTo)} a card` : ''}${auto}.`;
+				return `Round ${event.round}. Seven cards each.`;
+			case 'played': {
+				const nextSuit = event.card.kind === 'rainbow' ? `, ${SUIT_NAME[view.suit]} next` : '';
+				const skip = event.skipped ? `. ${nameOf(event.skipped)} is skipped` : '';
+				const gift = event.gaveTo ? ` and handed ${nameOf(event.gaveTo)} a card` : '';
+				return `${nameOf(event.playerId)} played ${cardName(event.card)}${nextSuit}${skip}${gift}${auto}.`;
+			}
 			case 'drew':
-				return e.got
-					? `${nameOf(e.playerId)} drew a card${auto}.`
-					: `The deck is empty. ${nameOf(e.playerId)} can only pass.`;
+				if (!event.got) return `The deck is empty. ${nameOf(event.playerId)} can only pass.`;
+				return `${nameOf(event.playerId)} drew a card${auto}.`;
 			case 'passed':
-				return `${nameOf(e.playerId)} passed${auto}.`;
-			case 'roundEnd':
-				return `${nameOf(e.outId)} went out.${e.tie ? ' Tie for fewest points: one more round.' : ''}`;
+				return `${nameOf(event.playerId)} passed${auto}.`;
+			case 'roundEnd': {
+				const tie = event.tie ? ' Tie for fewest points: one more round.' : '';
+				return `${nameOf(event.outId)} went out.${tie}`;
+			}
 		}
 	});
+
 	const standings = $derived([...view.players].sort((a, b) => a.points - b.points));
 	const iWon = $derived(view.winnerId !== null && view.winnerId === room.playerId);
 
-	function onKey(e: KeyboardEvent) {
-		if (e.target instanceof HTMLInputElement || e.metaKey || e.ctrlKey || e.altKey) return;
-		if (e.key === 'Escape' && pending) pending = null;
+	function onKey(event: KeyboardEvent) {
+		const typing = event.target instanceof HTMLInputElement;
+		if (typing || event.metaKey || event.ctrlKey || event.altKey) return;
+
+		if (event.key === 'Escape' && pending) pending = null;
 		if (!canMove || pending) return;
-		if (e.key === 'd' && !view.drew) room.draw();
-		if (e.key === 'p' && view.drew) room.pass();
+
+		if (event.key === 'd' && !view.drew) room.draw();
+		if (event.key === 'p' && view.drew) room.pass();
 	}
+
 	// Left and right arrows move along your hand.
-	function arrows(e: KeyboardEvent) {
-		if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
-		const cards = [
-			...(e.currentTarget as HTMLElement).querySelectorAll<HTMLButtonElement>(
-				'button:not(:disabled)'
-			)
-		];
-		const i = cards.indexOf(document.activeElement as HTMLButtonElement);
-		cards[(i + (e.key === 'ArrowRight' ? 1 : -1) + cards.length) % cards.length]?.focus();
-		e.preventDefault();
+	function arrows(event: KeyboardEvent) {
+		if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+
+		const handEl = event.currentTarget as HTMLElement;
+		const cards = [...handEl.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')];
+		const current = cards.indexOf(document.activeElement as HTMLButtonElement);
+		const step = event.key === 'ArrowRight' ? 1 : -1;
+
+		cards[(current + step + cards.length) % cards.length]?.focus();
+		event.preventDefault();
 	}
 </script>
 
@@ -313,13 +423,7 @@
 								aria-label="{p.points} of {view.burstAt} points"
 							>
 								{#each Array(view.burstAt) as _, i (i)}
-									<span
-										data-seg={i}
-										class="h-1.5 w-1 rounded-[1px] {i < shown
-											? shown >= view.burstAt - 2
-												? 'bg-ember'
-												: 'bg-paper/85'
-											: 'bg-paper/20'}"
+									<span data-seg={i} class="h-1.5 w-1 rounded-[1px] {segmentClass(i, shown)}"
 									></span>
 								{/each}
 								<span class="ml-1 text-[10px] text-paper/75 tabular-nums">{shown}</span>

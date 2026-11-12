@@ -25,9 +25,11 @@
 
 	async function run(task: () => Promise<boolean>) {
 		if (busy) return;
+
 		busy = true;
 		const ok = await task();
 		busy = false;
+
 		if (ok) await enter();
 	}
 
@@ -36,19 +38,24 @@
 		errors = null;
 	}
 
-	const account = (e: SubmitEvent) => (
-		e.preventDefault(),
-		run(async () => {
-			errors =
-				tab === 'login'
-					? await logIn({ username, password })
-					: await createAccount({ name, username, password });
+	function account(event: SubmitEvent) {
+		event.preventDefault();
+
+		return run(async () => {
+			if (tab === 'login') {
+				errors = await logIn({ username, password });
+			} else {
+				errors = await createAccount({ name, username, password });
+			}
+
 			return !errors;
-		})
-	);
+		});
+	}
+
 	const guest = () =>
 		run(async () => {
 			const failed = await playAsGuest();
+			// Show the form message, or else the first field message.
 			guestError = failed && (failed.form ?? Object.values(failed.fields)[0]);
 			return !failed;
 		});

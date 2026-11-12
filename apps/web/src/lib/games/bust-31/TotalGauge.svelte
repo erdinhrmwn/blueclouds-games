@@ -10,17 +10,19 @@
 	/** Points within this distance of the limit count as danger. */
 	const DANGER = 5;
 
-	const angleOf = (v: number) => -SWEEP / 2 + (SWEEP * v) / limit;
+	const angleOf = (value: number) => -SWEEP / 2 + (SWEEP * value) / limit;
 	// Angle 0 points up, positive goes clockwise.
 	const at = (deg: number, r: number) => {
 		const rad = (deg * Math.PI) / 180;
 		return { x: 60 + r * Math.sin(rad), y: 60 - r * Math.cos(rad) };
 	};
 	const arc = (from: number, to: number, r: number) => {
-		const a = at(angleOf(from), r);
-		const b = at(angleOf(to), r);
+		const start = at(angleOf(from), r);
+		const end = at(angleOf(to), r);
+		// SVG's large-arc flag: 1 when the arc spans more than half a circle.
 		const large = angleOf(to) - angleOf(from) > 180 ? 1 : 0;
-		return `M ${a.x} ${a.y} A ${r} ${r} 0 ${large} 1 ${b.x} ${b.y}`;
+
+		return `M ${start.x} ${start.y} A ${r} ${r} 0 ${large} 1 ${end.x} ${end.y}`;
 	};
 
 	const ticks = $derived(
@@ -37,13 +39,11 @@
 	const ratio = $derived(Math.min(Math.max(total, 0) / limit, 1));
 	const left = $derived(limit - total);
 	// calm → warning → about to bust
-	const tone = $derived(
-		left < DANGER
-			? 'var(--color-ember)'
-			: left < DANGER * 2 + 2
-				? 'var(--color-brass)'
-				: 'var(--color-paper)'
-	);
+	const tone = $derived.by(() => {
+		if (left < DANGER) return 'var(--color-ember)';
+		if (left < DANGER * 2 + 2) return 'var(--color-brass)';
+		return 'var(--color-paper)';
+	});
 	const leftText = $derived(left >= 0 ? `${left} left` : 'bust');
 </script>
 

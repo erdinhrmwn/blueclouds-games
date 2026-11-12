@@ -14,8 +14,10 @@ export const variables = defineEnvVars({
 		description:
 			"The engine's admin token. Server side only: it issues short-lived tokens for browsers.",
 		schema: (value) => {
-			if (!value || value.length < 32)
+			if (!value || value.length < 32) {
 				throw new Error('RIVET_TOKEN must be at least 32 characters');
+			}
+
 			return value;
 		}
 	},

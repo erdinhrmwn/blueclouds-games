@@ -10,6 +10,7 @@
 
 	/** A game's tournaments: the player's own table first, then the ones open for sign-up. Hidden when there are none. */
 	let { game }: { game: string } = $props();
+
 	let tables = $state<TournamentTable[]>([]);
 	let open = $state<Tournament[]>([]);
 	let busy = $state<string | null>(null);
@@ -17,7 +18,9 @@
 
 	async function load() {
 		try {
-			({ tournaments: open, tables } = await fetchTournaments(game));
+			const result = await fetchTournaments(game);
+			open = result.tournaments;
+			tables = result.tables;
 		} catch {
 			// Tournaments are extra: the rest of the page works without them.
 		}
@@ -28,14 +31,15 @@
 		if (player.ready && player.name) void load();
 	});
 
-	async function toggle(t: Tournament) {
-		busy = t.id;
+	async function toggle(tournament: Tournament) {
+		busy = tournament.id;
 		error = null;
+
 		try {
-			await setRegistration(t.id, !t.joined);
+			await setRegistration(tournament.id, !tournament.joined);
 			await load();
-		} catch (e) {
-			error = e instanceof Error ? e.message : 'Something went wrong. Try again.';
+		} catch (err) {
+			error = err instanceof Error ? err.message : 'Something went wrong. Try again.';
 		} finally {
 			busy = null;
 		}

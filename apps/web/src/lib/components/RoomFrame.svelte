@@ -13,6 +13,7 @@
 		connect,
 		table
 	}: { game: GameEntry; code: string; connect: () => R; table: Snippet<[R]> } = $props();
+
 	let room = $state<R | null>(null);
 
 	// Connect once there is a name; someone opening an invite link first fills in the name dialog.
@@ -20,15 +21,22 @@
 	let connected = false;
 	$effect(() => {
 		if (!player.name || connected) return;
+
 		connected = true;
 		room = connect();
 	});
-	$effect(() => () => void room?.dispose());
+
+	$effect(() => {
+		return () => void room?.dispose();
+	});
 
 	// Hide the site header once the game starts, so the screen is all table.
 	$effect(() => {
 		player.playing = !!room?.view && room.view.phase !== 'lobby';
-		return () => (player.playing = false);
+
+		return () => {
+			player.playing = false;
+		};
 	});
 
 	async function leave() {

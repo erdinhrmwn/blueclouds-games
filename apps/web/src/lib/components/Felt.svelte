@@ -10,7 +10,8 @@
 
 	/** Where the arms of the U start, and where its bottom curve starts, as % of the table's height. */
 	const ARM_TOP = 14;
-	const CURVE_TOP = 35; // keep in sync with `.u` below
+	// Keep in sync with `.u` below.
+	const CURVE_TOP = 35;
 	const STEPS = 90;
 
 	let width = $state(0);
@@ -20,34 +21,42 @@
 	const path: [number, number][] = [
 		[100, ARM_TOP],
 		...Array.from({ length: STEPS + 1 }, (_, i): [number, number] => {
-			const a = (i * Math.PI) / STEPS;
-			return [50 + 50 * Math.cos(a), CURVE_TOP + (100 - CURVE_TOP) * Math.sin(a)];
+			const angle = (i * Math.PI) / STEPS;
+			const x = 50 + 50 * Math.cos(angle);
+			const y = CURVE_TOP + (100 - CURVE_TOP) * Math.sin(angle);
+			return [x, y];
 		}),
 		[0, ARM_TOP]
 	];
 
 	/** Chairs spaced evenly by on-screen distance along the path, so a tall phone table doesn't bunch them. */
 	const chairs = $derived.by(() => {
+		// `along[i]`: on-screen distance from the start of the path to point i.
 		const along = [0];
 		for (let i = 1; i < path.length; i++) {
 			const [x0, y0] = path[i - 1];
 			const [x1, y1] = path[i];
-			along.push(
-				along[i - 1] +
-					Math.hypot(((x1 - x0) * (width || 1)) / 100, ((y1 - y0) * (height || 1)) / 100)
-			);
+			const dx = ((x1 - x0) * (width || 1)) / 100;
+			const dy = ((y1 - y0) * (height || 1)) / 100;
+			along.push(along[i - 1] + Math.hypot(dx, dy));
 		}
+
 		const total = along[along.length - 1];
-		const n = count - 1;
-		return Array.from({ length: n }, (_, j) => {
-			const target = n > 1 ? (j / (n - 1)) * total : total / 2;
+		const chairCount = count - 1;
+
+		return Array.from({ length: chairCount }, (_, chair) => {
+			// One chair alone sits in the middle; more are spread from end to end.
+			const target = chairCount > 1 ? (chair / (chairCount - 1)) * total : total / 2;
+
+			// Interpolate between the two path points around that distance.
 			const i = Math.max(
 				1,
-				along.findIndex((d) => d >= target)
+				along.findIndex((distance) => distance >= target)
 			);
 			const t = (target - along[i - 1]) / (along[i] - along[i - 1] || 1);
 			const [x0, y0] = path[i - 1];
 			const [x1, y1] = path[i];
+
 			return [x0 + (x1 - x0) * t, y0 + (y1 - y0) * t];
 		});
 	});

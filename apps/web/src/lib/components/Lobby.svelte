@@ -11,8 +11,15 @@
 		code,
 		minPlayers,
 		seats
-	}: { room: RoomConnection<BaseView, unknown>; code: string; minPlayers: number; seats: number } =
-		$props();
+	}: {
+		room: RoomConnection<BaseView, unknown>;
+		code: string;
+		minPlayers: number;
+		seats: number;
+	} = $props();
+
+	const COPIED_NOTE_MS = 1500;
+
 	const view = $derived(room.view!);
 	const canStart = $derived(view.players.length >= minPlayers);
 	/** A tournament table has no host controls: assigned players take their own seat and it starts by itself. */
@@ -22,14 +29,21 @@
 	let now = $state(Date.now());
 	$effect(() => {
 		if (!tournament || tournament.closed) return;
-		const tick = setInterval(() => (now = Date.now()), 1000);
+
+		const tick = setInterval(() => {
+			now = Date.now();
+		}, 1000);
 		return () => clearInterval(tick);
 	});
+
+	/** "4:07" until a time, counting down with `now`. */
 	const countdown = (until: number | null) => {
-		const s = Math.max(0, Math.ceil(((until ?? now) - now) / 1000));
-		return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+		const seconds = Math.max(0, Math.ceil(((until ?? now) - now) / 1000));
+		const minutes = Math.floor(seconds / 60);
+		return `${minutes}:${String(seconds % 60).padStart(2, '0')}`;
 	};
-	const inSeat = (s: number) => view.players.find((p) => p.seat === s) ?? null;
+
+	const inSeat = (seat: number) => view.players.find((p) => p.seat === seat) ?? null;
 
 	// Invites: the table's link (the same one until the host resets it) and short-lived codes made on demand.
 	let copied = $state(false);
@@ -43,11 +57,13 @@
 		if (sharing) return;
 		sharing = true;
 		shareNote = null;
+
 		try {
 			await task();
-		} catch (e) {
-			shareNote = e instanceof Error ? e.message : 'Something went wrong. Try again.';
+		} catch (err) {
+			shareNote = err instanceof Error ? err.message : 'Something went wrong. Try again.';
 		}
+
 		sharing = false;
 	}
 
@@ -55,12 +71,16 @@
 		share(async () => {
 			const { token } = await createInvite(room.game, code, 'link');
 			const link = `${location.origin}/invite/${token}`;
+
 			try {
 				await navigator.clipboard.writeText(link);
 				linkText = null;
 				copied = true;
-				setTimeout(() => (copied = false), 1500);
+				setTimeout(() => {
+					copied = false;
+				}, COPIED_NOTE_MS);
 			} catch {
+				// The browser blocked the clipboard: show the link to copy by hand.
 				linkText = link;
 			}
 		});
@@ -68,13 +88,12 @@
 	const makeCode = () =>
 		share(async () => {
 			const made = await createInvite(room.game, code, 'code');
-			inviteCode = {
-				code: made.code,
-				until: new Date(made.expiresAt).toLocaleTimeString([], {
-					hour: '2-digit',
-					minute: '2-digit'
-				})
-			};
+			const until = new Date(made.expiresAt).toLocaleTimeString([], {
+				hour: '2-digit',
+				minute: '2-digit'
+			});
+
+			inviteCode = { code: made.code, until };
 		});
 
 	const resetLink = () =>

@@ -12,16 +12,14 @@
 	// requests on the server, so it is only filled in the browser (effects don't run there).
 	$effect(() => loadPlayer(data.me));
 
+	const GUEST_LOGOUT_WARNING =
+		'You are playing as a guest. Logging out ends this guest for good, including its game history. Link an account on your profile to keep it. Log out anyway?';
+
 	let outError = $state<string | null>(null);
 	async function signOut() {
 		// A guest only exists in this browser: logging out loses it for good.
-		if (
-			player.guest &&
-			!confirm(
-				'You are playing as a guest. Logging out ends this guest for good, including its game history. Link an account on your profile to keep it. Log out anyway?'
-			)
-		)
-			return;
+		if (player.guest && !confirm(GUEST_LOGOUT_WARNING)) return;
+
 		outError = await logOut();
 		if (!outError) await goto(WELCOME, { invalidateAll: true });
 	}

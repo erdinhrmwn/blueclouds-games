@@ -2,15 +2,17 @@
 	import { createAccount, type FormErrors, NAME_MAX, player } from '#lib/player.svelte.ts';
 
 	/** Your name and account. A guest can't rename; linking an account here is where it picks a name, games and all. */
-	let name = $derived(player.name); // prefilled once the player loads, then the field owns it
+	// Prefilled once the player loads, then the field owns it.
+	let name = $derived(player.name);
 	let username = $state('');
 	let password = $state('');
 	let errors = $state<FormErrors | null>(null);
 	let busy = $state(false);
 	let linked = $state(false);
 
-	async function link(e: SubmitEvent) {
-		e.preventDefault();
+	async function link(event: SubmitEvent) {
+		event.preventDefault();
+
 		busy = true;
 		errors = await createAccount({ name, username, password });
 		busy = false;

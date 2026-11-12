@@ -41,16 +41,19 @@
 	} = $props();
 
 	const initial = $derived(player?.name.trim().charAt(0).toUpperCase() ?? '');
+
+	/** Knocked out: greyed out. Away: a little faded. */
+	const dimClass = $derived.by(() => {
+		if (out) return 'opacity-40 grayscale';
+		if (player?.away) return 'opacity-60';
+		return '';
+	});
 </script>
 
 {#if player}
 	<div
 		data-seat={player.id}
-		class="flex w-24 flex-col items-center gap-1 text-center sm:w-28 {out
-			? 'opacity-40 grayscale'
-			: player.away
-				? 'opacity-60'
-				: ''}"
+		class="flex w-24 flex-col items-center gap-1 text-center sm:w-28 {dimClass}"
 	>
 		<div class="relative">
 			<div

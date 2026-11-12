@@ -16,47 +16,49 @@
 	import TotalGauge from './TotalGauge.svelte';
 
 	let { room }: { room: Bust31Connection } = $props();
+
+	const BUST_STAMP_MS = 1800;
+	const CLOCK_TICK_MS = 250;
+	/** Where a card played by someone else starts its spin, in degrees. */
+	const OTHER_PLAYER_TILT = -25;
+
 	/** Phones get a smaller pile so the middle of the table stays clear of the seats. */
 	const wide = new MediaQuery('min-width: 640px');
 	const pileSize = $derived(wide.current ? 'md' : 'sm');
 	const view = $derived(room.view!);
 
 	// Fixed chairs: everyone sees the same table, dealer at the head.
-	const inSeat = (s: number) => view.players.find((p) => p.seat === s) ?? null;
+	const inSeat = (seat: number) => view.players.find((p) => p.seat === seat) ?? null;
 
 	// The dealer deals every new round (game start, or after a bust once its stamp has shown).
 	// The server holds the first turn until this ends; your hand appears when the deal is done.
 	let dealing = $state(false);
 	let dealtMoves: number | null = null;
 	$effect(() => {
-		const e = view.lastEvent;
-		if (
-			view.phase !== 'playing' ||
-			(e?.type !== 'started' && e?.type !== 'bust') ||
-			dealtMoves === view.moves
-		)
-			return;
+		const event = view.lastEvent;
+		if (view.phase !== 'playing') return;
+		if (event?.type !== 'started' && event?.type !== 'bust') return;
+		if (dealtMoves === view.moves) return;
+
 		dealtMoves = view.moves;
 		if (prefersReducedMotion.current) return;
+
 		const seats = view.players.filter((p) => p.lives > 0).map((p) => p.id);
-		const wait = e.type === 'bust' ? DEAL.afterBustMs : 0;
+		const wait = event.type === 'bust' ? DEAL.afterBustMs : 0;
+		const dealMs = seats.length * HAND_SIZE * DEAL.stepMs + DEAL.flightMs;
 		dealing = true;
+
 		// Timers are not cleared on re-run: every server update re-runs this effect, and the deal must finish.
 		setTimeout(() => {
-			dealCards(
-				document.querySelector('[data-deck]')?.getBoundingClientRect() ?? null,
-				seats.map(seatRect),
-				{
-					passes: HAND_SIZE,
-					...DEAL
-				}
-			);
+			const deck = document.querySelector('[data-deck]')?.getBoundingClientRect() ?? null;
+			dealCards(deck, seats.map(seatRect), { passes: HAND_SIZE, ...DEAL });
 		}, wait);
-		setTimeout(
-			() => (dealing = false),
-			wait + seats.length * HAND_SIZE * DEAL.stepMs + DEAL.flightMs
-		);
+
+		setTimeout(() => {
+			dealing = false;
+		}, wait + dealMs);
 	});
+
 	// Whoever played the card now on the pile; the new card flies in from their seat.
 	const lastPlayer = $derived(view.lastEvent?.type === 'played' ? view.lastEvent.playerId : null);
 
@@ -65,30 +67,41 @@
 	// Card ids repeat across rounds and reshuffles, so this is tied to the hand it was clicked
 	// in: the next hand from the server (new round included) must show every card it holds.
 	let placing = $state.raw<{ id: string; rect: DOMRect; tilt: number; hand: Card[] } | null>(null);
+
 	function play(cardId: string) {
 		const el = document.querySelector(`[data-card="${CSS.escape(cardId)}"]`);
-		const i = room.hand.findIndex((c) => c.id === cardId);
-		if (el)
+		const index = room.hand.findIndex((card) => card.id === cardId);
+
+		if (el) {
 			placing = {
 				id: cardId,
 				rect: el.getBoundingClientRect(),
-				tilt: fanAngle(i, room.hand.length),
+				tilt: fanAngle(index, room.hand.length),
 				hand: room.hand
 			};
+		}
+
 		room.play(cardId).then(() => {
-			if (room.error) placing = null; // rejected: show the card again
+			// Rejected: show the card again.
+			if (room.error) placing = null;
 		});
 	}
+
 	// The pile's fly-in has read `placing` by the time the new hand arrives (it follows the view).
 	$effect(() => {
 		if (placing && room.hand !== placing.hand) placing = null;
 	});
 	const flightFrom = (cardId: string) =>
 		placing?.id === cardId ? placing.rect : seatRect(lastPlayer);
-	const flightTilt = (cardId: string) => (placing?.id === cardId ? placing.tilt : -25);
+	const flightTilt = (cardId: string) =>
+		placing?.id === cardId ? placing.tilt : OTHER_PLAYER_TILT;
 
-	// Cards played earlier stay visible under the top one, each at its own slight angle.
-	const tiltOf = (id: string) => ([...id].reduce((h, ch) => h * 31 + ch.charCodeAt(0), 7) % 13) - 6;
+	// Cards played earlier stay visible under the top one, each at its own slight angle (-6..6).
+	const tiltOf = (id: string) => {
+		const hash = [...id].reduce((h, ch) => h * 31 + ch.charCodeAt(0), 7);
+		return (hash % 13) - 6;
+	};
+
 	// They come from the server, so a refresh mid-round shows the same pile.
 	const under = $derived(view.pileUnder);
 
@@ -101,63 +114,90 @@
 		playerId: string;
 		eliminated: boolean;
 	} | null>(null);
+
 	$effect(() => {
-		const e = view.lastEvent;
-		if (e?.type !== 'bust' || untrack(() => bust?.moves) === view.moves) return;
+		const event = view.lastEvent;
+		if (event?.type !== 'bust') return;
+		if (untrack(() => bust?.moves) === view.moves) return;
+
+		const moves = view.moves;
 		bust = {
-			moves: view.moves,
-			card: e.card,
-			total: e.total,
-			playerId: e.playerId,
-			eliminated: e.eliminated
+			moves,
+			card: event.card,
+			total: event.total,
+			playerId: event.playerId,
+			eliminated: event.eliminated
 		};
 		shake(tableEl);
-		const moves = view.moves;
+
 		const id = setTimeout(() => {
 			if (bust?.moves === moves) bust = null;
-		}, 1800);
+		}, BUST_STAMP_MS);
 		return () => clearTimeout(id);
 	});
+
 	const iWon = $derived(view.winnerId !== null && view.winnerId === room.playerId);
 
 	// Ticks while a turn timer runs; the deadline itself comes from the server.
 	let now = $state(Date.now());
 	$effect(() => {
 		if (room.turnEndsAt === null) return;
-		const id = setInterval(() => (now = Date.now()), 250);
+
+		const id = setInterval(() => {
+			now = Date.now();
+		}, CLOCK_TICK_MS);
 		return () => clearInterval(id);
 	});
+
 	const msLeft = $derived(room.turnEndsAt === null ? null : Math.max(0, room.turnEndsAt - now));
 	const secondsLeft = $derived(msLeft === null ? null : Math.ceil(msLeft / 1000));
 	// Snapshot taken once per deadline; the bar and ring animate down from it every frame.
-	const drain = $derived(
-		room.turnEndsAt === null
-			? null
-			: { ms: Math.max(0, room.turnEndsAt - Date.now()), total: room.turnTotal }
-	);
+	const drain = $derived.by(() => {
+		if (room.turnEndsAt === null) return null;
+		return { ms: Math.max(0, room.turnEndsAt - Date.now()), total: room.turnTotal };
+	});
 
 	const nameOf = (id: string | null) => view.players.find((p) => p.id === id)?.name ?? '?';
 
+	/** "+7", "−5", "a reverse" or "0", as the dealer says it. */
+	function spokenCard(card: Card): string {
+		if (card.kind === 'number') return `+${card.value}`;
+		if (card.kind === 'minus') return '−5';
+		if (card.kind === 'reverse') return 'a reverse';
+		return '0';
+	}
+
 	const dealerLine = $derived.by(() => {
-		const e = view.lastEvent;
-		if (!e) return '';
-		switch (e.type) {
+		const event = view.lastEvent;
+		if (!event) return '';
+
+		switch (event.type) {
 			case 'started':
 				return `Round ${view.round}. Cards dealt.`;
 			case 'joined':
-				return `${nameOf(e.playerId)} sat down.`;
-			case 'played':
-				return `${nameOf(e.playerId)} played ${e.card.kind === 'number' ? `+${e.card.value}` : e.card.kind === 'minus' ? '−5' : e.card.kind === 'reverse' ? 'a reverse' : '0'}${e.auto ? ' (auto, time ran out)' : ''}.`;
-			case 'bust':
-				return `${nameOf(e.playerId)} busted at ${e.total}${e.auto ? ' (auto, time ran out)' : ''}. ${e.eliminated ? 'Out of the game.' : `Loses a life. Round ${view.round}.`}`;
+				return `${nameOf(event.playerId)} sat down.`;
+			case 'played': {
+				const auto = event.auto ? ' (auto, time ran out)' : '';
+				return `${nameOf(event.playerId)} played ${spokenCard(event.card)}${auto}.`;
+			}
+			case 'bust': {
+				const auto = event.auto ? ' (auto, time ran out)' : '';
+				const outcome = event.eliminated
+					? 'Out of the game.'
+					: `Loses a life. Round ${view.round}.`;
+				return `${nameOf(event.playerId)} busted at ${event.total}${auto}. ${outcome}`;
+			}
 			case 'finished':
-				return `${nameOf(e.winnerId)} wins the table.`;
+				return `${nameOf(event.winnerId)} wins the table.`;
 		}
 	});
 
-	const fanAngle = (i: number, n: number) => (i - (n - 1) / 2) * 7;
-	const fan = (i: number, n: number) =>
-		`transform: rotate(${fanAngle(i, n)}deg) translateY(${Math.abs(i - (n - 1) / 2) * 6}px)`;
+	/** Your hand fans out: each card turns 7° and drops 6px per step away from the middle. */
+	const fanAngle = (index: number, count: number) => (index - (count - 1) / 2) * 7;
+	const fan = (index: number, count: number) => {
+		const drop = Math.abs(index - (count - 1) / 2) * 6;
+		return `transform: rotate(${fanAngle(index, count)}deg) translateY(${drop}px)`;
+	};
 </script>
 
 <!-- clip sideways only, so cards flying in mid-animation never add a horizontal scrollbar on phones -->

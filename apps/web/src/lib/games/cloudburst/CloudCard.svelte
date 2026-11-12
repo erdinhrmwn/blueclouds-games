@@ -26,14 +26,20 @@
 
 	const WORD = { calm: 'Calm', swirl: 'Swirl', gust: 'Gust' } as const;
 
-	const corner = $derived(
-		card.kind === 'number' ? String(card.value) : card.kind === 'rainbow' ? '' : WORD[card.kind][0]
-	);
-	const spoken = $derived(
-		card.kind === 'rainbow'
-			? 'Rainbow'
-			: `${SUIT_NAME[card.suit!]} ${card.kind === 'number' ? card.value : WORD[card.kind]}`
-	);
+	/** The corner mark: the number, an action's first letter, or nothing for a Rainbow. */
+	const corner = $derived.by(() => {
+		if (card.kind === 'number') return String(card.value);
+		if (card.kind === 'rainbow') return '';
+		return WORD[card.kind][0];
+	});
+
+	/** What a screen reader says: "Sun 7", "Rain Gust" or "Rainbow". */
+	const spoken = $derived.by(() => {
+		if (card.kind === 'rainbow') return 'Rainbow';
+
+		const face = card.kind === 'number' ? card.value : WORD[card.kind];
+		return `${SUIT_NAME[card.suit!]} ${face}`;
+	});
 </script>
 
 {#snippet face()}
