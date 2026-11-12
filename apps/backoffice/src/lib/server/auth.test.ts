@@ -28,7 +28,11 @@ describe('admin login', () => {
 	test('the right password gives a session that logout ends', async () => {
 		const res = await login(sql, 'Root ', 'correct horse battery', null);
 		if (!res.ok) throw new Error('expected login to work');
-		expect(await sessionAdmin(sql, res.token)).toEqual({ id: res.admin.id, username: 'root' });
+		expect(await sessionAdmin(sql, res.token)).toEqual({
+			id: res.admin.id,
+			username: 'root',
+			role: 'owner'
+		});
 		await logout(sql, res.token, res.admin, null);
 		expect(await sessionAdmin(sql, res.token)).toBeNull();
 	});

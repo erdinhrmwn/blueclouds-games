@@ -31,7 +31,11 @@ const newCup = (perRoom = 6) =>
 
 beforeAll(async () => {
 	sql = (await resetTestDatabase()).sql;
-	admin = { id: await createAdmin(sql, 'root', 'correct horse battery'), username: 'root' };
+	admin = {
+		id: await createAdmin(sql, 'root', 'correct horse battery'),
+		username: 'root',
+		role: 'owner'
+	};
 });
 afterAll(() => sql.close());
 

@@ -15,11 +15,15 @@ export const AUDIT_ACTIONS: Record<string, string> = {
 	'tournament.unregister': 'Unregistered player',
 	'tournament.distribute': 'Handed out tables',
 	'room.assign': 'Seated player',
-	'room.unassign': 'Took player off table'
+	'room.unassign': 'Took player off table',
+	'admin.create': 'Added admin',
+	'admin.disable': 'Disabled admin',
+	'admin.enable': 'Enabled admin',
+	'admin.password_reset': 'Reset admin password'
 };
 
 /** Actions worth a second look, shown in the danger colour. */
-const ALARMING = new Set(['login_failed', 'player.disable']);
+const ALARMING = new Set(['login_failed', 'player.disable', 'admin.disable']);
 
 export const auditLabel = (action: string) => AUDIT_ACTIONS[action] ?? action;
 
@@ -46,6 +50,7 @@ export function auditNote(row: AuditRow): string {
 	}
 
 	if (action === 'tournament.register') return `${detail.players} players`;
+	if (row.targetAdmin) return `Admin ${row.targetAdmin}`;
 
 	return row.roomCode ? `Table ${row.roomCode}` : '';
 }

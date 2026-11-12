@@ -93,64 +93,70 @@
 	</section>
 
 	<div class="space-y-6 lg:row-span-2">
-		<section class="panel" aria-labelledby="access">
-			<div class="panel-head">
-				<h2 id="access" class="font-semibold">Access</h2>
-			</div>
-			<div class="px-5 py-4">
-				{#if player.disabledAt}
-					<p class="text-sm text-muted">
-						Enabling lets them play again. Their old browser session stays signed out.
-					</p>
-					<form method="POST" action="?/enable" class="mt-4" use:enhance={submit}>
-						<button class="btn-primary w-full" disabled={busy}>Enable player</button>
-					</form>
-				{:else}
-					<p class="text-sm text-muted">
-						Disabling signs them out everywhere and stops them joining tables. The reason is kept in
-						the audit log.
-					</p>
-					<form method="POST" action="?/disable" class="mt-4 space-y-3" use:enhance={submit}>
-						<div>
-							<label class="label" for="reason">Reason</label>
-							<input
-								class="field"
-								id="reason"
-								name="reason"
-								value={form?.reason ?? ''}
-								maxlength={REASON_MAX}
-								required
-							/>
-						</div>
-						<button class="btn-danger w-full" disabled={busy}>Disable player</button>
-					</form>
-				{/if}
-			</div>
-		</section>
+		{#if data.admin?.role === 'viewer'}
+			<p class="panel px-5 py-4 text-sm text-muted">
+				You have view-only access, so disabling and VIP changes are hidden.
+			</p>
+		{:else}
+			<section class="panel" aria-labelledby="access">
+				<div class="panel-head">
+					<h2 id="access" class="font-semibold">Access</h2>
+				</div>
+				<div class="px-5 py-4">
+					{#if player.disabledAt}
+						<p class="text-sm text-muted">
+							Enabling lets them play again. Their old browser session stays signed out.
+						</p>
+						<form method="POST" action="?/enable" class="mt-4" use:enhance={submit}>
+							<button class="btn-primary w-full" disabled={busy}>Enable player</button>
+						</form>
+					{:else}
+						<p class="text-sm text-muted">
+							Disabling signs them out everywhere and stops them joining tables. The reason is kept
+							in the audit log.
+						</p>
+						<form method="POST" action="?/disable" class="mt-4 space-y-3" use:enhance={submit}>
+							<div>
+								<label class="label" for="reason">Reason</label>
+								<input
+									class="field"
+									id="reason"
+									name="reason"
+									value={form?.reason ?? ''}
+									maxlength={REASON_MAX}
+									required
+								/>
+							</div>
+							<button class="btn-danger w-full" disabled={busy}>Disable player</button>
+						</form>
+					{/if}
+				</div>
+			</section>
 
-		<section class="panel" aria-labelledby="vip">
-			<div class="panel-head">
-				<h2 id="vip" class="font-semibold">VIP</h2>
-				{#if player.isVip}<span class="tag-vip">VIP</span>{/if}
-			</div>
-			<div class="px-5 py-4">
-				<p class="text-sm text-muted">
-					{player.isVip
-						? 'This player is a VIP. Every player at their table sees the tag.'
-						: 'Mark a player as VIP. The change is kept in the audit log.'}
-				</p>
-				<form
-					method="POST"
-					action={player.isVip ? '?/revokeVip' : '?/grantVip'}
-					class="mt-4"
-					use:enhance={submit}
-				>
-					<button class="{player.isVip ? 'btn-quiet' : 'btn-primary'} w-full" disabled={busy}
-						>{player.isVip ? 'Take VIP away' : 'Make VIP'}</button
+			<section class="panel" aria-labelledby="vip">
+				<div class="panel-head">
+					<h2 id="vip" class="font-semibold">VIP</h2>
+					{#if player.isVip}<span class="tag-vip">VIP</span>{/if}
+				</div>
+				<div class="px-5 py-4">
+					<p class="text-sm text-muted">
+						{player.isVip
+							? 'This player is a VIP. Every player at their table sees the tag.'
+							: 'Mark a player as VIP. The change is kept in the audit log.'}
+					</p>
+					<form
+						method="POST"
+						action={player.isVip ? '?/revokeVip' : '?/grantVip'}
+						class="mt-4"
+						use:enhance={submit}
 					>
-				</form>
-			</div>
-		</section>
+						<button class="{player.isVip ? 'btn-quiet' : 'btn-primary'} w-full" disabled={busy}
+							>{player.isVip ? 'Take VIP away' : 'Make VIP'}</button
+						>
+					</form>
+				</div>
+			</section>
+		{/if}
 
 		<section class="panel" aria-labelledby="history">
 			<div class="panel-head">

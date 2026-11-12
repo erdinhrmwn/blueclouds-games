@@ -103,7 +103,7 @@ test('player stats count finished matches and wins', async () => {
 
 test('audit log shows the admin and the target player by name', async () => {
 	const id = await createAdmin(sql, 'root', 'correct horse battery');
-	await disablePlayer(sql, { id, username: 'root' }, rina, 'Spam', '192.168.1.9');
+	await disablePlayer(sql, { id, username: 'root', role: 'owner' }, rina, 'Spam', '192.168.1.9');
 	const [row] = await listAudit(sql, NO_AUDIT_FILTER);
 	expect(row).toMatchObject({
 		admin: 'root',

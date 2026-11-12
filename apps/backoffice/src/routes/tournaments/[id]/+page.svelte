@@ -8,7 +8,10 @@
 	let { data, form }: PageProps = $props();
 	const tournament = $derived(data.tournament);
 	const status = $derived(tournamentStatus(tournament));
-	const live = $derived(!tournament.cancelledAt && !tournament.endedAt);
+	/** Still running, and this admin may change it (viewers only look). */
+	const manageable = $derived(
+		!tournament.cancelledAt && !tournament.endedAt && data.admin?.role !== 'viewer'
+	);
 	const waiting = $derived(data.players.filter((p) => !p.roomCode));
 	/** Tables that haven't started and still have a free seat. */
 	const seatable = $derived(
@@ -98,7 +101,7 @@
 	</p>
 {/if}
 
-{#if live && !tournament.distributedAt}
+{#if manageable && !tournament.distributedAt}
 	<section class="mt-6 max-w-3xl panel p-5" aria-labelledby="register">
 		<h2 id="register" class="font-semibold">Register players</h2>
 		<p class="mt-1 text-sm text-muted">
@@ -148,7 +151,7 @@
 								<a class="link" href="/players/{p.playerId}">{p.name}</a>
 								{#if p.disabled}<span class="text-danger">(disabled)</span>{/if}
 							</span>
-							{#if live && !r.startedAt && !r.closedAt}
+							{#if manageable && !r.startedAt && !r.closedAt}
 								<form method="POST" action="?/unassign" use:enhance={submit}>
 									<input type="hidden" name="playerId" value={p.playerId} />
 									<button
@@ -166,7 +169,7 @@
 	</div>
 {/if}
 
-{#if live && seatable.length}
+{#if manageable && seatable.length}
 	<section class="mt-6 max-w-3xl panel p-5" aria-labelledby="assign">
 		<h2 id="assign" class="font-semibold">Seat a player by hand</h2>
 		<p class="mt-1 text-sm text-muted">
@@ -220,7 +223,7 @@
 					<span class="text-muted">{p.byAdmin ? 'added by an admin' : 'signed up'}</span>
 					{#if p.disabled}<span class="text-danger">(disabled, gets no table)</span>{/if}
 				</span>
-				{#if live}
+				{#if manageable}
 					<form method="POST" action="?/unregister" use:enhance={submit}>
 						<input type="hidden" name="playerId" value={p.playerId} />
 						<button
@@ -235,7 +238,7 @@
 	</ul>
 {/if}
 
-{#if live}
+{#if manageable}
 	<section class="mt-8 max-w-3xl panel p-5" aria-labelledby="cancel">
 		<h2 id="cancel" class="font-semibold">Cancel tournament</h2>
 		<p class="mt-1 text-sm text-muted">

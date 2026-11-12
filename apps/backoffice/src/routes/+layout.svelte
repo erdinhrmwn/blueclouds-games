@@ -7,13 +7,42 @@
 
 	let { data, children }: LayoutProps = $props();
 
-	const nav: { href: string; label: string; icon: IconName }[] = [
-		{ href: '/', label: 'Overview', icon: 'overview' },
-		{ href: '/players', label: 'Players', icon: 'players' },
-		{ href: '/matches', label: 'Matches', icon: 'matches' },
-		{ href: '/tournaments', label: 'Tournaments', icon: 'tournaments' },
-		{ href: '/audit', label: 'Audit log', icon: 'audit' }
+	type NavItem = { href: string; label: string; icon: IconName; ownerOnly?: boolean };
+	type NavGroup = { label: string | null; items: NavItem[] };
+
+	const NAV: NavGroup[] = [
+		{
+			label: null,
+			items: [{ href: '/', label: 'Overview', icon: 'overview' }]
+		},
+		{
+			label: 'Operations',
+			items: [
+				{ href: '/players', label: 'Players', icon: 'players' },
+				{ href: '/matches', label: 'Matches', icon: 'matches' },
+				{ href: '/live', label: 'Live tables', icon: 'live' },
+				{ href: '/tournaments', label: 'Tournaments', icon: 'tournaments' }
+			]
+		},
+		{
+			label: 'System',
+			items: [
+				{ href: '/admins', label: 'Admins', icon: 'admins', ownerOnly: true },
+				{ href: '/audit', label: 'Audit log', icon: 'audit' }
+			]
+		}
 	];
+
+	/** The groups this admin may open: owner-only links are dropped for everyone else. */
+	const nav = $derived.by(() => {
+		const owner = data.admin?.role === 'owner';
+		const groups = NAV.map((group) => ({
+			...group,
+			items: group.items.filter((item) => owner || !item.ownerOnly)
+		}));
+
+		return groups.filter((group) => group.items.length > 0);
+	});
 
 	const current = (href: string) => {
 		const path = page.url.pathname;
@@ -61,21 +90,32 @@
 			</span>
 		</a>
 
-		<nav aria-label="Main" class="mt-4 flex-1 px-3">
-			<ul class="space-y-1">
-				{#each nav as item (item.href)}
-					<li>
-						<a
-							href={item.href}
-							aria-current={current(item.href) ? 'page' : undefined}
-							class="flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm font-medium text-white/70 transition-colors hover:bg-white/5 hover:text-white aria-[current=page]:bg-white/10 aria-[current=page]:text-white"
+		<nav aria-label="Main" class="mt-4 flex-1 space-y-6 overflow-y-auto px-3">
+			{#each nav as group (group.label)}
+				<div>
+					{#if group.label}
+						<p
+							class="mb-1.5 px-3 text-[0.6875rem] font-semibold tracking-wider text-white/45 uppercase"
 						>
-							<Icon name={item.icon} />
-							{item.label}
-						</a>
-					</li>
-				{/each}
-			</ul>
+							{group.label}
+						</p>
+					{/if}
+					<ul class="space-y-1">
+						{#each group.items as item (item.href)}
+							<li>
+								<a
+									href={item.href}
+									aria-current={current(item.href) ? 'page' : undefined}
+									class="flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm font-medium text-white/70 transition-colors hover:bg-white/5 hover:text-white aria-[current=page]:bg-white/10 aria-[current=page]:text-white"
+								>
+									<Icon name={item.icon} />
+									{item.label}
+								</a>
+							</li>
+						{/each}
+					</ul>
+				</div>
+			{/each}
 		</nav>
 
 		<p class="px-5 py-5 text-xs text-white/50">All times are UTC.</p>
@@ -147,9 +187,10 @@
 							class="grid size-9 place-items-center rounded-full bg-felt-soft text-sm font-semibold text-felt uppercase"
 							aria-hidden="true">{data.admin.username.slice(0, 1)}</span
 						>
-						<span class="hidden text-sm sm:block">
+						<span class="hidden text-sm leading-tight sm:block">
 							<span class="sr-only">Signed in as</span>
-							<span class="font-medium">{data.admin.username}</span>
+							<span class="block font-medium">{data.admin.username}</span>
+							<span class="block text-xs text-muted capitalize">{data.admin.role}</span>
 						</span>
 						<form method="POST" action="/logout" class="ml-1">
 							<button

@@ -11,6 +11,8 @@ export type AuditRow = {
 	tournamentId: string | null;
 	tournamentName: string | null;
 	roomCode: string | null;
+	/** The admin an admin.* action was done to. */
+	targetAdmin: string | null;
 	detail: Record<string, unknown>;
 	ip: string | null;
 };
@@ -57,6 +59,7 @@ export async function listAudit(
 			a.tournament_id AS "tournamentId",
 			t.name AS "tournamentName",
 			r.code AS "roomCode",
+			ta.username AS "targetAdmin",
 			a.detail,
 			host(a.ip) AS ip
 		FROM admin_audit_events a
@@ -64,6 +67,7 @@ export async function listAudit(
 		LEFT JOIN players p ON p.id = a.player_id
 		LEFT JOIN tournaments t ON t.id = a.tournament_id
 		LEFT JOIN rooms r ON r.id = a.room_id
+		LEFT JOIN admins ta ON ta.id = a.target_admin_id
 		WHERE ${auditConditions(sql, filter)}
 		ORDER BY a.id DESC
 		LIMIT ${limit}`;
