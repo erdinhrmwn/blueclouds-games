@@ -368,12 +368,14 @@ export async function tournamentTick(c: Ctx, game: { start: () => void; commit: 
 	if (present >= t.minPlayers) {
 		game.start();
 		await game.commit();
-		if (!(await markRoom(code, "start"))) c.log.warn({ msg: "room start not recorded", code });
+		const marked = await markRoom(code, "start");
+		if (!marked.ok) c.log.warn({ msg: "room start not recorded", code, detail: marked.detail });
 		return;
 	}
 	c.vars.tournament = { ...t, closed: true };
 	await game.commit();
-	if (!(await markRoom(code, "close"))) c.log.warn({ msg: "room close not recorded", code });
+	const marked = await markRoom(code, "close");
+	if (!marked.ok) c.log.warn({ msg: "room close not recorded", code, detail: marked.detail });
 }
 
 /** The tournament part of the view. Times are relative, like the turn clock, so a wrong device clock still counts right. */

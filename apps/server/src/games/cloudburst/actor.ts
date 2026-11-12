@@ -44,6 +44,7 @@ const AFTER_DRAW_MS = 900;
 const rng = () => Math.random();
 
 export const cloudburstRoom = actor({
+	options: { name: "Cloudburst", icon: "cloud-bolt" }, // shown in the Rivet dashboard
 	db: db({ onMigrate: migrateRoom }),
 	createVars: () => roomVars(createGame()),
 	onWake: async (c) => {
