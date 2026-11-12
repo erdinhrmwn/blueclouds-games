@@ -6,7 +6,7 @@ There is still no BlueClouds brand guide; replace anything that clashes with it.
 
 ## Layout
 
-- **Table:** Bust 31's oval felt, dealer at the head, 6 fixed seats, everyone sees the same seating. Shared components (`Felt`, `Seat`, `Dealer`, lobby seats) are reused as is.
+- **Table:** Bust 31's U-shaped felt, dealer at the top, 6 fixed seats, everyone sees the same seating. Shared components (`Felt`, `Seat`, `Dealer`, lobby seats) are reused as is.
 - **Centre:** the deck (face down, with its count) on the left and the pile on the right. The pile's top card is the focal point of the game screen. Around the pile sits a thin ring in the **current suit's colour with its glyph and name** ("Rain"), so after a Rainbow everyone sees what to follow. A small arrow under the pile shows the turn direction.
 - **Seats:** name, card count as a number on a small face-down stack, turn ring with the countdown. At 1 card the count turns ember and reads "1 card".
 - **Points:** under each name, a cloud meter of 10 small segments filling with the player's points, plus the number ("6 of 10"). It replaces Bust 31's life dots in the same spot of the shared `Seat`. The segments are slate, and turn ember from 8 points (close to bursting).

@@ -27,7 +27,7 @@
 	<dd class="font-mono text-xs leading-5 break-all">{p.id}</dd>
 	<dt class="text-muted">Account</dt>
 	<dd>
-		{p.isBot ? 'Bot (run by the system)' : p.username ? `@${p.username}` : 'Guest (no username yet)'}{#if p.isVip}<span class="ml-2 rounded border border-line px-1.5 text-xs font-medium">VIP</span>{/if}
+		{p.isBot ? 'Bot (run by the system)' : p.isGuest ? `Guest${p.username ? ` @${p.username}` : ''}` : `@${p.username}`}{#if p.isVip}<span class="ml-2 rounded border border-line px-1.5 text-xs font-medium">VIP</span>{/if}
 	</dd>
 	<dt class="text-muted">Joined</dt>
 	<dd>{utc(p.createdAt)}</dd>

@@ -6,7 +6,7 @@
 		size = 'md',
 		disabled = false,
 		onplay
-	}: { card: Card; size?: 'md' | 'lg'; disabled?: boolean; onplay?: (id: string) => void } = $props();
+	}: { card: Card; size?: 'sm' | 'md' | 'lg'; disabled?: boolean; onplay?: (id: string) => void } = $props();
 
 	// corner glyph, caption, ink colour per card kind
 	const LOOK: Record<Card['kind'], [string, string, string]> = {
@@ -23,7 +23,7 @@
 
 {#snippet face()}
 	<span class="corner top-1.5 left-2">{label}</span>
-	<span class="font-display font-black {size === 'lg' ? 'text-6xl' : 'text-5xl'} leading-none">{label}</span>
+	<span class="font-display font-black {size === 'lg' ? 'text-6xl' : size === 'sm' ? 'text-4xl' : 'text-5xl'} leading-none">{label}</span>
 	{#if caption}<span class="mt-1 text-[11px] font-medium opacity-80">{caption}</span>{/if}
 	<span class="corner right-2 bottom-1.5 rotate-180">{label}</span>
 {/snippet}
@@ -59,6 +59,10 @@
 			inset 0 0 0 5px var(--color-paper),
 			inset 0 0 0 6px rgb(34 28 22 / 0.12),
 			0 6px 14px rgb(0 0 0 / 0.45);
+	}
+	.sm {
+		width: 3.5rem;
+		height: 5rem;
 	}
 	.md {
 		width: 4.75rem;

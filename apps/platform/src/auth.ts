@@ -3,8 +3,8 @@ import { createMiddleware } from "hono/factory";
 import { timingSafeEqual } from "node:crypto";
 import { ApiError } from "./http";
 
-/** `username` is null for a guest, who exists only in the browser that holds their secret. */
-export type Player = { id: string; name: string; username: string | null; createdAt: string };
+/** A guest has a generated `guest_…` username and no password: it exists only in the browser that holds its secret. */
+export type Player = { id: string; name: string; username: string | null; guest: boolean; createdAt: string };
 export type PlayerVariables = { player: Player };
 
 /** 32 random bytes, base64url (43 chars). */
@@ -13,9 +13,15 @@ const SECRET_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 export const newSecret = () => Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url");
 export const hashSecret = (secret: string) => new Bun.CryptoHasher("sha256").update(secret).digest();
 
-export type PlayerRow = { id: string; display_name: string; username: string | null; created_at: Date; disabled_at: Date | null };
-export const PLAYER_COLUMNS = (sql: SQL) => sql`p.id, p.display_name, p.username, p.created_at, p.disabled_at`;
-export const toPlayer = (r: PlayerRow): Player => ({ id: r.id, name: r.display_name, username: r.username, createdAt: r.created_at.toISOString() });
+export type PlayerRow = { id: string; display_name: string; username: string | null; is_guest: boolean; created_at: Date; disabled_at: Date | null };
+export const PLAYER_COLUMNS = (sql: SQL) => sql`p.id, p.display_name, p.username, p.is_guest, p.created_at, p.disabled_at`;
+export const toPlayer = (r: PlayerRow): Player => ({
+	id: r.id,
+	name: r.display_name,
+	username: r.username,
+	guest: r.is_guest,
+	createdAt: r.created_at.toISOString(),
+});
 
 export function bearer(header: string | undefined): string | null {
 	const match = header?.match(/^Bearer (\S+)$/);

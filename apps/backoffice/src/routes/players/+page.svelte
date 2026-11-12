@@ -38,7 +38,7 @@
 					<tr class="border-b border-line last:border-0 hover:bg-page">
 						<td class="px-3 py-2"><a class="font-medium underline decoration-line underline-offset-2 hover:decoration-ink" href="/players/{p.id}">{p.name}</a></td>
 						<td class="px-3 py-2">
-							{p.isBot ? 'Bot' : p.username ? `@${p.username}` : 'Guest'}{#if p.isVip}<span class="ml-2 rounded border border-line px-1.5 text-xs font-medium">VIP</span>{/if}
+							{p.isBot ? 'Bot' : p.isGuest ? 'Guest' : `@${p.username}`}{#if p.isVip}<span class="ml-2 rounded border border-line px-1.5 text-xs font-medium">VIP</span>{/if}
 						</td>
 						<td class="px-3 py-2 font-mono text-xs text-muted">{p.id}</td>
 						<td class="px-3 py-2 whitespace-nowrap">{utc(p.createdAt)}</td>

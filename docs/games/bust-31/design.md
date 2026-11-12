@@ -8,7 +8,7 @@ This direction is still a prototype proposal. There is no BlueClouds brand guide
 
 | Decision | Reason |
 |---|---|
-| Main screen = oval table with a dealer at the head and 6 fixed seats | It's turn-based: players must see at once who sits where and whose turn it is. Everyone sees the same table (seats don't rotate per player), so "the bot in seat 4" means the same chair to all; your seat is marked. Turns go clockwise from the dealer's left. |
+| Main screen = U-shaped table: dealer at the middle of the flat top edge, 6 fixed seats down the arms and round the curve | It's turn-based: players must see at once who sits where and whose turn it is. Everyone sees the same table (seats don't rotate per player), so "the bot in seat 4" means the same chair to all; your seat is marked. Turns go clockwise from the dealer's left. |
 | Fixed dark theme (no toggle) | A felt table in a dim room is the game's identity. The cream cards are the brightest element, so the eye goes straight to them. |
 | Palette: felt green, wood, cream paper + brass accent | The three core colours come from physical objects on a card table. Brass is used for one thing only: "your turn" / the primary action. |
 | Brick red (ember) | Not decoration: only for lives and a total close to 31 (danger). |

@@ -177,9 +177,9 @@ Server-to-server calls (actor → platform) use `Authorization: Bearer <PLATFORM
 
 ### `POST /v1/players/guest`
 
-Request: `{ "name": "Rina" }`, trimmed, 1–20 chars.
+Request: `{}` (the game's "Play as guest" button) or `{ "name": "Rina" }` (trimmed, 1–20 chars). Without a name the platform makes one up: `Guest 482193`, with username `guest_482193` (a random 6-digit number, drawn again on a clash). The username is always generated; a guest has no password, so it can't log in with it.
 
-`201`, `data: { "player": { "id": "uuidv7", "name": "Rina", "createdAt": "…" }, "playerSecret": "…" }`. The secret is shown only in this response.
+`201`, `data: { "player": { "id": "uuidv7", "name": "Guest 482193", "username": "guest_482193", "guest": true, "createdAt": "…" }, "playerSecret": "…" }`. The secret is shown only in this response.
 
 Errors: `400 bad_input`, `429 rate_limited` (5/min per IP).
 
@@ -189,7 +189,7 @@ Bearer player secret. `200`, `data: { "player": {…} }`; `401 unauthenticated`;
 
 ### `PATCH /v1/players/me`
 
-Bearer player secret. Request `{ "name": "Rina K" }`. `200`, `data: { "player": {…} }`. The game's name modal calls this; rooms pick up the new name at the next connect.
+Bearer player secret. Request `{ "name": "Rina K" }`. `200`, `data: { "player": {…} }`; `403 forbidden` for a guest, which keeps its generated name until it links an account. The profile page's rename dialog calls this; rooms pick up the new name at the next connect.
 
 ### `POST /v1/play-tokens`
 
@@ -197,7 +197,7 @@ Bearer player secret, no body. `200`, `data: { "token": "eyJ…", "expiresAt": "
 
 ### `POST /v1/players/register`, `POST /v1/players/login`, `POST /v1/players/logout`
 
-Player accounts (migration `011`). Register takes `{ "name", "username", "password" }`: with a guest's bearer secret it turns that guest into the account (same id and secret, `200`); without one it makes a new player and returns its secret (`201`). Login takes `{ "username", "password" }` and returns a new secret for this device. Logout revokes the bearer secret. Usernames are stored lowercase. Errors: `400 bad_input` per field, `409 conflict` (username taken, or already an account), `401` wrong username or password (same answer for an unknown username), `403` disabled, `429` rate limited or 5 wrong passwords in 15 minutes.
+Player accounts (migration `011`). Register takes `{ "name", "username", "password" }`: with a guest's bearer secret it turns that guest into the account (same id and secret, `200`); without one it makes a new player and returns its secret (`201`). Login takes `{ "username", "password" }` and returns a new secret for this device. Logout revokes the bearer secret; a guest that never played a match is deleted then, since nothing can reach it again. The platform also sweeps daily (`src/guests.ts`): guests with no match, tournament sign-up, seat or audit entry, unseen for 30 days, are deleted. `GET /players/me` counts as being seen (one write an hour at most). Guests that played stay, so every match keeps all its players. Usernames are stored lowercase, and ones starting with `guest` are kept for guests (migration `012`). Errors: `400 bad_input` per field, `409 conflict` (username taken, or already an account), `401` wrong username or password (same answer for an unknown username), `403` disabled, `429` rate limited or 5 wrong passwords in 15 minutes.
 
 ### Rooms and tournaments
 
