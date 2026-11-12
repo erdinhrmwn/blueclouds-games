@@ -28,6 +28,7 @@
 		"server": "workspace:*"
 	},
 	"dependencies": {
+		"motion": "^14.12.0",
 		"rivetkit": "3.0.7"
 	}
 }

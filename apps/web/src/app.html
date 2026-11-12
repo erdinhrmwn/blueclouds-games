@@ -10,6 +10,10 @@
 			rel="stylesheet"
 			href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700;9..144,900&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap"
 		/>
+		<!-- Lets CSS hide what a page animates in, only when scripts run. -->
+		<script>
+			document.documentElement.classList.add('js');
+		</script>
 		%sveltekit.head%
 	</head>
 	<body data-sveltekit-preload-data="hover">
