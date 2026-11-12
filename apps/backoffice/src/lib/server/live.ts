@@ -51,3 +51,19 @@ export async function openTables(games: { slug: string; name: string }[]): Promi
 
 	return Promise.all(lists);
 }
+
+/** One row of the Live tables list: an open table from the engine or a tournament table from the database. */
+export type LiveTable = {
+	code: string;
+	game: string;
+	gameName: string;
+	kind: 'open' | 'tournament';
+	phase: 'lobby' | 'playing' | 'finished';
+	players: number;
+	maxPlayers: number;
+	/** Open tables: who opened it. */
+	host: string | null;
+	tournament: { id: string; name: string } | null;
+	/** Tournament tables only: the room list keeps no names for open tables. */
+	seats: { playerId: string; name: string }[];
+};

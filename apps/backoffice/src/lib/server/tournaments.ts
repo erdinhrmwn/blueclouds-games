@@ -524,9 +524,11 @@ export async function unassignPlayer(
 export type TournamentTable = {
 	id: string;
 	code: string;
+	game: string;
 	gameName: string;
 	tournamentId: string;
 	tournamentName: string;
+	maxPlayers: number;
 	startedAt: Date | null;
 	seats: { playerId: string; name: string; seat: number | null }[];
 };
@@ -537,9 +539,11 @@ export async function tournamentTables(sql: SQL): Promise<TournamentTable[]> {
 		SELECT
 			r.id,
 			r.code,
+			r.game_slug AS game,
 			g.name AS "gameName",
 			t.id AS "tournamentId",
 			t.name AS "tournamentName",
+			t.players_per_room AS "maxPlayers",
 			r.started_at AS "startedAt",
 			coalesce(
 				(

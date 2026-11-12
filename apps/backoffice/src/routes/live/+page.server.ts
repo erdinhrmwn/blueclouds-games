@@ -1,12 +1,47 @@
 import { sql } from '#lib/server/db.ts';
-import { openTables } from '#lib/server/live.ts';
+import { type LiveTable, openTables } from '#lib/server/live.ts';
 import { matchGames } from '#lib/server/matches.ts';
 import { tournamentTables } from '#lib/server/tournaments.ts';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async () => {
 	const games = await matchGames(sql);
-	const [open, tournament] = await Promise.all([openTables(games), tournamentTables(sql)]);
+	const [lists, tournament] = await Promise.all([openTables(games), tournamentTables(sql)]);
 
-	return { open, tournament, checkedAt: new Date() };
+	const open: LiveTable[] = lists.flatMap((list) =>
+		(list.rooms ?? []).map((room) => ({
+			code: room.code,
+			game: list.game,
+			gameName: list.gameName,
+			kind: 'open' as const,
+			phase: room.phase,
+			players: room.players,
+			maxPlayers: room.maxPlayers,
+			host: room.host,
+			tournament: null,
+			seats: []
+		}))
+	);
+
+	const seated: LiveTable[] = tournament.map((table) => ({
+		code: table.code,
+		game: table.game,
+		gameName: table.gameName,
+		kind: 'tournament' as const,
+		phase: table.startedAt ? 'playing' : 'lobby',
+		players: table.seats.length,
+		maxPlayers: table.maxPlayers,
+		host: null,
+		tournament: { id: table.tournamentId, name: table.tournamentName },
+		seats: table.seats
+	}));
+
+	const unreachable = lists.filter((list) => list.rooms === null).map((list) => list.gameName);
+
+	return {
+		games,
+		tables: [...seated, ...open],
+		unreachable,
+		checkedAt: new Date()
+	};
 };
