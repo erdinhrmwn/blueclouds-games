@@ -7,8 +7,10 @@ export const variables = defineEnvVars({
 	DATABASE_PORT: {
 		schema: (value) => {
 			const port = Number(value || 5432);
-			if (!Number.isInteger(port) || port < 1 || port > 65535)
+			if (!Number.isInteger(port) || port < 1 || port > 65535) {
 				throw new Error('DATABASE_PORT must be a port number');
+			}
+
 			return port;
 		}
 	},
