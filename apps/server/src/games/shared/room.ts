@@ -10,7 +10,7 @@ import {
 	verifyPlayToken,
 } from "../../platform";
 import { type LogEntry, type LogEvent, type MatchReport, type MatchState, stamp } from "./match";
-import { ConnParams, SeatInput } from "./schema";
+import { ConnParams, SeatInput, tournamentListKey } from "./schema";
 import { markAway, removePlayer, RuleError, SEATS, showVips, type Table } from "./table";
 
 /** How long a closed tab has to come back (a refresh) before its player leaves the table. */
@@ -401,13 +401,15 @@ export function turnClock(timer: TurnTimer): { left: number; total: number } | n
  * The list is a convenience, so a failure is logged and the game carries on.
  */
 export async function reportToDirectory(c: Ctx, slug: string, leaving?: string): Promise<void> {
-	// Only rooms known to be public are listed: private and tournament tables are for their players only.
-	await loadTournament(c).catch(() => undefined);
-	if (!c.vars.listed) return;
+	// Public tables go to the game's list. Tournament tables go to their own list for the backoffice (round and
+	// seats). Private tables are for their players only.
+	const tournament = await loadTournament(c).catch(() => undefined);
+	const listKey = directoryKey(slug, c.vars.listed === true, !!tournament);
+	if (!listKey) return;
 
 	const code = c.key[0] as string;
-	const directory = c.client().roomList.getOrCreate([slug]);
-	const game = c.vars.game as Table;
+	const directory = c.client().roomList.getOrCreate([listKey]);
+	const game = c.vars.game as Table & { round?: number };
 	const stayingConns = [...c.conns.values()].filter((conn: { id: string }) => conn.id !== leaving);
 
 	try {
@@ -424,10 +426,19 @@ export async function reportToDirectory(c: Ctx, slug: string, leaving?: string):
 			maxPlayers: SEATS,
 			phase: game.phase,
 			seats: game.players.map((p) => ({ seat: p.seat, name: p.name, bot: p.bot })),
+			round: game.round ?? 0,
 		});
 	} catch (err) {
 		c.log.warn({ msg: "room list update failed", code, err: String(err) });
 	}
+}
+
+/** Which room list a table reports to: the public one, the backoffice's tournament one, or none (private). */
+export function directoryKey(slug: string, listed: boolean, tournament: boolean): string | null {
+	if (listed) return slug;
+	if (tournament) return tournamentListKey(slug);
+
+	return null;
 }
 
 /** onWake: a send may have been cut off by the actor stopping; the platform ignores duplicates. */

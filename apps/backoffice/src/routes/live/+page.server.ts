@@ -1,12 +1,16 @@
 import { sql } from '#lib/server/db.ts';
-import { type LiveTable, openTables } from '#lib/server/live.ts';
+import { type LiveTable, openTables, tournamentRounds } from '#lib/server/live.ts';
 import { matchGames } from '#lib/server/matches.ts';
 import { tournamentTables } from '#lib/server/tournaments.ts';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async () => {
 	const games = await matchGames(sql);
-	const [lists, tournament] = await Promise.all([openTables(games), tournamentTables(sql)]);
+	const [lists, rounds, tournament] = await Promise.all([
+		openTables(games),
+		tournamentRounds(games),
+		tournamentTables(sql)
+	]);
 
 	const open: LiveTable[] = lists.flatMap((list) =>
 		(list.rooms ?? []).map((room) => ({
@@ -15,6 +19,7 @@ export const load: PageServerLoad = async () => {
 			gameName: list.gameName,
 			kind: 'open' as const,
 			phase: room.phase,
+			round: room.round ?? 0,
 			players: room.players,
 			seatCount: room.maxPlayers,
 			host: room.host,
@@ -30,6 +35,7 @@ export const load: PageServerLoad = async () => {
 		gameName: table.gameName,
 		kind: 'tournament' as const,
 		phase: table.startedAt ? 'playing' : 'lobby',
+		round: rounds.get(table.code) ?? 0,
 		players: table.seats.length,
 		seatCount: table.seatCount,
 		host: null,

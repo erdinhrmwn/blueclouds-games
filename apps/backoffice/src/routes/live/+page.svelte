@@ -175,6 +175,9 @@
 							{#if table.players === 0}<span class="tag bg-subtle text-muted">Empty table</span
 								>{/if}
 							<span class={phase.tag}>{phase.label}</span>
+							{#if table.phase === 'playing' && table.round > 0}
+								<span class="tag tabular-nums">Round {table.round}</span>
+							{/if}
 						</span>
 					</div>
 
