@@ -37,8 +37,7 @@
 			</div>
 			<p class="mt-4 text-sm text-paper/75">
 				{#if player.guest}
-					Guest <b class="font-semibold text-paper">@{player.username}</b>. Saved in this browser
-					only.
+					Guest. Saved in this browser only.
 				{:else}
 					<b class="font-semibold text-paper">@{player.username}</b>. Log in with it on any device.
 				{/if}
