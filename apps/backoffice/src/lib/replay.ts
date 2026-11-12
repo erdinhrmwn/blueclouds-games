@@ -8,11 +8,14 @@ export type LogEvent = {
 	seat?: number;
 	data?: Record<string, unknown>;
 };
+
 export type MatchLog = { logVersion: number; events: LogEvent[] };
 
 export type ReplaySeat = { seat: number; name: string | null };
+
 /** One seat at the table after a step. Cards are labels such as "7", "0", "-5", "Reverse". */
 export type SeatState = { seat: number; lives: number; hand: string[]; away: boolean };
+
 export type TableState = {
 	round: number;
 	total: number;
@@ -35,11 +38,18 @@ const RENDERERS: Record<string, (log: MatchLog, seats: ReplaySeat[]) => Step[]> 
 export function replay(game: string, log: MatchLog, seats: ReplaySeat[]): Step[] {
 	const render = Object.hasOwn(RENDERERS, game) ? RENDERERS[game] : undefined;
 	if (render && log.logVersion === 1) return render(log, seats);
-	const name = (seat?: number) =>
-		seat === undefined ? '' : `${seats.find((s) => s.seat === seat)?.name ?? `Seat ${seat + 1}`}: `;
+
+	/** "Ann: " before a seat's event, nothing before a table event. */
+	const prefix = (seat?: number) => {
+		if (seat === undefined) return '';
+
+		const name = seats.find((s) => s.seat === seat)?.name ?? `Seat ${seat + 1}`;
+		return `${name}: `;
+	};
+
 	return log.events.map((event) => ({
 		event,
-		text: `${name(event.seat)}${event.type} ${JSON.stringify(event.data ?? {})}`,
+		text: `${prefix(event.seat)}${event.type} ${JSON.stringify(event.data ?? {})}`,
 		state: null
 	}));
 }

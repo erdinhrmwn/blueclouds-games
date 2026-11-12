@@ -6,5 +6,11 @@ import type { PageServerLoad } from './$types';
 export const load: PageServerLoad = async ({ url }) => {
 	const before = url.searchParams.get('before');
 	const rows = await listAudit(sql, before);
-	return { rows, paged: !!before, next: rows.length === PAGE_SIZE ? rows.at(-1)!.id : null };
+	const fullPage = rows.length === PAGE_SIZE;
+
+	return {
+		rows,
+		paged: !!before,
+		next: fullPage ? rows.at(-1)!.id : null
+	};
 };

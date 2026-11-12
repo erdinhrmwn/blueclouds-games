@@ -21,13 +21,20 @@
 		'room.unassign': 'Took player off table'
 	};
 	/** The one detail worth showing per action. */
-	const note = (r: (typeof data.rows)[number]) => {
-		if (r.action === 'login_failed') return `as “${r.detail.username}”`;
-		if (typeof r.detail.reason === 'string') return `Reason: ${r.detail.reason}`;
-		if (r.action === 'tournament.distribute')
-			return `${r.detail.players} players, ${r.detail.rooms} tables${r.detail.auto ? ', automatic' : ''}`;
-		if (r.action === 'tournament.register') return `${r.detail.players} players`;
-		return r.roomCode ? `Table ${r.roomCode}` : '';
+	const note = (row: (typeof data.rows)[number]) => {
+		const { action, detail } = row;
+
+		if (action === 'login_failed') return `as “${detail.username}”`;
+		if (typeof detail.reason === 'string') return `Reason: ${detail.reason}`;
+
+		if (action === 'tournament.distribute') {
+			const automatic = detail.auto ? ', automatic' : '';
+			return `${detail.players} players, ${detail.rooms} tables${automatic}`;
+		}
+
+		if (action === 'tournament.register') return `${detail.players} players`;
+
+		return row.roomCode ? `Table ${row.roomCode}` : '';
 	};
 </script>
 

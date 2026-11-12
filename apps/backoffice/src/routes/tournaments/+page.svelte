@@ -5,9 +5,11 @@
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
-	const v = $derived(form?.values ?? {});
+	const values = $derived(form?.values ?? {});
 	let game = $state('');
-	const picked = $derived(data.games.find((g) => g.slug === (game || v.game)) ?? data.games[0]);
+	const picked = $derived(
+		data.games.find((g) => g.slug === (game || values.game)) ?? data.games[0]
+	);
 	let busy = $state(false);
 </script>
 
@@ -78,7 +80,7 @@
 				class="field"
 				id="game"
 				name="game"
-				value={v.game ?? data.games[0]?.slug}
+				value={values.game ?? data.games[0]?.slug}
 				onchange={(e) => (game = e.currentTarget.value)}
 			>
 				{#each data.games as g (g.slug)}<option value={g.slug}>{g.name}</option>{/each}
@@ -90,7 +92,7 @@
 				class="field"
 				id="name"
 				name="name"
-				value={v.name ?? ''}
+				value={values.name ?? ''}
 				maxlength="80"
 				required
 				placeholder="Friday Cup"
@@ -103,7 +105,7 @@
 				id="startsAt"
 				name="startsAt"
 				type="datetime-local"
-				value={v.startsAt ?? ''}
+				value={values.startsAt ?? ''}
 				required
 			/>
 		</div>
@@ -116,7 +118,7 @@
 				type="number"
 				min={picked?.minPlayers}
 				max={picked?.maxPlayers}
-				value={v.playersPerRoom ?? picked?.maxPlayers}
+				value={values.playersPerRoom ?? picked?.maxPlayers}
 				required
 			/>
 		</div>
@@ -127,7 +129,7 @@
 				id="registrationOpensAt"
 				name="registrationOpensAt"
 				type="datetime-local"
-				value={v.registrationOpensAt ?? ''}
+				value={values.registrationOpensAt ?? ''}
 			/>
 		</div>
 		<div>
@@ -139,7 +141,7 @@
 				id="registrationClosesAt"
 				name="registrationClosesAt"
 				type="datetime-local"
-				value={v.registrationClosesAt ?? ''}
+				value={values.registrationClosesAt ?? ''}
 			/>
 		</div>
 		<div class="sm:col-span-2">

@@ -4,21 +4,27 @@
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
-	const m = $derived(data.match);
-	const minutes = $derived(
-		Math.max(
-			1,
-			Math.round((new Date(m.endedAt).getTime() - new Date(m.startedAt).getTime()) / 60_000)
-		)
-	);
+	const match = $derived(data.match);
+	const minutes = $derived.by(() => {
+		const playedMs = new Date(match.endedAt).getTime() - new Date(match.startedAt).getTime();
+		return Math.max(1, Math.round(playedMs / 60_000));
+	});
 
-	const steps = $derived(data.log ? replay(m.game, data.log, m.seats) : []);
+	const steps = $derived(data.log ? replay(match.game, data.log, match.seats) : []);
 	const flagged = $derived(steps.filter((s) => s.mismatch).length);
+
 	let at = $state(0);
 	const step = $derived(steps[Math.min(at, steps.length - 1)]);
-	const nameOf = (seat: number) => m.seats.find((s) => s.seat === seat)?.name ?? `Seat ${seat + 1}`;
-	const clock = (ms: number) =>
-		`+${Math.floor(ms / 60_000)}:${String(Math.floor(ms / 1000) % 60).padStart(2, '0')}`;
+
+	const nameOf = (seat: number) =>
+		match.seats.find((s) => s.seat === seat)?.name ?? `Seat ${seat + 1}`;
+
+	/** "+3:07": minutes and seconds since the match started. */
+	const clock = (ms: number) => {
+		const minutes = Math.floor(ms / 60_000);
+		const seconds = String(Math.floor(ms / 1000) % 60).padStart(2, '0');
+		return `+${minutes}:${seconds}`;
+	};
 
 	let timeline = $state<HTMLOListElement>();
 	$effect(() => {
@@ -26,47 +32,47 @@
 	});
 </script>
 
-<svelte:head><title>Match {m.roomCode} · Backoffice</title></svelte:head>
+<svelte:head><title>Match {match.roomCode} · Backoffice</title></svelte:head>
 
 <a href="/matches" class="text-sm text-muted underline-offset-2 hover:underline">Matches</a>
-<h1 class="mt-1 text-2xl font-semibold">{m.gameName} at table {m.roomCode}</h1>
+<h1 class="mt-1 text-2xl font-semibold">{match.gameName} at table {match.roomCode}</h1>
 
 <dl class="mt-4 grid max-w-2xl grid-cols-[auto_1fr] gap-x-6 gap-y-1 text-sm">
 	<dt class="text-muted">Table</dt>
 	<dd>
-		<span class="font-mono">{m.roomCode}</span>, {m.tournamentId
+		<span class="font-mono">{match.roomCode}</span>, {match.tournamentId
 			? 'tournament table'
 			: 'open table'}
 	</dd>
-	{#if m.tournamentId}
+	{#if match.tournamentId}
 		<dt class="text-muted">Tournament</dt>
 		<dd>
 			<a
 				class="underline decoration-line underline-offset-2 hover:decoration-ink"
-				href="/tournaments/{m.tournamentId}">{m.tournamentName}</a
+				href="/tournaments/{match.tournamentId}">{match.tournamentName}</a
 			>
 		</dd>
 	{:else}
 		<dt class="text-muted">Opened by</dt>
 		<dd>
-			{#if m.openedByPlayerId}
+			{#if match.openedByPlayerId}
 				<a
 					class="underline decoration-line underline-offset-2 hover:decoration-ink"
-					href="/players/{m.openedByPlayerId}">{m.openedByPlayer}</a
+					href="/players/{match.openedByPlayerId}">{match.openedByPlayer}</a
 				>
-			{:else if m.openedByAdmin}
-				{m.openedByAdmin} <span class="text-muted">(admin)</span>
+			{:else if match.openedByAdmin}
+				{match.openedByAdmin} <span class="text-muted">(admin)</span>
 			{:else}
 				<span class="text-muted">Not recorded</span>
 			{/if}
 		</dd>
 	{/if}
 	<dt class="text-muted">Match id</dt>
-	<dd class="font-mono text-xs leading-5 break-all">{m.id}</dd>
+	<dd class="font-mono text-xs leading-5 break-all">{match.id}</dd>
 	<dt class="text-muted">Played</dt>
-	<dd>{utc(m.startedAt)}, {minutes} min</dd>
+	<dd>{utc(match.startedAt)}, {minutes} min</dd>
 	<dt class="text-muted">Rules version</dt>
-	<dd>{m.rulesVersion}</dd>
+	<dd>{match.rulesVersion}</dd>
 </dl>
 
 <div class="mt-6 max-w-2xl overflow-x-auto rounded-lg border border-line bg-surface">
@@ -76,11 +82,11 @@
 				<th class="px-3 py-2 font-medium">Place</th>
 				<th class="px-3 py-2 font-medium">Player</th>
 				<th class="px-3 py-2 font-medium">Seat</th>
-				<th class="px-3 py-2 font-medium">{m.scoreLabel}</th>
+				<th class="px-3 py-2 font-medium">{match.scoreLabel}</th>
 			</tr>
 		</thead>
 		<tbody>
-			{#each m.seats as s (s.seat)}
+			{#each match.seats as s (s.seat)}
 				<tr class="border-b border-line last:border-0">
 					<td class="px-3 py-2 font-semibold {s.placement === 1 ? 'text-felt' : ''}"
 						>{s.placement}</td
@@ -109,7 +115,7 @@
 		{#if data.log}
 			<a
 				class="text-sm underline decoration-line underline-offset-2 hover:decoration-ink"
-				href="/matches/{m.id}/log.json"
+				href="/matches/{match.id}/log.json"
 				download>Download JSON</a
 			>
 		{/if}

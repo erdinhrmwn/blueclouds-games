@@ -5,13 +5,13 @@
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
-	const t = $derived(data.tournament);
-	const status = $derived(tournamentStatus(t));
-	const live = $derived(!t.cancelledAt && !t.endedAt);
+	const tournament = $derived(data.tournament);
+	const status = $derived(tournamentStatus(tournament));
+	const live = $derived(!tournament.cancelledAt && !tournament.endedAt);
 	const waiting = $derived(data.players.filter((p) => !p.roomCode));
 	/** Tables that haven't started and still have a free seat. */
 	const seatable = $derived(
-		data.rooms.filter((r) => !r.startedAt && !r.closedAt && r.players < t.playersPerRoom)
+		data.rooms.filter((r) => !r.startedAt && !r.closedAt && r.players < tournament.playersPerRoom)
 	);
 	let busy = $state(false);
 
@@ -22,52 +22,58 @@
 			busy = false;
 		};
 	};
-	const roomState = (r: (typeof data.rooms)[number]) =>
-		r.closeReason === 'finished'
-			? `Finished after ${duration(r.startedAt ?? t.startsAt, r.closedAt!)}`
-			: r.closeReason === 'not_enough_players'
-				? 'Closed: not enough players showed up'
-				: r.startedAt
-					? `Playing since ${utc(r.startedAt)}`
-					: 'Waiting for the start';
+
+	const roomState = (room: (typeof data.rooms)[number]) => {
+		if (room.closeReason === 'finished') {
+			return `Finished after ${duration(room.startedAt ?? tournament.startsAt, room.closedAt!)}`;
+		}
+		if (room.closeReason === 'not_enough_players') {
+			return 'Closed: not enough players showed up';
+		}
+		if (room.startedAt) {
+			return `Playing since ${utc(room.startedAt)}`;
+		}
+
+		return 'Waiting for the start';
+	};
 </script>
 
-<svelte:head><title>{t.name} · Tournaments · Backoffice</title></svelte:head>
+<svelte:head><title>{tournament.name} · Tournaments · Backoffice</title></svelte:head>
 
 <a href="/tournaments" class="text-sm text-muted underline-offset-2 hover:underline">Tournaments</a>
-<h1 class="mt-1 text-2xl font-semibold">{t.name}</h1>
+<h1 class="mt-1 text-2xl font-semibold">{tournament.name}</h1>
 
 <dl class="mt-4 grid max-w-2xl grid-cols-[auto_1fr] gap-x-6 gap-y-1 text-sm">
 	<dt class="text-muted">Status</dt>
 	<dd class={status.bad ? 'font-medium text-danger' : ''}>{status.label}</dd>
 	<dt class="text-muted">Game</dt>
-	<dd>{t.gameName}, {t.playersPerRoom} per table</dd>
+	<dd>{tournament.gameName}, {tournament.playersPerRoom} per table</dd>
 	<dt class="text-muted">Starts</dt>
-	<dd>{utc(t.startsAt)}</dd>
+	<dd>{utc(tournament.startsAt)}</dd>
 	<dt class="text-muted">Sign-up</dt>
-	<dd>{utc(t.registrationOpensAt)} to {utc(t.registrationClosesAt)}</dd>
-	{#if t.distributedAt}<dt class="text-muted">Tables handed out</dt>
-		<dd>{utc(t.distributedAt)}</dd>{/if}
-	{#if t.endedAt}<dt class="text-muted">Ended</dt>
-		<dd>{utc(t.endedAt)}, ran {duration(t.startsAt, t.endedAt)}</dd>{/if}
-	{#if t.cancelledAt}<dt class="text-muted">Cancelled</dt>
-		<dd>{utc(t.cancelledAt)}</dd>{/if}
+	<dd>{utc(tournament.registrationOpensAt)} to {utc(tournament.registrationClosesAt)}</dd>
+	{#if tournament.distributedAt}<dt class="text-muted">Tables handed out</dt>
+		<dd>{utc(tournament.distributedAt)}</dd>{/if}
+	{#if tournament.endedAt}<dt class="text-muted">Ended</dt>
+		<dd>{utc(tournament.endedAt)}, ran {duration(tournament.startsAt, tournament.endedAt)}</dd>{/if}
+	{#if tournament.cancelledAt}<dt class="text-muted">Cancelled</dt>
+		<dd>{utc(tournament.cancelledAt)}</dd>{/if}
 	<dt class="text-muted">Tournament id</dt>
-	<dd class="font-mono text-xs leading-5 break-all">{t.id}</dd>
+	<dd class="font-mono text-xs leading-5 break-all">{tournament.id}</dd>
 </dl>
 
-{#if t.distributeError && !t.distributedAt && !t.cancelledAt}
+{#if tournament.distributeError && !tournament.distributedAt && !tournament.cancelledAt}
 	<p
 		class="mt-4 max-w-2xl rounded-md border border-danger/40 px-3 py-2 text-sm text-danger"
 		role="alert"
 	>
-		The tables couldn't be handed out: {t.distributeError} The platform tries again every minute.
+		The tables couldn't be handed out: {tournament.distributeError} The platform tries again every minute.
 	</p>
 {/if}
 {#if form?.message}<p class="mt-4 text-sm" role="status">{form.message}</p>{/if}
 {#if form?.error}<p class="mt-4 text-sm text-danger" role="alert">{form.error}</p>{/if}
 
-{#if live && !t.distributedAt}
+{#if live && !tournament.distributedAt}
 	<section
 		class="mt-6 max-w-2xl rounded-lg border border-line bg-surface p-4"
 		aria-labelledby="register"
@@ -92,11 +98,13 @@
 	>
 		<h2 id="distribute" class="font-semibold">Hand out tables</h2>
 		<p class="mt-1 text-sm text-muted">
-			This happens by itself at {utc(t.registrationClosesAt)}. Doing it now closes sign-up early and
-			spreads the {t.registered} registered players over as few tables as fit, evenly.
+			This happens by itself at {utc(tournament.registrationClosesAt)}. Doing it now closes sign-up
+			early and spreads the {tournament.registered} registered players over as few tables as fit, evenly.
 		</p>
 		<form method="POST" action="?/distribute" class="mt-3" use:enhance={submit}>
-			<button class="btn-primary" disabled={busy || t.registered === 0}>Hand out tables now</button>
+			<button class="btn-primary" disabled={busy || tournament.registered === 0}
+				>Hand out tables now</button
+			>
 		</form>
 	</section>
 {/if}
@@ -108,7 +116,7 @@
 			<section class="rounded-lg border border-line bg-surface p-4" aria-label="Table {r.code}">
 				<p class="flex items-baseline justify-between gap-2">
 					<span class="font-mono text-lg tracking-[0.15em]">{r.code}</span>
-					<span class="text-sm text-muted">{r.players}/{t.playersPerRoom}</span>
+					<span class="text-sm text-muted">{r.players}/{tournament.playersPerRoom}</span>
 				</p>
 				<p class="text-sm {r.closeReason === 'not_enough_players' ? 'text-danger' : 'text-muted'}">
 					{roomState(r)}
@@ -172,7 +180,7 @@
 				<label class="label" for="room">Table</label>
 				<select class="field" id="room" name="room">
 					{#each seatable as r (r.id)}<option value={r.code}
-							>{r.code} ({r.players}/{t.playersPerRoom})</option
+							>{r.code} ({r.players}/{tournament.playersPerRoom})</option
 						>{/each}
 				</select>
 			</div>
@@ -182,15 +190,17 @@
 {/if}
 
 <h2 class="mt-8 font-semibold">
-	{t.distributedAt ? 'Registered without a table' : 'Registered players'} ({t.distributedAt
+	{tournament.distributedAt ? 'Registered without a table' : 'Registered players'} ({tournament.distributedAt
 		? waiting.length
 		: data.players.length})
 </h2>
-{#if (t.distributedAt ? waiting : data.players).length === 0}
-	<p class="mt-2 text-sm text-muted">{t.distributedAt ? 'Everyone has a table.' : 'Nobody yet.'}</p>
+{#if (tournament.distributedAt ? waiting : data.players).length === 0}
+	<p class="mt-2 text-sm text-muted">
+		{tournament.distributedAt ? 'Everyone has a table.' : 'Nobody yet.'}
+	</p>
 {:else}
 	<ul class="mt-2 max-w-2xl divide-y divide-line rounded-lg border border-line bg-surface text-sm">
-		{#each t.distributedAt ? waiting : data.players as p (p.playerId)}
+		{#each tournament.distributedAt ? waiting : data.players as p (p.playerId)}
 			<li class="flex items-center justify-between gap-3 px-3 py-2">
 				<span>
 					<a
@@ -230,7 +240,7 @@
 			action="?/cancel"
 			class="mt-3"
 			use:enhance={({ cancel }) => {
-				if (!confirm(`Cancel ${t.name}?`)) return cancel();
+				if (!confirm(`Cancel ${tournament.name}?`)) return cancel();
 				return submit();
 			}}
 		>

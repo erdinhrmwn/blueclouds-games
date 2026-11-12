@@ -3,9 +3,13 @@
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
-	const nextHref = $derived(
-		`?${new URLSearchParams({ ...(data.q ? { q: data.q } : {}), before: data.next ?? '' })}`
-	);
+	const nextHref = $derived.by(() => {
+		const params = new URLSearchParams();
+		if (data.q) params.set('q', data.q);
+		params.set('before', data.next ?? '');
+
+		return `?${params}`;
+	});
 </script>
 
 <svelte:head><title>Players · Backoffice</title></svelte:head>

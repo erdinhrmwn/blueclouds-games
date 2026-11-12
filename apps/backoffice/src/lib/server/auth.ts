@@ -9,11 +9,14 @@ export const USERNAME = /^[a-z0-9_.-]{3,32}$/;
 export const PASSWORD_MIN = 12;
 /** 5 failed tries per username within 15 minutes lock that username for the rest of the window. */
 const LOCKOUT = { tries: 5, minutes: 15 };
+const SESSION_TOKEN_BYTES = 32;
+/** A real session token is 43 characters; anything far longer is not worth hashing. */
+const MAX_TOKEN_LENGTH = 100;
 
 /** A client address fit for the audit log's inet column. */
 export const auditIp = (address: string) => (isIP(address) ? address : null);
 
-const sha256 = (s: string) => new Bun.CryptoHasher('sha256').update(s).digest();
+const sha256 = (text: string) => new Bun.CryptoHasher('sha256').update(text).digest();
 
 /** Same work for an unknown username as for a wrong password, so timing doesn't reveal which usernames exist. */
 let dummyHash: Promise<string> | undefined;
@@ -49,8 +52,15 @@ export async function audit(
 ): Promise<void> {
 	await sql`
 		INSERT INTO admin_audit_events (admin_id, action, player_id, tournament_id, room_id, detail, ip)
-		VALUES (${entry.adminId}, ${entry.action}, ${entry.playerId ?? null}, ${entry.tournamentId ?? null}, ${entry.roomId ?? null},
-		        ${entry.detail ?? {}}, ${entry.ip}::inet)`;
+		VALUES (
+			${entry.adminId},
+			${entry.action},
+			${entry.playerId ?? null},
+			${entry.tournamentId ?? null},
+			${entry.roomId ?? null},
+			${entry.detail ?? {}},
+			${entry.ip}::inet
+		)`;
 }
 
 export type LoginResult =
@@ -64,15 +74,23 @@ export async function login(
 ): Promise<LoginResult> {
 	const name = username.trim().toLowerCase();
 	const [{ failures }] = await sql`
-		SELECT count(*)::int AS failures FROM admin_audit_events
-		WHERE action = 'login_failed' AND detail->>'username' = ${name}
-		  AND created_at > now() - make_interval(mins => ${LOCKOUT.minutes})`;
+		SELECT count(*)::int AS failures
+		FROM admin_audit_events
+		WHERE action = 'login_failed'
+			AND detail->>'username' = ${name}
+			AND created_at > now() - make_interval(mins => ${LOCKOUT.minutes})`;
+
 	if (failures >= LOCKOUT.tries) return { ok: false, reason: 'locked' };
 
-	const [row] =
-		await sql`SELECT id, username, password_hash FROM admins WHERE username = ${name} AND disabled_at IS NULL`;
+	const [row] = await sql`
+		SELECT id, username, password_hash
+		FROM admins
+		WHERE username = ${name} AND disabled_at IS NULL`;
+
 	dummyHash ??= Bun.password.hash('not-a-real-password');
-	const valid = await Bun.password.verify(password, row?.password_hash ?? (await dummyHash));
+	const hashToCheck = row?.password_hash ?? (await dummyHash);
+	const valid = await Bun.password.verify(password, hashToCheck);
+
 	if (!row || !valid) {
 		await audit(sql, {
 			adminId: row?.id ?? null,
@@ -83,7 +101,9 @@ export async function login(
 		return { ok: false, reason: 'invalid' };
 	}
 
-	const token = Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64url');
+	const tokenBytes = crypto.getRandomValues(new Uint8Array(SESSION_TOKEN_BYTES));
+	const token = Buffer.from(tokenBytes).toString('base64url');
+
 	await sql.begin(async (tx) => {
 		await tx`DELETE FROM admin_sessions WHERE expires_at < now()`;
 		await tx`
@@ -91,16 +111,25 @@ export async function login(
 			VALUES (${sha256(token)}, ${row.id}, now() + make_interval(hours => ${SESSION_HOURS}))`;
 		await audit(tx, { adminId: row.id, action: 'login', ip });
 	});
+
 	return { ok: true, token, admin: { id: row.id, username: row.username } };
 }
 
 /** The admin a session cookie belongs to, or null if it is unknown, expired or the admin was disabled. */
 export async function sessionAdmin(sql: SQL, token: string | undefined): Promise<Admin | null> {
-	if (!token || token.length > 100) return null;
+	if (!token || token.length > MAX_TOKEN_LENGTH) return null;
+
 	const [row] = await sql`
-		SELECT a.id, a.username FROM admin_sessions s JOIN admins a ON a.id = s.admin_id
-		WHERE s.token_hash = ${sha256(token)} AND s.expires_at > now() AND a.disabled_at IS NULL`;
-	return row ? { id: row.id, username: row.username } : null;
+		SELECT a.id, a.username
+		FROM admin_sessions s
+		JOIN admins a ON a.id = s.admin_id
+		WHERE s.token_hash = ${sha256(token)}
+			AND s.expires_at > now()
+			AND a.disabled_at IS NULL`;
+
+	if (!row) return null;
+
+	return { id: row.id, username: row.username };
 }
 
 export async function logout(
@@ -117,13 +146,22 @@ export async function logout(
 
 /** Used by the admin:create script. Returns the new admin's id. */
 export async function createAdmin(sql: SQL, username: string, password: string): Promise<string> {
-	if (!USERNAME.test(username))
+	if (!USERNAME.test(username)) {
 		throw new Error('Username must be 3-32 characters: a-z, 0-9, _ . -');
-	if (password.length < PASSWORD_MIN)
+	}
+	if (password.length < PASSWORD_MIN) {
 		throw new Error(`Password must be at least ${PASSWORD_MIN} characters.`);
+	}
+
 	const hash = await Bun.password.hash(password); // argon2id
-	const [row] =
-		await sql`INSERT INTO admins (username, password_hash) VALUES (${username}, ${hash}) ON CONFLICT (username) DO NOTHING RETURNING id`;
+
+	const [row] = await sql`
+		INSERT INTO admins (username, password_hash)
+		VALUES (${username}, ${hash})
+		ON CONFLICT (username) DO NOTHING
+		RETURNING id`;
+
 	if (!row) throw new Error(`Admin "${username}" already exists.`);
+
 	return row.id;
 }
