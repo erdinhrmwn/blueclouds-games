@@ -55,29 +55,42 @@
 	}
 </script>
 
-<header class="flex items-start justify-between gap-3 pb-1 {player.playing ? 'pt-3' : 'pt-2'}">
-	<!-- Title, then the room's name, then a row of small facts about the room. -->
+<!-- Game as a small brass eyebrow, the room's name as the title, then its code and round. -->
+<header
+	class="mb-4 flex items-center justify-between gap-4 border-b border-paper/10 pb-4 sm:mb-6 {player.playing
+		? 'pt-4'
+		: 'pt-3'}"
+>
 	<div class="min-w-0">
-		<h1 class="font-display text-xl leading-tight font-bold text-paper">{game.name}</h1>
-		<p class="mt-0.5 truncate text-sm font-medium text-paper/90">{roomName}</p>
-		<div class="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px]">
+		<p
+			class="flex items-center gap-2 text-[11px] font-semibold tracking-[0.18em] text-brass uppercase"
+		>
+			{game.name}
 			{#if room?.view?.tournament}
-				<span class="rounded-full bg-brass px-2 py-0.5 font-semibold text-ink">Tournament</span>
-			{/if}
-			<span class="rounded-full border border-paper/15 bg-black/30 px-2 py-0.5 text-paper/65">
-				Room <span class="font-semibold tracking-wider text-paper tabular-nums">{code}</span>
-			</span>
-			{#if room?.view && room.view.phase !== 'lobby'}
 				<span
-					class="rounded-full border border-brass/40 bg-brass/10 px-2 py-0.5 font-semibold text-brass tabular-nums"
+					class="rounded-full px-2 py-0.5 tracking-normal normal-case ring-1 ring-brass/40 ring-inset"
+					>Tournament</span
 				>
-					Round #{room.view.round}
-				</span>
 			{/if}
-		</div>
+		</p>
+		<h1 class="mt-1 truncate font-display text-xl leading-tight font-bold text-paper sm:text-2xl">
+			{roomName}
+		</h1>
+		<p class="mt-1.5 flex items-center gap-2 text-xs text-paper/60">
+			<span>Room <span class="font-mono tracking-[0.15em] text-paper/90">{code}</span></span>
+			{#if room?.view && room.view.phase !== 'lobby'}
+				<span class="size-1 rounded-full bg-paper/30" aria-hidden="true"></span>
+				<span
+					>Round <span class="font-semibold text-paper/90 tabular-nums">#{room.view.round}</span
+					></span
+				>
+			{/if}
+		</p>
 	</div>
 	{#if room?.view}
-		<button class="link-btn shrink-0" onclick={leave}>Leave table</button>
+		<button class="btn-ghost shrink-0 px-4 text-xs" onclick={leave} aria-label="Leave table">
+			<span class="sm:hidden">Leave</span><span class="hidden sm:inline">Leave table</span>
+		</button>
 	{/if}
 </header>
 
