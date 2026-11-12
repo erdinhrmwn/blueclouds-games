@@ -46,20 +46,13 @@
 </script>
 
 <div class="flex min-h-8 items-center justify-between gap-3 {player.playing ? 'pt-3' : 'pt-2'}">
-	<!-- Game name, then the table code and round as small chips; phones keep just the chips. -->
-	<div class="flex min-w-0 items-center gap-2">
-		<h1 class="sr-only font-display text-lg font-bold text-paper sm:not-sr-only">{game.name}</h1>
-		<span class="rounded-md border border-paper/15 bg-black/35 px-2 py-0.5 text-xs text-paper/70">
-			<span class="sr-only sm:not-sr-only">Table</span>
-			<span class="font-semibold tracking-wider text-paper tabular-nums">{code}</span>
-		</span>
-		{#if room?.view?.phase === 'playing'}
-			<span
-				class="rounded-md border border-brass/40 bg-brass/10 px-2 py-0.5 text-xs font-semibold whitespace-nowrap text-brass"
-			>
-				Round {room.view.round}
-			</span>
-		{/if}
+	<!-- Game name on top, the table code and round underneath. -->
+	<div class="min-w-0">
+		<h1 class="font-display text-lg leading-tight font-bold text-paper">{game.name}</h1>
+		<p class="text-xs text-paper/70 tabular-nums">
+			Table <span class="font-semibold tracking-wider text-paper/90">{code}</span>
+			{#if room?.view && room.view.phase !== 'lobby'}- Round #{room.view.round}{/if}
+		</p>
 	</div>
 	{#if room?.view}
 		<button class="link-btn" onclick={leave}>Leave table</button>
