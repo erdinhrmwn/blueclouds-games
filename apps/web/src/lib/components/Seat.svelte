@@ -101,7 +101,7 @@
 							pathLength="100"
 							stroke-dasharray="100"
 							class="ring"
-							use:countdown={drain && { ...drain, kind: 'ring' }}
+							use:countdown={drain}
 						/>
 					</svg>
 				{/if}

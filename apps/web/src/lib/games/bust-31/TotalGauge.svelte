@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { prefersReducedMotion } from 'svelte/motion';
+	import { untrack } from 'svelte';
+	import { prefersReducedMotion, Spring } from 'svelte/motion';
 	import { scale } from 'svelte/transition';
 
 	let { total, limit, direction }: { total: number; limit: number; direction: 1 | -1 } = $props();
@@ -37,6 +38,20 @@
 		})
 	);
 	const ratio = $derived(Math.min(Math.max(total, 0) / limit, 1));
+
+	// The filled arc swings to the new total like a needle, overshooting a touch before it settles.
+	const fill = new Spring(
+		untrack(() => ratio),
+		{ stiffness: 0.2, damping: 0.5, precision: 0.001 }
+	);
+
+	$effect(() => {
+		fill.set(ratio, { instant: prefersReducedMotion.current });
+	});
+
+	// A swing below zero would give the stroke a negative dash, which SVG rejects.
+	const fillLength = $derived(Math.max(0, fill.current) * 100);
+
 	const left = $derived(limit - total);
 	// calm → warning → about to bust
 	const tone = $derived.by(() => {
@@ -101,9 +116,9 @@
 				stroke-width="5"
 				stroke-linecap="round"
 				pathLength="100"
-				stroke-dasharray="{ratio * 100} 100"
+				stroke-dasharray="{fillLength} 100"
 				opacity={total > 0 ? 1 : 0}
-				style="transition: stroke-dasharray 400ms ease, stroke 400ms ease"
+				style="transition: stroke 400ms ease"
 			/>
 		</svg>
 		<div class="absolute inset-0 flex flex-col items-center justify-center pb-2">

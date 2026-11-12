@@ -63,10 +63,10 @@ export function shake(node: HTMLElement | undefined): void {
 	node.animate(frames, { duration: SHAKE_MS, easing: 'ease-out' });
 }
 
-type Countdown = { ms: number; total: number; kind: 'bar' | 'ring' } | null;
+type Countdown = { ms: number; total: number } | null;
 
 /**
- * Drains a timer bar (scaleX) or ring (stroke-dashoffset) every frame with the Web Animations API.
+ * Drains a timer ring (stroke-dashoffset) every frame with the Web Animations API.
  * A new value restarts the animation only when the deadline really moved, so the frequent
  * re-renders around it (seconds label ticking, server echoes) never make it jump.
  */
@@ -92,10 +92,7 @@ export function countdown(node: Element, params: Countdown) {
 		const delay = Math.max(0, timer.ms - timer.total);
 		const left = Math.min(1, timer.ms / timer.total);
 
-		const frames =
-			timer.kind === 'bar'
-				? [{ transform: `scaleX(${left})` }, { transform: 'scaleX(0)' }]
-				: [{ strokeDashoffset: `${100 * (1 - left)}` }, { strokeDashoffset: '100' }];
+		const frames = [{ strokeDashoffset: `${100 * (1 - left)}` }, { strokeDashoffset: '100' }];
 
 		anim = node.animate(frames, {
 			delay,
