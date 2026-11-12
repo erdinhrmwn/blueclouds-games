@@ -31,25 +31,27 @@ export const ok = <T extends object>(c: Context, data: T, status: ContentfulStat
 	c.json({ ok: true, data, error: null }, status);
 
 /** Error envelope. */
-export const fail = (c: Context, err: ApiError) =>
-	c.json(
-		{
-			ok: false,
-			data: null,
-			error: { code: err.code, message: err.message, ...(err.fields && { fields: err.fields }) },
-		},
-		err.status,
-	);
+export function fail(c: Context, err: ApiError) {
+	const error = {
+		code: err.code,
+		message: err.message,
+		...(err.fields && { fields: err.fields }),
+	};
+
+	return c.json({ ok: false, data: null, error }, err.status);
+}
 
 /** Validates input; on failure throws `bad_input` with one message per field. */
 export function parse<S extends z.ZodType>(schema: S, input: unknown): z.output<S> {
 	const result = schema.safeParse(input);
 	if (result.success) return result.data;
+
 	const fields: Record<string, string> = {};
 	for (const issue of result.error.issues) {
 		const key = issue.path.join(".") || "_";
 		fields[key] ??= issue.message;
 	}
+
 	throw new ApiError("bad_input", 400, "Some fields are invalid.", fields);
 }
 

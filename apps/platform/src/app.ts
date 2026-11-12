@@ -24,17 +24,24 @@ export function createApp(deps: Deps) {
 
 	app.use(requestId());
 	app.use(secureHeaders());
-	const limit = (maxSize: number) =>
+
+	const limitBody = (maxSize: number) =>
 		bodyLimit({
 			maxSize,
 			onError: (c) => fail(c, new ApiError("payload_too_large", 413, "Request body is too large.")),
 		});
-	const [small, large] = [limit(MAX_BODY_BYTES), limit(MAX_MATCH_BODY_BYTES)];
-	app.use((c, next) => (c.req.path === "/v1/matches" ? large : small)(c, next));
+	const smallBody = limitBody(MAX_BODY_BYTES);
+	const matchBody = limitBody(MAX_MATCH_BODY_BYTES);
+
+	app.use((c, next) => {
+		const limit = c.req.path === "/v1/matches" ? matchBody : smallBody;
+		return limit(c, next);
+	});
 
 	/** For the container healthcheck: the process is up and the database answers. */
 	app.get("/v1/health", async (c) => {
 		await deps.sql`SELECT 1`;
+
 		return ok(c, { status: "ok" });
 	});
 
@@ -44,8 +51,10 @@ export function createApp(deps: Deps) {
 	app.route("/v1", tournamentRoutes(deps.sql));
 
 	app.notFound((c) => fail(c, new ApiError("not_found", 404, "Not found.")));
+
 	app.onError((err, c) => {
 		if (err instanceof ApiError) return fail(c, err);
+
 		log.error({
 			msg: "unhandled error",
 			requestId: c.get("requestId"),
@@ -53,6 +62,7 @@ export function createApp(deps: Deps) {
 			err: String(err),
 			stack: err.stack,
 		});
+
 		return fail(c, new ApiError("internal", 500, "Something went wrong. Try again later."));
 	});
 

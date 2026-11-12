@@ -4,55 +4,75 @@ import { log } from "../lib/log";
 import { insertRoom } from "./rooms";
 
 const JOB_BATCH = 10;
+
 /**
  * A room nobody opened is closed this long after starts_at: the room's own 3-minute wait for late
  * players (LATE_GRACE_MS in the actor) plus a margin.
  */
 const UNOPENED_CLOSE_AFTER = "4 minutes";
 
+const LIST_LIMIT = 20;
+
 /** Why a tournament can't be distributed; the message is shown to admins as is. */
 export class DistributeError extends Error {}
+
+export type DistributeBy = { adminId: string | null; ip?: string | null };
+
+const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
 
 /**
  * Splits players into ceil(n / perRoom) rooms, as evenly as possible (20 at 6 → 5+5+5+5).
  * Refuses when a room would fall below the game's minimum, and says how to fix it.
  */
 export function planRooms<T>(players: T[], perRoom: number, minPlayers: number): T[][] {
-	const n = players.length;
-	if (n === 0) throw new DistributeError("Nobody is registered.");
-	if (perRoom < minPlayers)
+	const playerCount = players.length;
+	if (playerCount === 0) {
+		throw new DistributeError("Nobody is registered.");
+	}
+	if (perRoom < minPlayers) {
 		throw new DistributeError(`Players per table must be at least ${minPlayers}.`);
-	const rooms = Math.ceil(n / perRoom);
-	const base = Math.floor(n / rooms);
-	if (base < minPlayers) {
-		const add = rooms * minPlayers - n;
-		const remove = rooms > 1 ? n - (rooms - 1) * perRoom : 0;
-		const fix = `Add ${add} player${add === 1 ? "" : "s"}${remove ? ` or remove ${remove}` : ""}.`;
+	}
+
+	const roomCount = Math.ceil(playerCount / perRoom);
+	const baseSize = Math.floor(playerCount / roomCount);
+
+	if (baseSize < minPlayers) {
+		const toAdd = roomCount * minPlayers - playerCount;
+		const toRemove = roomCount > 1 ? playerCount - (roomCount - 1) * perRoom : 0;
+		const removeHint = toRemove ? ` or remove ${toRemove}` : "";
+		const fix = `Add ${plural(toAdd, "player")}${removeHint}.`;
+
 		throw new DistributeError(
-			`${n} player${n === 1 ? "" : "s"} can't fill every table with at least ${minPlayers}. ${fix}`,
+			`${plural(playerCount, "player")} can't fill every table with at least ${minPlayers}. ${fix}`,
 		);
 	}
-	const extra = n % rooms;
-	const out: T[][] = [];
-	for (let r = 0, i = 0; r < rooms; r++) {
-		const size = base + (r < extra ? 1 : 0);
-		out.push(players.slice(i, i + size));
-		i += size;
+
+	// The first `bigRooms` rooms take one extra player each.
+	const bigRooms = playerCount % roomCount;
+	const rooms: T[][] = [];
+	let start = 0;
+
+	for (let room = 0; room < roomCount; room++) {
+		const size = room < bigRooms ? baseSize + 1 : baseSize;
+		rooms.push(players.slice(start, start + size));
+		start += size;
 	}
-	return out;
+
+	return rooms;
 }
 
+/** Fisher-Yates shuffle with crypto randomness. */
 function shuffle<T>(items: T[]): T[] {
 	const out = [...items];
 	const random = crypto.getRandomValues(new Uint32Array(out.length));
+
 	for (let i = out.length - 1; i > 0; i--) {
 		const j = random[i]! % (i + 1);
 		[out[i], out[j]] = [out[j]!, out[i]!];
 	}
+
 	return out;
 }
-
-export type DistributeBy = { adminId: string | null; ip?: string | null };
 
 /**
  * Opens the tournament's rooms and seats every registered player, inside the caller's transaction.
@@ -63,48 +83,92 @@ export async function distributeIn(
 	tournamentId: string,
 	by: DistributeBy,
 ): Promise<{ rooms: number; players: number }> {
-	const [t] = await tx`
+	const [tournament] = await tx`
 		SELECT t.game_slug, t.players_per_room, t.distributed_at, t.cancelled_at, g.min_players
-		FROM tournaments t JOIN games g ON g.slug = t.game_slug WHERE t.id = ${tournamentId} FOR UPDATE OF t`;
-	if (!t) throw new DistributeError("Tournament not found.");
-	if (t.cancelled_at) throw new DistributeError("This tournament was cancelled.");
-	if (t.distributed_at) throw new DistributeError("Players already have their tables.");
+		FROM tournaments t
+		JOIN games g ON g.slug = t.game_slug
+		WHERE t.id = ${tournamentId}
+		FOR UPDATE OF t`;
+
+	if (!tournament) {
+		throw new DistributeError("Tournament not found.");
+	}
+	if (tournament.cancelled_at) {
+		throw new DistributeError("This tournament was cancelled.");
+	}
+	if (tournament.distributed_at) {
+		throw new DistributeError("Players already have their tables.");
+	}
+
 	// Disabled players can't play, so they don't take a seat.
 	const registered = await tx`
-		SELECT tp.player_id FROM tournament_players tp JOIN players p ON p.id = tp.player_id
-		WHERE tp.tournament_id = ${tournamentId} AND p.disabled_at IS NULL
-		  AND NOT EXISTS (SELECT 1 FROM room_assignments ra WHERE ra.tournament_id = tp.tournament_id AND ra.player_id = tp.player_id)`;
-	const plan = planRooms(
-		shuffle(registered.map((r: { player_id: string }) => r.player_id)),
-		t.players_per_room,
-		t.min_players,
-	);
-	for (const players of plan) {
-		const room = await insertRoom(tx, { game: t.game_slug, tournamentId, adminId: by.adminId });
-		const rows = players.map((playerId, seat) => ({
+		SELECT tp.player_id
+		FROM tournament_players tp
+		JOIN players p ON p.id = tp.player_id
+		WHERE tp.tournament_id = ${tournamentId}
+			AND p.disabled_at IS NULL
+			AND NOT EXISTS (
+				SELECT 1 FROM room_assignments ra
+				WHERE ra.tournament_id = tp.tournament_id AND ra.player_id = tp.player_id
+			)`;
+
+	const playerIds = registered.map((row: { player_id: string }) => row.player_id);
+	const plan = planRooms(shuffle(playerIds), tournament.players_per_room, tournament.min_players);
+
+	for (const roomPlayers of plan) {
+		const room = await insertRoom(tx, {
+			game: tournament.game_slug,
+			tournamentId,
+			adminId: by.adminId,
+		});
+
+		const assignments = roomPlayers.map((playerId, seat) => ({
 			room_id: room.id,
 			tournament_id: tournamentId,
 			player_id: playerId,
 			seat,
 		}));
-		await tx`INSERT INTO room_assignments ${tx(rows)}`;
+		await tx`INSERT INTO room_assignments ${tx(assignments)}`;
 	}
-	await tx`UPDATE tournaments SET distributed_at = now(), distribute_error = NULL WHERE id = ${tournamentId}`;
+
+	await tx`
+		UPDATE tournaments
+		SET distributed_at = now(), distribute_error = NULL
+		WHERE id = ${tournamentId}`;
+
 	const result = { rooms: plan.length, players: registered.length };
+	const detail = JSON.stringify({ ...result, auto: !by.adminId });
+
 	await tx`
 		INSERT INTO admin_audit_events (admin_id, action, tournament_id, detail, ip)
-		VALUES (${by.adminId}, 'tournament.distribute', ${tournamentId}, ${JSON.stringify({ ...result, auto: !by.adminId })}::text::jsonb, ${by.ip ?? null}::inet)`;
+		VALUES (
+			${by.adminId},
+			'tournament.distribute',
+			${tournamentId},
+			${detail}::text::jsonb,
+			${by.ip ?? null}::inet
+		)`;
+
 	return result;
 }
 
 /** Sets ended_at on each of these tournaments whose rooms are all closed: when the last one closed. */
 export async function endIfDone(tx: SQL, tournamentIds: string[]): Promise<void> {
 	const ids = [...new Set(tournamentIds)];
-	if (!ids.length) return;
+	if (ids.length === 0) return;
+
 	// greatest(): a room can close a moment before starts_at by the actor's clock.
 	await tx`
-		UPDATE tournaments t SET ended_at = greatest(t.starts_at, (SELECT max(r.closed_at) FROM rooms r WHERE r.tournament_id = t.id))
-		WHERE t.id IN ${tx(ids)} AND NOT EXISTS (SELECT 1 FROM rooms r WHERE r.tournament_id = t.id AND r.closed_at IS NULL)`;
+		UPDATE tournaments t
+		SET ended_at = greatest(
+			t.starts_at,
+			(SELECT max(r.closed_at) FROM rooms r WHERE r.tournament_id = t.id)
+		)
+		WHERE t.id IN ${tx(ids)}
+			AND NOT EXISTS (
+				SELECT 1 FROM rooms r
+				WHERE r.tournament_id = t.id AND r.closed_at IS NULL
+			)`;
 }
 
 /**
@@ -118,11 +182,19 @@ export async function closeRoom(
 	startedAt?: string,
 ): Promise<void> {
 	const [room] = await tx`
-		UPDATE rooms SET closed_at = now(), close_reason = ${reason}, started_at = coalesce(started_at, ${startedAt ?? null}::timestamptz)
-		WHERE id = ${roomId} AND tournament_id IS NOT NULL
-		  AND (closed_at IS NULL OR (${reason} = 'finished' AND close_reason <> 'finished'))
+		UPDATE rooms
+		SET
+			closed_at = now(),
+			close_reason = ${reason},
+			started_at = coalesce(started_at, ${startedAt ?? null}::timestamptz)
+		WHERE id = ${roomId}
+			AND tournament_id IS NOT NULL
+			AND (closed_at IS NULL OR (${reason} = 'finished' AND close_reason <> 'finished'))
 		RETURNING tournament_id`;
-	if (room) await endIfDone(tx, [room.tournament_id]);
+
+	if (room) {
+		await endIfDone(tx, [room.tournament_id]);
+	}
 }
 
 /**
@@ -134,62 +206,99 @@ export async function runTournamentJob(
 ): Promise<{ distributed: number; failed: number; closed: number }> {
 	return sql.begin(async (tx) => {
 		const due = await tx`
-			SELECT id FROM tournaments
-			WHERE registration_closes_at <= now() AND distributed_at IS NULL AND cancelled_at IS NULL
-			ORDER BY registration_closes_at FOR UPDATE SKIP LOCKED LIMIT ${JOB_BATCH}`;
+			SELECT id
+			FROM tournaments
+			WHERE registration_closes_at <= now()
+				AND distributed_at IS NULL
+				AND cancelled_at IS NULL
+			ORDER BY registration_closes_at
+			FOR UPDATE SKIP LOCKED
+			LIMIT ${JOB_BATCH}`;
+
 		let distributed = 0;
 		let failed = 0;
+
 		for (const { id } of due) {
 			try {
 				const result = await tx.savepoint((sp) => distributeIn(sp, id, { adminId: null }));
-				distributed++;
+				distributed += 1;
 				log.info({ msg: "tournament distributed", tournamentId: id, ...result });
 			} catch (err) {
-				failed++;
-				const known = err instanceof DistributeError;
-				if (!known)
-					log.error({ msg: "tournament distribute failed", tournamentId: id, err: String(err) });
-				const reason = known
-					? err.message
-					: "Something went wrong. The platform tries again every minute.";
-				await tx`UPDATE tournaments SET distribute_error = ${reason} WHERE id = ${id} AND distribute_error IS DISTINCT FROM ${reason}`;
+				failed += 1;
+				await saveDistributeError(tx, id, err);
 			}
 		}
+
 		// A started room is never closed here: its match reaches the platform through the room's outbox.
 		const closed = await tx`
-			UPDATE rooms r SET closed_at = now(), close_reason = 'not_enough_players'
+			UPDATE rooms r
+			SET closed_at = now(), close_reason = 'not_enough_players'
 			FROM tournaments t
-			WHERE t.id = r.tournament_id AND t.cancelled_at IS NULL AND r.started_at IS NULL AND r.closed_at IS NULL
-			  AND t.starts_at + ${UNOPENED_CLOSE_AFTER}::interval <= now()
+			WHERE t.id = r.tournament_id
+				AND t.cancelled_at IS NULL
+				AND r.started_at IS NULL
+				AND r.closed_at IS NULL
+				AND t.starts_at + ${UNOPENED_CLOSE_AFTER}::interval <= now()
 			RETURNING r.tournament_id`;
-		await endIfDone(
-			tx,
-			closed.map((r: { tournament_id: string }) => r.tournament_id),
-		);
+
+		const closedTournamentIds = closed.map((row: { tournament_id: string }) => row.tournament_id);
+		await endIfDone(tx, closedTournamentIds);
+
 		return { distributed, failed, closed: closed.length };
 	});
 }
 
-const LIST_LIMIT = 20;
+/** Shows admins why the job could not distribute. Unknown errors are logged and get a generic message. */
+async function saveDistributeError(tx: SQL, tournamentId: string, err: unknown): Promise<void> {
+	const known = err instanceof DistributeError;
+	if (!known) {
+		log.error({ msg: "tournament distribute failed", tournamentId, err: String(err) });
+	}
+
+	const reason = known
+		? err.message
+		: "Something went wrong. The platform tries again every minute.";
+
+	await tx`
+		UPDATE tournaments
+		SET distribute_error = ${reason}
+		WHERE id = ${tournamentId} AND distribute_error IS DISTINCT FROM ${reason}`;
+}
 
 /** Tournaments of a game whose registration is open now, and whether this player is in. */
 export async function listOpen(sql: SQL, game: string, playerId: string) {
 	const rows = await sql`
-		SELECT t.id, t.name, t.starts_at, t.registration_closes_at, t.players_per_room,
-		       (SELECT count(*)::int FROM tournament_players x WHERE x.tournament_id = t.id) AS registered,
-		       EXISTS (SELECT 1 FROM tournament_players x WHERE x.tournament_id = t.id AND x.player_id = ${playerId}) AS joined
+		SELECT
+			t.id,
+			t.name,
+			t.starts_at,
+			t.registration_closes_at,
+			t.players_per_room,
+			(
+				SELECT count(*)::int FROM tournament_players x
+				WHERE x.tournament_id = t.id
+			) AS registered,
+			EXISTS (
+				SELECT 1 FROM tournament_players x
+				WHERE x.tournament_id = t.id AND x.player_id = ${playerId}
+			) AS joined
 		FROM tournaments t
-		WHERE t.game_slug = ${game} AND t.cancelled_at IS NULL AND t.distributed_at IS NULL
-		  AND t.registration_opens_at <= now() AND t.registration_closes_at > now()
-		ORDER BY t.starts_at LIMIT ${LIST_LIMIT}`;
-	return rows.map((r: any) => ({
-		id: r.id,
-		name: r.name,
-		startsAt: r.starts_at.toISOString(),
-		registrationClosesAt: r.registration_closes_at.toISOString(),
-		playersPerRoom: r.players_per_room,
-		registered: r.registered,
-		joined: r.joined,
+		WHERE t.game_slug = ${game}
+			AND t.cancelled_at IS NULL
+			AND t.distributed_at IS NULL
+			AND t.registration_opens_at <= now()
+			AND t.registration_closes_at > now()
+		ORDER BY t.starts_at
+		LIMIT ${LIST_LIMIT}`;
+
+	return rows.map((row: any) => ({
+		id: row.id,
+		name: row.name,
+		startsAt: row.starts_at.toISOString(),
+		registrationClosesAt: row.registration_closes_at.toISOString(),
+		playersPerRoom: row.players_per_room,
+		registered: row.registered,
+		joined: row.joined,
 	}));
 }
 
@@ -201,32 +310,62 @@ export async function setRegistration(
 	join: boolean,
 ): Promise<void> {
 	await sql.begin(async (tx) => {
-		const [t] = await tx`
-			SELECT cancelled_at, distributed_at, registration_opens_at <= now() AND registration_closes_at > now() AS open
-			FROM tournaments WHERE id = ${tournamentId} FOR SHARE`;
-		if (!t) throw new ApiError("not_found", 404, "There is no such tournament.");
-		if (t.cancelled_at) throw new ApiError("conflict", 409, "This tournament was cancelled.");
-		if (!t.open || t.distributed_at)
+		const [tournament] = await tx`
+			SELECT
+				cancelled_at,
+				distributed_at,
+				registration_opens_at <= now() AND registration_closes_at > now() AS open
+			FROM tournaments
+			WHERE id = ${tournamentId}
+			FOR SHARE`;
+
+		if (!tournament) {
+			throw new ApiError("not_found", 404, "There is no such tournament.");
+		}
+		if (tournament.cancelled_at) {
+			throw new ApiError("conflict", 409, "This tournament was cancelled.");
+		}
+		if (!tournament.open || tournament.distributed_at) {
 			throw new ApiError("conflict", 409, "Registration for this tournament is closed.");
-		if (join)
-			await tx`INSERT INTO tournament_players (tournament_id, player_id) VALUES (${tournamentId}, ${playerId}) ON CONFLICT DO NOTHING`;
-		else
-			await tx`DELETE FROM tournament_players WHERE tournament_id = ${tournamentId} AND player_id = ${playerId}`;
+		}
+
+		if (join) {
+			await tx`
+				INSERT INTO tournament_players (tournament_id, player_id)
+				VALUES (${tournamentId}, ${playerId})
+				ON CONFLICT DO NOTHING`;
+		} else {
+			await tx`
+				DELETE FROM tournament_players
+				WHERE tournament_id = ${tournamentId} AND player_id = ${playerId}`;
+		}
 	});
 }
 
 /** The open tournament tables the player is seated at, so the game's home page can show "your table". */
 export async function seatedRooms(sql: SQL, playerId: string, game: string | undefined) {
+	const gameFilter = game ? sql`AND r.game_slug = ${game}` : sql``;
+
 	const rows = await sql`
 		SELECT r.code, r.game_slug, ra.seat, t.id AS tournament_id, t.name, t.starts_at
-		FROM room_assignments ra JOIN rooms r ON r.id = ra.room_id JOIN tournaments t ON t.id = ra.tournament_id
-		WHERE ra.player_id = ${playerId} AND r.closed_at IS NULL AND t.cancelled_at IS NULL
-		  ${game ? sql`AND r.game_slug = ${game}` : sql``}
-		ORDER BY t.starts_at LIMIT ${LIST_LIMIT}`;
-	return rows.map((r: any) => ({
-		code: r.code,
-		game: r.game_slug,
-		seat: r.seat,
-		tournament: { id: r.tournament_id, name: r.name, startsAt: r.starts_at.toISOString() },
+		FROM room_assignments ra
+		JOIN rooms r ON r.id = ra.room_id
+		JOIN tournaments t ON t.id = ra.tournament_id
+		WHERE ra.player_id = ${playerId}
+			AND r.closed_at IS NULL
+			AND t.cancelled_at IS NULL
+			${gameFilter}
+		ORDER BY t.starts_at
+		LIMIT ${LIST_LIMIT}`;
+
+	return rows.map((row: any) => ({
+		code: row.code,
+		game: row.game_slug,
+		seat: row.seat,
+		tournament: {
+			id: row.tournament_id,
+			name: row.name,
+			startsAt: row.starts_at.toISOString(),
+		},
 	}));
 }

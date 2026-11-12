@@ -13,7 +13,9 @@ const Name = z
 	.trim()
 	.min(1, "Must be 1–20 characters.")
 	.max(20, "Must be 1–20 characters.")
-	.refine((n) => !/\p{Cc}/u.test(n), "Must not contain control characters."); // same rule as players_display_name_check
+	// Same rule as players_display_name_check.
+	.refine((name) => !/\p{Cc}/u.test(name), "Must not contain control characters.");
+
 const NameBody = z.object({ name: Name });
 /** A guest may bring a name (a browser that lost its guest keeps playing under the same name); else one is made up. */
 const GuestBody = z.object({ name: Name.optional() });
@@ -24,12 +26,17 @@ const Username = z
 	.trim()
 	.toLowerCase()
 	.regex(/^[a-z0-9_.-]{3,32}$/, "Use 3–32 characters: a–z, 0–9, _ . -")
-	.refine((u) => !u.startsWith("guest"), 'Usernames starting with "guest" are kept for guests.');
+	.refine(
+		(username) => !username.startsWith("guest"),
+		'Usernames starting with "guest" are kept for guests.',
+	);
 /** Long enough to resist guessing; capped so hashing stays cheap for the server. */
+
 const Password = z
 	.string()
 	.min(8, "Use at least 8 characters.")
 	.max(200, "Use at most 200 characters.");
+
 const Register = z.object({ name: Name, username: Username, password: Password });
 const Login = z.object({
 	username: z.string().trim().toLowerCase().max(64),
@@ -46,7 +53,9 @@ export function playerRoutes(sql: SQL, signer: Signer) {
 	/** New guest player. The secret is returned only here. */
 	app.post("/players/guest", rateLimit(GUEST_LIMIT.perIp, GUEST_LIMIT.windowMs), async (c) => {
 		const { name } = parse(GuestBody, await readJson(c));
-		return ok(c, await players.createGuest(sql, name), 201);
+		const signedIn = await players.createGuest(sql, name);
+
+		return ok(c, signedIn, 201);
 	});
 
 	/** With the current guest's secret, that guest becomes the account; without one, a new player is made (201). */
@@ -54,16 +63,22 @@ export function playerRoutes(sql: SQL, signer: Signer) {
 		const input = parse(Register, await readJson(c));
 		const current = await players.findBySecret(sql, bearer(c.req.header("authorization")));
 		const result = await players.register(sql, current, input);
-		return ok(c, result, result.playerSecret ? 201 : 200);
+		const status = result.playerSecret ? 201 : 200;
+
+		return ok(c, result, status);
 	});
 
 	app.post("/players/login", rateLimit(LOGIN_LIMIT.perIp, LOGIN_LIMIT.windowMs), async (c) => {
 		const { username, password } = parse(Login, await readJson(c));
-		return ok(c, await players.login(sql, username, password));
+		const signedIn = await players.login(sql, username, password);
+
+		return ok(c, signedIn);
 	});
 
 	app.post("/players/logout", auth, async (c) => {
-		await players.logout(sql, c.get("player"), bearer(c.req.header("authorization"))!);
+		const secret = bearer(c.req.header("authorization"))!;
+		await players.logout(sql, c.get("player"), secret);
+
 		return ok(c, { signedOut: true });
 	});
 
@@ -71,20 +86,28 @@ export function playerRoutes(sql: SQL, signer: Signer) {
 	app.get("/players/me", auth, async (c) => {
 		const player = c.get("player");
 		await players.noteSeen(sql, player.id);
+
 		return ok(c, { player });
 	});
 
 	/** Accounts only: a guest keeps its generated name until it links an account. */
 	app.patch("/players/me", auth, async (c) => {
 		const player = c.get("player");
-		if (player.guest) throw new ApiError("forbidden", 403, "Link an account to choose your name.");
+		if (player.guest) {
+			throw new ApiError("forbidden", 403, "Link an account to choose your name.");
+		}
+
 		const { name } = parse(NameBody, await readJson(c));
-		return ok(c, { player: await players.rename(sql, player.id, name) });
+		const renamed = await players.rename(sql, player.id, name);
+
+		return ok(c, { player: renamed });
 	});
 
-	app.post("/play-tokens", auth, async (c) =>
-		ok(c, await players.issuePlayToken(sql, signer, c.get("player"))),
-	);
+	app.post("/play-tokens", auth, async (c) => {
+		const playToken = await players.issuePlayToken(sql, signer, c.get("player"));
+
+		return ok(c, playToken);
+	});
 
 	return app;
 }

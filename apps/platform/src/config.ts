@@ -49,16 +49,20 @@ type RawEnv = Record<string, string | undefined>;
 function check<S extends z.ZodType>(schema: S, env: RawEnv, what: string): z.output<S> {
 	const parsed = schema.safeParse(env);
 	if (parsed.success) return parsed.data;
-	const problems = parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ");
+
+	const problems = parsed.error.issues
+		.map((issue) => `${issue.path.join(".")}: ${issue.message}`)
+		.join("; ");
+
 	throw new Error(`Invalid ${what}: ${problems}`);
 }
 
-const toDb = (e: z.output<typeof DbEnv>): DbConfig => ({
-	hostname: e.DATABASE_HOST,
-	port: e.DATABASE_PORT,
-	username: e.DATABASE_USER,
-	password: e.DATABASE_PASSWORD,
-	database: e.DATABASE_NAME,
+const toDb = (env: z.output<typeof DbEnv>): DbConfig => ({
+	hostname: env.DATABASE_HOST,
+	port: env.DATABASE_PORT,
+	username: env.DATABASE_USER,
+	password: env.DATABASE_PASSWORD,
+	database: env.DATABASE_NAME,
 });
 
 /** Only the database settings, for scripts such as `db:migrate`. */
@@ -67,12 +71,13 @@ export const loadDbConfig = (env: RawEnv = process.env): DbConfig =>
 
 /** Reads and checks the environment once at startup; throws a readable error listing every bad key. */
 export function loadConfig(env: RawEnv = process.env): Config {
-	const e = check(Env, env, "platform config");
+	const parsed = check(Env, env, "platform config");
+
 	return {
-		db: toDb(e),
-		playTokenPrivateKey: e.PLAY_TOKEN_PRIVATE_KEY,
-		serverKey: e.PLATFORM_SERVER_KEY,
-		host: e.PLATFORM_HOST,
-		port: e.PLATFORM_PORT,
+		db: toDb(parsed),
+		playTokenPrivateKey: parsed.PLAY_TOKEN_PRIVATE_KEY,
+		serverKey: parsed.PLATFORM_SERVER_KEY,
+		host: parsed.PLATFORM_HOST,
+		port: parsed.PLATFORM_PORT,
 	};
 }

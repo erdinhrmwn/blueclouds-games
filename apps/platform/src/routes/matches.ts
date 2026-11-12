@@ -12,15 +12,19 @@ export function matchRoutes(sql: SQL, serverKey: string) {
 
 	/** A room reports a finished game with its move log: 201 when stored, 200 for a retry of a stored match. */
 	app.post("/matches", serverAuth(serverKey), async (c) => {
-		const m = parse(MatchReport, await readJson(c));
-		const created = await recordMatch(sql, m);
-		return ok(c, { match: { id: m.matchId, created } }, created ? 201 : 200);
+		const report = parse(MatchReport, await readJson(c));
+		const created = await recordMatch(sql, report);
+		const status = created ? 201 : 200;
+
+		return ok(c, { match: { id: report.matchId, created } }, status);
 	});
 
 	/** The signed-in player's own history, newest first. */
 	app.get("/players/me/matches", playerAuth(sql), async (c) => {
 		const { cursor } = parse(HistoryQuery, c.req.query());
-		return ok(c, await history(sql, c.get("player").id, cursor));
+		const page = await history(sql, c.get("player").id, cursor);
+
+		return ok(c, page);
 	});
 
 	return app;

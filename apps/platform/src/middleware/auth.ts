@@ -15,8 +15,12 @@ export function bearer(header: string | undefined): string | null {
 /** Resolves `Authorization: Bearer <player secret>` to a player, or stops with 401/403. */
 export const playerAuth = (sql: SQL) =>
 	createMiddleware<{ Variables: PlayerVariables }>(async (c, next) => {
-		const row = await findBySecret(sql, bearer(c.req.header("authorization")));
-		if (!row) throw new ApiError("unauthenticated", 401, "Sign in as a player first.");
+		const secret = bearer(c.req.header("authorization"));
+		const row = await findBySecret(sql, secret);
+		if (!row) {
+			throw new ApiError("unauthenticated", 401, "Sign in as a player first.");
+		}
+
 		c.set("player", toPlayer(row));
 		await next();
 	});
@@ -24,10 +28,13 @@ export const playerAuth = (sql: SQL) =>
 /** Checks `Authorization: Bearer <server key>` in constant time (both sides hashed to equal length). */
 export const serverAuth = (serverKey: string) => {
 	const expected = hashSecret(serverKey);
+
 	return createMiddleware(async (c, next) => {
 		const given = bearer(c.req.header("authorization"));
-		if (!given || !timingSafeEqual(hashSecret(given), expected))
+		if (!given || !timingSafeEqual(hashSecret(given), expected)) {
 			throw new ApiError("unauthenticated", 401, "Invalid server key.");
+		}
+
 		await next();
 	});
 };
