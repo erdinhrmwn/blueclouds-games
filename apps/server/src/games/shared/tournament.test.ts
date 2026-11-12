@@ -7,7 +7,7 @@ mock.module("../../platform", () => ({
 	verifyPlayToken: async () => null,
 	reportMatch: async () => ({ result: "sent" }),
 	fetchRoomSeats: async () => seats,
-	markRoom: async (code: string, change: string) => (marked.push(`${code}:${change}`), true),
+	markRoom: async (code: string, change: string) => (marked.push(`${code}:${change}`), { ok: true }),
 }));
 const { LATE_GRACE_MS, loadTournament, requireOpenTable, seatFor, tournamentTick } = await import("./room");
 const { addPlayer, createGame } = await import("../bust-31/rules");

@@ -41,6 +41,7 @@ const SLUG = "bust-31";
 const rng = () => Math.random();
 
 export const bust31Room = actor({
+	options: { name: "Bust 31", icon: "fire" }, // shown in the Rivet dashboard
 	db: db({ onMigrate: migrateRoom }),
 	createVars: () => roomVars<Game, MatchState>(createGame()),
 	onWake: async (c) => {

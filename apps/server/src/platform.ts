@@ -105,11 +105,12 @@ export async function fetchRoomSeats(code: string): Promise<RoomSeats | null> {
 }
 
 /** Tells the platform a tournament room's match began, or that it gave up. A lost call is fixed by the platform's job and the match report. */
-export async function markRoom(code: string, change: "start" | "close"): Promise<boolean> {
+export async function markRoom(code: string, change: "start" | "close"): Promise<{ ok: boolean; detail?: string }> {
 	try {
 		const res = await callPlatform("POST", `/rooms/${encodeURIComponent(code)}/${change}`, change === "close" ? { reason: "not_enough_players" } : undefined);
-		return res.ok;
-	} catch {
-		return false;
+		if (res.ok) return { ok: true };
+		return { ok: false, detail: `${res.status} ${await res.text().catch(() => "")}`.slice(0, 500) };
+	} catch (err) {
+		return { ok: false, detail: String(err) };
 	}
 }
