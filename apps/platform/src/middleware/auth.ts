@@ -5,7 +5,8 @@ import { ApiError } from "../lib/http";
 import { hashSecret } from "../lib/secrets";
 import { findBySecret, type Player, toPlayer } from "../services/players";
 
-export type PlayerVariables = { player: Player };
+/** The signed-in player and the secret they signed in with (logout revokes that one). */
+export type PlayerVariables = { player: Player; playerSecret: string };
 
 export function bearer(header: string | undefined): string | null {
 	const match = header?.match(/^Bearer (\S+)$/);
@@ -17,11 +18,12 @@ export const playerAuth = (sql: SQL) =>
 	createMiddleware<{ Variables: PlayerVariables }>(async (c, next) => {
 		const secret = bearer(c.req.header("authorization"));
 		const row = await findBySecret(sql, secret);
-		if (!row) {
+		if (!secret || !row) {
 			throw new ApiError("unauthenticated", 401, "Sign in as a player first.");
 		}
 
 		c.set("player", toPlayer(row));
+		c.set("playerSecret", secret);
 		await next();
 	});
 

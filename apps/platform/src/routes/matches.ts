@@ -1,14 +1,15 @@
 import type { SQL } from "bun";
 import { Hono } from "hono";
+import type { AppEnv } from "../app";
 import { z } from "zod";
 import { ok, parse, readJson } from "../lib/http";
-import { playerAuth, type PlayerVariables, serverAuth } from "../middleware/auth";
+import { playerAuth, serverAuth } from "../middleware/auth";
 import { history, MatchReport, recordMatch } from "../services/matches";
 
 const HistoryQuery = z.object({ cursor: z.uuid().optional() });
 
 export function matchRoutes(sql: SQL, serverKey: string) {
-	const app = new Hono<{ Variables: PlayerVariables }>();
+	const app = new Hono<AppEnv>();
 
 	/** A room reports a finished game with its move log: 201 when stored, 200 for a retry of a stored match. */
 	app.post("/matches", serverAuth(serverKey), async (c) => {

@@ -1,9 +1,10 @@
 import type { SQL } from "bun";
 import { Hono } from "hono";
+import type { AppEnv } from "../app";
 import { z } from "zod";
 import { ApiError, ok, parse, readJson } from "../lib/http";
 import type { Signer } from "../lib/play-tokens";
-import { bearer, playerAuth, type PlayerVariables } from "../middleware/auth";
+import { bearer, playerAuth } from "../middleware/auth";
 import { rateLimit } from "../middleware/rate-limit";
 import * as players from "../services/players";
 
@@ -47,7 +48,7 @@ const GUEST_LIMIT = { perIp: 5, windowMs: 60_000 };
 const LOGIN_LIMIT = { perIp: 10, windowMs: 60_000 };
 
 export function playerRoutes(sql: SQL, signer: Signer) {
-	const app = new Hono<{ Variables: PlayerVariables }>();
+	const app = new Hono<AppEnv>();
 	const auth = playerAuth(sql);
 
 	/** New guest player. The secret is returned only here. */
@@ -76,8 +77,7 @@ export function playerRoutes(sql: SQL, signer: Signer) {
 	});
 
 	app.post("/players/logout", auth, async (c) => {
-		const secret = bearer(c.req.header("authorization"))!;
-		await players.logout(sql, c.get("player"), secret);
+		await players.logout(sql, c.get("player"), c.get("playerSecret"));
 
 		return ok(c, { signedOut: true });
 	});

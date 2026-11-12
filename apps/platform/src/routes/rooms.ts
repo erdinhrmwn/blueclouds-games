@@ -1,8 +1,9 @@
 import type { SQL } from "bun";
 import { Hono } from "hono";
+import type { AppEnv } from "../app";
 import { z } from "zod";
 import { ok, parse, readJson } from "../lib/http";
-import { playerAuth, type PlayerVariables, serverAuth } from "../middleware/auth";
+import { playerAuth, serverAuth } from "../middleware/auth";
 import { rateLimit } from "../middleware/rate-limit";
 import * as rooms from "../services/rooms";
 
@@ -27,7 +28,7 @@ const Redeem = z.object({
 const CloseBody = z.object({ reason: z.literal("not_enough_players") });
 
 export function roomRoutes(sql: SQL, serverKey: string) {
-	const app = new Hono<{ Variables: PlayerVariables }>();
+	const app = new Hono<AppEnv>();
 	const auth = playerAuth(sql);
 	const server = serverAuth(serverKey);
 

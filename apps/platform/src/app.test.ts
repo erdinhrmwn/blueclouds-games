@@ -1,9 +1,15 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { HTTPException } from "hono/http-exception";
 import { call, setupTestApp } from "./test-helpers";
 
 let t: Awaited<ReturnType<typeof setupTestApp>>;
 beforeAll(async () => {
 	t = await setupTestApp();
+
+	// Stands in for a Hono middleware that throws, e.g. a timeout or a validator.
+	t.app.get("/v1/test/http-exception", () => {
+		throw new HTTPException(401, { message: "No entry." });
+	});
 });
 afterAll(async () => {
 	await t.sql.close();
@@ -33,6 +39,16 @@ describe("envelope", () => {
 		});
 		expect(res.status).toBe(413);
 		expect(res.json.error.code).toBe("payload_too_large");
+	});
+
+	test("an HTTPException from Hono keeps its status inside the envelope", async () => {
+		const res = await call(t.app, "GET", "/v1/test/http-exception");
+		expect(res.status).toBe(401);
+		expect(res.json).toEqual({
+			ok: false,
+			data: null,
+			error: { code: "unauthenticated", message: "No entry." },
+		});
 	});
 
 	test("sends no CORS headers: browsers never call the platform", async () => {
