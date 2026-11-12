@@ -1,13 +1,13 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
-	import { utc } from '#lib/format.ts';
+	import { playerType, utc } from '#lib/format.ts';
 	import { REASON_MAX } from '#lib/limits.ts';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
 	const player = $derived(data.player);
 	const account = $derived.by(() => {
-		if (player.isBot) return 'Bot (run by the system)';
+		if (player.isBot) return 'Run by the system';
 		if (player.isGuest) return player.username ? `Guest @${player.username}` : 'Guest';
 		return `@${player.username}`;
 	});
@@ -30,10 +30,10 @@
 <dl class="mt-4 grid max-w-2xl grid-cols-[auto_1fr] gap-x-6 gap-y-1 text-sm">
 	<dt class="text-muted">Player id</dt>
 	<dd class="font-mono text-xs leading-5 break-all">{player.id}</dd>
+	<dt class="text-muted">Type</dt>
+	<dd>{playerType(player)}</dd>
 	<dt class="text-muted">Account</dt>
-	<dd>
-		{account}{#if player.isVip}<span class="tag ml-2">VIP</span>{/if}
-	</dd>
+	<dd>{account}</dd>
 	<dt class="text-muted">Joined</dt>
 	<dd>{utc(player.createdAt)}</dd>
 	<dt class="text-muted">Last seen</dt>

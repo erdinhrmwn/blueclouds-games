@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { utc } from '#lib/format.ts';
+	import { playerType, utc } from '#lib/format.ts';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -40,6 +40,7 @@
 			<thead class="border-b border-line text-muted">
 				<tr>
 					<th class="px-3 py-2 font-medium">Name</th>
+					<th class="px-3 py-2 font-medium">Type</th>
 					<th class="px-3 py-2 font-medium">Account</th>
 					<th class="px-3 py-2 font-medium">Player id</th>
 					<th class="px-3 py-2 font-medium">Joined</th>
@@ -56,10 +57,9 @@
 								href="/players/{p.id}">{p.name}</a
 							></td
 						>
+						<td class="px-3 py-2">{playerType(p)}</td>
 						<td class="px-3 py-2">
-							{p.isBot ? 'Bot' : p.isGuest ? 'Guest' : `@${p.username}`}{#if p.isVip}<span
-									class="tag ml-2">VIP</span
-								>{/if}
+							{p.isBot ? 'System' : p.isGuest ? 'Guest' : `@${p.username}`}
 						</td>
 						<td class="px-3 py-2 font-mono text-xs text-muted">{p.id}</td>
 						<td class="px-3 py-2 whitespace-nowrap">{utc(p.createdAt)}</td>

@@ -6,3 +6,11 @@ export function utc(date: Date | string | null): string {
 	const minutes = new Date(date).toISOString().slice(0, 16);
 	return `${minutes.replace('T', ' ')} UTC`;
 }
+
+/** A player's type: a bot is run by the system; anyone else is a VIP or a normal player. */
+export function playerType(player: { isBot: boolean; isVip: boolean }): 'Bot' | 'VIP' | 'Normal' {
+	if (player.isBot) return 'Bot';
+	if (player.isVip) return 'VIP';
+
+	return 'Normal';
+}
