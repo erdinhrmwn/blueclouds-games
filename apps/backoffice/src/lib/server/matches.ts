@@ -2,19 +2,38 @@ import type { SQL } from 'bun';
 import type { MatchLog } from '../replay.ts';
 import { isUuid, PAGE_SIZE } from './players.ts';
 
-export type MatchFilter = { game: string; player: string; from: string; to: string; before: string };
+export type MatchFilter = {
+	game: string;
+	player: string;
+	from: string;
+	to: string;
+	before: string;
+};
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
-export type MatchRow = { id: string; game: string; gameName: string; roomCode: string; endedAt: Date; players: number; winner: string | null };
+export type MatchRow = {
+	id: string;
+	game: string;
+	gameName: string;
+	roomCode: string;
+	endedAt: Date;
+	players: number;
+	winner: string | null;
+};
 
 /** Newest matches first. Empty or malformed filters are ignored; dates are UTC days, `to` inclusive. */
 export async function listMatches(sql: SQL, f: MatchFilter): Promise<MatchRow[]> {
 	const where = [sql`TRUE`];
 	if (f.game) where.push(sql`m.game_slug = ${f.game}`);
-	if (isUuid(f.player)) where.push(sql`EXISTS (SELECT 1 FROM match_players x WHERE x.match_id = m.id AND x.player_id = ${f.player})`);
+	if (isUuid(f.player))
+		where.push(
+			sql`EXISTS (SELECT 1 FROM match_players x WHERE x.match_id = m.id AND x.player_id = ${f.player})`
+		);
 	// AT TIME ZONE 'UTC': a bare ::date compares in the session's TimeZone, not UTC
-	if (DATE.test(f.from)) where.push(sql`m.ended_at >= ${f.from}::date::timestamp AT TIME ZONE 'UTC'`);
-	if (DATE.test(f.to)) where.push(sql`m.ended_at < (${f.to}::date + 1)::timestamp AT TIME ZONE 'UTC'`);
+	if (DATE.test(f.from))
+		where.push(sql`m.ended_at >= ${f.from}::date::timestamp AT TIME ZONE 'UTC'`);
+	if (DATE.test(f.to))
+		where.push(sql`m.ended_at < (${f.to}::date + 1)::timestamp AT TIME ZONE 'UTC'`);
 	if (isUuid(f.before)) where.push(sql`m.id < ${f.before}`);
 	const filter = where.reduce((a, b) => sql`${a} AND ${b}`);
 	return (await sql`
@@ -28,10 +47,20 @@ export async function listMatches(sql: SQL, f: MatchFilter): Promise<MatchRow[]>
 
 /** Every game in the catalog, for the filter. */
 export async function matchGames(sql: SQL): Promise<{ slug: string; name: string }[]> {
-	return (await sql`SELECT slug, name FROM games ORDER BY name`) as { slug: string; name: string }[];
+	return (await sql`SELECT slug, name FROM games ORDER BY name`) as {
+		slug: string;
+		name: string;
+	}[];
 }
 
-export type Seat = { seat: number; playerId: string | null; name: string | null; bot: boolean; placement: number; score: number };
+export type Seat = {
+	seat: number;
+	playerId: string | null;
+	name: string | null;
+	bot: boolean;
+	placement: number;
+	score: number;
+};
 /** Where the match was played: a tournament table, or an open table and who opened it (both null for tables older than 009). */
 export type MatchTable = {
 	tournamentId: string | null;
@@ -67,6 +96,7 @@ export async function matchDetail(sql: SQL, id: string): Promise<MatchDetail | n
 /** The match's move log, or null for a match stored before logs existed. Holds every hand: backoffice only. */
 export async function matchLog(sql: SQL, id: string): Promise<MatchLog | null> {
 	if (!isUuid(id)) return null;
-	const [row] = await sql`SELECT log_version AS "logVersion", events FROM match_logs WHERE match_id = ${id}`;
+	const [row] =
+		await sql`SELECT log_version AS "logVersion", events FROM match_logs WHERE match_id = ${id}`;
 	return (row as MatchLog | undefined) ?? null;
 }

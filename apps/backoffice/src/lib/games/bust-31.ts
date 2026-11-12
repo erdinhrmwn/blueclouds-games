@@ -16,7 +16,10 @@ function cardOf(id: string): { value: number; reverse: boolean; label: string } 
 	return { value: 0, reverse: false, label: '0' };
 }
 
-const BY: Record<string, string> = { timeout: ' (time ran out, played for them)', away: ' (away, played for them)' };
+const BY: Record<string, string> = {
+	timeout: ' (time ran out, played for them)',
+	away: ' (away, played for them)'
+};
 
 /**
  * Folds a Bust 31 log into one table state per event. The server's own numbers in the log
@@ -24,8 +27,11 @@ const BY: Record<string, string> = { timeout: ' (time ran out, played for them)'
  */
 export function replayBust31(log: MatchLog, seats: ReplaySeat[]): Step[] {
 	const order = [...seats].sort((a, b) => a.seat - b.seat).map((s) => s.seat);
-	const name = (seat: number | undefined) => seats.find((s) => s.seat === seat)?.name ?? `Seat ${(seat ?? 0) + 1}`;
-	const table = new Map<number, { lives: number; hand: string[]; away: boolean }>(order.map((s) => [s, { lives: START_LIVES, hand: [], away: false }]));
+	const name = (seat: number | undefined) =>
+		seats.find((s) => s.seat === seat)?.name ?? `Seat ${(seat ?? 0) + 1}`;
+	const table = new Map<number, { lives: number; hand: string[]; away: boolean }>(
+		order.map((s) => [s, { lives: START_LIVES, hand: [], away: false }])
+	);
 	let round = 0;
 	let total = 0;
 	let direction = 1;
@@ -61,7 +67,8 @@ export function replayBust31(log: MatchLog, seats: ReplaySeat[]): Step[] {
 		const player = event.seat === undefined ? undefined : table.get(event.seat);
 		const mismatches: string[] = [];
 		const expect = (what: string, logged: unknown, replayed: unknown) => {
-			if (logged !== replayed) mismatches.push(`${what}: logged ${String(logged)}, replay ${String(replayed)}`);
+			if (logged !== replayed)
+				mismatches.push(`${what}: logged ${String(logged)}, replay ${String(replayed)}`);
 		};
 		let text: string;
 
@@ -85,7 +92,8 @@ export function replayBust31(log: MatchLog, seats: ReplaySeat[]): Step[] {
 			case 'play':
 			case 'bust': {
 				const card = cardOf(d.card);
-				if (!player || !player.hand.includes(d.card)) mismatches.push(`${d.card} was not in ${who}'s hand`);
+				if (!player || !player.hand.includes(d.card))
+					mismatches.push(`${d.card} was not in ${who}'s hand`);
 				if (player) player.hand = player.hand.filter((c) => c !== d.card);
 				expect('Turn', event.seat, turn);
 				total = Math.max(0, total + card.value);
@@ -102,7 +110,9 @@ export function replayBust31(log: MatchLog, seats: ReplaySeat[]): Step[] {
 					if (player) player.lives = Math.max(0, player.lives - 1);
 					expect('Lives', d.lives, player?.lives);
 					turn = null;
-					const left = d.eliminated ? 'and is out' : `${player?.lives} ${player?.lives === 1 ? 'life' : 'lives'} left`;
+					const left = d.eliminated
+						? 'and is out'
+						: `${player?.lives} ${player?.lives === 1 ? 'life' : 'lives'} left`;
 					text = `${who} went over ${LIMIT} with ${card.label}. Total ${total}, ${left}.${BY[d.by] ?? ''}`;
 				}
 				break;
@@ -122,6 +132,11 @@ export function replayBust31(log: MatchLog, seats: ReplaySeat[]): Step[] {
 			default:
 				text = `${event.type} ${JSON.stringify(event.data ?? {})}`;
 		}
-		return { event, text, state: snapshot(), ...(mismatches.length ? { mismatch: mismatches.join('; ') } : {}) };
+		return {
+			event,
+			text,
+			state: snapshot(),
+			...(mismatches.length ? { mismatch: mismatches.join('; ') } : {})
+		};
 	});
 }

@@ -24,7 +24,8 @@
 	const note = (r: (typeof data.rows)[number]) => {
 		if (r.action === 'login_failed') return `as “${r.detail.username}”`;
 		if (typeof r.detail.reason === 'string') return `Reason: ${r.detail.reason}`;
-		if (r.action === 'tournament.distribute') return `${r.detail.players} players, ${r.detail.rooms} tables${r.detail.auto ? ', automatic' : ''}`;
+		if (r.action === 'tournament.distribute')
+			return `${r.detail.players} players, ${r.detail.rooms} tables${r.detail.auto ? ', automatic' : ''}`;
 		if (r.action === 'tournament.register') return `${r.detail.players} players`;
 		return r.roomCode ? `Table ${r.roomCode}` : '';
 	};
@@ -55,16 +56,28 @@
 				{#each data.rows as r (r.id)}
 					<tr class="border-b border-line last:border-0">
 						<td class="px-3 py-2 whitespace-nowrap">{utc(r.createdAt)}</td>
-						<td class="px-3 py-2">{r.admin ?? (r.action === 'tournament.distribute' ? 'Platform' : '')}</td>
-						<td class="px-3 py-2 {r.action === 'login_failed' || r.action === 'player.disable' ? 'text-danger' : ''}">{ACTIONS[r.action] ?? r.action}</td>
+						<td class="px-3 py-2"
+							>{r.admin ?? (r.action === 'tournament.distribute' ? 'Platform' : '')}</td
+						>
+						<td
+							class="px-3 py-2 {r.action === 'login_failed' || r.action === 'player.disable'
+								? 'text-danger'
+								: ''}">{ACTIONS[r.action] ?? r.action}</td
+						>
 						<td class="px-3 py-2">
 							{#if r.playerId}
-								<a class="underline decoration-line underline-offset-2 hover:decoration-ink" href="/players/{r.playerId}">{r.playerName ?? r.playerId}</a>
+								<a
+									class="underline decoration-line underline-offset-2 hover:decoration-ink"
+									href="/players/{r.playerId}">{r.playerName ?? r.playerId}</a
+								>
 							{/if}
 						</td>
 						<td class="px-3 py-2">
 							{#if r.tournamentId}
-								<a class="underline decoration-line underline-offset-2 hover:decoration-ink" href="/tournaments/{r.tournamentId}">{r.tournamentName}</a>
+								<a
+									class="underline decoration-line underline-offset-2 hover:decoration-ink"
+									href="/tournaments/{r.tournamentId}">{r.tournamentName}</a
+								>
 							{/if}
 						</td>
 						<td class="px-3 py-2">{note(r)}</td>

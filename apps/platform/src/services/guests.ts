@@ -18,7 +18,8 @@ const unused = (sql: SQL) => sql`
 
 /** On logout: a guest can never come back once its secret is gone, so an unused one is deleted right away. */
 export async function deleteGuestIfUnused(sql: SQL, playerId: string): Promise<boolean> {
-	const rows = await sql`DELETE FROM players p WHERE p.id = ${playerId} AND ${unused(sql)} RETURNING p.id`;
+	const rows =
+		await sql`DELETE FROM players p WHERE p.id = ${playerId} AND ${unused(sql)} RETURNING p.id`;
 	return rows.length > 0;
 }
 

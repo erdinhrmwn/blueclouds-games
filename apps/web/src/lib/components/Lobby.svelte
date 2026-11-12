@@ -6,7 +6,13 @@
 	import Dealer from './Dealer.svelte';
 
 	/** Any game's lobby: invites, fixed seats, bots, and the host's Play button. */
-	let { room, code, minPlayers, seats }: { room: RoomConnection<BaseView, unknown>; code: string; minPlayers: number; seats: number } = $props();
+	let {
+		room,
+		code,
+		minPlayers,
+		seats
+	}: { room: RoomConnection<BaseView, unknown>; code: string; minPlayers: number; seats: number } =
+		$props();
 	const view = $derived(room.view!);
 	const canStart = $derived(view.players.length >= minPlayers);
 	/** A tournament table has no host controls: assigned players take their own seat and it starts by itself. */
@@ -62,7 +68,13 @@
 	const makeCode = () =>
 		share(async () => {
 			const made = await createInvite(room.game, code, 'code');
-			inviteCode = { code: made.code, until: new Date(made.expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
+			inviteCode = {
+				code: made.code,
+				until: new Date(made.expiresAt).toLocaleTimeString([], {
+					hour: '2-digit',
+					minute: '2-digit'
+				})
+			};
 		});
 
 	const resetLink = () =>
@@ -101,7 +113,9 @@
 	{:else if inviteCode}
 		<div class="flex flex-col items-center gap-1 text-center">
 			<p class="label">Invite code</p>
-			<p class="rounded-md border border-brass/50 bg-black/30 px-3 py-1 font-mono text-2xl tracking-[0.2em] text-brass sm:px-4 sm:text-4xl">
+			<p
+				class="rounded-md border border-brass/50 bg-black/30 px-3 py-1 font-mono text-2xl tracking-[0.2em] text-brass sm:px-4 sm:text-4xl"
+			>
 				{inviteCode.code}
 			</p>
 			<p class="text-xs text-paper/75">Works until {inviteCode.until}</p>
@@ -114,8 +128,12 @@
 		<div class="flex flex-col items-center gap-1 text-center">
 			<p class="label">Invite friends</p>
 			<div class="flex flex-wrap justify-center">
-				<button class="link-btn" onclick={copyLink} disabled={sharing}>{copied ? 'Link copied' : 'Copy invite link'}</button>
-				<button class="link-btn" onclick={makeCode} disabled={sharing}>{inviteCode ? 'New code' : 'Get a code'}</button>
+				<button class="link-btn" onclick={copyLink} disabled={sharing}
+					>{copied ? 'Link copied' : 'Copy invite link'}</button
+				>
+				<button class="link-btn" onclick={makeCode} disabled={sharing}
+					>{inviteCode ? 'New code' : 'Get a code'}</button
+				>
 				{#if room.isHost}
 					<button class="link-btn" onclick={resetLink} disabled={sharing}>Reset link</button>
 				{/if}
@@ -123,7 +141,12 @@
 			{#if linkText}
 				<label class="w-80 max-w-full text-left">
 					<span class="label">Copy this link</span>
-					<input class="field mt-1 text-sm" readonly value={linkText} onfocus={(e) => e.currentTarget.select()} />
+					<input
+						class="field mt-1 text-sm"
+						readonly
+						value={linkText}
+						onfocus={(e) => e.currentTarget.select()}
+					/>
 				</label>
 			{/if}
 			{#if shareNote}<p class="max-w-80 text-sm text-paper/80" role="status">{shareNote}</p>{/if}
@@ -131,10 +154,14 @@
 	{/if}
 	{#if tournament}
 		{#if tournament.closed}
-			<p class="text-sm text-ember" role="status">Not enough players showed up, so this table is closed.</p>
+			<p class="text-sm text-ember" role="status">
+				Not enough players showed up, so this table is closed.
+			</p>
 		{:else if (room.startsAt ?? now) > now}
 			<p class="text-sm text-paper/75" aria-live="off">
-				Starts by itself in <span class="font-mono tabular-nums text-paper">{countdown(room.startsAt)}</span>. {view.players.length} of {tournament.seats} players here.
+				Starts by itself in <span class="font-mono tabular-nums text-paper"
+					>{countdown(room.startsAt)}</span
+				>. {view.players.length} of {tournament.seats} players here.
 			</p>
 		{:else}
 			<p class="text-sm text-paper/75" aria-live="off">
@@ -147,9 +174,13 @@
 			<button class="btn-brass" onclick={room.start} disabled={room.busy || !canStart}>Play</button>
 		</div>
 		<p class="text-sm text-paper/75">
-			{canStart ? `${view.players.length} players ready.` : `Needs at least ${minPlayers} players. Invite a friend, or press + on an empty seat to add a bot.`}
+			{canStart
+				? `${view.players.length} players ready.`
+				: `Needs at least ${minPlayers} players. Invite a friend, or press + on an empty seat to add a bot.`}
 		</p>
 	{:else}
-		<p class="text-sm text-paper/75">Waiting for {view.players.find((p) => p.id === view.hostId)?.name ?? 'the host'} to start…</p>
+		<p class="text-sm text-paper/75">
+			Waiting for {view.players.find((p) => p.id === view.hostId)?.name ?? 'the host'} to start…
+		</p>
 	{/if}
 </div>

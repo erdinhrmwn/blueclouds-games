@@ -27,7 +27,13 @@
 	<dd class="font-mono text-xs leading-5 break-all">{p.id}</dd>
 	<dt class="text-muted">Account</dt>
 	<dd>
-		{p.isBot ? 'Bot (run by the system)' : p.isGuest ? `Guest${p.username ? ` @${p.username}` : ''}` : `@${p.username}`}{#if p.isVip}<span class="ml-2 rounded border border-line px-1.5 text-xs font-medium">VIP</span>{/if}
+		{p.isBot
+			? 'Bot (run by the system)'
+			: p.isGuest
+				? `Guest${p.username ? ` @${p.username}` : ''}`
+				: `@${p.username}`}{#if p.isVip}<span
+				class="ml-2 rounded border border-line px-1.5 text-xs font-medium">VIP</span
+			>{/if}
 	</dd>
 	<dt class="text-muted">Joined</dt>
 	<dd>{utc(p.createdAt)}</dd>
@@ -46,19 +52,34 @@
 {#if form?.message}<p class="mt-4 text-sm" role="status">{form.message}</p>{/if}
 {#if form?.error}<p class="mt-4 text-sm text-danger" role="alert">{form.error}</p>{/if}
 
-<section class="mt-6 max-w-2xl rounded-lg border border-line bg-surface p-4" aria-labelledby="access">
+<section
+	class="mt-6 max-w-2xl rounded-lg border border-line bg-surface p-4"
+	aria-labelledby="access"
+>
 	<h2 id="access" class="font-semibold">Access</h2>
 	{#if p.disabledAt}
-		<p class="mt-1 text-sm text-muted">Enabling lets them play again. Their old browser session stays signed out.</p>
+		<p class="mt-1 text-sm text-muted">
+			Enabling lets them play again. Their old browser session stays signed out.
+		</p>
 		<form method="POST" action="?/enable" class="mt-3" use:enhance={submit}>
 			<button class="btn-primary" disabled={busy}>Enable player</button>
 		</form>
 	{:else}
-		<p class="mt-1 text-sm text-muted">Disabling signs them out everywhere and stops them joining tables. The reason is kept in the audit log.</p>
+		<p class="mt-1 text-sm text-muted">
+			Disabling signs them out everywhere and stops them joining tables. The reason is kept in the
+			audit log.
+		</p>
 		<form method="POST" action="?/disable" class="mt-3 space-y-3" use:enhance={submit}>
 			<div>
 				<label class="label" for="reason">Reason</label>
-				<input class="field" id="reason" name="reason" value={form?.reason ?? ''} maxlength={REASON_MAX} required />
+				<input
+					class="field"
+					id="reason"
+					name="reason"
+					value={form?.reason ?? ''}
+					maxlength={REASON_MAX}
+					required
+				/>
 			</div>
 			<button class="btn-danger" disabled={busy}>Disable player</button>
 		</form>
@@ -67,16 +88,25 @@
 
 <section class="mt-6 max-w-2xl rounded-lg border border-line bg-surface p-4" aria-labelledby="vip">
 	<h2 id="vip" class="font-semibold">VIP</h2>
-	<p class="mt-1 text-sm text-muted">{p.isVip ? 'This player is a VIP.' : 'Mark a player as VIP. The change is kept in the audit log.'}</p>
+	<p class="mt-1 text-sm text-muted">
+		{p.isVip
+			? 'This player is a VIP.'
+			: 'Mark a player as VIP. The change is kept in the audit log.'}
+	</p>
 	<form method="POST" action="?/vip" class="mt-3" use:enhance={submit}>
 		<input type="hidden" name="vip" value={p.isVip ? 'false' : 'true'} />
-		<button class={p.isVip ? 'btn-quiet' : 'btn-primary'} disabled={busy}>{p.isVip ? 'Take VIP away' : 'Make VIP'}</button>
+		<button class={p.isVip ? 'btn-quiet' : 'btn-primary'} disabled={busy}
+			>{p.isVip ? 'Take VIP away' : 'Make VIP'}</button
+		>
 	</form>
 </section>
 
 <div class="mt-8 flex items-baseline justify-between gap-4">
 	<h2 class="font-semibold">Recent matches</h2>
-	{#if data.matches.length}<a class="text-sm underline underline-offset-2" href="/matches?player={p.id}">All their matches</a>{/if}
+	{#if data.matches.length}<a
+			class="text-sm underline underline-offset-2"
+			href="/matches?player={p.id}">All their matches</a
+		>{/if}
 </div>
 {#if data.matches.length === 0}
 	<p class="mt-2 text-sm text-muted">No finished matches yet.</p>
@@ -95,7 +125,10 @@
 				{#each data.matches as m (m.id)}
 					<tr class="border-b border-line last:border-0">
 						<td class="px-3 py-2 whitespace-nowrap">
-							<a class="underline decoration-line underline-offset-2 hover:decoration-ink" href="/matches/{m.id}">{utc(m.endedAt)}</a>
+							<a
+								class="underline decoration-line underline-offset-2 hover:decoration-ink"
+								href="/matches/{m.id}">{utc(m.endedAt)}</a
+							>
 						</td>
 						<td class="px-3 py-2">{m.gameName}</td>
 						<td class="px-3 py-2 font-mono text-xs">{m.roomCode}</td>

@@ -12,11 +12,16 @@ beforeAll(async () => {
 afterAll(() => sql.close());
 
 const failures = async (username: string) =>
-	(await sql`SELECT count(*)::int AS n FROM admin_audit_events WHERE action = 'login_failed' AND detail->>'username' = ${username}`)[0].n;
+	(
+		await sql`SELECT count(*)::int AS n FROM admin_audit_events WHERE action = 'login_failed' AND detail->>'username' = ${username}`
+	)[0].n;
 
 describe('admin login', () => {
 	test('a wrong password fails and writes a login_failed audit row', async () => {
-		expect(await login(sql, 'root', 'wrong password!', '10.0.0.1')).toEqual({ ok: false, reason: 'invalid' });
+		expect(await login(sql, 'root', 'wrong password!', '10.0.0.1')).toEqual({
+			ok: false,
+			reason: 'invalid'
+		});
 		expect(await failures('root')).toBe(1);
 	});
 
@@ -31,7 +36,10 @@ describe('admin login', () => {
 	test('5 failures within 15 minutes lock the username, even with the right password', async () => {
 		await createAdmin(sql, 'ops', 'another long password');
 		for (let i = 0; i < 5; i++) await login(sql, 'ops', 'nope', null);
-		expect(await login(sql, 'ops', 'another long password', null)).toEqual({ ok: false, reason: 'locked' });
+		expect(await login(sql, 'ops', 'another long password', null)).toEqual({
+			ok: false,
+			reason: 'locked'
+		});
 	});
 
 	test('an unknown username fails the same way', async () => {
@@ -43,7 +51,10 @@ describe('admin login', () => {
 		const res = await login(sql, 'temp', 'temporary password', null);
 		await sql`UPDATE admins SET disabled_at = now() WHERE id = ${id}`;
 		expect(res.ok && (await sessionAdmin(sql, res.token))).toBeNull();
-		expect(await login(sql, 'temp', 'temporary password', null)).toEqual({ ok: false, reason: 'invalid' });
+		expect(await login(sql, 'temp', 'temporary password', null)).toEqual({
+			ok: false,
+			reason: 'invalid'
+		});
 	});
 
 	test('createAdmin rejects short passwords, bad usernames and duplicates', async () => {

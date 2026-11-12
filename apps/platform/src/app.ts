@@ -25,7 +25,10 @@ export function createApp(deps: Deps) {
 	app.use(requestId());
 	app.use(secureHeaders());
 	const limit = (maxSize: number) =>
-		bodyLimit({ maxSize, onError: (c) => fail(c, new ApiError("payload_too_large", 413, "Request body is too large.")) });
+		bodyLimit({
+			maxSize,
+			onError: (c) => fail(c, new ApiError("payload_too_large", 413, "Request body is too large.")),
+		});
 	const [small, large] = [limit(MAX_BODY_BYTES), limit(MAX_MATCH_BODY_BYTES)];
 	app.use((c, next) => (c.req.path === "/v1/matches" ? large : small)(c, next));
 
@@ -43,7 +46,13 @@ export function createApp(deps: Deps) {
 	app.notFound((c) => fail(c, new ApiError("not_found", 404, "Not found.")));
 	app.onError((err, c) => {
 		if (err instanceof ApiError) return fail(c, err);
-		log.error({ msg: "unhandled error", requestId: c.get("requestId"), path: c.req.path, err: String(err), stack: err.stack });
+		log.error({
+			msg: "unhandled error",
+			requestId: c.get("requestId"),
+			path: c.req.path,
+			err: String(err),
+			stack: err.stack,
+		});
 		return fail(c, new ApiError("internal", 500, "Something went wrong. Try again later."));
 	});
 

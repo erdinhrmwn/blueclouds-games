@@ -46,8 +46,17 @@
 		box-shadow: inset 0 0 0 2px var(--color-brass);
 	}
 	@keyframes burst {
-		0% { opacity: 1; transform: translate(0, 0) rotate(0) scale(0.4); }
-		45% { opacity: 1; transform: translate(var(--x), var(--y)) rotate(calc(var(--spin) * 0.5)) scale(1); }
-		100% { opacity: 0; transform: translate(var(--x), calc(var(--y) + var(--fall))) rotate(var(--spin)) scale(1); }
+		0% {
+			opacity: 1;
+			transform: translate(0, 0) rotate(0) scale(0.4);
+		}
+		45% {
+			opacity: 1;
+			transform: translate(var(--x), var(--y)) rotate(calc(var(--spin) * 0.5)) scale(1);
+		}
+		100% {
+			opacity: 0;
+			transform: translate(var(--x), calc(var(--y) + var(--fall))) rotate(var(--spin)) scale(1);
+		}
 	}
 </style>

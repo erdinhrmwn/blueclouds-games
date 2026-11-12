@@ -7,8 +7,15 @@ export const RULES_VERSION = 1;
 export const LOG_VERSION = 1;
 
 /** The result of a finished match: placed by points (fewest first), and each seat's points as its score. */
-export function buildReport(match: MatchState, game: Game, roomCode: string, endedAt: string, events: LogEvent[]): MatchReport {
-	if (game.phase !== "finished" || !game.winnerId) throw new Error("buildReport needs a finished game");
+export function buildReport(
+	match: MatchState,
+	game: Game,
+	roomCode: string,
+	endedAt: string,
+	events: LogEvent[],
+): MatchReport {
+	if (game.phase !== "finished" || !game.winnerId)
+		throw new Error("buildReport needs a finished game");
 	const place = placements(game);
 	return {
 		matchId: match.id,
@@ -39,7 +46,8 @@ export function logEvents(before: Game, after: Game, auto = false): LogEntry[] {
 	if (before.phase === "playing") {
 		for (const p of after.players) {
 			const was = before.players.find((b) => b.id === p.id);
-			if (was && !!was.away !== !!p.away) entries.push({ type: p.away ? "away" : "back", seat: p.seat });
+			if (was && !!was.away !== !!p.away)
+				entries.push({ type: p.away ? "away" : "back", seat: p.seat });
 		}
 	}
 	if (after.moves === before.moves || after.phase === "lobby") return entries;
@@ -47,11 +55,23 @@ export function logEvents(before: Game, after: Game, auto = false): LogEntry[] {
 	const ev = after.lastEvent;
 	const seatOf = (id: string) => after.players.find((p) => p.id === id)!.seat;
 	const mover = before.phase === "playing" ? before.players[before.turn] : undefined;
-	const by = !mover ? "player" : mover.bot ? "bot" : !auto ? "player" : mover.away ? "away" : "timeout";
+	const by = !mover
+		? "player"
+		: mover.bot
+			? "bot"
+			: !auto
+				? "player"
+				: mover.away
+					? "away"
+					: "timeout";
 
 	if (mover && (ev?.type === "played" || ev?.type === "roundEnd")) {
 		const card = ev.card;
-		const data: Record<string, unknown> = { card: card.id, left: ev.type === "roundEnd" ? 0 : after.players[before.turn]!.hand.length, by };
+		const data: Record<string, unknown> = {
+			card: card.id,
+			left: ev.type === "roundEnd" ? 0 : after.players[before.turn]!.hand.length,
+			by,
+		};
 		if (card.kind === "rainbow" && ev.type === "played") data.suit = after.suit;
 		if (ev.type === "played" && ev.gaveTo) {
 			const receiver = after.players.find((p) => p.id === ev.gaveTo)!;
@@ -61,10 +81,15 @@ export function logEvents(before: Game, after: Game, auto = false): LogEntry[] {
 		entries.push({ type: "play", seat: mover.seat, data });
 	}
 	if (mover && ev?.type === "drew") {
-		if (before.deck.length === 0 && before.discard.length > 1) entries.push({ type: "reshuffle", data: { deck: [...(after.drawnId ? [after.drawnId] : []), ...ids(after.deck)] } });
+		if (before.deck.length === 0 && before.discard.length > 1)
+			entries.push({
+				type: "reshuffle",
+				data: { deck: [...(after.drawnId ? [after.drawnId] : []), ...ids(after.deck)] },
+			});
 		entries.push({ type: "draw", seat: mover.seat, data: { card: after.drawnId, by } });
 	}
-	if (mover && ev?.type === "passed") entries.push({ type: "pass", seat: mover.seat, data: { by } });
+	if (mover && ev?.type === "passed")
+		entries.push({ type: "pass", seat: mover.seat, data: { by } });
 
 	if (ev?.type === "roundEnd") {
 		const left = Object.fromEntries(Object.entries(ev.gained).map(([id, n]) => [seatOf(id), n]));
@@ -74,7 +99,16 @@ export function logEvents(before: Game, after: Game, auto = false): LogEntry[] {
 	if (after.phase === "playing" && (ev?.type === "dealt" || ev?.type === "roundEnd")) {
 		const hands = Object.fromEntries(after.players.map((p) => [p.seat, ids(p.hand)]));
 		const start = after.discard[0]!.id;
-		entries.push({ type: "deal", data: { round: after.round, starter: after.players[after.turn]!.seat, start, hands, deck: ids(after.deck) } });
+		entries.push({
+			type: "deal",
+			data: {
+				round: after.round,
+				starter: after.players[after.turn]!.seat,
+				start,
+				hands,
+				deck: ids(after.deck),
+			},
+		});
 	}
 	if (after.phase === "finished") {
 		const points = Object.fromEntries(after.players.map((p) => [p.seat, p.points]));

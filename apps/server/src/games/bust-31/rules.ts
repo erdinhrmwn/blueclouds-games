@@ -32,7 +32,14 @@ export type GameEvent =
 	| { type: "joined"; playerId: string }
 	| { type: "started" }
 	| { type: "played"; playerId: string; card: Card; total: number; auto?: boolean }
-	| { type: "bust"; playerId: string; card: Card; total: number; eliminated: boolean; auto?: boolean }
+	| {
+			type: "bust";
+			playerId: string;
+			card: Card;
+			total: number;
+			eliminated: boolean;
+			auto?: boolean;
+	  }
 	| { type: "finished"; winnerId: string };
 
 export type Game = {
@@ -83,14 +90,19 @@ export function buildDeck(): Card[] {
 /** Sits a new player in `seat`, or in the first free one when no seat is given. */
 export function addPlayer(game: Game, id: string, name: string, bot = false, seat?: number): Game {
 	if (game.players.some((p) => p.id === id)) return game;
-	const seated = seatPlayer<Game, Player>(game, { id, name, lives: START_LIVES, hand: [], bot }, seat);
+	const seated = seatPlayer<Game, Player>(
+		game,
+		{ id, name, lives: START_LIVES, hand: [], bot },
+		seat,
+	);
 	return { ...seated, lastEvent: { type: "joined", playerId: id } };
 }
 
 export function startGame(game: Game, byId: string, rng: Rng): Game {
 	if (game.hostId !== byId) throw new RuleError("Only the host can start the game.");
 	if (game.phase === "playing") throw new RuleError("The game is already running.");
-	if (game.players.length < MIN_PLAYERS) throw new RuleError(`Needs at least ${MIN_PLAYERS} players.`);
+	if (game.players.length < MIN_PLAYERS)
+		throw new RuleError(`Needs at least ${MIN_PLAYERS} players.`);
 	const players = game.players.map((p) => ({ ...p, lives: START_LIVES, hand: [] }));
 	const dealt = dealRound({ ...game, players, round: 0, winnerId: null }, 0, rng);
 	return { ...dealt, phase: "playing", lastEvent: { type: "started" }, moves: game.moves + 1 };
@@ -124,7 +136,11 @@ export function playCard(game: Game, playerId: string, cardId: string, rng: Rng)
 		}
 		// Loser starts the next round; if they are out, the next alive seat does.
 		const starter = lives > 0 ? game.turn : nextAlive(players, game.turn, game.direction);
-		return { ...dealRound({ ...game, players }, starter, rng), lastEvent: bust, moves: game.moves + 1 };
+		return {
+			...dealRound({ ...game, players }, starter, rng),
+			lastEvent: bust,
+			moves: game.moves + 1,
+		};
 	}
 
 	let { deck, discard } = game;
@@ -135,7 +151,9 @@ export function playCard(game: Game, playerId: string, cardId: string, rng: Rng)
 		discard = [card];
 	}
 	const [drawn, ...rest] = deck;
-	const players = game.players.map((p) => (p.id === playerId ? { ...p, hand: drawn ? [...hand, drawn] : hand } : p));
+	const players = game.players.map((p) =>
+		p.id === playerId ? { ...p, hand: drawn ? [...hand, drawn] : hand } : p,
+	);
 	const direction = card.kind === "reverse" ? (-game.direction as 1 | -1) : game.direction;
 
 	return {
@@ -160,7 +178,9 @@ export function resetToLobby(game: Game, byId: string): Game {
 		moves: game.moves,
 		hostId: game.hostId,
 		// Players who walked away mid-game don't come back to the lobby.
-		players: game.players.filter((p) => !p.away).map((p) => ({ ...p, lives: START_LIVES, hand: [] })),
+		players: game.players
+			.filter((p) => !p.away)
+			.map((p) => ({ ...p, lives: START_LIVES, hand: [] })),
 	};
 }
 
@@ -172,10 +192,20 @@ function dealRound(game: Game, starter: number, rng: Rng): Game {
 		deck = deck.slice(HAND_SIZE);
 		return { ...p, hand };
 	});
-	return { ...game, players, deck, discard: [], total: 0, direction: 1, turn: starter, round: game.round + 1 };
+	return {
+		...game,
+		players,
+		deck,
+		discard: [],
+		total: 0,
+		direction: 1,
+		turn: starter,
+		round: game.round + 1,
+	};
 }
 
-const nextAlive = (players: Player[], from: number, direction: 1 | -1) => nextIndex(players, from, direction, (p) => p.lives > 0);
+const nextAlive = (players: Player[], from: number, direction: 1 | -1) =>
+	nextIndex(players, from, direction, (p) => p.lives > 0);
 
 /**
  * What every player may see: no hands, no deck order.
@@ -185,7 +215,14 @@ export function publicView(game: Game, turn: { left: number; total: number } | n
 	return {
 		phase: game.phase,
 		hostId: game.hostId,
-		players: game.players.map((p) => ({ id: p.id, name: p.name, lives: p.lives, bot: p.bot, seat: p.seat, away: !!p.away })),
+		players: game.players.map((p) => ({
+			id: p.id,
+			name: p.name,
+			lives: p.lives,
+			bot: p.bot,
+			seat: p.seat,
+			away: !!p.away,
+		})),
 		deckCount: game.deck.length,
 		topCard: game.discard.at(-1) ?? null,
 		/** Up to three cards played before the top one, oldest first. */
@@ -212,7 +249,12 @@ export function dealPauseMs(game: Game): number {
 	const e = game.lastEvent;
 	if (game.phase !== "playing" || (e?.type !== "started" && e?.type !== "bust")) return 0;
 	const alive = game.players.filter((p) => p.lives > 0).length;
-	return (e.type === "bust" ? DEAL.afterBustMs : 0) + alive * HAND_SIZE * DEAL.stepMs + DEAL.flightMs + 100;
+	return (
+		(e.type === "bust" ? DEAL.afterBustMs : 0) +
+		alive * HAND_SIZE * DEAL.stepMs +
+		DEAL.flightMs +
+		100
+	);
 }
 
 export function handOf(game: Game, playerId: string): Card[] {

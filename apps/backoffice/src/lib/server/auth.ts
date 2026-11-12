@@ -53,9 +53,15 @@ export async function audit(
 		        ${entry.detail ?? {}}, ${entry.ip}::inet)`;
 }
 
-export type LoginResult = { ok: true; token: string; admin: Admin } | { ok: false; reason: 'invalid' | 'locked' };
+export type LoginResult =
+	{ ok: true; token: string; admin: Admin } | { ok: false; reason: 'invalid' | 'locked' };
 
-export async function login(sql: SQL, username: string, password: string, ip: string | null): Promise<LoginResult> {
+export async function login(
+	sql: SQL,
+	username: string,
+	password: string,
+	ip: string | null
+): Promise<LoginResult> {
 	const name = username.trim().toLowerCase();
 	const [{ failures }] = await sql`
 		SELECT count(*)::int AS failures FROM admin_audit_events
@@ -63,11 +69,17 @@ export async function login(sql: SQL, username: string, password: string, ip: st
 		  AND created_at > now() - make_interval(mins => ${LOCKOUT.minutes})`;
 	if (failures >= LOCKOUT.tries) return { ok: false, reason: 'locked' };
 
-	const [row] = await sql`SELECT id, username, password_hash FROM admins WHERE username = ${name} AND disabled_at IS NULL`;
+	const [row] =
+		await sql`SELECT id, username, password_hash FROM admins WHERE username = ${name} AND disabled_at IS NULL`;
 	dummyHash ??= Bun.password.hash('not-a-real-password');
 	const valid = await Bun.password.verify(password, row?.password_hash ?? (await dummyHash));
 	if (!row || !valid) {
-		await audit(sql, { adminId: row?.id ?? null, action: 'login_failed', detail: { username: name }, ip });
+		await audit(sql, {
+			adminId: row?.id ?? null,
+			action: 'login_failed',
+			detail: { username: name },
+			ip
+		});
 		return { ok: false, reason: 'invalid' };
 	}
 
@@ -91,7 +103,12 @@ export async function sessionAdmin(sql: SQL, token: string | undefined): Promise
 	return row ? { id: row.id, username: row.username } : null;
 }
 
-export async function logout(sql: SQL, token: string, admin: Admin, ip: string | null): Promise<void> {
+export async function logout(
+	sql: SQL,
+	token: string,
+	admin: Admin,
+	ip: string | null
+): Promise<void> {
 	await sql.begin(async (tx) => {
 		await tx`DELETE FROM admin_sessions WHERE token_hash = ${sha256(token)}`;
 		await audit(tx, { adminId: admin.id, action: 'logout', ip });
@@ -100,10 +117,13 @@ export async function logout(sql: SQL, token: string, admin: Admin, ip: string |
 
 /** Used by the admin:create script. Returns the new admin's id. */
 export async function createAdmin(sql: SQL, username: string, password: string): Promise<string> {
-	if (!USERNAME.test(username)) throw new Error('Username must be 3-32 characters: a-z, 0-9, _ . -');
-	if (password.length < PASSWORD_MIN) throw new Error(`Password must be at least ${PASSWORD_MIN} characters.`);
+	if (!USERNAME.test(username))
+		throw new Error('Username must be 3-32 characters: a-z, 0-9, _ . -');
+	if (password.length < PASSWORD_MIN)
+		throw new Error(`Password must be at least ${PASSWORD_MIN} characters.`);
 	const hash = await Bun.password.hash(password); // argon2id
-	const [row] = await sql`INSERT INTO admins (username, password_hash) VALUES (${username}, ${hash}) ON CONFLICT (username) DO NOTHING RETURNING id`;
+	const [row] =
+		await sql`INSERT INTO admins (username, password_hash) VALUES (${username}, ${hash}) ON CONFLICT (username) DO NOTHING RETURNING id`;
 	if (!row) throw new Error(`Admin "${username}" already exists.`);
 	return row.id;
 }

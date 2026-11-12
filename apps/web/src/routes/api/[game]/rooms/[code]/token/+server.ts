@@ -8,10 +8,16 @@ import type { RequestHandler } from './$types';
 export const POST: RequestHandler = async (event) => {
 	const { params } = event;
 	if (!hasRooms(params.game)) {
-		return json({ error: { code: 'not_found', message: 'There is no such game.' } }, { status: 404 });
+		return json(
+			{ error: { code: 'not_found', message: 'There is no such game.' } },
+			{ status: 404 }
+		);
 	}
 	if (!isRoomCode(params.code)) {
-		return json({ error: { code: 'bad_input', message: 'A table code is 4–8 letters or digits.' } }, { status: 400 });
+		return json(
+			{ error: { code: 'bad_input', message: 'A table code is 4–8 letters or digits.' } },
+			{ status: 400 }
+		);
 	}
 	try {
 		await roomFor(event, params.game, params.code);
@@ -19,9 +25,16 @@ export const POST: RequestHandler = async (event) => {
 		return failure(e);
 	}
 	try {
-		return json(await issueRoomToken(params.game, params.code), { headers: { 'Cache-Control': 'no-store' } });
+		return json(await issueRoomToken(params.game, params.code), {
+			headers: { 'Cache-Control': 'no-store' }
+		});
 	} catch (err) {
 		console.error('room token failed', String(err));
-		return json({ error: { code: 'unavailable', message: 'The game server is busy. Try again in a moment.' } }, { status: 503 });
+		return json(
+			{
+				error: { code: 'unavailable', message: 'The game server is busy. Try again in a moment.' }
+			},
+			{ status: 503 }
+		);
 	}
 };

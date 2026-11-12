@@ -26,9 +26,13 @@
 
 	const WORD = { calm: 'Calm', swirl: 'Swirl', gust: 'Gust' } as const;
 
-	const corner = $derived(card.kind === 'number' ? String(card.value) : card.kind === 'rainbow' ? '' : WORD[card.kind][0]);
+	const corner = $derived(
+		card.kind === 'number' ? String(card.value) : card.kind === 'rainbow' ? '' : WORD[card.kind][0]
+	);
 	const spoken = $derived(
-		card.kind === 'rainbow' ? 'Rainbow' : `${SUIT_NAME[card.suit!]} ${card.kind === 'number' ? card.value : WORD[card.kind]}`
+		card.kind === 'rainbow'
+			? 'Rainbow'
+			: `${SUIT_NAME[card.suit!]} ${card.kind === 'number' ? card.value : WORD[card.kind]}`
 	);
 </script>
 
@@ -46,13 +50,24 @@
 			<span class="num font-display leading-none font-black">{card.value}</span>
 			<SuitGlyph suit={card.suit!} class="glyph" />
 		{:else}
-			<svg viewBox="0 0 24 24" class="glyph-lg" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+			<svg
+				viewBox="0 0 24 24"
+				class="glyph-lg"
+				fill="none"
+				stroke="currentColor"
+				stroke-width="2.2"
+				stroke-linecap="round"
+				stroke-linejoin="round"
+				aria-hidden="true"
+			>
 				{#if card.kind === 'calm'}
 					<path d="M5 10h14M5 14h14" />
 				{:else if card.kind === 'swirl'}
 					<path d="M4 9h13l-3-3M20 15H7l3 3" />
 				{:else}
-					<rect x="3.5" y="6" width="9" height="12" rx="1.5" /><path d="M15 12h6m-2.5-2.5L21 12l-2.5 2.5" />
+					<rect x="3.5" y="6" width="9" height="12" rx="1.5" /><path
+						d="M15 12h6m-2.5-2.5L21 12l-2.5 2.5"
+					/>
 				{/if}
 			</svg>
 			<span class="word text-[11px] font-semibold">{WORD[card.kind]}</span>
@@ -77,7 +92,11 @@
 		{@render face()}
 	</button>
 {:else}
-	<div class="card {size} {card.suit ? SUIT_TEXT[card.suit] : ''}" role="img" aria-label="Card, {spoken}">
+	<div
+		class="card {size} {card.suit ? SUIT_TEXT[card.suit] : ''}"
+		role="img"
+		aria-label="Card, {spoken}"
+	>
 		{@render face()}
 	</div>
 {/if}

@@ -30,7 +30,12 @@
 	let dealtMoves: number | null = null;
 	$effect(() => {
 		const e = view.lastEvent;
-		if (view.phase !== 'playing' || (e?.type !== 'started' && e?.type !== 'bust') || dealtMoves === view.moves) return;
+		if (
+			view.phase !== 'playing' ||
+			(e?.type !== 'started' && e?.type !== 'bust') ||
+			dealtMoves === view.moves
+		)
+			return;
 		dealtMoves = view.moves;
 		if (prefersReducedMotion.current) return;
 		const seats = view.players.filter((p) => p.lives > 0).map((p) => p.id);
@@ -38,12 +43,19 @@
 		dealing = true;
 		// Timers are not cleared on re-run: every server update re-runs this effect, and the deal must finish.
 		setTimeout(() => {
-			dealCards(document.querySelector('[data-deck]')?.getBoundingClientRect() ?? null, seats.map(seatRect), {
-				passes: HAND_SIZE,
-				...DEAL
-			});
+			dealCards(
+				document.querySelector('[data-deck]')?.getBoundingClientRect() ?? null,
+				seats.map(seatRect),
+				{
+					passes: HAND_SIZE,
+					...DEAL
+				}
+			);
 		}, wait);
-		setTimeout(() => (dealing = false), wait + seats.length * HAND_SIZE * DEAL.stepMs + DEAL.flightMs);
+		setTimeout(
+			() => (dealing = false),
+			wait + seats.length * HAND_SIZE * DEAL.stepMs + DEAL.flightMs
+		);
 	});
 	// Whoever played the card now on the pile; the new card flies in from their seat.
 	const lastPlayer = $derived(view.lastEvent?.type === 'played' ? view.lastEvent.playerId : null);
@@ -56,7 +68,13 @@
 	function play(cardId: string) {
 		const el = document.querySelector(`[data-card="${CSS.escape(cardId)}"]`);
 		const i = room.hand.findIndex((c) => c.id === cardId);
-		if (el) placing = { id: cardId, rect: el.getBoundingClientRect(), tilt: fanAngle(i, room.hand.length), hand: room.hand };
+		if (el)
+			placing = {
+				id: cardId,
+				rect: el.getBoundingClientRect(),
+				tilt: fanAngle(i, room.hand.length),
+				hand: room.hand
+			};
 		room.play(cardId).then(() => {
 			if (room.error) placing = null; // rejected: show the card again
 		});
@@ -65,7 +83,8 @@
 	$effect(() => {
 		if (placing && room.hand !== placing.hand) placing = null;
 	});
-	const flightFrom = (cardId: string) => (placing?.id === cardId ? placing.rect : seatRect(lastPlayer));
+	const flightFrom = (cardId: string) =>
+		placing?.id === cardId ? placing.rect : seatRect(lastPlayer);
 	const flightTilt = (cardId: string) => (placing?.id === cardId ? placing.tilt : -25);
 
 	// Cards played earlier stay visible under the top one, each at its own slight angle.
@@ -75,11 +94,23 @@
 
 	// A bust clears the pile (new round), so the busting card is shown on its own for a moment.
 	let tableEl = $state<HTMLElement>();
-	let bust = $state<{ moves: number; card: Card; total: number; playerId: string; eliminated: boolean } | null>(null);
+	let bust = $state<{
+		moves: number;
+		card: Card;
+		total: number;
+		playerId: string;
+		eliminated: boolean;
+	} | null>(null);
 	$effect(() => {
 		const e = view.lastEvent;
 		if (e?.type !== 'bust' || untrack(() => bust?.moves) === view.moves) return;
-		bust = { moves: view.moves, card: e.card, total: e.total, playerId: e.playerId, eliminated: e.eliminated };
+		bust = {
+			moves: view.moves,
+			card: e.card,
+			total: e.total,
+			playerId: e.playerId,
+			eliminated: e.eliminated
+		};
 		shake(tableEl);
 		const moves = view.moves;
 		const id = setTimeout(() => {
@@ -99,7 +130,11 @@
 	const msLeft = $derived(room.turnEndsAt === null ? null : Math.max(0, room.turnEndsAt - now));
 	const secondsLeft = $derived(msLeft === null ? null : Math.ceil(msLeft / 1000));
 	// Snapshot taken once per deadline; the bar and ring animate down from it every frame.
-	const drain = $derived(room.turnEndsAt === null ? null : { ms: Math.max(0, room.turnEndsAt - Date.now()), total: room.turnTotal });
+	const drain = $derived(
+		room.turnEndsAt === null
+			? null
+			: { ms: Math.max(0, room.turnEndsAt - Date.now()), total: room.turnTotal }
+	);
 
 	const nameOf = (id: string | null) => view.players.find((p) => p.id === id)?.name ?? '?';
 
@@ -121,7 +156,8 @@
 	});
 
 	const fanAngle = (i: number, n: number) => (i - (n - 1) / 2) * 7;
-	const fan = (i: number, n: number) => `transform: rotate(${fanAngle(i, n)}deg) translateY(${Math.abs(i - (n - 1) / 2) * 6}px)`;
+	const fan = (i: number, n: number) =>
+		`transform: rotate(${fanAngle(i, n)}deg) translateY(${Math.abs(i - (n - 1) / 2) * 6}px)`;
 </script>
 
 <!-- clip sideways only, so cards flying in mid-animation never add a horizontal scrollbar on phones -->
@@ -133,9 +169,17 @@
 			{:else}
 				{@const p = inSeat(k - 1)}
 				{#snippet lives()}
-					<span class="flex items-center gap-1" role="img" aria-label="{p?.lives} of {START_LIVES} lives">
+					<span
+						class="flex items-center gap-1"
+						role="img"
+						aria-label="{p?.lives} of {START_LIVES} lives"
+					>
 						{#each Array(START_LIVES) as _, i (i)}
-							<span class="size-2 rounded-full {i < (p?.lives ?? 0) ? 'bg-ember' : 'border border-paper/60'}"></span>
+							<span
+								class="size-2 rounded-full {i < (p?.lives ?? 0)
+									? 'bg-ember'
+									: 'border border-paper/60'}"
+							></span>
 						{/each}
 					</span>
 				{/snippet}
@@ -147,7 +191,9 @@
 					isMe={!!p && p.id === room.playerId}
 					out={!!p && p.lives === 0}
 					status={p ? lives : undefined}
-					timeLeft={p && p.id === view.turnPlayerId && msLeft !== null ? Math.min(1, msLeft / room.turnTotal) : null}
+					timeLeft={p && p.id === view.turnPlayerId && msLeft !== null
+						? Math.min(1, msLeft / room.turnTotal)
+						: null}
 					drain={p && p.id === view.turnPlayerId ? drain : null}
 				/>
 			{/if}
@@ -156,7 +202,10 @@
 		{#if view.phase === 'finished'}
 			<WinCascade />
 			<div class="relative flex flex-col items-center gap-3 text-center">
-				<p class="label" in:fly={{ y: 10, duration: prefersReducedMotion.current ? 0 : 300, delay: 200 }}>
+				<p
+					class="label"
+					in:fly={{ y: 10, duration: prefersReducedMotion.current ? 0 : 300, delay: 200 }}
+				>
 					{iWon ? 'You win' : room.me ? 'You lost this one' : 'Winner'}
 				</p>
 				<p
@@ -168,7 +217,9 @@
 				{#if view.tournament}
 					<p class="text-sm text-paper/75">This {view.tournament.name} table is done.</p>
 				{:else if room.isHost}
-					<button class="btn-brass mt-2" onclick={room.reset} disabled={room.busy}>Shuffle &amp; play again</button>
+					<button class="btn-brass mt-2" onclick={room.reset} disabled={room.busy}
+						>Shuffle &amp; play again</button
+					>
 				{:else}
 					<p class="text-sm text-paper/75">Waiting for the host to open a new table…</p>
 				{/if}
@@ -177,9 +228,15 @@
 			<div class="flex flex-col items-center gap-4 sm:flex-row sm:gap-8">
 				<TotalGauge total={view.total} limit={view.limit} direction={view.direction} />
 				<div class="flex items-end gap-5">
-					<div class="grid h-20 w-14 place-items-center rounded-lg sm:h-[6.75rem] sm:w-[4.75rem] border border-dashed border-paper/40">
+					<div
+						class="grid h-20 w-14 place-items-center rounded-lg sm:h-[6.75rem] sm:w-[4.75rem] border border-dashed border-paper/40"
+					>
 						{#each under as u (u.id)}
-							<div class="col-start-1 row-start-1" style="rotate: {tiltOf(u.id)}deg" aria-hidden="true">
+							<div
+								class="col-start-1 row-start-1"
+								style="rotate: {tiltOf(u.id)}deg"
+								aria-hidden="true"
+							>
 								<PlayingCard card={u} size={pileSize} />
 							</div>
 						{/each}
@@ -188,9 +245,14 @@
 								<div
 									class="col-start-1 row-start-1"
 									data-pile-top
-									in:placeCard|global={{ from: flightFrom(view.topCard.id), tilt: flightTilt(view.topCard.id) }}
+									in:placeCard|global={{
+										from: flightFrom(view.topCard.id),
+										tilt: flightTilt(view.topCard.id)
+									}}
 								>
-									<div style="rotate: {tiltOf(view.topCard.id)}deg"><PlayingCard card={view.topCard} size={pileSize} /></div>
+									<div style="rotate: {tiltOf(view.topCard.id)}deg">
+										<PlayingCard card={view.topCard} size={pileSize} />
+									</div>
 								</div>
 							{/if}
 						{/key}
@@ -200,27 +262,42 @@
 		{/if}
 		{#if bust}
 			{#key bust.moves}
-				<BustStamp card={bust.card} total={bust.total} playerId={bust.playerId} eliminated={bust.eliminated} />
+				<BustStamp
+					card={bust.card}
+					total={bust.total}
+					playerId={bust.playerId}
+					eliminated={bust.eliminated}
+				/>
 			{/key}
 		{/if}
 	</Felt>
 </div>
 
-<p class="mx-auto mt-4 mb-4 min-h-6 max-w-md text-center font-display text-base text-paper/80 italic" aria-live="polite">
+<p
+	class="mx-auto mt-4 mb-4 min-h-6 max-w-md text-center font-display text-base text-paper/80 italic"
+	aria-live="polite"
+>
 	{dealerLine}
 </p>
 
 {#if view.phase === 'playing'}
 	{#if room.me && room.me.lives > 0}
 		<section aria-label="Your hand" class="flex flex-col items-center gap-4">
-			<p class="text-sm font-semibold {room.myTurn ? 'text-brass' : 'text-paper/75'}" aria-live="polite">
+			<p
+				class="text-sm font-semibold {room.myTurn ? 'text-brass' : 'text-paper/75'}"
+				aria-live="polite"
+			>
 				{room.myTurn ? 'Your turn. Pick a card.' : `Waiting for ${nameOf(view.turnPlayerId)}`}
 			</p>
 			<!-- The countdown itself is the ring on the seat; screen readers get one warning instead. -->
 			{#if room.myTurn && secondsLeft !== null && secondsLeft <= 5}
 				<p class="sr-only" role="alert">Time is almost up.</p>
 			{/if}
-			<div class="flex justify-center px-4 pt-2 transition-opacity duration-300 {dealing ? 'pointer-events-none opacity-0' : ''}">
+			<div
+				class="flex justify-center px-4 pt-2 transition-opacity duration-300 {dealing
+					? 'pointer-events-none opacity-0'
+					: ''}"
+			>
 				{#each room.hand as card, i (card.id)}
 					<div
 						class="-mx-1.5 sm:mx-0.5 {placing?.id === card.id ? 'invisible' : ''}"

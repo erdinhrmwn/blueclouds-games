@@ -5,13 +5,28 @@ import { hashSecret, newSecret, SECRET_PATTERN } from "../lib/secrets";
 import { deleteGuestIfUnused } from "./guests";
 
 /** A guest has a generated `guest_…` username and no password: it exists only in the browser that holds its secret. */
-export type Player = { id: string; name: string; username: string | null; guest: boolean; createdAt: string };
-export type PlayerRow = { id: string; display_name: string; username: string | null; is_guest: boolean; created_at: Date; disabled_at: Date | null };
+export type Player = {
+	id: string;
+	name: string;
+	username: string | null;
+	guest: boolean;
+	createdAt: string;
+};
+export type PlayerRow = {
+	id: string;
+	display_name: string;
+	username: string | null;
+	is_guest: boolean;
+	created_at: Date;
+	disabled_at: Date | null;
+};
 /** A player as the API returns it, with the secret when one was just made for this device. */
 type SignedIn = { player: Player; playerSecret?: string };
 
-const PLAYER_COLUMNS = (sql: SQL) => sql`p.id, p.display_name, p.username, p.is_guest, p.created_at, p.disabled_at`;
-const RETURNING = (sql: SQL) => sql`RETURNING id, display_name, username, is_guest, created_at, disabled_at`;
+const PLAYER_COLUMNS = (sql: SQL) =>
+	sql`p.id, p.display_name, p.username, p.is_guest, p.created_at, p.disabled_at`;
+const RETURNING = (sql: SQL) =>
+	sql`RETURNING id, display_name, username, is_guest, created_at, disabled_at`;
 export const toPlayer = (r: PlayerRow): Player => ({
 	id: r.id,
 	name: r.display_name,
@@ -24,7 +39,8 @@ export const toPlayer = (r: PlayerRow): Player => ({
 const LOCKOUT = { tries: 5, windowMs: 15 * 60_000 };
 /** Tries before giving up on a free guest number (6 digits: a clash is rare, a few in a row means something else). */
 const GUEST_NUMBER_TRIES = 5;
-const guestNumber = () => String(100_000 + (crypto.getRandomValues(new Uint32Array(1))[0]! % 900_000));
+const guestNumber = () =>
+	String(100_000 + (crypto.getRandomValues(new Uint32Array(1))[0]! % 900_000));
 
 /**
  * Wrong passwords per username.
@@ -37,7 +53,8 @@ function isLocked(username: string): boolean {
 }
 function noteFailure(username: string): void {
 	const now = Date.now();
-	if (failures.size > 10_000) for (const [k, f] of failures) if (f.resetAt <= now) failures.delete(k);
+	if (failures.size > 10_000)
+		for (const [k, f] of failures) if (f.resetAt <= now) failures.delete(k);
 	const f = failures.get(username);
 	if (!f || f.resetAt <= now) failures.set(username, { count: 1, resetAt: now + LOCKOUT.windowMs });
 	else f.count++;
@@ -69,7 +86,8 @@ export async function createGuest(sql: SQL, name: string | undefined): Promise<R
 		const n = guestNumber();
 		try {
 			const row = await sql.begin(async (tx) => {
-				const [p] = await tx`INSERT INTO players (display_name, username) VALUES (${name ?? `Guest ${n}`}, ${`guest_${n}`}) ${RETURNING(tx)}`;
+				const [p] =
+					await tx`INSERT INTO players (display_name, username) VALUES (${name ?? `Guest ${n}`}, ${`guest_${n}`}) ${RETURNING(tx)}`;
 				await tx`INSERT INTO player_secrets (secret_hash, player_id) VALUES (${hashSecret(secret)}, ${p.id})`;
 				return p;
 			});
@@ -91,7 +109,8 @@ export async function register(
 	input: { name: string; username: string; password: string },
 ): Promise<SignedIn> {
 	const { name, username, password } = input;
-	if (current && !current.is_guest) throw new ApiError("conflict", 409, "You already have an account. Log out first.");
+	if (current && !current.is_guest)
+		throw new ApiError("conflict", 409, "You already have an account. Log out first.");
 	const passwordHash = await Bun.password.hash(password); // argon2id
 	try {
 		if (current) {
@@ -110,14 +129,22 @@ export async function register(
 		});
 		return { player: toPlayer(row), playerSecret: secret };
 	} catch (err) {
-		if (isUniqueViolation(err)) throw new ApiError("conflict", 409, "Some fields are invalid.", { username: "That username is taken." });
+		if (isUniqueViolation(err))
+			throw new ApiError("conflict", 409, "Some fields are invalid.", {
+				username: "That username is taken.",
+			});
 		throw err;
 	}
 }
 
 /** Signs in on this device: a new secret for this browser, the player's other devices stay signed in. */
-export async function login(sql: SQL, username: string, password: string): Promise<Required<SignedIn>> {
-	if (isLocked(username)) throw new ApiError("rate_limited", 429, "Too many wrong passwords. Try again in 15 minutes.");
+export async function login(
+	sql: SQL,
+	username: string,
+	password: string,
+): Promise<Required<SignedIn>> {
+	if (isLocked(username))
+		throw new ApiError("rate_limited", 429, "Too many wrong passwords. Try again in 15 minutes.");
 	const [row] = (await sql`
 		SELECT id, display_name, username, is_guest, created_at, disabled_at, password_hash FROM players WHERE username = ${username}`) as (PlayerRow & {
 		password_hash: string | null;

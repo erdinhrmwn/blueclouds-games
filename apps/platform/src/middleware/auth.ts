@@ -26,7 +26,8 @@ export const serverAuth = (serverKey: string) => {
 	const expected = hashSecret(serverKey);
 	return createMiddleware(async (c, next) => {
 		const given = bearer(c.req.header("authorization"));
-		if (!given || !timingSafeEqual(hashSecret(given), expected)) throw new ApiError("unauthenticated", 401, "Invalid server key.");
+		if (!given || !timingSafeEqual(hashSecret(given), expected))
+			throw new ApiError("unauthenticated", 401, "Invalid server key.");
 		await next();
 	});
 };

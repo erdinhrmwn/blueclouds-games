@@ -14,7 +14,8 @@ export function rateLimit(limit: number, windowMs: number): MiddlewareHandler {
 	const windows = new Map<string, { count: number; resetAt: number }>();
 	return async (c, next) => {
 		const now = Date.now();
-		if (windows.size > SWEEP_AT) for (const [k, w] of windows) if (w.resetAt <= now) windows.delete(k);
+		if (windows.size > SWEEP_AT)
+			for (const [k, w] of windows) if (w.resetAt <= now) windows.delete(k);
 		const key = clientIp(c);
 		const w = windows.get(key);
 		if (!w || w.resetAt <= now) windows.set(key, { count: 1, resetAt: now + windowMs });

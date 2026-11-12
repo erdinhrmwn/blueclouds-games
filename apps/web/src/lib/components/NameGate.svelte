@@ -33,16 +33,29 @@
 >
 	<form onsubmit={submit} class="space-y-4">
 		<h2 id="name-title" class="font-display text-2xl font-bold">Change your name</h2>
-		<p class="text-sm text-paper/75">Other players see this name at the table. A new name shows from the next table you join.</p>
+		<p class="text-sm text-paper/75">
+			Other players see this name at the table. A new name shows from the next table you join.
+		</p>
 		<label class="block">
 			<span class="label mb-1.5 block">Your name</span>
 			<!-- svelte-ignore a11y_autofocus -->
-			<input class="field" bind:value={draft} maxlength={NAME_MAX} autocomplete="nickname" autofocus required />
+			<input
+				class="field"
+				bind:value={draft}
+				maxlength={NAME_MAX}
+				autocomplete="nickname"
+				autofocus
+				required
+			/>
 		</label>
 		{#if error}<p class="text-sm text-ember" role="alert">{error}</p>{/if}
 		<div class="flex justify-end gap-3">
-			<button type="button" class="btn-ghost" onclick={() => (player.editing = false)}>Cancel</button>
-			<button type="submit" class="btn-brass" disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
+			<button type="button" class="btn-ghost" onclick={() => (player.editing = false)}
+				>Cancel</button
+			>
+			<button type="submit" class="btn-brass" disabled={saving}
+				>{saving ? 'Saving…' : 'Save'}</button
+			>
 		</div>
 	</form>
 </dialog>

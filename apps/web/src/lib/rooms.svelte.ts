@@ -19,7 +19,9 @@ export class RoomList {
 
 	async #load() {
 		try {
-			const res = await fetch(`/api/${encodeURIComponent(this.#game)}/rooms`, { cache: 'no-store' });
+			const res = await fetch(`/api/${encodeURIComponent(this.#game)}/rooms`, {
+				cache: 'no-store'
+			});
 			if (!res.ok) throw new Error(`room list ${res.status}`);
 			this.rooms = ((await res.json()) as { rooms: RoomSummary[] }).rooms;
 			this.status = 'ready';

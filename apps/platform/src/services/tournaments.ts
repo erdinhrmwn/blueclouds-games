@@ -20,14 +20,17 @@ export class DistributeError extends Error {}
 export function planRooms<T>(players: T[], perRoom: number, minPlayers: number): T[][] {
 	const n = players.length;
 	if (n === 0) throw new DistributeError("Nobody is registered.");
-	if (perRoom < minPlayers) throw new DistributeError(`Players per table must be at least ${minPlayers}.`);
+	if (perRoom < minPlayers)
+		throw new DistributeError(`Players per table must be at least ${minPlayers}.`);
 	const rooms = Math.ceil(n / perRoom);
 	const base = Math.floor(n / rooms);
 	if (base < minPlayers) {
 		const add = rooms * minPlayers - n;
 		const remove = rooms > 1 ? n - (rooms - 1) * perRoom : 0;
 		const fix = `Add ${add} player${add === 1 ? "" : "s"}${remove ? ` or remove ${remove}` : ""}.`;
-		throw new DistributeError(`${n} player${n === 1 ? "" : "s"} can't fill every table with at least ${minPlayers}. ${fix}`);
+		throw new DistributeError(
+			`${n} player${n === 1 ? "" : "s"} can't fill every table with at least ${minPlayers}. ${fix}`,
+		);
 	}
 	const extra = n % rooms;
 	const out: T[][] = [];
@@ -55,7 +58,11 @@ export type DistributeBy = { adminId: string | null; ip?: string | null };
  * Opens the tournament's rooms and seats every registered player, inside the caller's transaction.
  * Locks the tournament row first, so two runs (job and "Distribute now") never both distribute.
  */
-export async function distributeIn(tx: SQL, tournamentId: string, by: DistributeBy): Promise<{ rooms: number; players: number }> {
+export async function distributeIn(
+	tx: SQL,
+	tournamentId: string,
+	by: DistributeBy,
+): Promise<{ rooms: number; players: number }> {
 	const [t] = await tx`
 		SELECT t.game_slug, t.players_per_room, t.distributed_at, t.cancelled_at, g.min_players
 		FROM tournaments t JOIN games g ON g.slug = t.game_slug WHERE t.id = ${tournamentId} FOR UPDATE OF t`;
@@ -67,10 +74,19 @@ export async function distributeIn(tx: SQL, tournamentId: string, by: Distribute
 		SELECT tp.player_id FROM tournament_players tp JOIN players p ON p.id = tp.player_id
 		WHERE tp.tournament_id = ${tournamentId} AND p.disabled_at IS NULL
 		  AND NOT EXISTS (SELECT 1 FROM room_assignments ra WHERE ra.tournament_id = tp.tournament_id AND ra.player_id = tp.player_id)`;
-	const plan = planRooms(shuffle(registered.map((r: { player_id: string }) => r.player_id)), t.players_per_room, t.min_players);
+	const plan = planRooms(
+		shuffle(registered.map((r: { player_id: string }) => r.player_id)),
+		t.players_per_room,
+		t.min_players,
+	);
 	for (const players of plan) {
 		const room = await insertRoom(tx, { game: t.game_slug, tournamentId, adminId: by.adminId });
-		const rows = players.map((playerId, seat) => ({ room_id: room.id, tournament_id: tournamentId, player_id: playerId, seat }));
+		const rows = players.map((playerId, seat) => ({
+			room_id: room.id,
+			tournament_id: tournamentId,
+			player_id: playerId,
+			seat,
+		}));
 		await tx`INSERT INTO room_assignments ${tx(rows)}`;
 	}
 	await tx`UPDATE tournaments SET distributed_at = now(), distribute_error = NULL WHERE id = ${tournamentId}`;
@@ -95,7 +111,12 @@ export async function endIfDone(tx: SQL, tournamentIds: string[]): Promise<void>
  * Closes a tournament room, and its tournament if it was the last open room. A finished match also
  * overrides an earlier "not enough players" (the job closed a room whose start call got lost).
  */
-export async function closeRoom(tx: SQL, roomId: string, reason: "finished" | "not_enough_players", startedAt?: string): Promise<void> {
+export async function closeRoom(
+	tx: SQL,
+	roomId: string,
+	reason: "finished" | "not_enough_players",
+	startedAt?: string,
+): Promise<void> {
 	const [room] = await tx`
 		UPDATE rooms SET closed_at = now(), close_reason = ${reason}, started_at = coalesce(started_at, ${startedAt ?? null}::timestamptz)
 		WHERE id = ${roomId} AND tournament_id IS NOT NULL
@@ -108,7 +129,9 @@ export async function closeRoom(tx: SQL, roomId: string, reason: "finished" | "n
  * One tick of the job: distributes tournaments whose registration closed, and closes rooms nobody opened.
  * SKIP LOCKED keeps overlapping runs (or several platform instances) from doing the same tournament twice.
  */
-export async function runTournamentJob(sql: SQL): Promise<{ distributed: number; failed: number; closed: number }> {
+export async function runTournamentJob(
+	sql: SQL,
+): Promise<{ distributed: number; failed: number; closed: number }> {
 	return sql.begin(async (tx) => {
 		const due = await tx`
 			SELECT id FROM tournaments
@@ -124,8 +147,11 @@ export async function runTournamentJob(sql: SQL): Promise<{ distributed: number;
 			} catch (err) {
 				failed++;
 				const known = err instanceof DistributeError;
-				if (!known) log.error({ msg: "tournament distribute failed", tournamentId: id, err: String(err) });
-				const reason = known ? err.message : "Something went wrong. The platform tries again every minute.";
+				if (!known)
+					log.error({ msg: "tournament distribute failed", tournamentId: id, err: String(err) });
+				const reason = known
+					? err.message
+					: "Something went wrong. The platform tries again every minute.";
 				await tx`UPDATE tournaments SET distribute_error = ${reason} WHERE id = ${id} AND distribute_error IS DISTINCT FROM ${reason}`;
 			}
 		}
@@ -168,16 +194,24 @@ export async function listOpen(sql: SQL, game: string, playerId: string) {
 }
 
 /** Signs the player up (or out) while registration is open. FOR SHARE waits for a distribute run on the same tournament. */
-export async function setRegistration(sql: SQL, tournamentId: string, playerId: string, join: boolean): Promise<void> {
+export async function setRegistration(
+	sql: SQL,
+	tournamentId: string,
+	playerId: string,
+	join: boolean,
+): Promise<void> {
 	await sql.begin(async (tx) => {
 		const [t] = await tx`
 			SELECT cancelled_at, distributed_at, registration_opens_at <= now() AND registration_closes_at > now() AS open
 			FROM tournaments WHERE id = ${tournamentId} FOR SHARE`;
 		if (!t) throw new ApiError("not_found", 404, "There is no such tournament.");
 		if (t.cancelled_at) throw new ApiError("conflict", 409, "This tournament was cancelled.");
-		if (!t.open || t.distributed_at) throw new ApiError("conflict", 409, "Registration for this tournament is closed.");
-		if (join) await tx`INSERT INTO tournament_players (tournament_id, player_id) VALUES (${tournamentId}, ${playerId}) ON CONFLICT DO NOTHING`;
-		else await tx`DELETE FROM tournament_players WHERE tournament_id = ${tournamentId} AND player_id = ${playerId}`;
+		if (!t.open || t.distributed_at)
+			throw new ApiError("conflict", 409, "Registration for this tournament is closed.");
+		if (join)
+			await tx`INSERT INTO tournament_players (tournament_id, player_id) VALUES (${tournamentId}, ${playerId}) ON CONFLICT DO NOTHING`;
+		else
+			await tx`DELETE FROM tournament_players WHERE tournament_id = ${tournamentId} AND player_id = ${playerId}`;
 	});
 }
 

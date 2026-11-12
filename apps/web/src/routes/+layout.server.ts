@@ -7,7 +7,13 @@ import type { LayoutServerLoad } from './$types';
 export const load: LayoutServerLoad = async (event) => {
 	const me = await whoAmI(event);
 	const { pathname, search } = event.url;
-	if (!me && pathname !== WELCOME) redirect(303, pathname === '/' && !search ? WELCOME : `${WELCOME}?next=${encodeURIComponent(pathname + search)}`);
+	if (!me && pathname !== WELCOME)
+		redirect(
+			303,
+			pathname === '/' && !search
+				? WELCOME
+				: `${WELCOME}?next=${encodeURIComponent(pathname + search)}`
+		);
 	if (me && pathname === WELCOME) redirect(303, nextPath(event.url));
 	return { me };
 };

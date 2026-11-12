@@ -28,7 +28,13 @@ export type BaseView = {
 	turn: { left: number; total: number } | null;
 	round: number;
 	/** Set at a tournament table: it starts by itself. Times are ms from when the view was sent. */
-	tournament: { name: string; startsIn: number; waitEndsIn: number; seats: number; closed: boolean } | null;
+	tournament: {
+		name: string;
+		startsIn: number;
+		waitEndsIn: number;
+		seats: number;
+		closed: boolean;
+	} | null;
 };
 
 /**
@@ -85,7 +91,9 @@ export class RoomConnection<View extends BaseView, Hand> {
 		};
 		// ponytail: the actor is picked by name, so its typed actions are lost; `Conn` lists the shared ones.
 		const handle = (client as unknown as Record<string, RoomClient['bust31Room']>)[this.actor]!;
-		const conn = (this.#conn = handle.getForId(actorId, { getParams }).connect() as unknown as Conn);
+		const conn = (this.#conn = handle
+			.getForId(actorId, { getParams })
+			.connect() as unknown as Conn);
 		this.#stop.push(
 			conn.on('view', (v: View) => this.#setView(v)),
 			conn.on('hand', (h: Hand) => (this.hand = h)),
@@ -139,7 +147,11 @@ export class RoomConnection<View extends BaseView, Hand> {
 
 	/** Calls a game-specific action, with the same busy and error handling as the shared ones. */
 	protected call(action: string, ...args: unknown[]): Promise<void> {
-		return this.#run(() => (this.#c as unknown as Record<string, (...a: unknown[]) => Promise<unknown>>)[action]!(...args));
+		return this.#run(() =>
+			(this.#c as unknown as Record<string, (...a: unknown[]) => Promise<unknown>>)[action]!(
+				...args
+			)
+		);
 	}
 
 	async #run(fn: () => Promise<unknown>): Promise<void> {

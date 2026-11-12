@@ -15,15 +15,22 @@ const STOPPERS = ["calm", "gust", "swirl"] as const;
 export function chooseBotMove(game: Game): BotMove {
 	const me = game.players[game.turn]!;
 	const top = game.discard.at(-1)!;
-	const canPlay = me.hand.filter((c) => fits(c, top, game.suit) && (!game.drew || c.id === game.drawnId));
+	const canPlay = me.hand.filter(
+		(c) => fits(c, top, game.suit) && (!game.drew || c.id === game.drawnId),
+	);
 	if (canPlay.length === 0) return game.drew ? { type: "pass" } : { type: "draw" };
 
 	const next = game.players[nextIndex(game.players, game.turn, game.direction)]!;
 	const count = suitCounts(me.hand);
-	const pick = next.hand.length <= 2 ? STOPPERS.map((k) => canPlay.find((c) => c.kind === k)).find(Boolean) : undefined;
+	const pick =
+		next.hand.length <= 2
+			? STOPPERS.map((k) => canPlay.find((c) => c.kind === k)).find(Boolean)
+			: undefined;
 	const card =
 		pick ??
-		canPlay.filter((c) => c.kind !== "rainbow").sort((a, b) => count.get(b.suit!)! - count.get(a.suit!)!)[0] ??
+		canPlay
+			.filter((c) => c.kind !== "rainbow")
+			.sort((a, b) => count.get(b.suit!)! - count.get(a.suit!)!)[0] ??
 		canPlay[0]!;
 
 	const rest = me.hand.filter((c) => c.id !== card.id);

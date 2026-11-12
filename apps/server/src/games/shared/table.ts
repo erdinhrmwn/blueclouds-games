@@ -13,7 +13,12 @@ export class RuleError extends Error {}
 export type Seated = { id: string; name: string; bot: boolean; seat: number; away?: boolean };
 
 /** What the shared helpers need from a game. */
-export type Table<P extends Seated = Seated> = { phase: "lobby" | "playing" | "finished"; hostId: string | null; players: P[]; moves: number };
+export type Table<P extends Seated = Seated> = {
+	phase: "lobby" | "playing" | "finished";
+	hostId: string | null;
+	players: P[];
+	moves: number;
+};
 
 export function shuffle<T>(items: T[], rng: Rng): T[] {
 	const out = [...items];
@@ -25,7 +30,8 @@ export function shuffle<T>(items: T[], rng: Rng): T[] {
 }
 
 // Players are kept in seat order, so a turn index walks around the table.
-export const bySeat = <P extends Seated>(players: P[]) => [...players].sort((a, b) => a.seat - b.seat);
+export const bySeat = <P extends Seated>(players: P[]) =>
+	[...players].sort((a, b) => a.seat - b.seat);
 
 export function freeSeats(players: Seated[]): number[] {
 	const taken = new Set(players.map((p) => p.seat));
@@ -33,7 +39,8 @@ export function freeSeats(players: Seated[]): number[] {
 }
 
 function assertFreeSeat(players: Seated[], seat: number) {
-	if (!Number.isInteger(seat) || seat < 0 || seat >= SEATS) throw new RuleError("That seat does not exist.");
+	if (!Number.isInteger(seat) || seat < 0 || seat >= SEATS)
+		throw new RuleError("That seat does not exist.");
 	if (players.some((p) => p.seat === seat)) throw new RuleError("That seat is taken.");
 }
 
@@ -41,7 +48,11 @@ function assertFreeSeat(players: Seated[], seat: number) {
  * Sits `player` in `seat`, or in the first free one when no seat is given. Lobby only.
  * The first human becomes host (a bot can't be: someone has to press start).
  */
-export function seatPlayer<G extends Table<P>, P extends Seated>(game: G, player: Omit<P, "seat">, seat?: number): G {
+export function seatPlayer<G extends Table<P>, P extends Seated>(
+	game: G,
+	player: Omit<P, "seat">,
+	seat?: number,
+): G {
 	if (game.phase !== "lobby") throw new RuleError("The game has already started.");
 	const chosen = seat ?? freeSeats(game.players)[0];
 	if (chosen === undefined) throw new RuleError("This table is full.");
@@ -71,11 +82,19 @@ export function removePlayer<G extends Table>(game: G, id: string): G {
 
 /** A human who closed the game mid-match: their turns are played for them until they return. */
 export function setAway<G extends Table>(game: G, id: string, away: boolean): G {
-	return { ...game, players: game.players.map((p) => (p.id === id && !p.bot ? { ...p, away } : p)) };
+	return {
+		...game,
+		players: game.players.map((p) => (p.id === id && !p.bot ? { ...p, away } : p)),
+	};
 }
 
 /** The next index around the table in `direction` whose player `inPlay` accepts (or `from` if none does). */
-export function nextIndex<P>(players: P[], from: number, direction: 1 | -1, inPlay: (p: P) => boolean = () => true): number {
+export function nextIndex<P>(
+	players: P[],
+	from: number,
+	direction: 1 | -1,
+	inPlay: (p: P) => boolean = () => true,
+): number {
 	const n = players.length;
 	for (let step = 1; step <= n; step++) {
 		const i = (((from + step * direction) % n) + n) % n;

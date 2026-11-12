@@ -2,7 +2,8 @@ import { goto } from '$app/navigation';
 import { isInviteCode, isRoomCode } from '#lib/guest.ts';
 import { openRoom, redeemInviteCode, type Visibility } from '#lib/platform.ts';
 
-const problem = (e: unknown) => (e instanceof Error ? e.message : 'Something went wrong. Try again.');
+const problem = (e: unknown) =>
+	e instanceof Error ? e.message : 'Something went wrong. Try again.';
 
 /** Opens a listed table by its code. Returns an error to show, or null when it went there. */
 export function enterTable(game: string, code: string): string | null {

@@ -6,7 +6,10 @@ import { createAdmin } from '../src/lib/server/auth.ts';
 
 /** Reads one line from the terminal without echoing it. */
 function askHidden(question: string): Promise<string> {
-	if (!process.stdin.isTTY) return Promise.reject(new Error('Run this in an interactive terminal (docker compose exec -it ...).'));
+	if (!process.stdin.isTTY)
+		return Promise.reject(
+			new Error('Run this in an interactive terminal (docker compose exec -it ...).')
+		);
 	process.stdout.write(question);
 	process.stdin.setRawMode(true);
 	process.stdin.resume();
@@ -24,7 +27,8 @@ function askHidden(question: string): Promise<string> {
 			for (const ch of chunk.toString('utf8')) {
 				if (ch === '\r' || ch === '\n') return done();
 				if (ch === '\u0003') return done(new Error('Cancelled.')); // Ctrl+C
-				if (ch === '\u007f') value = value.slice(0, -1); // backspace
+				if (ch === '\u007f')
+					value = value.slice(0, -1); // backspace
 				else value += ch;
 			}
 		};
@@ -49,7 +53,8 @@ const sql = new SQL({
 
 try {
 	const password = await askHidden('Password: ');
-	if ((await askHidden('Repeat password: ')) !== password) throw new Error('The passwords do not match.');
+	if ((await askHidden('Repeat password: ')) !== password)
+		throw new Error('The passwords do not match.');
 	await createAdmin(sql, username, password);
 	console.log(`Admin "${username}" created.`);
 } catch (err) {

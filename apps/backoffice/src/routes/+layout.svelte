@@ -10,13 +10,17 @@
 		{ href: '/tournaments', label: 'Tournaments' },
 		{ href: '/audit', label: 'Audit log' }
 	];
-	const current = (href: string) => page.url.pathname === href || page.url.pathname.startsWith(href + '/');
+	const current = (href: string) =>
+		page.url.pathname === href || page.url.pathname.startsWith(href + '/');
 </script>
 
 <svelte:head>
 	<link rel="preconnect" href="https://fonts.googleapis.com" />
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
-	<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400&display=swap" />
+	<link
+		rel="stylesheet"
+		href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400&display=swap"
+	/>
 </svelte:head>
 
 {#if data.admin}

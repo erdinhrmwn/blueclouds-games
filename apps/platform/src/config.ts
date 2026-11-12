@@ -1,7 +1,12 @@
 import { z } from "zod";
 
 /** A raw 32-byte Ed25519 key in base64url, as `bun run --filter platform keys:generate` prints it. */
-const Ed25519Key = z.string().regex(/^[A-Za-z0-9_-]{43}$/, "must be a 43-character base64url Ed25519 key; run `bun run --filter platform keys:generate`");
+const Ed25519Key = z
+	.string()
+	.regex(
+		/^[A-Za-z0-9_-]{43}$/,
+		"must be a 43-character base64url Ed25519 key; run `bun run --filter platform keys:generate`",
+	);
 
 const DbEnv = z.object({
 	DATABASE_HOST: z.string().min(1),
@@ -23,7 +28,13 @@ const Env = DbEnv.extend({
 });
 
 /** Connection options in the shape `new SQL(...)` takes. */
-export type DbConfig = { hostname: string; port: number; username: string; password: string; database: string };
+export type DbConfig = {
+	hostname: string;
+	port: number;
+	username: string;
+	password: string;
+	database: string;
+};
 
 export type Config = {
 	db: DbConfig;
@@ -51,7 +62,8 @@ const toDb = (e: z.output<typeof DbEnv>): DbConfig => ({
 });
 
 /** Only the database settings, for scripts such as `db:migrate`. */
-export const loadDbConfig = (env: RawEnv = process.env): DbConfig => toDb(check(DbEnv, env, "database config"));
+export const loadDbConfig = (env: RawEnv = process.env): DbConfig =>
+	toDb(check(DbEnv, env, "database config"));
 
 /** Reads and checks the environment once at startup; throws a readable error listing every bad key. */
 export function loadConfig(env: RawEnv = process.env): Config {

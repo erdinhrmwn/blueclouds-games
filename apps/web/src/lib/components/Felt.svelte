@@ -5,7 +5,8 @@
 	 * U-shaped card table: spot 0 (the dealer) sits at the middle of the flat top edge,
 	 * the other `count - 1` spots follow the U clockwise, from the top of the right arm round to the left one.
 	 */
-	let { count, seat, children }: { count: number; seat: Snippet<[number]>; children: Snippet } = $props();
+	let { count, seat, children }: { count: number; seat: Snippet<[number]>; children: Snippet } =
+		$props();
 
 	/** Where the arms of the U start, and where its bottom curve starts, as % of the table's height. */
 	const ARM_TOP = 14;
@@ -31,13 +32,19 @@
 		for (let i = 1; i < path.length; i++) {
 			const [x0, y0] = path[i - 1];
 			const [x1, y1] = path[i];
-			along.push(along[i - 1] + Math.hypot(((x1 - x0) * (width || 1)) / 100, ((y1 - y0) * (height || 1)) / 100));
+			along.push(
+				along[i - 1] +
+					Math.hypot(((x1 - x0) * (width || 1)) / 100, ((y1 - y0) * (height || 1)) / 100)
+			);
 		}
 		const total = along[along.length - 1];
 		const n = count - 1;
 		return Array.from({ length: n }, (_, j) => {
 			const target = n > 1 ? (j / (n - 1)) * total : total / 2;
-			const i = Math.max(1, along.findIndex((d) => d >= target));
+			const i = Math.max(
+				1,
+				along.findIndex((d) => d >= target)
+			);
 			const t = (target - along[i - 1]) / (along[i] - along[i - 1] || 1);
 			const [x0, y0] = path[i - 1];
 			const [x1, y1] = path[i];
@@ -51,15 +58,24 @@
 	}
 </script>
 
-<div class="relative mx-auto aspect-[3/4] w-full max-w-3xl px-10 py-14 sm:aspect-[16/10] sm:px-16 sm:py-16">
+<div
+	class="relative mx-auto aspect-[3/4] w-full max-w-3xl px-10 py-14 sm:aspect-[16/10] sm:px-16 sm:py-16"
+>
 	<div class="table-rim u relative h-full w-full p-3 sm:p-4">
 		<div class="felt u relative grid h-full w-full place-items-center">
 			{@render children()}
 		</div>
 	</div>
-	<div class="pointer-events-none absolute inset-x-12 inset-y-14 sm:inset-x-16 sm:inset-y-16" bind:clientWidth={width} bind:clientHeight={height}>
+	<div
+		class="pointer-events-none absolute inset-x-12 inset-y-14 sm:inset-x-16 sm:inset-y-16"
+		bind:clientWidth={width}
+		bind:clientHeight={height}
+	>
 		{#each Array(count) as _, k (k)}
-			<div class="pointer-events-auto absolute -translate-x-1/2 -translate-y-1/2" style={position(k)}>
+			<div
+				class="pointer-events-auto absolute -translate-x-1/2 -translate-y-1/2"
+				style={position(k)}
+			>
 				{@render seat(k)}
 			</div>
 		{/each}

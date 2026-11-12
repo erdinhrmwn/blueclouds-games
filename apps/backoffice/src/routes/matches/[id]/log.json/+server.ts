@@ -7,5 +7,8 @@ import type { RequestHandler } from './$types';
 export const GET: RequestHandler = async ({ params }) => {
 	const log = await matchLog(sql, params.id);
 	if (!log) error(404, 'No move log for this match');
-	return json({ matchId: params.id, ...log }, { headers: { 'Content-Disposition': `attachment; filename="match-${params.id}.json"` } });
+	return json(
+		{ matchId: params.id, ...log },
+		{ headers: { 'Content-Disposition': `attachment; filename="match-${params.id}.json"` } }
+	);
 };

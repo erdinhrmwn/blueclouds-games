@@ -1,4 +1,12 @@
-import { fetchPlayToken, PlatformError, registerAccount, saveName, signIn, signOut, startGuest } from './platform.ts';
+import {
+	fetchPlayToken,
+	PlatformError,
+	registerAccount,
+	saveName,
+	signIn,
+	signOut,
+	startGuest
+} from './platform.ts';
 
 export const NAME_MAX = 20;
 
@@ -10,7 +18,14 @@ type Me = { name: string; username: string | null; guest: boolean };
  * `ready` turns true once the server's answer is in; until then nothing should ask for it.
  * `playing` is true while a game runs at the open table, so the page can hide everything but the game.
  */
-export const player = $state({ name: '', username: '', guest: false, ready: false, editing: false, playing: false });
+export const player = $state({
+	name: '',
+	username: '',
+	guest: false,
+	ready: false,
+	editing: false,
+	playing: false
+});
 
 /** Takes the server's answer (from the player cookie) as the truth; the browser keeps no copy of its own. */
 export function loadPlayer(me: Me | null): void {
@@ -34,12 +49,20 @@ async function attempt(run: () => Promise<{ player: Me }>): Promise<FormErrors |
 		return null;
 	} catch (e) {
 		const fields = e instanceof PlatformError ? e.fields : {};
-		return { form: Object.keys(fields).length ? undefined : e instanceof Error ? e.message : 'Something went wrong. Try again.', fields };
+		return {
+			form: Object.keys(fields).length
+				? undefined
+				: e instanceof Error
+					? e.message
+					: 'Something went wrong. Try again.',
+			fields
+		};
 	}
 }
 
 /** Creates an account; a guest playing in this browser becomes it. */
-export const createAccount = (body: { name: string; username: string; password: string }) => attempt(() => registerAccount(body));
+export const createAccount = (body: { name: string; username: string; password: string }) =>
+	attempt(() => registerAccount(body));
 export const logIn = (body: { username: string; password: string }) => attempt(() => signIn(body));
 /** "Play as guest": the platform makes up the name and username. */
 export const playAsGuest = () => attempt(startGuest);

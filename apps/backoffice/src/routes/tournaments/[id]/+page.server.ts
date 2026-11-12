@@ -42,16 +42,32 @@ export const actions: Actions = {
 	register: async ({ params, request, locals, getClientAddress }) => {
 		const text = field(await request.formData(), 'ids');
 		const { ids, invalid } = parseIds(text);
-		if (invalid.length) return fail(400, { error: `Not player ids: ${invalid.slice(0, 5).join(', ')}`, ids: text });
-		return attempt(async () => {
-			const r = await registerPlayers(sql, locals.admin!, params.id, ids, auditIp(getClientAddress()));
-			return `Registered ${r.added} player${r.added === 1 ? '' : 's'}.${r.already ? ` ${r.already} already were.` : ''}`;
-		}, { ids: text });
+		if (invalid.length)
+			return fail(400, { error: `Not player ids: ${invalid.slice(0, 5).join(', ')}`, ids: text });
+		return attempt(
+			async () => {
+				const r = await registerPlayers(
+					sql,
+					locals.admin!,
+					params.id,
+					ids,
+					auditIp(getClientAddress())
+				);
+				return `Registered ${r.added} player${r.added === 1 ? '' : 's'}.${r.already ? ` ${r.already} already were.` : ''}`;
+			},
+			{ ids: text }
+		);
 	},
 	unregister: async ({ params, request, locals, getClientAddress }) => {
 		const data = await request.formData();
 		return attempt(async () => {
-			await unregisterPlayer(sql, locals.admin!, params.id, playerIdOf(data), auditIp(getClientAddress()));
+			await unregisterPlayer(
+				sql,
+				locals.admin!,
+				params.id,
+				playerIdOf(data),
+				auditIp(getClientAddress())
+			);
 			return 'Player removed from the tournament.';
 		});
 	},
@@ -64,14 +80,27 @@ export const actions: Actions = {
 		const data = await request.formData();
 		return attempt(async () => {
 			const code = field(data, 'room').toUpperCase();
-			const seat = await assignPlayer(sql, locals.admin!, params.id, code, playerIdOf(data), auditIp(getClientAddress()));
+			const seat = await assignPlayer(
+				sql,
+				locals.admin!,
+				params.id,
+				code,
+				playerIdOf(data),
+				auditIp(getClientAddress())
+			);
 			return `Seated at table ${code}, seat ${seat + 1}.`;
 		});
 	},
 	unassign: async ({ params, request, locals, getClientAddress }) => {
 		const data = await request.formData();
 		return attempt(async () => {
-			await unassignPlayer(sql, locals.admin!, params.id, playerIdOf(data), auditIp(getClientAddress()));
+			await unassignPlayer(
+				sql,
+				locals.admin!,
+				params.id,
+				playerIdOf(data),
+				auditIp(getClientAddress())
+			);
 			return 'Player taken off their table. They are still registered.';
 		});
 	},

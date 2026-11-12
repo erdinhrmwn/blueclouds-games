@@ -26,9 +26,15 @@ const Username = z
 	.regex(/^[a-z0-9_.-]{3,32}$/, "Use 3–32 characters: a–z, 0–9, _ . -")
 	.refine((u) => !u.startsWith("guest"), 'Usernames starting with "guest" are kept for guests.');
 /** Long enough to resist guessing; capped so hashing stays cheap for the server. */
-const Password = z.string().min(8, "Use at least 8 characters.").max(200, "Use at most 200 characters.");
+const Password = z
+	.string()
+	.min(8, "Use at least 8 characters.")
+	.max(200, "Use at most 200 characters.");
 const Register = z.object({ name: Name, username: Username, password: Password });
-const Login = z.object({ username: z.string().trim().toLowerCase().max(64), password: z.string().max(200) });
+const Login = z.object({
+	username: z.string().trim().toLowerCase().max(64),
+	password: z.string().max(200),
+});
 
 const GUEST_LIMIT = { perIp: 5, windowMs: 60_000 };
 const LOGIN_LIMIT = { perIp: 10, windowMs: 60_000 };
@@ -76,7 +82,9 @@ export function playerRoutes(sql: SQL, signer: Signer) {
 		return ok(c, { player: await players.rename(sql, player.id, name) });
 	});
 
-	app.post("/play-tokens", auth, async (c) => ok(c, await players.issuePlayToken(sql, signer, c.get("player"))));
+	app.post("/play-tokens", auth, async (c) =>
+		ok(c, await players.issuePlayToken(sql, signer, c.get("player"))),
+	);
 
 	return app;
 }

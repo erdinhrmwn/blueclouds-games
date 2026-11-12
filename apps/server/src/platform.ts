@@ -11,9 +11,17 @@ const PLAY_TOKEN_AUDIENCE = "blueclouds-rooms";
 
 const Env = z.object({
 	/** Ed25519 public key (32 bytes, base64url) matching the platform's PLAY_TOKEN_PRIVATE_KEY. */
-	PLAY_TOKEN_PUBLIC_KEY: z.string().regex(/^[A-Za-z0-9_-]{43}$/, "must be a 43-character base64url Ed25519 key; run `bun run --filter platform keys:generate`"),
+	PLAY_TOKEN_PUBLIC_KEY: z
+		.string()
+		.regex(
+			/^[A-Za-z0-9_-]{43}$/,
+			"must be a 43-character base64url Ed25519 key; run `bun run --filter platform keys:generate`",
+		),
 	/** Where the actor server reaches the platform API (server to server, not the public URL). */
-	PLATFORM_URL: z.url().default("http://127.0.0.1:3000").transform((u) => u.replace(/\/+$/, "")),
+	PLATFORM_URL: z
+		.url()
+		.default("http://127.0.0.1:3000")
+		.transform((u) => u.replace(/\/+$/, "")),
 	/** Bearer key for calls to the platform (match reports, tournament rooms); same value as the platform's. */
 	PLATFORM_SERVER_KEY: z.string().min(32, "must be at least 32 characters"),
 });
@@ -34,7 +42,10 @@ export function loadPlatformConfig(env: Record<string, string | undefined> = pro
 		const issues = parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ");
 		throw new Error(`Invalid actor server config: ${issues}`);
 	}
-	publicKey = importJWK({ kty: "OKP", crv: "Ed25519", x: parsed.data.PLAY_TOKEN_PUBLIC_KEY }, "EdDSA");
+	publicKey = importJWK(
+		{ kty: "OKP", crv: "Ed25519", x: parsed.data.PLAY_TOKEN_PUBLIC_KEY },
+		"EdDSA",
+	);
 	config = parsed.data;
 	return config;
 }
@@ -44,7 +55,10 @@ export async function verifyPlayToken(token: unknown): Promise<Identity | null> 
 	if (typeof token !== "string" || token.length > 2048) return null;
 	if (!publicKey) loadPlatformConfig();
 	try {
-		const { payload } = await jwtVerify(token, await publicKey!, { audience: PLAY_TOKEN_AUDIENCE, algorithms: ["EdDSA"] });
+		const { payload } = await jwtVerify(token, await publicKey!, {
+			audience: PLAY_TOKEN_AUDIENCE,
+			algorithms: ["EdDSA"],
+		});
 		const claims = Claims.safeParse(payload);
 		return claims.success ? { id: claims.data.sub, name: claims.data.name } : null;
 	} catch {
@@ -56,7 +70,9 @@ export async function verifyPlayToken(token: unknown): Promise<Identity | null> 
  * Sends a finished match. "sent": stored (or already stored, the platform is idempotent by matchId).
  * "rejected": the platform will never accept this body, so retrying is pointless. "retry": try again later.
  */
-export async function reportMatch(report: { matchId: string }): Promise<{ result: "sent" | "rejected" | "retry"; detail?: string }> {
+export async function reportMatch(report: {
+	matchId: string;
+}): Promise<{ result: "sent" | "rejected" | "retry"; detail?: string }> {
 	try {
 		const res = await callPlatform("POST", "/matches", report);
 		if (res.ok) return { result: "sent" };
@@ -72,7 +88,13 @@ const TournamentRoom = z.object({
 	minPlayers: z.number().int().min(1),
 	startedAt: z.string().nullable(),
 	closedAt: z.string().nullable(),
-	tournament: z.object({ name: z.string(), startsAt: z.iso.datetime({ offset: true }), cancelled: z.boolean() }).nullable(),
+	tournament: z
+		.object({
+			name: z.string(),
+			startsAt: z.iso.datetime({ offset: true }),
+			cancelled: z.boolean(),
+		})
+		.nullable(),
 	seats: z.array(z.object({ playerId: z.uuid(), seat: z.number().int().min(0).nullable() })),
 });
 export type RoomSeats = z.output<typeof TournamentRoom>;
@@ -96,9 +118,16 @@ export async function fetchRoomSeats(code: string): Promise<RoomSeats | null> {
 }
 
 /** Tells the platform a tournament room's match began, or that it gave up. A lost call is fixed by the platform's job and the match report. */
-export async function markRoom(code: string, change: "start" | "close"): Promise<{ ok: boolean; detail?: string }> {
+export async function markRoom(
+	code: string,
+	change: "start" | "close",
+): Promise<{ ok: boolean; detail?: string }> {
 	try {
-		const res = await callPlatform("POST", `/rooms/${encodeURIComponent(code)}/${change}`, change === "close" ? { reason: "not_enough_players" } : undefined);
+		const res = await callPlatform(
+			"POST",
+			`/rooms/${encodeURIComponent(code)}/${change}`,
+			change === "close" ? { reason: "not_enough_players" } : undefined,
+		);
 		if (res.ok) return { ok: true };
 		return { ok: false, detail: `${res.status} ${await res.text().catch(() => "")}`.slice(0, 500) };
 	} catch (err) {

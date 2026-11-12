@@ -8,7 +8,10 @@ export const POST: RequestHandler = async (event) => {
 	const body = (await event.request.json().catch(() => null)) as { code?: unknown } | null;
 	const code = typeof body?.code === 'string' ? body.code.trim().toUpperCase() : '';
 	if (!isInviteCode(code)) {
-		return json({ error: { code: 'bad_input', message: 'An invite code is 6 letters or digits.' } }, { status: 400 });
+		return json(
+			{ error: { code: 'bad_input', message: 'An invite code is 6 letters or digits.' } },
+			{ status: 400 }
+		);
 	}
 	try {
 		return json(await redeemInvite(event, code));

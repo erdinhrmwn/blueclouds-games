@@ -25,11 +25,27 @@
 		<div>
 			<label class="label" for="username">Username</label>
 			<!-- svelte-ignore a11y_autofocus -->
-			<input class="field" id="username" name="username" value={form?.username ?? ''} autocomplete="username" autocapitalize="none" required autofocus />
+			<input
+				class="field"
+				id="username"
+				name="username"
+				value={form?.username ?? ''}
+				autocomplete="username"
+				autocapitalize="none"
+				required
+				autofocus
+			/>
 		</div>
 		<div>
 			<label class="label" for="password">Password</label>
-			<input class="field" id="password" name="password" type="password" autocomplete="current-password" required />
+			<input
+				class="field"
+				id="password"
+				name="password"
+				type="password"
+				autocomplete="current-password"
+				required
+			/>
 		</div>
 		{#if form?.error}<p class="text-sm text-danger" role="alert">{form.error}</p>{/if}
 		<button class="btn-primary w-full" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button>

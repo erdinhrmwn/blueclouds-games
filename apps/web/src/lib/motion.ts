@@ -6,7 +6,10 @@ import type { TransitionConfig } from 'svelte/transition';
  * Places a card on the pile: it travels from `from` (the card in your hand, or the seat of whoever
  * played it) along a small arc, lifts slightly mid-air and lands at its resting size.
  */
-export function placeCard(node: Element, { from, tilt = 0 }: { from: DOMRect | null; tilt?: number }): TransitionConfig {
+export function placeCard(
+	node: Element,
+	{ from, tilt = 0 }: { from: DOMRect | null; tilt?: number }
+): TransitionConfig {
 	if (!from || prefersReducedMotion.current) return { duration: 0 };
 	const to = node.getBoundingClientRect();
 	const dx = from.left + from.width / 2 - (to.left + to.width / 2);
@@ -87,7 +90,8 @@ export function dealCards(
 	layer.setAttribute('aria-hidden', 'true');
 	layer.style.cssText = 'position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:30';
 	document.body.append(layer);
-	const W = 28, H = 40;
+	const W = 28,
+		H = 40;
 	let last: Animation | undefined;
 	for (let pass = 0; pass < passes; pass++) {
 		targets.forEach((to, i) => {
@@ -100,12 +104,27 @@ export function dealCards(
 			last = card.animate(
 				[
 					{ transform: 'translate(0, 0) rotate(0deg) scale(0.9)', opacity: 1 },
-					{ transform: `translate(${dx}px, ${dy}px) rotate(${(i % 2 ? 1 : -1) * 200}deg) scale(0.7)`, opacity: 1, offset: 0.9 },
-					{ transform: `translate(${dx}px, ${dy}px) rotate(${(i % 2 ? 1 : -1) * 200}deg) scale(0.5)`, opacity: 0 }
+					{
+						transform: `translate(${dx}px, ${dy}px) rotate(${(i % 2 ? 1 : -1) * 200}deg) scale(0.7)`,
+						opacity: 1,
+						offset: 0.9
+					},
+					{
+						transform: `translate(${dx}px, ${dy}px) rotate(${(i % 2 ? 1 : -1) * 200}deg) scale(0.5)`,
+						opacity: 0
+					}
 				],
-				{ delay: (pass * targets.length + i) * stepMs, duration: flightMs, easing: 'cubic-bezier(0.2, 0.7, 0.3, 1)', fill: 'both' }
+				{
+					delay: (pass * targets.length + i) * stepMs,
+					duration: flightMs,
+					easing: 'cubic-bezier(0.2, 0.7, 0.3, 1)',
+					fill: 'both'
+				}
 			);
 		});
 	}
-	last?.finished.then(() => layer.remove(), () => layer.remove());
+	last?.finished.then(
+		() => layer.remove(),
+		() => layer.remove()
+	);
 }

@@ -20,11 +20,17 @@ describe("envelope", () => {
 	test("unknown route is a not_found envelope", async () => {
 		const res = await call(t.app, "GET", "/v1/nope");
 		expect(res.status).toBe(404);
-		expect(res.json).toEqual({ ok: false, data: null, error: { code: "not_found", message: "Not found." } });
+		expect(res.json).toEqual({
+			ok: false,
+			data: null,
+			error: { code: "not_found", message: "Not found." },
+		});
 	});
 
 	test("oversized body is rejected with the envelope", async () => {
-		const res = await call(t.app, "POST", "/v1/players/guest", { body: JSON.stringify({ name: "x".repeat(20_000) }) });
+		const res = await call(t.app, "POST", "/v1/players/guest", {
+			body: JSON.stringify({ name: "x".repeat(20_000) }),
+		});
 		expect(res.status).toBe(413);
 		expect(res.json.error.code).toBe("payload_too_large");
 	});

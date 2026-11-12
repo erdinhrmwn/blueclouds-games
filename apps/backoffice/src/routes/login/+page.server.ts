@@ -13,11 +13,15 @@ export const actions: Actions = {
 		const form = await request.formData();
 		const username = String(form.get('username') ?? '').slice(0, 64);
 		const password = String(form.get('password') ?? '').slice(0, 256);
-		if (!username || !password) return fail(400, { username, error: 'Enter your username and password.' });
+		if (!username || !password)
+			return fail(400, { username, error: 'Enter your username and password.' });
 
 		const result = await login(sql, username, password, auditIp(getClientAddress()));
 		if (!result.ok) {
-			const error = result.reason === 'locked' ? 'Too many failed tries. Wait 15 minutes, then try again.' : 'Wrong username or password.';
+			const error =
+				result.reason === 'locked'
+					? 'Too many failed tries. Wait 15 minutes, then try again.'
+					: 'Wrong username or password.';
 			return fail(400, { username, error });
 		}
 		cookies.set(SESSION_COOKIE, result.token, {

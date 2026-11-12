@@ -6,7 +6,9 @@
 	const f = $derived(data.filter);
 	const filtered = $derived(!!(f.game || f.player || f.from || f.to));
 	const nextHref = $derived.by(() => {
-		const q = new URLSearchParams(Object.entries({ ...f, before: data.next ?? '' }).filter(([, v]) => v));
+		const q = new URLSearchParams(
+			Object.entries({ ...f, before: data.next ?? '' }).filter(([, v]) => v)
+		);
 		return `?${q}`;
 	});
 </script>
@@ -25,7 +27,13 @@
 	</div>
 	<div>
 		<label class="label" for="player">Player id</label>
-		<input class="field font-mono text-sm" id="player" name="player" value={f.player} maxlength="36" />
+		<input
+			class="field font-mono text-sm"
+			id="player"
+			name="player"
+			value={f.player}
+			maxlength="36"
+		/>
 	</div>
 	<div>
 		<label class="label" for="from">Ended from (UTC)</label>
@@ -42,7 +50,9 @@
 </form>
 
 {#if data.matches.length === 0}
-	<p class="mt-6 text-muted">{filtered ? 'No matches fit these filters.' : f.before ? 'No more matches.' : 'No matches yet.'}</p>
+	<p class="mt-6 text-muted">
+		{filtered ? 'No matches fit these filters.' : f.before ? 'No more matches.' : 'No matches yet.'}
+	</p>
 {:else}
 	<div class="mt-6 overflow-x-auto rounded-lg border border-line bg-surface">
 		<table class="w-full min-w-[36rem] text-left text-sm">
@@ -59,7 +69,10 @@
 				{#each data.matches as m (m.id)}
 					<tr class="border-b border-line last:border-0 hover:bg-page">
 						<td class="px-3 py-2 whitespace-nowrap">
-							<a class="underline decoration-line underline-offset-2 hover:decoration-ink" href="/matches/{m.id}">{utc(m.endedAt)}</a>
+							<a
+								class="underline decoration-line underline-offset-2 hover:decoration-ink"
+								href="/matches/{m.id}">{utc(m.endedAt)}</a
+							>
 						</td>
 						<td class="px-3 py-2">{m.gameName}</td>
 						<td class="px-3 py-2 font-mono text-xs">{m.roomCode}</td>

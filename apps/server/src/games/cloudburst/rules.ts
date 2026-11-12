@@ -39,7 +39,14 @@ export type Player = {
 export type GameEvent =
 	| { type: "joined"; playerId: string }
 	| { type: "dealt"; round: number }
-	| { type: "played"; playerId: string; card: Card; skipped?: string; gaveTo?: string; auto?: boolean }
+	| {
+			type: "played";
+			playerId: string;
+			card: Card;
+			skipped?: string;
+			gaveTo?: string;
+			auto?: boolean;
+	  }
 	| { type: "drew"; playerId: string; got: boolean; auto?: boolean }
 	| { type: "passed"; playerId: string; auto?: boolean }
 	| {
@@ -102,18 +109,22 @@ export function buildDeck(): Card[] {
 	const cards: Card[] = [];
 	for (const suit of SUITS) {
 		for (let copy = 0; copy < 2; copy++) {
-			for (let v = 1; v <= 8; v++) cards.push({ id: `${suit}-${v}-${copy}`, kind: "number", suit, value: v });
-			for (const kind of ACTIONS) cards.push({ id: `${suit}-${kind}-${copy}`, kind, suit, value: 0 });
+			for (let v = 1; v <= 8; v++)
+				cards.push({ id: `${suit}-${v}-${copy}`, kind: "number", suit, value: v });
+			for (const kind of ACTIONS)
+				cards.push({ id: `${suit}-${kind}-${copy}`, kind, suit, value: 0 });
 		}
 	}
-	for (let i = 0; i < 4; i++) cards.push({ id: `rainbow-${i}`, kind: "rainbow", suit: null, value: 0 });
+	for (let i = 0; i < 4; i++)
+		cards.push({ id: `rainbow-${i}`, kind: "rainbow", suit: null, value: 0 });
 	return cards;
 }
 
 /** Same suit, a number exactly one up or down, the same action, or any Rainbow. A same number alone does not fit. */
 export function fits(card: Card, top: Card, suit: Suit): boolean {
 	if (card.kind === "rainbow" || card.suit === suit) return true;
-	if (card.kind === "number") return top.kind === "number" && Math.abs(card.value - top.value) === 1;
+	if (card.kind === "number")
+		return top.kind === "number" && Math.abs(card.value - top.value) === 1;
 	return card.kind === top.kind;
 }
 
@@ -127,9 +138,14 @@ export function addPlayer(game: Game, id: string, name: string, bot = false, sea
 export function startGame(game: Game, byId: string, rng: Rng): Game {
 	if (game.hostId !== byId) throw new RuleError("Only the host can start the game.");
 	if (game.phase === "playing") throw new RuleError("The game is already running.");
-	if (game.players.length < MIN_PLAYERS) throw new RuleError(`Needs at least ${MIN_PLAYERS} players.`);
+	if (game.players.length < MIN_PLAYERS)
+		throw new RuleError(`Needs at least ${MIN_PLAYERS} players.`);
 	const players = game.players.map((p) => ({ ...p, points: 0, hand: [] }));
-	return { ...dealRound({ ...game, players, round: 0, winnerId: null }, rng), phase: "playing", moves: game.moves + 1 };
+	return {
+		...dealRound({ ...game, players, round: 0, winnerId: null }, rng),
+		phase: "playing",
+		moves: game.moves + 1,
+	};
 }
 
 function currentPlayer(game: Game, playerId: string): Player {
@@ -143,7 +159,8 @@ export function playCard(game: Game, playerId: string, input: PlayInput, rng: Rn
 	const current = currentPlayer(game, playerId);
 	const card = current.hand.find((c) => c.id === input.cardId);
 	if (!card) throw new RuleError("That card is not in your hand.");
-	if (game.drew && card.id !== game.drawnId) throw new RuleError("After drawing you can only play the card you drew, or pass.");
+	if (game.drew && card.id !== game.drawnId)
+		throw new RuleError("After drawing you can only play the card you drew, or pass.");
 	const top = game.discard.at(-1)!;
 	if (!fits(card, top, game.suit)) throw new RuleError("That card does not fit the pile.");
 	if (card.kind === "rainbow" && !input.suit) throw new RuleError("Pick a suit for the Rainbow.");
@@ -160,7 +177,14 @@ export function playCard(game: Game, playerId: string, input: PlayInput, rng: Rn
 	const players = game.players.map((p, i) =>
 		i === game.turn ? { ...p, hand } : i === nextUp && give ? { ...p, hand: [...p.hand, give] } : p,
 	);
-	const played = { ...game, players, discard: [...game.discard, card], suit: card.suit ?? input.suit!, drew: false, drawnId: null };
+	const played = {
+		...game,
+		players,
+		discard: [...game.discard, card],
+		suit: card.suit ?? input.suit!,
+		drew: false,
+		drawnId: null,
+	};
 
 	if (hand.length === 0) return endRound(played, playerId, card, rng);
 
@@ -175,7 +199,13 @@ export function playCard(game: Game, playerId: string, input: PlayInput, rng: Rn
 		...played,
 		direction,
 		turn,
-		lastEvent: { type: "played", playerId, card, ...(skipped ? { skipped } : {}), ...(give ? { gaveTo: players[nextUp]!.id } : {}) },
+		lastEvent: {
+			type: "played",
+			playerId,
+			card,
+			...(skipped ? { skipped } : {}),
+			...(give ? { gaveTo: players[nextUp]!.id } : {}),
+		},
 		moves: game.moves + 1,
 		turnKey: game.turnKey + 1,
 	};
@@ -192,7 +222,9 @@ export function drawCard(game: Game, playerId: string, rng: Rng): Game {
 		discard = discard.slice(-1);
 	}
 	const [drawn, ...rest] = deck;
-	const players = game.players.map((p) => (p.id === current.id && drawn ? { ...p, hand: [...p.hand, drawn] } : p));
+	const players = game.players.map((p) =>
+		p.id === current.id && drawn ? { ...p, hand: [...p.hand, drawn] } : p,
+	);
 	return {
 		...game,
 		players,
@@ -233,8 +265,22 @@ function endRound(game: Game, outId: string, card: Card, rng: Rng): Game {
 	const leaders = players.filter((p) => p.points === fewest);
 	const burst = players.some((p) => p.points >= BURST_AT);
 	const finished = burst && leaders.length === 1;
-	const roundEnd: GameEvent = { type: "roundEnd", outId, card, gained, left, tie: burst && !finished, next: finished ? "finished" : "round" };
-	const scored = { ...game, players, lastEvent: roundEnd, moves: game.moves + 1, turnKey: game.turnKey + 1 };
+	const roundEnd: GameEvent = {
+		type: "roundEnd",
+		outId,
+		card,
+		gained,
+		left,
+		tie: burst && !finished,
+		next: finished ? "finished" : "round",
+	};
+	const scored = {
+		...game,
+		players,
+		lastEvent: roundEnd,
+		moves: game.moves + 1,
+		turnKey: game.turnKey + 1,
+	};
 	if (finished) return { ...scored, phase: "finished", winnerId: leaders[0]!.id };
 	return { ...dealRound(scored, rng), lastEvent: roundEnd };
 }
@@ -284,7 +330,9 @@ export function resetToLobby(game: Game, byId: string): Game {
 
 /** Places by points, fewest first; equal points share a place (1st is never shared). */
 export function placements(game: Game): Map<string, number> {
-	return new Map(game.players.map((p) => [p.id, 1 + game.players.filter((o) => o.points < p.points).length]));
+	return new Map(
+		game.players.map((p) => [p.id, 1 + game.players.filter((o) => o.points < p.points).length]),
+	);
 }
 
 /**
@@ -295,7 +343,15 @@ export function publicView(game: Game, turn: { left: number; total: number } | n
 	return {
 		phase: game.phase,
 		hostId: game.hostId,
-		players: game.players.map((p) => ({ id: p.id, name: p.name, bot: p.bot, seat: p.seat, away: !!p.away, cards: p.hand.length, points: p.points })),
+		players: game.players.map((p) => ({
+			id: p.id,
+			name: p.name,
+			bot: p.bot,
+			seat: p.seat,
+			away: !!p.away,
+			cards: p.hand.length,
+			points: p.points,
+		})),
 		deckCount: game.deck.length,
 		topCard: game.discard.at(-1) ?? null,
 		/** Up to three cards played before the top one, oldest first. */
@@ -318,7 +374,10 @@ export type PublicView = ReturnType<typeof publicView>;
 /** Your own hand, plus the card you just drew (the only one you may play now). */
 export function handOf(game: Game, playerId: string): { cards: Card[]; drawnId: string | null } {
 	const mine = game.phase === "playing" && game.players[game.turn]?.id === playerId;
-	return { cards: game.players.find((p) => p.id === playerId)?.hand ?? [], drawnId: mine ? game.drawnId : null };
+	return {
+		cards: game.players.find((p) => p.id === playerId)?.hand ?? [],
+		drawnId: mine ? game.drawnId : null,
+	};
 }
 
 /**
@@ -327,5 +386,10 @@ export function handOf(game: Game, playerId: string): { cards: Card[]; drawnId: 
 export function dealPauseMs(game: Game): number {
 	const e = game.lastEvent;
 	if (game.phase !== "playing" || (e?.type !== "dealt" && e?.type !== "roundEnd")) return 0;
-	return (e.type === "roundEnd" ? DEAL.roundEndMs : 0) + game.players.length * HAND_SIZE * DEAL.stepMs + DEAL.flightMs + 100;
+	return (
+		(e.type === "roundEnd" ? DEAL.roundEndMs : 0) +
+		game.players.length * HAND_SIZE * DEAL.stepMs +
+		DEAL.flightMs +
+		100
+	);
 }

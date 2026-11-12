@@ -7,7 +7,10 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 function handler(join: boolean): RequestHandler {
 	return async (event) => {
 		if (!UUID.test(event.params.id)) {
-			return json({ error: { code: 'not_found', message: 'There is no such tournament.' } }, { status: 404 });
+			return json(
+				{ error: { code: 'not_found', message: 'There is no such tournament.' } },
+				{ status: 404 }
+			);
 		}
 		try {
 			await setRegistration(event, event.params.id, join);

@@ -1,7 +1,18 @@
 import { actor, UserError } from "rivetkit";
 import { db } from "rivetkit/db";
 import { chooseBotCard } from "./bots";
-import { addPlayer, createGame, dealPauseMs, type Game, handOf, playCard, publicView, resetToLobby, startGame, TURN_MS } from "./rules";
+import {
+	addPlayer,
+	createGame,
+	dealPauseMs,
+	type Game,
+	handOf,
+	playCard,
+	publicView,
+	resetToLobby,
+	startGame,
+	TURN_MS,
+} from "./rules";
 import { buildReport, logEvents, type MatchState, noteMove } from "./match";
 import { PlayInput } from "./schema";
 import {
@@ -88,7 +99,15 @@ export const bust31Room = actor({
 			requireOpenTable(c);
 			requireHost(c);
 			const seat = parseSeat(seatInput);
-			c.vars.game = apply(() => addPlayer(c.vars.game, `bot-${crypto.randomUUID()}`, botName(c.vars.game.players), true, seat));
+			c.vars.game = apply(() =>
+				addPlayer(
+					c.vars.game,
+					`bot-${crypto.randomUUID()}`,
+					botName(c.vars.game.players),
+					true,
+					seat,
+				),
+			);
 			await commit(c);
 		},
 		/** Moves you to an empty chair (lobby only). */
@@ -103,7 +122,8 @@ export const bust31Room = actor({
 			requireOpenTable(c);
 			requireHost(c);
 			const id = BotIdInput.parse(botId);
-			if (!c.vars.game.players.find((p) => p.id === id)?.bot) throw new UserError("Bot not found.", { code: "rule" });
+			if (!c.vars.game.players.find((p) => p.id === id)?.bot)
+				throw new UserError("Bot not found.", { code: "rule" });
 			c.vars.game = removePlayer(c.vars.game, id);
 			await commit(c);
 		},
@@ -129,7 +149,10 @@ export const bust31Room = actor({
 		dropIfGone: async (c, id: unknown) => {
 			requireScheduler(c);
 			const { game } = c.vars;
-			if (await dropIfGone(c, id, { playerId: game.players[game.turn]?.id ?? null, key: game.moves })) await commit(c);
+			if (
+				await dropIfGone(c, id, { playerId: game.players[game.turn]?.id ?? null, key: game.moves })
+			)
+				await commit(c);
 		},
 		/** Internal (scheduler only): a tournament table's start time, or the end of its wait for late players. */
 		tournamentStart: async (c) => {
@@ -175,7 +198,10 @@ const commit = (c: Ctx, auto = false) =>
 		auto,
 	);
 
-const viewOf = (c: Ctx) => ({ ...publicView(c.vars.game, turnClock(c.vars.timer)), tournament: tournamentView(c) });
+const viewOf = (c: Ctx) => ({
+	...publicView(c.vars.game, turnClock(c.vars.timer)),
+	tournament: tournamentView(c),
+});
 
 /** Starts the match; `by` must be the host. */
 function begin(c: Ctx, by: string): void {
@@ -184,11 +210,20 @@ function begin(c: Ctx, by: string): void {
 }
 
 /** How a tournament table starts itself: as its host would. */
-const tournament = (c: Ctx) => ({ start: () => begin(c, c.vars.game.hostId), commit: () => commit(c) });
+const tournament = (c: Ctx) => ({
+	start: () => begin(c, c.vars.game.hostId),
+	commit: () => commit(c),
+});
 
 /** Everyone gets TURN_MS; the clock of a fresh round starts once the dealer has finished dealing. */
 function scheduleTurn(c: Ctx, resume: boolean): Promise<void> {
 	const game = c.vars.game as Game;
 	const current = game.phase === "playing" ? game.players[game.turn] : undefined;
-	return armTurn(c, current, { key: game.moves, turnMs: TURN_MS, pause: dealPauseMs(game), resume, rng });
+	return armTurn(c, current, {
+		key: game.moves,
+		turnMs: TURN_MS,
+		pause: dealPauseMs(game),
+		resume,
+		rng,
+	});
 }

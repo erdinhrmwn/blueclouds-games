@@ -1,6 +1,14 @@
 /** Where a tournament is in its life, from its timestamps. `bad` marks the ones that need an admin. */
 export function tournamentStatus(
-	t: { cancelledAt: Date | null; endedAt: Date | null; distributedAt: Date | null; distributeError: string | null; startsAt: Date; registrationOpensAt: Date; registrationClosesAt: Date },
+	t: {
+		cancelledAt: Date | null;
+		endedAt: Date | null;
+		distributedAt: Date | null;
+		distributeError: string | null;
+		startsAt: Date;
+		registrationOpensAt: Date;
+		registrationClosesAt: Date;
+	},
 	now = new Date()
 ): { label: string; bad?: boolean } {
 	if (t.cancelledAt) return { label: 'Cancelled' };

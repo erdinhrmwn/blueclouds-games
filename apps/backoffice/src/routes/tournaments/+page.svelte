@@ -15,7 +15,8 @@
 
 <h1 class="text-2xl font-semibold">Tournaments</h1>
 <p class="mt-1 text-sm text-muted">
-	When sign-up closes, the platform hands out the tables by itself; each table starts on its own at the start time.
+	When sign-up closes, the platform hands out the tables by itself; each table starts on its own at
+	the start time.
 </p>
 
 {#if data.tournaments.length === 0}
@@ -39,7 +40,10 @@
 					<tr class="border-b border-line last:border-0 hover:bg-page">
 						<td class="px-3 py-2 whitespace-nowrap">{utc(t.startsAt)}</td>
 						<td class="px-3 py-2">
-							<a class="font-medium underline decoration-line underline-offset-2 hover:decoration-ink" href="/tournaments/{t.id}">{t.name}</a>
+							<a
+								class="font-medium underline decoration-line underline-offset-2 hover:decoration-ink"
+								href="/tournaments/{t.id}">{t.name}</a
+							>
 						</td>
 						<td class="px-3 py-2">{t.gameName}</td>
 						<td class="px-3 py-2 tabular-nums">{t.registered}</td>
@@ -70,17 +74,38 @@
 	>
 		<div>
 			<label class="label" for="game">Game</label>
-			<select class="field" id="game" name="game" value={v.game ?? data.games[0]?.slug} onchange={(e) => (game = e.currentTarget.value)}>
+			<select
+				class="field"
+				id="game"
+				name="game"
+				value={v.game ?? data.games[0]?.slug}
+				onchange={(e) => (game = e.currentTarget.value)}
+			>
 				{#each data.games as g (g.slug)}<option value={g.slug}>{g.name}</option>{/each}
 			</select>
 		</div>
 		<div>
 			<label class="label" for="name">Name</label>
-			<input class="field" id="name" name="name" value={v.name ?? ''} maxlength="80" required placeholder="Friday Cup" />
+			<input
+				class="field"
+				id="name"
+				name="name"
+				value={v.name ?? ''}
+				maxlength="80"
+				required
+				placeholder="Friday Cup"
+			/>
 		</div>
 		<div>
 			<label class="label" for="startsAt">Starts (UTC)</label>
-			<input class="field" id="startsAt" name="startsAt" type="datetime-local" value={v.startsAt ?? ''} required />
+			<input
+				class="field"
+				id="startsAt"
+				name="startsAt"
+				type="datetime-local"
+				value={v.startsAt ?? ''}
+				required
+			/>
 		</div>
 		<div>
 			<label class="label" for="playersPerRoom">Players per table</label>
@@ -97,11 +122,25 @@
 		</div>
 		<div>
 			<label class="label" for="registrationOpensAt">Sign-up opens (UTC, empty = now)</label>
-			<input class="field" id="registrationOpensAt" name="registrationOpensAt" type="datetime-local" value={v.registrationOpensAt ?? ''} />
+			<input
+				class="field"
+				id="registrationOpensAt"
+				name="registrationOpensAt"
+				type="datetime-local"
+				value={v.registrationOpensAt ?? ''}
+			/>
 		</div>
 		<div>
-			<label class="label" for="registrationClosesAt">Sign-up closes (UTC, empty = 10 min before start)</label>
-			<input class="field" id="registrationClosesAt" name="registrationClosesAt" type="datetime-local" value={v.registrationClosesAt ?? ''} />
+			<label class="label" for="registrationClosesAt"
+				>Sign-up closes (UTC, empty = 10 min before start)</label
+			>
+			<input
+				class="field"
+				id="registrationClosesAt"
+				name="registrationClosesAt"
+				type="datetime-local"
+				value={v.registrationClosesAt ?? ''}
+			/>
 		</div>
 		<div class="sm:col-span-2">
 			<button class="btn-primary" disabled={busy}>Create tournament</button>

@@ -2,7 +2,20 @@ import { actor, UserError } from "rivetkit";
 import { db } from "rivetkit/db";
 import { chooseBotMove } from "./bots";
 import { buildReport, logEvents } from "./match";
-import { addPlayer, createGame, dealPauseMs, drawCard, type Game, handOf, pass, playCard, publicView, resetToLobby, startGame, TURN_MS } from "./rules";
+import {
+	addPlayer,
+	createGame,
+	dealPauseMs,
+	drawCard,
+	type Game,
+	handOf,
+	pass,
+	playCard,
+	publicView,
+	resetToLobby,
+	startGame,
+	TURN_MS,
+} from "./rules";
 import { PlayInput } from "./schema";
 import {
 	apply,
@@ -88,7 +101,15 @@ export const cloudburstRoom = actor({
 			requireOpenTable(c);
 			requireHost(c);
 			const seat = parseSeat(seatInput);
-			c.vars.game = apply(() => addPlayer(c.vars.game, `bot-${crypto.randomUUID()}`, botName(c.vars.game.players), true, seat));
+			c.vars.game = apply(() =>
+				addPlayer(
+					c.vars.game,
+					`bot-${crypto.randomUUID()}`,
+					botName(c.vars.game.players),
+					true,
+					seat,
+				),
+			);
 			await commit(c);
 		},
 		/** Moves you to an empty chair (lobby only). */
@@ -103,7 +124,8 @@ export const cloudburstRoom = actor({
 			requireOpenTable(c);
 			requireHost(c);
 			const id = BotIdInput.parse(botId);
-			if (!c.vars.game.players.find((p) => p.id === id)?.bot) throw new UserError("Bot not found.", { code: "rule" });
+			if (!c.vars.game.players.find((p) => p.id === id)?.bot)
+				throw new UserError("Bot not found.", { code: "rule" });
 			c.vars.game = removePlayer(c.vars.game, id);
 			await commit(c);
 		},
@@ -140,7 +162,13 @@ export const cloudburstRoom = actor({
 		dropIfGone: async (c, id: unknown) => {
 			requireScheduler(c);
 			const { game } = c.vars;
-			if (await dropIfGone(c, id, { playerId: game.players[game.turn]?.id ?? null, key: game.turnKey })) await commit(c);
+			if (
+				await dropIfGone(c, id, {
+					playerId: game.players[game.turn]?.id ?? null,
+					key: game.turnKey,
+				})
+			)
+				await commit(c);
 		},
 		/** Internal (scheduler only): a tournament table's start time, or the end of its wait for late players. */
 		tournamentStart: async (c) => {
@@ -161,9 +189,14 @@ export const cloudburstRoom = actor({
 			const player = game.players[game.turn]!;
 			const move = chooseBotMove(game);
 			const next =
-				move.type === "play" ? playCard(game, player.id, move.input, rng) : move.type === "draw" ? drawCard(game, player.id, rng) : pass(game, player.id);
+				move.type === "play"
+					? playCard(game, player.id, move.input, rng)
+					: move.type === "draw"
+						? drawCard(game, player.id, rng)
+						: pass(game, player.id);
 			const ev = next.lastEvent;
-			const mark = !player.bot && (ev?.type === "played" || ev?.type === "drew" || ev?.type === "passed");
+			const mark =
+				!player.bot && (ev?.type === "played" || ev?.type === "drew" || ev?.type === "passed");
 			c.vars.game = mark ? { ...next, lastEvent: { ...ev, auto: true } } : next;
 			if (move.type === "draw") await c.schedule.after(AFTER_DRAW_MS, "autoPlay", game.turnKey);
 			await commit(c, true);
@@ -186,7 +219,10 @@ const commit = (c: Ctx, auto = false) =>
 		auto,
 	);
 
-const viewOf = (c: Ctx) => ({ ...publicView(c.vars.game, turnClock(c.vars.timer)), tournament: tournamentView(c) });
+const viewOf = (c: Ctx) => ({
+	...publicView(c.vars.game, turnClock(c.vars.timer)),
+	tournament: tournamentView(c),
+});
 
 /** Starts the match; `by` must be the host. */
 function begin(c: Ctx, by: string): void {
@@ -195,11 +231,20 @@ function begin(c: Ctx, by: string): void {
 }
 
 /** How a tournament table starts itself: as its host would. */
-const tournament = (c: Ctx) => ({ start: () => begin(c, c.vars.game.hostId), commit: () => commit(c) });
+const tournament = (c: Ctx) => ({
+	start: () => begin(c, c.vars.game.hostId),
+	commit: () => commit(c),
+});
 
 /** Everyone gets TURN_MS; a fresh round's clock starts after the round summary and the deal. */
 function scheduleTurn(c: Ctx, resume: boolean): Promise<void> {
 	const game = c.vars.game as Game;
 	const current = game.phase === "playing" ? game.players[game.turn] : undefined;
-	return armTurn(c, current, { key: game.turnKey, turnMs: TURN_MS, pause: dealPauseMs(game), resume, rng });
+	return armTurn(c, current, {
+		key: game.turnKey,
+		turnMs: TURN_MS,
+		pause: dealPauseMs(game),
+		resume,
+		rng,
+	});
 }

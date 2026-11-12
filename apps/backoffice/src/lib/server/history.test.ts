@@ -31,7 +31,9 @@ describe('matches', () => {
 		expect(all.map((m) => m.winner)).toEqual(['Bot Rain', 'Rina']);
 		expect(all[0]!.players).toBe(2);
 		expect(await listMatches(sql, { ...empty, to: '2026-11-09' })).toHaveLength(1);
-		expect(await listMatches(sql, { ...empty, from: '2026-11-10', to: '2026-11-10' })).toHaveLength(1);
+		expect(await listMatches(sql, { ...empty, from: '2026-11-10', to: '2026-11-10' })).toHaveLength(
+			1
+		);
 		expect(await listMatches(sql, { ...empty, player: rina, game: 'other' })).toHaveLength(0);
 		expect(await listMatches(sql, { ...empty, from: 'garbage' })).toHaveLength(2);
 	});
@@ -49,13 +51,21 @@ describe('matches', () => {
 		const m = await matchDetail(sql, '01900000-0000-7000-8000-000000000001');
 		expect(m).toMatchObject({ gameName: 'Bust 31', scoreLabel: 'Lives left' });
 		expect(m?.seats[0]?.score).toBe(2);
-		expect(await matchGames(sql)).toEqual([{ slug: 'bust-31', name: 'Bust 31' }, { slug: 'cloudburst', name: 'Cloudburst' }]);
+		expect(await matchGames(sql)).toEqual([
+			{ slug: 'bust-31', name: 'Bust 31' },
+			{ slug: 'cloudburst', name: 'Cloudburst' }
+		]);
 		expect(m?.seats.map((s) => [s.name, s.bot, s.placement])).toEqual([
 			['Rina', false, 1],
 			['Bot Rain', true, 2]
 		]);
 		// A table from before rooms were stored: open, opener unknown.
-		expect(m).toMatchObject({ roomCode: 'ABCD', tournamentId: null, openedByPlayerId: null, openedByAdmin: null });
+		expect(m).toMatchObject({
+			roomCode: 'ABCD',
+			tournamentId: null,
+			openedByPlayerId: null,
+			openedByAdmin: null
+		});
 	});
 
 	test('detail shows the tournament, or who opened an open table', async () => {
@@ -63,14 +73,20 @@ describe('matches', () => {
 		const [{ id: cup }] = await sql`
 			INSERT INTO tournaments (game_slug, name, players_per_room, starts_at, registration_opens_at, registration_closes_at, created_by_admin_id)
 			VALUES ('bust-31', 'Friday Cup', 2, now(), now() - interval '1 hour', now(), ${admin}) RETURNING id`;
-		const [{ id: cupRoom }] = await sql`INSERT INTO rooms (game_slug, code, tournament_id) VALUES ('bust-31', 'CUP01', ${cup}) RETURNING id`;
-		const [{ id: openRoom }] = await sql`INSERT INTO rooms (game_slug, code, created_by_player_id) VALUES ('bust-31', 'OPEN1', ${rina}) RETURNING id`;
+		const [{ id: cupRoom }] =
+			await sql`INSERT INTO rooms (game_slug, code, tournament_id) VALUES ('bust-31', 'CUP01', ${cup}) RETURNING id`;
+		const [{ id: openRoom }] =
+			await sql`INSERT INTO rooms (game_slug, code, created_by_player_id) VALUES ('bust-31', 'OPEN1', ${rina}) RETURNING id`;
 		const played = async (id: string, roomId: string) => {
 			await sql`INSERT INTO matches (id, game_slug, room_id, rules_version, started_at, ended_at, body_hash)
 			          VALUES (${id}, 'bust-31', ${roomId}, 1, now() - interval '5 min', now(), ${new Uint8Array(32)})`;
 			return matchDetail(sql, id);
 		};
-		expect(await played('01900000-0000-7000-8000-000000000003', cupRoom)).toMatchObject({ roomCode: 'CUP01', tournamentId: cup, tournamentName: 'Friday Cup' });
+		expect(await played('01900000-0000-7000-8000-000000000003', cupRoom)).toMatchObject({
+			roomCode: 'CUP01',
+			tournamentId: cup,
+			tournamentName: 'Friday Cup'
+		});
 		expect(await played('01900000-0000-7000-8000-000000000004', openRoom)).toMatchObject({
 			roomCode: 'OPEN1',
 			tournamentId: null,
@@ -84,5 +100,11 @@ test('audit log shows the admin and the target player by name', async () => {
 	const id = await createAdmin(sql, 'root', 'correct horse battery');
 	await disablePlayer(sql, { id, username: 'root' }, rina, 'Spam', '192.168.1.9');
 	const [row] = await listAudit(sql, null);
-	expect(row).toMatchObject({ admin: 'root', action: 'player.disable', playerName: 'Rina', ip: '192.168.1.9', detail: { reason: 'Spam' } });
+	expect(row).toMatchObject({
+		admin: 'root',
+		action: 'player.disable',
+		playerName: 'Rina',
+		ip: '192.168.1.9',
+		detail: { reason: 'Spam' }
+	});
 });

@@ -8,7 +8,10 @@ type RoomAccess = { actorId: string; token: string };
 export class RoomRefused extends Error {}
 
 async function roomAccess(game: string, code: string): Promise<RoomAccess> {
-	const res = await fetch(`/api/${encodeURIComponent(game)}/rooms/${encodeURIComponent(code)}/token`, { method: 'POST', cache: 'no-store' });
+	const res = await fetch(
+		`/api/${encodeURIComponent(game)}/rooms/${encodeURIComponent(code)}/token`,
+		{ method: 'POST', cache: 'no-store' }
+	);
 	if (!res.ok) {
 		// Our route answers { error: { message } } for known cases (unknown code, no name yet).
 		const body = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
@@ -31,6 +34,10 @@ export async function roomClient(game: string, code: string) {
 		return token;
 	};
 	// devtools off: the local engine does not serve the devtools bundle, which only adds a 404.
-	const client = createClient<typeof registry>({ endpoint: PUBLIC_RIVET_ENDPOINT, devtools: false, getToken });
+	const client = createClient<typeof registry>({
+		endpoint: PUBLIC_RIVET_ENDPOINT,
+		devtools: false,
+		getToken
+	});
 	return { client, actorId: first.actorId };
 }
