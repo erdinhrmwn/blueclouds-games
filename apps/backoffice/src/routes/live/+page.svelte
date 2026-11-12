@@ -26,14 +26,19 @@
 	let refreshing = $state(false);
 	let now = $state(Date.now());
 
-	const tables = $derived(
-		data.tables.filter((table) => {
+	/** The tables that fit the filters, empty ones last: they rarely need a look, but an admin may want to fill them. */
+	const tables = $derived.by(() => {
+		const fitting = data.tables.filter((table) => {
 			const gameFits = !game || table.game === game;
 			const kindFits = !kind || table.kind === kind;
 
 			return gameFits && kindFits;
-		})
-	);
+		});
+		const taken = fitting.filter((table) => table.players > 0);
+		const empty = fitting.filter((table) => table.players === 0);
+
+		return [...taken, ...empty];
+	});
 
 	const stats = $derived([
 		{ label: 'Live tables', value: data.tables.length },
@@ -166,7 +171,11 @@
 								{/if}
 							</p>
 						</div>
-						<span class={phase.tag}>{phase.label}</span>
+						<span class="flex shrink-0 flex-wrap justify-end gap-1.5">
+							{#if table.players === 0}<span class="tag bg-subtle text-muted">Empty table</span
+								>{/if}
+							<span class={phase.tag}>{phase.label}</span>
+						</span>
 					</div>
 
 					<!-- The seats in order, one row: a player's initial, or + where the seat is free. -->
