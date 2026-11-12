@@ -147,6 +147,20 @@ export async function fetchRoomSeats(code: string): Promise<RoomSeats | null> {
 	return TournamentRoom.parse(body.data.room);
 }
 
+const VipIds = z.object({ vipIds: z.array(z.uuid()) });
+
+/** Which of these players are VIP right now. Throws if the platform can't be reached. */
+export async function fetchVipIds(ids: string[]): Promise<Set<string>> {
+	const query = ids.map(encodeURIComponent).join(",");
+	const res = await callPlatform("GET", `/players/vips?ids=${query}`);
+	if (!res.ok) throw new Error(`vip lookup: ${res.status}`);
+
+	const body = (await res.json()) as { data: unknown };
+	const { vipIds } = VipIds.parse(body.data);
+
+	return new Set(vipIds);
+}
+
 /** Tells the platform a tournament room's match began, or that it gave up. A lost call is fixed by the platform's job and the match report. */
 export async function markRoom(
 	code: string,

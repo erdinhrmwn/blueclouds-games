@@ -4,7 +4,7 @@ import type { AppEnv } from "../app";
 import { z } from "zod";
 import { ApiError, ok, validate } from "../lib/http";
 import type { Signer } from "../lib/play-tokens";
-import { bearer, playerAuth } from "../middleware/auth";
+import { bearer, playerAuth, serverAuth } from "../middleware/auth";
 import { rateLimit } from "../middleware/rate-limit";
 import * as players from "../services/players";
 
@@ -18,6 +18,15 @@ const Name = z
 	.refine((name) => !/\p{Cc}/u.test(name), "Must not contain control characters.");
 
 const NameBody = z.object({ name: Name });
+
+/** A room asks about its seated humans only: at most a few ids. */
+const MAX_VIP_LOOKUP = 12;
+const VipQuery = z.object({
+	ids: z
+		.string()
+		.transform((ids) => ids.split(","))
+		.pipe(z.array(z.uuid()).min(1).max(MAX_VIP_LOOKUP)),
+});
 /** A guest may bring a name (a browser that lost its guest keeps playing under the same name); else one is made up. */
 const GuestBody = z.object({ name: Name.optional() });
 
@@ -47,9 +56,10 @@ const Login = z.object({
 const GUEST_LIMIT = { perIp: 5, windowMs: 60_000 };
 const LOGIN_LIMIT = { perIp: 10, windowMs: 60_000 };
 
-export function playerRoutes(sql: SQL, signer: Signer) {
+export function playerRoutes(sql: SQL, signer: Signer, serverKey: string) {
 	const app = new Hono<AppEnv>();
 	const auth = playerAuth(sql);
+	const server = serverAuth(serverKey);
 
 	/** New guest player. The secret is returned only here. */
 	app.post(
@@ -122,6 +132,14 @@ export function playerRoutes(sql: SQL, signer: Signer) {
 		const playToken = await players.issuePlayToken(sql, signer, c.get("player"));
 
 		return ok(c, playToken);
+	});
+
+	/** For the room actor, with the server key: which of its seated players are VIP right now. */
+	app.get("/players/vips", server, validate("query", VipQuery), async (c) => {
+		const { ids } = c.req.valid("query");
+		const vipIds = await players.vipIds(sql, ids);
+
+		return ok(c, { vipIds });
 	});
 
 	return app;

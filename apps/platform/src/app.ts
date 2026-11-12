@@ -53,7 +53,7 @@ export function createApp(deps: Deps) {
 		return ok(c, { status: "ok" });
 	});
 
-	app.route("/v1", playerRoutes(deps.sql, deps.signer));
+	app.route("/v1", playerRoutes(deps.sql, deps.signer, deps.config.serverKey));
 	app.route("/v1", matchRoutes(deps.sql, deps.config.serverKey));
 	app.route("/v1", roomRoutes(deps.sql, deps.config.serverKey));
 	app.route("/v1", tournamentRoutes(deps.sql));

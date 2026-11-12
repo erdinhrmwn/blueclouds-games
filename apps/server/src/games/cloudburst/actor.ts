@@ -20,6 +20,7 @@ import { PlayInput } from "./schema";
 import {
 	apply,
 	armTurn,
+	armVipRefresh,
 	botName,
 	caller,
 	checkConnect,
@@ -32,6 +33,7 @@ import {
 	migrateRoom,
 	parseSeat,
 	playerOf,
+	refreshVips,
 	reportToDirectory,
 	requireHost,
 	requireOpenTable,
@@ -69,7 +71,10 @@ export const cloudburstRoom = actor({
 	},
 	onBeforeConnect: async (_c, params: unknown) => checkConnect(params),
 	onConnect: async (c, conn) => {
-		if (await identify(c, conn)) await reportToDirectory(c, SLUG);
+		if (!(await identify(c, conn))) return;
+
+		await reportToDirectory(c, SLUG);
+		await armVipRefresh(c);
 	},
 	onDisconnect: async (c, conn) => {
 		const id = playerOf(c, conn);
@@ -177,6 +182,13 @@ export const cloudburstRoom = actor({
 
 			const dropped = await dropIfGone(c, id, turn);
 			if (dropped) await commit(c);
+		},
+		/** Internal (scheduler only): shows a VIP grant or revoke on a seated player's tag. */
+		refreshVips: async (c, at: unknown) => {
+			requireScheduler(c);
+
+			const changed = await refreshVips(c, at);
+			if (changed) await commit(c);
 		},
 		/** Internal (scheduler only): a tournament table's start time, or the end of its wait for late players. */
 		tournamentStart: async (c) => {

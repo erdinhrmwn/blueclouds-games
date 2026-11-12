@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { jwtVerify } from "jose";
 import { PLAY_TOKEN_AUDIENCE } from "../lib/play-tokens";
-import { call, guest, setupTestApp } from "../test-helpers";
+import { call, guest, SERVER_KEY, setupTestApp } from "../test-helpers";
 
 let t: Awaited<ReturnType<typeof setupTestApp>>;
 beforeAll(async () => {
@@ -169,6 +169,22 @@ describe("play tokens", () => {
 		});
 
 		expect(payload.vip).toBe(true);
+	});
+
+	test("tells a room which of its players are VIP, with the server key only", async () => {
+		const vip = await guest(t.app);
+		const plain = await guest(t.app);
+		await t.sql`UPDATE players SET is_vip = true WHERE id = ${vip.player.id}`;
+
+		const path = `/v1/players/vips?ids=${vip.player.id},${plain.player.id}`;
+		const res = await call(t.app, "GET", path, { token: SERVER_KEY });
+
+		expect(res.status).toBe(200);
+		expect(res.json.data.vipIds).toEqual([vip.player.id]);
+		expect((await call(t.app, "GET", path, { token: vip.secret })).status).toBe(401);
+		expect(
+			(await call(t.app, "GET", "/v1/players/vips?ids=nope", { token: SERVER_KEY })).status,
+		).toBe(400);
 	});
 
 	test("disabled player cannot get a token", async () => {

@@ -122,6 +122,19 @@ export function markVip<G extends Table>(game: G, id: string): G {
 	};
 }
 
+/** Shows exactly the humans in `vipIds` as VIPs. Returns the same game when no tag changes. */
+export function showVips<G extends Table>(game: G, vipIds: Set<string>): G {
+	const changed = game.players.some((p) => !p.bot && !!p.vip !== vipIds.has(p.id));
+	if (!changed) {
+		return game;
+	}
+
+	return {
+		...game,
+		players: game.players.map((p) => (p.bot ? p : { ...p, vip: vipIds.has(p.id) })),
+	};
+}
+
 /** The next index around the table in `direction` whose player `inPlay` accepts (or `from` if none does). */
 export function nextIndex<P>(
 	players: P[],

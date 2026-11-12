@@ -261,3 +261,15 @@ export async function issuePlayToken(sql: SQL, signer: Signer, player: Player) {
 
 	return signer.sign({ id: player.id, name: player.name, vip });
 }
+
+/** Which of these players are VIP, for the seat tags at a table. */
+export async function vipIds(sql: SQL, ids: string[]): Promise<string[]> {
+	const rows = (await sql`
+		SELECT id
+		FROM players
+		WHERE id IN ${sql(ids)}
+			AND is_vip
+	`) as { id: string }[];
+
+	return rows.map((row) => row.id);
+}

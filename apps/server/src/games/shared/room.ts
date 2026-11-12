@@ -3,6 +3,7 @@
 import { UserError } from "rivetkit";
 import {
 	fetchRoomSeats,
+	fetchVipIds,
 	type Identity,
 	markRoom,
 	reportMatch,
@@ -10,7 +11,7 @@ import {
 } from "../../platform";
 import { type LogEntry, type LogEvent, type MatchReport, type MatchState, stamp } from "./match";
 import { ConnParams, SeatInput } from "./schema";
-import { markAway, removePlayer, RuleError, SEATS, type Table } from "./table";
+import { markAway, removePlayer, RuleError, SEATS, showVips, type Table } from "./table";
 
 /** How long a closed tab has to come back (a refresh) before its player leaves the table. */
 export const GONE_AFTER_MS = 15_000;
@@ -27,6 +28,9 @@ export type TurnTimer = { moves: number; endsAt: number; total: number } | null;
 
 /** How long a tournament room waits past its start time for late players (Erdin, 2026-11-11). */
 export const LATE_GRACE_MS = 3 * 60_000;
+
+/** How often a room with someone connected asks the platform who is VIP, so a grant or revoke reaches seated tags. */
+export const VIP_REFRESH_MS = 30_000;
 
 /** A tournament room as the actor knows it from the platform. `seats` maps each assigned player to their seat (null = any). */
 export type TournamentRoom = {
@@ -52,17 +56,20 @@ export type Saved<G extends Table, M extends MatchState = MatchState> = {
 
 /**
  * What every room keeps in `c.vars`. Not saved: who each open connection is (connections close when
- * the actor sleeps), and the game as last committed, to see what each commit changed for the move log.
+ * the actor sleeps), the game as last committed, to see what each commit changed for the move log,
+ * and when the running VIP check is due (null = none running).
  */
 export type RoomVars<G extends Table, M extends MatchState = MatchState> = Saved<G, M> & {
 	who: Record<string, Identity>;
 	logged: G;
+	vipCheckAt: number | null;
 };
 
 export const roomVars = <G extends Table, M extends MatchState>(game: G): RoomVars<G, M> => ({
 	game,
 	logged: game,
 	who: {},
+	vipCheckAt: null,
 	timer: null,
 	match: null,
 });
@@ -621,4 +628,51 @@ export function tournamentView(c: Ctx) {
 		seats: Object.keys(tournament.seats).length,
 		closed: tournament.closed,
 	};
+}
+
+/**
+ * Starts the room's VIP check if none is running. Its due time is not saved: after a wake the next
+ * connection starts a fresh check, and the timer left from before the sleep is ignored.
+ */
+export async function armVipRefresh(c: Ctx): Promise<void> {
+	if (c.vars.vipCheckAt) return;
+
+	const at = Date.now() + VIP_REFRESH_MS;
+	c.vars.vipCheckAt = at;
+	await c.schedule.at(at, "refreshVips", at);
+}
+
+/**
+ * For the scheduled `refreshVips`: shows a VIP grant or revoke on seated humans' tags, and keeps
+ * checking while anyone is connected. Returns true when a tag changed.
+ */
+export async function refreshVips(c: Ctx, at: unknown): Promise<boolean> {
+	// A timer from before a sleep, or a duplicate.
+	if (at !== c.vars.vipCheckAt) return false;
+
+	c.vars.vipCheckAt = null;
+	if (c.conns.size > 0) {
+		await armVipRefresh(c);
+	}
+
+	const humanIds = (c.vars.game as Table).players
+		.filter((player) => !player.bot)
+		.map((player) => player.id);
+	if (humanIds.length === 0) return false;
+
+	let vipIds: Set<string>;
+	try {
+		vipIds = await fetchVipIds(humanIds);
+	} catch (err) {
+		c.log.warn({ msg: "vip check failed", err: String(err) });
+		return false;
+	}
+
+	// Read the game again: a move may have landed while the platform answered.
+	const game = c.vars.game as Table;
+	const updated = showVips(game, vipIds);
+	if (updated === game) return false;
+
+	c.vars.game = updated;
+	return true;
 }
