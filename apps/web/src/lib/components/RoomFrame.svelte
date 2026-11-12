@@ -55,27 +55,31 @@
 	}
 </script>
 
-<div class="flex min-h-8 items-center justify-between gap-3 {player.playing ? 'pt-3' : 'pt-2'}">
-	<!-- Game name, the room's name, its code, then the round once dealt: one per line. -->
+<header class="flex items-start justify-between gap-3 pb-1 {player.playing ? 'pt-3' : 'pt-2'}">
+	<!-- Title, then the room's name, then a row of small facts about the room. -->
 	<div class="min-w-0">
-		<h1 class="font-display text-lg leading-tight font-bold text-paper">{game.name}</h1>
-		<p class="flex min-w-0 items-center gap-1.5 text-xs font-semibold text-paper/90">
+		<h1 class="font-display text-xl leading-tight font-bold text-paper">{game.name}</h1>
+		<p class="mt-0.5 truncate text-sm font-medium text-paper/90">{roomName}</p>
+		<div class="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px]">
 			{#if room?.view?.tournament}
-				<span class="shrink-0 rounded-sm bg-brass px-1 text-[10px] text-ink">Tournament</span>
+				<span class="rounded-full bg-brass px-2 py-0.5 font-semibold text-ink">Tournament</span>
 			{/if}
-			<span class="truncate">{roomName}</span>
-		</p>
-		<p class="text-xs text-paper/70">
-			Room <span class="font-semibold tracking-wider text-paper/90 tabular-nums">{code}</span>
-		</p>
-		{#if room?.view && room.view.phase !== 'lobby'}
-			<p class="text-xs text-paper/70 tabular-nums">Round #{room.view.round}</p>
-		{/if}
+			<span class="rounded-full border border-paper/15 bg-black/30 px-2 py-0.5 text-paper/65">
+				Room <span class="font-semibold tracking-wider text-paper tabular-nums">{code}</span>
+			</span>
+			{#if room?.view && room.view.phase !== 'lobby'}
+				<span
+					class="rounded-full border border-brass/40 bg-brass/10 px-2 py-0.5 font-semibold text-brass tabular-nums"
+				>
+					Round #{room.view.round}
+				</span>
+			{/if}
+		</div>
 	</div>
 	{#if room?.view}
-		<button class="link-btn" onclick={leave}>Leave table</button>
+		<button class="link-btn shrink-0" onclick={leave}>Leave table</button>
 	{/if}
-</div>
+</header>
 
 {#if room?.status === 'reconnecting'}
 	<p
