@@ -26,6 +26,7 @@ export function shuffle<T>(items: T[], rng: Rng): T[] {
 		const j = Math.floor(rng() * (i + 1));
 		[out[i], out[j]] = [out[j]!, out[i]!];
 	}
+
 	return out;
 }
 
@@ -35,12 +36,15 @@ export const bySeat = <P extends Seated>(players: P[]) =>
 
 export function freeSeats(players: Seated[]): number[] {
 	const taken = new Set(players.map((p) => p.seat));
-	return Array.from({ length: SEATS }, (_, s) => s).filter((s) => !taken.has(s));
+	const allSeats = Array.from({ length: SEATS }, (_, seat) => seat);
+
+	return allSeats.filter((seat) => !taken.has(seat));
 }
 
 function assertFreeSeat(players: Seated[], seat: number) {
-	if (!Number.isInteger(seat) || seat < 0 || seat >= SEATS)
+	if (!Number.isInteger(seat) || seat < 0 || seat >= SEATS) {
 		throw new RuleError("That seat does not exist.");
+	}
 	if (players.some((p) => p.seat === seat)) throw new RuleError("That seat is taken.");
 }
 
@@ -57,11 +61,11 @@ export function seatPlayer<G extends Table<P>, P extends Seated>(
 	const chosen = seat ?? freeSeats(game.players)[0];
 	if (chosen === undefined) throw new RuleError("This table is full.");
 	assertFreeSeat(game.players, chosen);
-	return {
-		...game,
-		hostId: game.hostId ?? (player.bot ? null : player.id),
-		players: bySeat([...game.players, { ...player, seat: chosen } as P]),
-	};
+
+	const seated = { ...player, seat: chosen } as P;
+	const hostId = game.hostId ?? (player.bot ? null : player.id);
+
+	return { ...game, hostId, players: bySeat([...game.players, seated]) };
 }
 
 /** Moves a player to an empty chair. Lobby only, so the turn order never changes mid-game. */
@@ -69,14 +73,23 @@ export function takeSeat<G extends Table>(game: G, id: string, seat: number): G 
 	if (game.phase !== "lobby") throw new RuleError("Seats are locked while a game is running.");
 	if (!game.players.some((p) => p.id === id)) throw new RuleError("Join the table first.");
 	assertFreeSeat(game.players, seat);
-	return { ...game, players: bySeat(game.players.map((p) => (p.id === id ? { ...p, seat } : p))) };
+
+	const moved = game.players.map((p) => (p.id === id ? { ...p, seat } : p));
+	return { ...game, players: bySeat(moved) };
 }
 
 /** Only allowed in the lobby; mid-game seats stay so the turn order holds. */
 export function removePlayer<G extends Table>(game: G, id: string): G {
 	if (game.phase !== "lobby") return game;
+
 	const players = game.players.filter((p) => p.id !== id);
-	const hostId = game.hostId === id ? (players.find((p) => !p.bot)?.id ?? null) : game.hostId;
+
+	// The host leaving hands the table to the next human.
+	let hostId = game.hostId;
+	if (hostId === id) {
+		hostId = players.find((p) => !p.bot)?.id ?? null;
+	}
+
 	return { ...game, players, hostId };
 }
 
@@ -95,10 +108,12 @@ export function nextIndex<P>(
 	direction: 1 | -1,
 	inPlay: (p: P) => boolean = () => true,
 ): number {
-	const n = players.length;
-	for (let step = 1; step <= n; step++) {
-		const i = (((from + step * direction) % n) + n) % n;
-		if (inPlay(players[i]!)) return i;
+	const count = players.length;
+	for (let step = 1; step <= count; step++) {
+		// Wraps around both ways: ((x % n) + n) % n is never negative.
+		const index = (((from + step * direction) % count) + count) % count;
+		if (inPlay(players[index]!)) return index;
 	}
+
 	return from;
 }

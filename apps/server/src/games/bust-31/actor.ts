@@ -52,14 +52,20 @@ const SLUG = "bust-31";
 const rng = () => Math.random();
 
 export const bust31Room = actor({
-	options: { name: "Bust 31", icon: "fire" }, // shown in the Rivet dashboard
+	// Shown in the Rivet dashboard.
+	options: { name: "Bust 31", icon: "fire" },
 	db: db({ onMigrate: migrateRoom }),
 	createVars: () => roomVars<Game, MatchState>(createGame()),
 	onWake: async (c) => {
 		await loadRoom(c);
-		c.vars.game.moves ??= 0; // rooms saved before move counting existed
-		c.vars.game.players.forEach((p, i) => (p.seat ??= i)); // rooms saved before fixed seats
+
+		// Rooms saved before move counting and fixed seats existed.
+		c.vars.game.moves ??= 0;
+		c.vars.game.players.forEach((player, index) => {
+			player.seat ??= index;
+		});
 		c.vars.logged = c.vars.game;
+
 		await scheduleTurn(c, true);
 		await resumeReports(c);
 		await wakeTournament(c);
@@ -71,6 +77,7 @@ export const bust31Room = actor({
 	onDisconnect: async (c, conn) => {
 		const id = playerOf(c, conn);
 		delete c.vars.who[conn.id];
+
 		await reportToDirectory(c, SLUG, conn.id);
 		if (id) await c.schedule.after(GONE_AFTER_MS, "dropIfGone", id);
 	},
@@ -79,15 +86,20 @@ export const bust31Room = actor({
 		join: async (c) => {
 			const who = caller(c);
 			const seated = c.vars.game.players.find((p) => p.id === who.id);
+
 			if (!seated) {
 				const seat = await seatFor(c, who);
 				c.vars.game = apply(() => addPlayer(c.vars.game, who.id, who.name, false, seat));
 				await commit(c);
-				await tournamentTick(c, tournament(c)); // the last one in starts a tournament table
+
+				// The last one in starts a tournament table.
+				await tournamentTick(c, tournament(c));
 			} else if (seated.away) {
-				c.vars.game = setAway(c.vars.game, who.id, false); // back from a closed tab
+				// Back from a closed tab.
+				c.vars.game = setAway(c.vars.game, who.id, false);
 				await commit(c);
 			}
+
 			return { playerId: who.id, view: viewOf(c), hand: handOf(c.vars.game, who.id) };
 		},
 		leave: async (c) => {
@@ -99,15 +111,10 @@ export const bust31Room = actor({
 			requireOpenTable(c);
 			requireHost(c);
 			const seat = parseSeat(seatInput);
-			c.vars.game = apply(() =>
-				addPlayer(
-					c.vars.game,
-					`bot-${crypto.randomUUID()}`,
-					botName(c.vars.game.players),
-					true,
-					seat,
-				),
-			);
+			const botId = `bot-${crypto.randomUUID()}`;
+			const name = botName(c.vars.game.players);
+
+			c.vars.game = apply(() => addPlayer(c.vars.game, botId, name, true, seat));
 			await commit(c);
 		},
 		/** Moves you to an empty chair (lobby only). */
@@ -122,8 +129,11 @@ export const bust31Room = actor({
 			requireOpenTable(c);
 			requireHost(c);
 			const id = BotIdInput.parse(botId);
-			if (!c.vars.game.players.find((p) => p.id === id)?.bot)
+			const bot = c.vars.game.players.find((p) => p.id === id);
+			if (!bot?.bot) {
 				throw new UserError("Bot not found.", { code: "rule" });
+			}
+
 			c.vars.game = removePlayer(c.vars.game, id);
 			await commit(c);
 		},
@@ -136,6 +146,7 @@ export const bust31Room = actor({
 			const me = requirePlayer(c);
 			const parsed = PlayInput.safeParse(input);
 			if (!parsed.success) throw new UserError("Invalid card.", { code: "bad_input" });
+
 			c.vars.game = apply(() => playCard(c.vars.game, me, parsed.data.cardId, rng));
 			await commit(c);
 		},
@@ -149,10 +160,10 @@ export const bust31Room = actor({
 		dropIfGone: async (c, id: unknown) => {
 			requireScheduler(c);
 			const { game } = c.vars;
-			if (
-				await dropIfGone(c, id, { playerId: game.players[game.turn]?.id ?? null, key: game.moves })
-			)
-				await commit(c);
+			const turn = { playerId: game.players[game.turn]?.id ?? null, key: game.moves };
+
+			const dropped = await dropIfGone(c, id, turn);
+			if (dropped) await commit(c);
 		},
 		/** Internal (scheduler only): a tournament table's start time, or the end of its wait for late players. */
 		tournamentStart: async (c) => {
@@ -170,13 +181,20 @@ export const bust31Room = actor({
 			const { game } = c.vars;
 			// A stale or duplicate timer (e.g. after a wake) must not move twice.
 			if (game.phase !== "playing" || moves !== game.moves) return;
+
 			const player = game.players[game.turn];
-			const card = player && chooseBotCard(player.hand, game.total);
-			if (!player || !card) return;
+			if (!player) return;
+
+			const card = chooseBotCard(player.hand, game.total);
+			if (!card) return;
+
 			const next = playCard(game, player.id, card.id, rng);
-			const ev = next.lastEvent;
-			const auto = !player.bot && (ev?.type === "played" || ev?.type === "bust");
-			c.vars.game = auto ? { ...next, lastEvent: { ...ev, auto: true } } : next;
+			const event = next.lastEvent;
+
+			// A move made for a human (timeout or away) is marked so the table can say so.
+			const playedForHuman = !player.bot && (event?.type === "played" || event?.type === "bust");
+			c.vars.game = playedForHuman ? { ...next, lastEvent: { ...event, auto: true } } : next;
+
 			await commit(c, true);
 		},
 	},

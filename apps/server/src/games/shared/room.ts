@@ -16,7 +16,9 @@ import { removePlayer, RuleError, SEATS, setAway, type Table } from "./table";
 export const GONE_AFTER_MS = 15_000;
 /** A bot gets the same turn clock as a human; it just decides within this range (random). */
 export const BOT_THINK_MS = [1500, 4000] as const;
+
 const BOT_NAMES = ["Bot Cloud", "Bot Rain", "Bot Thunder", "Bot Rainbow", "Bot Wind"];
+
 /** Wait before each retry of an unsent match result; the last one repeats forever. */
 const REPORT_RETRY_MS = [10_000, 60_000, 5 * 60_000, 30 * 60_000, 6 * 60 * 60_000];
 
@@ -69,26 +71,41 @@ export const roomVars = <G extends Table, M extends MatchState>(game: G): RoomVa
 export async function migrateRoom(d: {
 	execute: (sql: string) => Promise<unknown>;
 }): Promise<void> {
-	await d.execute(
-		"CREATE TABLE IF NOT EXISTS room (id INTEGER PRIMARY KEY CHECK (id = 1), data TEXT NOT NULL)",
-	);
+	await d.execute(`
+		CREATE TABLE IF NOT EXISTS room (
+			id INTEGER PRIMARY KEY CHECK (id = 1),
+			data TEXT NOT NULL
+		)`);
+
 	// Outbox: finished match results waiting to reach the platform.
-	await d.execute(
-		"CREATE TABLE IF NOT EXISTS match_reports (match_id TEXT PRIMARY KEY, body TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0)",
-	);
+	await d.execute(`
+		CREATE TABLE IF NOT EXISTS match_reports (
+			match_id TEXT PRIMARY KEY,
+			body TEXT NOT NULL,
+			attempts INTEGER NOT NULL DEFAULT 0
+		)`);
+
 	// Move log of the match being played; moved into its report when the match ends.
-	await d.execute(
-		"CREATE TABLE IF NOT EXISTS match_events (match_id TEXT NOT NULL, seq INTEGER NOT NULL, body TEXT NOT NULL, PRIMARY KEY (match_id, seq))",
-	);
+	await d.execute(`
+		CREATE TABLE IF NOT EXISTS match_events (
+			match_id TEXT NOT NULL,
+			seq INTEGER NOT NULL,
+			body TEXT NOT NULL,
+			PRIMARY KEY (match_id, seq)
+		)`);
 }
 
 /** onWake: loads the saved room into `c.vars`. */
 export async function loadRoom(c: Ctx): Promise<void> {
-	const rows = await c.db.execute("SELECT data FROM room WHERE id = 1");
-	if (rows[0]) Object.assign(c.vars, JSON.parse(rows[0].data));
+	const [row] = await c.db.execute("SELECT data FROM room WHERE id = 1");
+	if (row) Object.assign(c.vars, JSON.parse(row.data));
+
 	c.vars.timer ??= null;
 	c.vars.match ??= null;
-	if (c.vars.match) c.vars.match.seq ??= 0; // matches started before the move log
+
+	// Matches started before the move log have no seq yet.
+	if (c.vars.match) c.vars.match.seq ??= 0;
+
 	c.vars.logged = c.vars.game;
 }
 
@@ -119,20 +136,21 @@ export async function commitRoom<G extends Table, M extends MatchState>(
 	auto = false,
 ): Promise<void> {
 	await game.scheduleTurn();
+
 	const vars = c.vars as RoomVars<G, M>;
 	const entries = vars.match ? game.logEvents(vars.logged, vars.game, auto) : [];
 	vars.logged = vars.game;
 
 	let match = vars.match;
 	let events: LogEvent[] = [];
-	if (match)
-		({ match, events } = stamp(
-			game.noteMove ? game.noteMove(match, vars.game) : match,
-			entries,
-			Date.now(),
-		));
+	if (match) {
+		const noted = game.noteMove ? game.noteMove(match, vars.game) : match;
+		({ match, events } = stamp(noted, entries, Date.now()));
+	}
+
 	const finished = !!match && vars.game.phase === "finished";
 	vars.match = finished ? null : match;
+
 	const saved: Saved<G, M> = {
 		game: vars.game,
 		timer: vars.timer,
@@ -142,26 +160,25 @@ export async function commitRoom<G extends Table, M extends MatchState>(
 	};
 	await c.db.transaction(
 		async (tx: Ctx) => {
-			for (const e of events)
+			for (const event of events) {
 				await tx.execute(
 					"INSERT INTO match_events (match_id, seq, body) VALUES (?, ?, ?)",
 					match!.id,
-					e.seq,
-					JSON.stringify(e),
+					event.seq,
+					JSON.stringify(event),
 				);
+			}
+
 			if (finished) {
 				const rows = await tx.execute(
 					"SELECT body FROM match_events WHERE match_id = ? ORDER BY seq",
 					match!.id,
 				);
-				const log = rows.map((r: { body: string }) => JSON.parse(r.body) as LogEvent);
-				const report = game.buildReport(
-					match!,
-					vars.game,
-					c.key[0] as string,
-					new Date().toISOString(),
-					log,
-				);
+				const log = rows.map((row: { body: string }) => JSON.parse(row.body) as LogEvent);
+				const roomCode = c.key[0] as string;
+				const endedAt = new Date().toISOString();
+				const report = game.buildReport(match!, vars.game, roomCode, endedAt, log);
+
 				await tx.execute(
 					"INSERT OR IGNORE INTO match_reports (match_id, body) VALUES (?, ?)",
 					report.matchId,
@@ -169,8 +186,10 @@ export async function commitRoom<G extends Table, M extends MatchState>(
 				);
 				await tx.execute("DELETE FROM match_events WHERE match_id = ?", match!.id);
 			}
+
 			await tx.execute(
-				"INSERT INTO room (id, data) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET data = excluded.data",
+				`INSERT INTO room (id, data) VALUES (1, ?)
+				ON CONFLICT(id) DO UPDATE SET data = excluded.data`,
 				JSON.stringify(saved),
 			);
 		},
@@ -179,10 +198,13 @@ export async function commitRoom<G extends Table, M extends MatchState>(
 
 	c.broadcast("view", game.view());
 	for (const conn of c.conns.values()) {
-		const id = playerOf(c, conn);
-		if (id) conn.send("hand", game.handOf(id));
+		const playerId = playerOf(c, conn);
+		if (playerId) conn.send("hand", game.handOf(playerId));
 	}
-	await reportToDirectory(c, game.slug); // after the players got their update, so the list never slows a move
+
+	// After the players got their update, so the list never slows a move.
+	await reportToDirectory(c, game.slug);
+
 	if (finished) await c.schedule.after(0, "sendReports");
 }
 
@@ -202,19 +224,26 @@ export function apply<T>(fn: () => T): T {
 
 export function parseSeat(input: unknown): number {
 	const parsed = SeatInput.safeParse(input);
-	if (!parsed.success) throw new UserError("That seat does not exist.", { code: "bad_input" });
+	if (!parsed.success) {
+		throw new UserError("That seat does not exist.", { code: "bad_input" });
+	}
+
 	return parsed.data;
 }
 
 export function botName(players: { name: string }[]): string {
-	const used = new Set(players.map((p) => p.name));
-	return BOT_NAMES.find((n) => !used.has(n)) ?? `Bot ${players.length + 1}`;
+	const used = new Set(players.map((player) => player.name));
+	const free = BOT_NAMES.find((name) => !used.has(name));
+
+	return free ?? `Bot ${players.length + 1}`;
 }
 
 /** onBeforeConnect: only connections with a valid play token get in. */
 export async function checkConnect(params: unknown): Promise<void> {
 	const parsed = ConnParams.safeParse(params);
-	if (!parsed.success || !(await verifyPlayToken(parsed.data.playToken))) {
+	const identity = parsed.success ? await verifyPlayToken(parsed.data.playToken) : null;
+
+	if (!identity) {
 		throw new UserError("Your session expired. Reload the page.", { code: "unauthenticated" });
 	}
 }
@@ -224,11 +253,13 @@ export async function identify(
 	c: Ctx,
 	conn: { id: string; params: unknown; disconnect: (reason: string) => void },
 ): Promise<boolean> {
-	const who = await verifyPlayToken(ConnParams.parse(conn.params).playToken);
+	const { playToken } = ConnParams.parse(conn.params);
+	const who = await verifyPlayToken(playToken);
 	if (!who) {
 		conn.disconnect("unauthenticated");
 		return false;
 	}
+
 	c.vars.who[conn.id] = who;
 	return true;
 }
@@ -236,27 +267,37 @@ export async function identify(
 /** The identity of the connection calling an action. */
 export function caller(c: Ctx): Identity {
 	const who = c.vars.who[c.conn.id] as Identity | undefined;
-	if (!who)
+	if (!who) {
 		throw new UserError("Your session expired. Reload the page.", { code: "unauthenticated" });
+	}
+
 	return who;
 }
 
 /** The player a connection sits as, if they joined the table. */
 export function playerOf(c: Ctx, conn: { id: string }): string | undefined {
 	const id = (c.vars.who[conn.id] as Identity | undefined)?.id;
-	return id && (c.vars.game as Table).players.some((p) => p.id === id) ? id : undefined;
+	if (!id) return undefined;
+
+	const seated = (c.vars.game as Table).players.some((player) => player.id === id);
+	return seated ? id : undefined;
 }
 
 export function requirePlayer(c: Ctx): string {
 	const id = playerOf(c, c.conn);
-	if (!id) throw new UserError("Join the table first.", { code: "not_joined" });
+	if (!id) {
+		throw new UserError("Join the table first.", { code: "not_joined" });
+	}
+
 	return id;
 }
 
 export function requireHost(c: Ctx): string {
 	const me = requirePlayer(c);
-	if ((c.vars.game as Table).hostId !== me)
+	if ((c.vars.game as Table).hostId !== me) {
 		throw new UserError("Only the host can do that.", { code: "rule" });
+	}
+
 	return me;
 }
 
@@ -276,16 +317,23 @@ export async function dropIfGone(
 ): Promise<boolean> {
 	const game = c.vars.game as Table;
 	const player = game.players.find((p) => p.id === id);
-	if (!player || [...c.conns.values()].some((conn: { id: string }) => playerOf(c, conn) === id))
-		return false;
+	if (!player) return false;
+
+	const cameBack = [...c.conns.values()].some((conn: { id: string }) => playerOf(c, conn) === id);
+	if (cameBack) return false;
+
 	if (game.phase === "lobby") {
 		c.vars.game = removePlayer(game, player.id);
-	} else {
-		c.vars.game = setAway(game, player.id, true);
-		// Their turn may be running on the full human clock: play it at bot speed instead.
-		if (game.phase === "playing" && turn.playerId === player.id)
-			await c.schedule.after(BOT_THINK_MS[0], "autoPlay", turn.key);
+		return true;
 	}
+
+	c.vars.game = setAway(game, player.id, true);
+
+	// Their turn may be running on the full human clock: play it at bot speed instead.
+	if (game.phase === "playing" && turn.playerId === player.id) {
+		await c.schedule.after(BOT_THINK_MS[0], "autoPlay", turn.key);
+	}
+
 	return true;
 }
 
@@ -305,27 +353,39 @@ export async function armTurn(
 		c.vars.timer = null;
 		return;
 	}
-	const same = timer?.moves === opts.key;
-	if (same && !opts.resume) return;
+
+	const sameTurn = timer?.moves === opts.key;
+	if (sameTurn && !opts.resume) return;
+
 	// Resuming after a wake keeps the deadline players already saw.
-	const next: NonNullable<TurnTimer> = same
+	const next: NonNullable<TurnTimer> = sameTurn
 		? { ...timer!, total: timer!.total ?? opts.turnMs }
-		: { moves: opts.key, endsAt: Date.now() + opts.pause + opts.turnMs, total: opts.turnMs };
+		: {
+				moves: opts.key,
+				endsAt: Date.now() + opts.pause + opts.turnMs,
+				total: opts.turnMs,
+			};
 	c.vars.timer = next;
-	const pause = same ? 0 : opts.pause;
+
+	const pause = sameTurn ? 0 : opts.pause;
 	const untilTimeout = Math.max(0, next.endsAt - Date.now());
-	const [min, max] = BOT_THINK_MS;
-	// A bot plays once it has "decided", which stops its clock early, like a quick human.
-	const delay =
-		current.bot || current.away
-			? Math.min(untilTimeout, pause + min + Math.round(opts.rng() * (max - min)))
-			: untilTimeout;
+
+	let delay = untilTimeout;
+	if (current.bot || current.away) {
+		// A bot plays once it has "decided", which stops its clock early, like a quick human.
+		const [minThink, maxThink] = BOT_THINK_MS;
+		const think = minThink + Math.round(opts.rng() * (maxThink - minThink));
+		delay = Math.min(untilTimeout, pause + think);
+	}
+
 	await c.schedule.after(delay, "autoPlay", opts.key);
 }
 
 /** The turn clock as clients get it: relative, so a wrong device clock still counts down correctly. */
 export function turnClock(timer: TurnTimer): { left: number; total: number } | null {
-	return timer && { left: Math.max(0, timer.endsAt - Date.now()), total: timer.total };
+	if (!timer) return null;
+
+	return { left: Math.max(0, timer.endsAt - Date.now()), total: timer.total };
 }
 
 /**
@@ -337,17 +397,18 @@ export async function reportToDirectory(c: Ctx, slug: string, leaving?: string):
 	// Only rooms known to be public are listed: private and tournament tables are for their players only.
 	await loadTournament(c).catch(() => undefined);
 	if (!c.vars.listed) return;
+
 	const code = c.key[0] as string;
 	const directory = c.client().roomList.getOrCreate([slug]);
-	const connected = [...c.conns.values()].filter(
-		(conn: { id: string }) => conn.id !== leaving,
-	).length;
 	const game = c.vars.game as Table;
+	const stayingConns = [...c.conns.values()].filter((conn: { id: string }) => conn.id !== leaving);
+
 	try {
-		if (connected === 0) {
+		if (stayingConns.length === 0) {
 			await directory.remove(code);
 			return;
 		}
+
 		const host = game.players.find((p) => p.id === game.hostId)?.name ?? null;
 		await directory.report({
 			code,
@@ -369,21 +430,26 @@ export async function resumeReports(c: Ctx): Promise<void> {
 
 /** Body of the scheduled `sendReports` action: sends queued results, retrying with backoff. */
 export async function sendReports(c: Ctx): Promise<void> {
-	const rows = (await c.db.execute("SELECT match_id, body, attempts FROM match_reports")) as {
-		match_id: string;
-		body: string;
-		attempts: number;
-	}[];
+	type ReportRow = { match_id: string; body: string; attempts: number };
+	const rows = (await c.db.execute(
+		"SELECT match_id, body, attempts FROM match_reports",
+	)) as ReportRow[];
+
 	let retryIn: number | null = null;
+
 	for (const row of rows) {
 		const { result, detail } = await reportMatch(JSON.parse(row.body));
+
 		if (result === "retry") {
 			await c.db.execute(
 				"UPDATE match_reports SET attempts = attempts + 1 WHERE match_id = ?",
 				row.match_id,
 			);
-			const wait = REPORT_RETRY_MS[Math.min(row.attempts, REPORT_RETRY_MS.length - 1)]!;
+
+			const step = Math.min(row.attempts, REPORT_RETRY_MS.length - 1);
+			const wait = REPORT_RETRY_MS[step]!;
 			retryIn = Math.min(retryIn ?? wait, wait);
+
 			c.log.warn({
 				msg: "match report failed, will retry",
 				matchId: row.match_id,
@@ -392,15 +458,19 @@ export async function sendReports(c: Ctx): Promise<void> {
 			});
 			continue;
 		}
-		if (result === "rejected")
+
+		if (result === "rejected") {
 			c.log.error({
 				msg: "match report rejected, dropped",
 				matchId: row.match_id,
 				body: row.body,
 				detail,
 			});
+		}
+
 		await c.db.execute("DELETE FROM match_reports WHERE match_id = ?", row.match_id);
 	}
+
 	if (retryIn !== null) await c.schedule.after(retryIn, "sendReports");
 }
 
@@ -412,38 +482,53 @@ export async function loadTournament(c: Ctx, refresh = false): Promise<Tournamen
 	const known = c.vars.tournament as TournamentRoom | null | undefined;
 	// `listed` is undefined in rooms saved before private tables existed: ask once more.
 	if (known !== undefined && c.vars.listed !== undefined && !refresh) return known;
+
+	const code = c.key[0] as string;
 	let room: Awaited<ReturnType<typeof fetchRoomSeats>>;
 	try {
-		room = await fetchRoomSeats(c.key[0] as string);
+		room = await fetchRoomSeats(code);
 	} catch (err) {
-		c.log.warn({ msg: "room seats unavailable", code: c.key[0], err: String(err) });
+		c.log.warn({ msg: "room seats unavailable", code, err: String(err) });
 		if (known !== undefined) return known;
+
 		throw new UserError("The table can't be reached right now. Try again shortly.", {
 			code: "unavailable",
 		});
 	}
-	const t = room?.tournament;
-	c.vars.listed = !t && room?.visibility === "public";
-	c.vars.tournament = t
-		? {
-				name: t.name,
-				startsAt: Date.parse(t.startsAt),
-				cancelled: t.cancelled,
-				minPlayers: room!.minPlayers,
-				seats: Object.fromEntries(room!.seats.map((s) => [s.playerId, s.seat])),
-				closed: !!known?.closed || !!room!.closedAt,
-			}
-		: null;
+	const tournament = room?.tournament;
+	c.vars.listed = !tournament && room?.visibility === "public";
+
+	if (!tournament) {
+		c.vars.tournament = null;
+		return null;
+	}
+
+	const seats = Object.fromEntries(room!.seats.map((seat) => [seat.playerId, seat.seat]));
+	c.vars.tournament = {
+		name: tournament.name,
+		startsAt: Date.parse(tournament.startsAt),
+		cancelled: tournament.cancelled,
+		minPlayers: room!.minPlayers,
+		seats,
+		closed: !!known?.closed || !!room!.closedAt,
+	};
+
 	return c.vars.tournament;
 }
 
 /** onWake: refreshes the tournament and arms its start and the end of the wait for late players. */
 export async function wakeTournament(c: Ctx): Promise<void> {
-	const t = await loadTournament(c, true).catch(() => null);
-	if (!t || t.closed || t.cancelled || (c.vars.game as Table).phase !== "lobby") return;
+	const tournament = await loadTournament(c, true).catch(() => null);
+	if (!tournament || tournament.closed || tournament.cancelled) return;
+	if ((c.vars.game as Table).phase !== "lobby") return;
+
 	const now = Date.now();
-	if (t.startsAt > now) await c.schedule.at(t.startsAt, "tournamentStart");
-	await c.schedule.at(Math.max(now, t.startsAt + LATE_GRACE_MS), "tournamentStart");
+	if (tournament.startsAt > now) {
+		await c.schedule.at(tournament.startsAt, "tournamentStart");
+	}
+
+	const waitEndsAt = Math.max(now, tournament.startsAt + LATE_GRACE_MS);
+	await c.schedule.at(waitEndsAt, "tournamentStart");
 }
 
 /**
@@ -451,19 +536,27 @@ export async function wakeTournament(c: Ctx): Promise<void> {
  * Asks the platform again first, since an admin may have seated or removed someone by hand.
  */
 export async function seatFor(c: Ctx, who: Identity): Promise<number | undefined> {
-	const t = c.vars.tournament === null ? null : await loadTournament(c, true);
-	if (!t) return undefined;
-	if (t.cancelled) throw new UserError(`${t.name} was cancelled.`, { code: "forbidden" });
-	if (t.closed) throw new UserError("This table has finished.", { code: "forbidden" });
-	if (!(who.id in t.seats))
-		throw new UserError(`This table is for players of ${t.name}.`, { code: "forbidden" });
-	return t.seats[who.id] ?? undefined;
+	const tournament = c.vars.tournament === null ? null : await loadTournament(c, true);
+	if (!tournament) return undefined;
+
+	if (tournament.cancelled) {
+		throw new UserError(`${tournament.name} was cancelled.`, { code: "forbidden" });
+	}
+	if (tournament.closed) {
+		throw new UserError("This table has finished.", { code: "forbidden" });
+	}
+	if (!(who.id in tournament.seats)) {
+		throw new UserError(`This table is for players of ${tournament.name}.`, { code: "forbidden" });
+	}
+
+	return tournament.seats[who.id] ?? undefined;
 }
 
 /** Host controls (bots, seats, start, play again) are for open tables; a tournament table runs itself. */
 export function requireOpenTable(c: Ctx): void {
-	if (c.vars.tournament)
+	if (c.vars.tournament) {
 		throw new UserError("A tournament table starts on its own.", { code: "rule" });
+	}
 }
 
 /**
@@ -475,36 +568,51 @@ export async function tournamentTick(
 	c: Ctx,
 	game: { start: () => void; commit: () => Promise<void> },
 ): Promise<void> {
-	const t = c.vars.tournament as TournamentRoom | null | undefined;
+	const tournament = c.vars.tournament as TournamentRoom | null | undefined;
 	const table = c.vars.game as Table;
 	const now = Date.now();
-	if (!t || t.closed || t.cancelled || table.phase !== "lobby" || now < t.startsAt) return;
-	const present = table.players.filter((p) => !p.bot).length;
-	const everyone = present >= Object.keys(t.seats).length;
-	if (!everyone && now < t.startsAt + LATE_GRACE_MS) return;
+
+	if (!tournament || tournament.closed || tournament.cancelled) return;
+	if (table.phase !== "lobby" || now < tournament.startsAt) return;
+
+	const present = table.players.filter((player) => !player.bot).length;
+	const everyoneIsHere = present >= Object.keys(tournament.seats).length;
+	const stillWaiting = now < tournament.startsAt + LATE_GRACE_MS;
+	if (!everyoneIsHere && stillWaiting) return;
+
 	const code = c.key[0] as string;
-	if (present >= t.minPlayers) {
+
+	if (present >= tournament.minPlayers) {
 		game.start();
 		await game.commit();
+
 		const marked = await markRoom(code, "start");
-		if (!marked.ok) c.log.warn({ msg: "room start not recorded", code, detail: marked.detail });
+		if (!marked.ok) {
+			c.log.warn({ msg: "room start not recorded", code, detail: marked.detail });
+		}
 		return;
 	}
-	c.vars.tournament = { ...t, closed: true };
+
+	c.vars.tournament = { ...tournament, closed: true };
 	await game.commit();
+
 	const marked = await markRoom(code, "close");
-	if (!marked.ok) c.log.warn({ msg: "room close not recorded", code, detail: marked.detail });
+	if (!marked.ok) {
+		c.log.warn({ msg: "room close not recorded", code, detail: marked.detail });
+	}
 }
 
 /** The tournament part of the view. Times are relative, like the turn clock, so a wrong device clock still counts right. */
 export function tournamentView(c: Ctx) {
-	const t = c.vars.tournament as TournamentRoom | null | undefined;
-	if (!t) return null;
+	const tournament = c.vars.tournament as TournamentRoom | null | undefined;
+	if (!tournament) return null;
+
+	const now = Date.now();
 	return {
-		name: t.name,
-		startsIn: t.startsAt - Date.now(),
-		waitEndsIn: t.startsAt + LATE_GRACE_MS - Date.now(),
-		seats: Object.keys(t.seats).length,
-		closed: t.closed,
+		name: tournament.name,
+		startsIn: tournament.startsAt - now,
+		waitEndsIn: tournament.startsAt + LATE_GRACE_MS - now,
+		seats: Object.keys(tournament.seats).length,
+		closed: tournament.closed,
 	};
 }

@@ -12,6 +12,10 @@ export const TURN_MS = 20_000;
 /** Dealing animation timing, shared so the server holds the first turn of a round until it ends. */
 export const DEAL = { stepMs: 80, flightMs: 400, afterBustMs: 1300 };
 const MINUS_VALUE = 5;
+const COPIES_PER_CARD = 4;
+const HIGHEST_NUMBER = 9;
+/** Extra wait after the deal animation, so the first turn never starts mid-flight. */
+const DEAL_SETTLE_MS = 100;
 
 export type CardKind = "number" | "zero" | "minus" | "reverse";
 export type Card = { id: string; kind: CardKind; value: number };
@@ -78,69 +82,55 @@ export function createGame(): Game {
 /** 48 cards: 1–9 four times each, plus four of each special card. */
 export function buildDeck(): Card[] {
 	const cards: Card[] = [];
-	for (let copy = 0; copy < 4; copy++) {
-		for (let v = 1; v <= 9; v++) cards.push({ id: `n${v}-${copy}`, kind: "number", value: v });
+	for (let copy = 0; copy < COPIES_PER_CARD; copy++) {
+		for (let value = 1; value <= HIGHEST_NUMBER; value++) {
+			cards.push({ id: `n${value}-${copy}`, kind: "number", value });
+		}
 		cards.push({ id: `z-${copy}`, kind: "zero", value: 0 });
 		cards.push({ id: `m-${copy}`, kind: "minus", value: -MINUS_VALUE });
 		cards.push({ id: `r-${copy}`, kind: "reverse", value: 0 });
 	}
+
 	return cards;
 }
 
 /** Sits a new player in `seat`, or in the first free one when no seat is given. */
 export function addPlayer(game: Game, id: string, name: string, bot = false, seat?: number): Game {
 	if (game.players.some((p) => p.id === id)) return game;
-	const seated = seatPlayer<Game, Player>(
-		game,
-		{ id, name, lives: START_LIVES, hand: [], bot },
-		seat,
-	);
+
+	const player = { id, name, lives: START_LIVES, hand: [], bot };
+	const seated = seatPlayer<Game, Player>(game, player, seat);
+
 	return { ...seated, lastEvent: { type: "joined", playerId: id } };
 }
 
 export function startGame(game: Game, byId: string, rng: Rng): Game {
 	if (game.hostId !== byId) throw new RuleError("Only the host can start the game.");
 	if (game.phase === "playing") throw new RuleError("The game is already running.");
-	if (game.players.length < MIN_PLAYERS)
+	if (game.players.length < MIN_PLAYERS) {
 		throw new RuleError(`Needs at least ${MIN_PLAYERS} players.`);
+	}
+
 	const players = game.players.map((p) => ({ ...p, lives: START_LIVES, hand: [] }));
 	const dealt = dealRound({ ...game, players, round: 0, winnerId: null }, 0, rng);
+
 	return { ...dealt, phase: "playing", lastEvent: { type: "started" }, moves: game.moves + 1 };
 }
 
 export function playCard(game: Game, playerId: string, cardId: string, rng: Rng): Game {
 	if (game.phase !== "playing") throw new RuleError("The game has not started yet.");
+
 	const current = game.players[game.turn];
 	if (current?.id !== playerId) throw new RuleError("It is not your turn yet.");
-	const card = current.hand.find((c) => c.id === cardId);
+
+	const card = current.hand.find((held) => held.id === cardId);
 	if (!card) throw new RuleError("That card is not in your hand.");
 
 	const total = Math.max(0, game.total + card.value);
-	const hand = current.hand.filter((c) => c.id !== cardId);
+	const hand = current.hand.filter((held) => held.id !== cardId);
 
 	if (total > LIMIT) {
-		const lives = current.lives - 1;
-		const players = game.players.map((p) => (p.id === playerId ? { ...p, lives, hand } : p));
-		const alive = players.filter((p) => p.lives > 0);
-		const bust: GameEvent = { type: "bust", playerId, card, total, eliminated: lives === 0 };
-		if (alive.length === 1) {
-			return {
-				...game,
-				players,
-				total,
-				phase: "finished",
-				winnerId: alive[0]!.id,
-				lastEvent: { type: "finished", winnerId: alive[0]!.id },
-				moves: game.moves + 1,
-			};
-		}
-		// Loser starts the next round; if they are out, the next alive seat does.
-		const starter = lives > 0 ? game.turn : nextAlive(players, game.turn, game.direction);
-		return {
-			...dealRound({ ...game, players }, starter, rng),
-			lastEvent: bust,
-			moves: game.moves + 1,
-		};
+		return bust(game, current, card, total, hand, rng);
 	}
 
 	let { deck, discard } = game;
@@ -150,10 +140,10 @@ export function playCard(game: Game, playerId: string, cardId: string, rng: Rng)
 		deck = shuffle(discard.slice(0, -1), rng);
 		discard = [card];
 	}
+
 	const [drawn, ...rest] = deck;
-	const players = game.players.map((p) =>
-		p.id === playerId ? { ...p, hand: drawn ? [...hand, drawn] : hand } : p,
-	);
+	const newHand = drawn ? [...hand, drawn] : hand;
+	const players = game.players.map((p) => (p.id === playerId ? { ...p, hand: newHand } : p));
 	const direction = card.kind === "reverse" ? (-game.direction as 1 | -1) : game.direction;
 
 	return {
@@ -169,29 +159,77 @@ export function playCard(game: Game, playerId: string, cardId: string, rng: Rng)
 	};
 }
 
+/** The total went over LIMIT: the player loses a life, then a new round, or the end of the match. */
+function bust(
+	game: Game,
+	current: Player,
+	card: Card,
+	total: number,
+	hand: Card[],
+	rng: Rng,
+): Game {
+	const lives = current.lives - 1;
+	const players = game.players.map((p) => (p.id === current.id ? { ...p, lives, hand } : p));
+	const alive = players.filter((p) => p.lives > 0);
+
+	if (alive.length === 1) {
+		const winnerId = alive[0]!.id;
+		return {
+			...game,
+			players,
+			total,
+			phase: "finished",
+			winnerId,
+			lastEvent: { type: "finished", winnerId },
+			moves: game.moves + 1,
+		};
+	}
+
+	// Loser starts the next round; if they are out, the next alive seat does.
+	const starter = lives > 0 ? game.turn : nextAlive(players, game.turn, game.direction);
+	const event: GameEvent = {
+		type: "bust",
+		playerId: current.id,
+		card,
+		total,
+		eliminated: lives === 0,
+	};
+
+	return {
+		...dealRound({ ...game, players }, starter, rng),
+		lastEvent: event,
+		moves: game.moves + 1,
+	};
+}
+
 /** Host sends everyone back to the lobby after a finished game. */
 export function resetToLobby(game: Game, byId: string): Game {
 	if (game.hostId !== byId) throw new RuleError("Only the host can start over.");
 	if (game.phase !== "finished") throw new RuleError("The game is not over yet.");
+
+	// Players who walked away mid-game don't come back to the lobby.
+	const players = game.players
+		.filter((player) => !player.away)
+		.map((player) => ({ ...player, lives: START_LIVES, hand: [] }));
+
 	return {
 		...createGame(),
 		moves: game.moves,
 		hostId: game.hostId,
-		// Players who walked away mid-game don't come back to the lobby.
-		players: game.players
-			.filter((p) => !p.away)
-			.map((p) => ({ ...p, lives: START_LIVES, hand: [] })),
+		players,
 	};
 }
 
 function dealRound(game: Game, starter: number, rng: Rng): Game {
 	let deck = shuffle(buildDeck(), rng);
-	const players = game.players.map((p) => {
-		if (p.lives <= 0) return { ...p, hand: [] };
+	const players = game.players.map((player) => {
+		if (player.lives <= 0) return { ...player, hand: [] };
+
 		const hand = deck.slice(0, HAND_SIZE);
 		deck = deck.slice(HAND_SIZE);
-		return { ...p, hand };
+		return { ...player, hand };
 	});
+
 	return {
 		...game,
 		players,
@@ -246,15 +284,15 @@ export type PublicView = ReturnType<typeof publicView>;
  * (plus the bust stamp before it). 0 for any other turn.
  */
 export function dealPauseMs(game: Game): number {
-	const e = game.lastEvent;
-	if (game.phase !== "playing" || (e?.type !== "started" && e?.type !== "bust")) return 0;
-	const alive = game.players.filter((p) => p.lives > 0).length;
-	return (
-		(e.type === "bust" ? DEAL.afterBustMs : 0) +
-		alive * HAND_SIZE * DEAL.stepMs +
-		DEAL.flightMs +
-		100
-	);
+	const event = game.lastEvent;
+	if (game.phase !== "playing") return 0;
+	if (event?.type !== "started" && event?.type !== "bust") return 0;
+
+	const alive = game.players.filter((player) => player.lives > 0).length;
+	const bustStampMs = event.type === "bust" ? DEAL.afterBustMs : 0;
+	const dealMs = alive * HAND_SIZE * DEAL.stepMs + DEAL.flightMs;
+
+	return bustStampMs + dealMs + DEAL_SETTLE_MS;
 }
 
 export function handOf(game: Game, playerId: string): Card[] {
