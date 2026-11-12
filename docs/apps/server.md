@@ -6,7 +6,7 @@ Rivet Actors: one actor type per game, one actor per room (keyed by the room cod
 
 | Variable | Purpose |
 |---|---|
-| `PLAY_TOKEN_PUBLIC_KEY` | Ed25519 public JWK that checks the platform's play tokens |
+| `PLAY_TOKEN_PUBLIC_KEY` | Ed25519 public key (43-char base64url) that checks the platform's play tokens |
 | `PLATFORM_URL` | Platform API as the actors reach it (default `http://127.0.0.1:3000`) |
 | `PLATFORM_SERVER_KEY` | Bearer key for match reports, same as the platform's |
 | `RIVET_TOKEN` | Engine admin token. In dev, `bun run dev` also gives it to the local engine RivetKit starts, so dev checks tokens like production |

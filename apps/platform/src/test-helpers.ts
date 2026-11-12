@@ -55,7 +55,7 @@ export async function setupTestApp() {
 	const { privateKey, publicKey } = await generateKeyPair("EdDSA", { crv: "Ed25519", extractable: true });
 	const config: Config = {
 		db,
-		playTokenPrivateKey: JSON.stringify(await exportJWK(privateKey)),
+		playTokenPrivateKey: (await exportJWK(privateKey)).d!,
 		serverKey: SERVER_KEY,
 		host: "127.0.0.1",
 		port: 0,

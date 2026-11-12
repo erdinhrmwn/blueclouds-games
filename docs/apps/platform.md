@@ -22,7 +22,7 @@ Platform tests use the same `DATABASE_*` server with `DATABASE_TEST_NAME` as the
 |---|---|
 | `DATABASE_HOST`, `DATABASE_PORT`, `DATABASE_USER`, `DATABASE_PASSWORD`, `DATABASE_NAME` | Postgres 18 connection (port defaults to 5432; password may be empty) |
 | `DATABASE_TEST_NAME` | Tests only: throwaway database on the same server |
-| `PLAY_TOKEN_PRIVATE_KEY` | Ed25519 private JWK that signs play tokens |
+| `PLAY_TOKEN_PRIVATE_KEY` | Ed25519 private key (43-char base64url seed) that signs play tokens |
 | `PLATFORM_SERVER_KEY` | Bearer key the actor server sends with match reports (32+ chars) |
 | `PLATFORM_HOST` | Listen interface (default `127.0.0.1`; `0.0.0.0` inside a container) |
 | `PLATFORM_PORT` | Listen port (default `3000`) |

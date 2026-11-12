@@ -1,4 +1,5 @@
-import { importJWK, SignJWT } from "jose";
+import { createPrivateKey } from "node:crypto";
+import { SignJWT } from "jose";
 import type { Player } from "./auth";
 
 /** Room actors only accept tokens with this audience. */
@@ -8,18 +9,13 @@ export const PLAY_TOKEN_TTL_SECONDS = 15 * 60;
 export type PlayToken = { token: string; expiresAt: string };
 export type Signer = { sign: (player: Player) => Promise<PlayToken> };
 
-/** Builds the play-token signer from an Ed25519 private JWK; fails at startup if the key is wrong. */
-export async function createSigner(privateJwk: string): Promise<Signer> {
-	let jwk: Record<string, unknown>;
-	try {
-		jwk = JSON.parse(privateJwk);
-	} catch {
-		throw new Error("PLAY_TOKEN_PRIVATE_KEY must be a JSON JWK");
-	}
-	if (jwk.kty !== "OKP" || jwk.crv !== "Ed25519" || typeof jwk.d !== "string") {
-		throw new Error("PLAY_TOKEN_PRIVATE_KEY must be an Ed25519 private JWK");
-	}
-	const key = await importJWK(jwk, "EdDSA");
+/** PKCS#8 DER header for a raw 32-byte Ed25519 seed (RFC 8410). */
+const ED25519_PKCS8_PREFIX = Buffer.from("302e020100300506032b657004220420", "hex");
+
+/** Builds the play-token signer from the base64url Ed25519 seed (config checks its format). */
+export async function createSigner(privateKey: string): Promise<Signer> {
+	const der = Buffer.concat([ED25519_PKCS8_PREFIX, Buffer.from(privateKey, "base64url")]);
+	const key = createPrivateKey({ key: der, format: "der", type: "pkcs8" });
 	return {
 		async sign(player) {
 			const iat = Math.floor(Date.now() / 1000);
