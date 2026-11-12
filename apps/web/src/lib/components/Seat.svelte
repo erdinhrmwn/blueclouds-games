@@ -42,13 +42,14 @@
 
 	const initial = $derived(player?.name.trim().charAt(0).toUpperCase() ?? '');
 
-	/** Knocked out: the whole seat greys. Away fades only the avatar and status, so the Away tag stays readable. */
+	/** Knocked out: the whole seat greys. Away fades the status and the avatar's letter, so the Away tag stays readable. */
 	const outClass = $derived(out ? 'opacity-40 grayscale' : '');
 	const awayFade = $derived(player?.away ? 'opacity-50' : '');
 
+	/** Every avatar keeps the same full-strength edge, so none looks smaller than the rest. */
 	const avatarLook = $derived.by(() => {
 		if (isTurn) return 'turn border-brass bg-brass text-ink';
-		if (player?.away) return 'border-dashed border-paper/55 bg-[#2a1d13] text-paper';
+		if (player?.away) return 'border-dashed border-paper/70 bg-[#2a1d13] text-paper/45';
 		return 'border-rim-light bg-[#2a1d13] text-paper';
 	});
 
@@ -88,7 +89,7 @@
 		<div class="relative mb-1.5" aria-hidden="true">
 			<div
 				class="relative grid size-14 place-items-center rounded-full border-2 font-display text-2xl font-bold sm:size-16
-					{avatarLook} {awayFade}"
+					{avatarLook}"
 			>
 				{#if player.bot}
 					<!-- robot head: bots get an icon instead of a monogram -->
@@ -113,15 +114,16 @@
 					{initial}
 				{/if}
 				{#if timeLeft !== null}
+					<!-- The timer runs on the avatar's own edge, so the seat on turn is no bigger than the others. -->
 					<svg
-						class="pointer-events-none absolute -inset-1.5 size-[calc(100%+0.75rem)] -rotate-90"
+						class="pointer-events-none absolute -inset-0.5 size-[calc(100%+0.25rem)] -rotate-90"
 						viewBox="0 0 40 40"
 						aria-hidden="true"
 					>
 						<circle
 							cx="20"
 							cy="20"
-							r="18.5"
+							r="19"
 							fill="none"
 							stroke={timeLeft < 0.25 ? 'var(--color-ember)' : 'var(--color-paper)'}
 							stroke-width="2"
@@ -177,12 +179,14 @@
 	>
 		{#if onAddBot}
 			<button
-				class="grid size-14 place-items-center rounded-full border-2 border-dashed border-brass/70 text-2xl leading-none text-brass transition hover:border-solid hover:bg-brass/10 disabled:opacity-40 sm:size-16"
+				class="mb-1.5 grid size-14 place-items-center rounded-full border-2 border-dashed border-brass/70 text-2xl leading-none text-brass transition hover:border-solid hover:bg-brass/10 disabled:opacity-40 sm:size-16"
 				onclick={onAddBot}
 				aria-label="Add a bot to seat {number ?? ''}">+</button
 			>
 		{:else}
-			<div class="size-14 rounded-full border-2 border-dashed border-paper/40 sm:size-16"></div>
+			<div
+				class="mb-1.5 size-14 rounded-full border-2 border-dashed border-paper/40 sm:size-16"
+			></div>
 		{/if}
 		<div class="text-xs text-paper/70">Seat {number ?? ''}</div>
 		{#if onSit}
