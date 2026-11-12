@@ -67,17 +67,17 @@ afterEach(() => setSystemTime());
 
 test("only assigned players sit, each on their own seat; host controls are off", async () => {
 	const c = room();
-	expect(await seatFor(c, { id: BEN, name: "Ben" })).toBe(1);
-	expect(seatFor(c, { id: "01900000-0000-7000-8000-0000000000ff", name: "Dee" })).rejects.toThrow(
-		"This table is for players of Friday Cup.",
-	);
+	expect(await seatFor(c, { id: BEN, name: "Ben", vip: false })).toBe(1);
+	expect(
+		seatFor(c, { id: "01900000-0000-7000-8000-0000000000ff", name: "Dee", vip: false }),
+	).rejects.toThrow("This table is for players of Friday Cup.");
 	expect(() => requireOpenTable(c)).toThrow("A tournament table starts on its own.");
 });
 
 test("an open room lets anyone sit anywhere", async () => {
 	seats = { minPlayers: 2, startedAt: null, closedAt: null, tournament: null, seats: [] };
 	const c = room();
-	expect(await seatFor(c, { id: ANN, name: "Ann" })).toBeUndefined();
+	expect(await seatFor(c, { id: ANN, name: "Ann", vip: false })).toBeUndefined();
 	expect(() => requireOpenTable(c)).not.toThrow();
 });
 
@@ -143,5 +143,7 @@ test("closes the table when fewer than the game's minimum came", async () => {
 	expect(calls.started).toBe(0);
 	expect(c.vars.tournament.closed).toBe(true);
 	expect(marked).toEqual(["CUP01:close"]);
-	expect(seatFor(c, { id: BEN, name: "Ben" })).rejects.toThrow("This table has finished.");
+	expect(seatFor(c, { id: BEN, name: "Ben", vip: false })).rejects.toThrow(
+		"This table has finished.",
+	);
 });

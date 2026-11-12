@@ -10,7 +10,15 @@ export type Rng = () => number;
 export class RuleError extends Error {}
 
 /** What the shared helpers need from a player. Turns go up the seat numbers (clockwise). */
-export type Seated = { id: string; name: string; bot: boolean; seat: number; away?: boolean };
+export type Seated = {
+	id: string;
+	name: string;
+	bot: boolean;
+	seat: number;
+	away?: boolean;
+	/** A VIP account, as its play token said when it sat down. */
+	vip?: boolean;
+};
 
 /** What the shared helpers need from a game. */
 export type Table<P extends Seated = Seated> = {
@@ -103,6 +111,14 @@ function withAway<G extends Table>(game: G, id: string, away: boolean): G {
 	return {
 		...game,
 		players: game.players.map((p) => (p.id === id && !p.bot ? { ...p, away } : p)),
+	};
+}
+
+/** Shows the player as a VIP at the table. */
+export function markVip<G extends Table>(game: G, id: string): G {
+	return {
+		...game,
+		players: game.players.map((p) => (p.id === id ? { ...p, vip: true } : p)),
 	};
 }
 

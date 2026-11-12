@@ -32,6 +32,7 @@ export type Player = {
 	/** Fixed chair at the table, 0 to SEATS - 1. Turns go up the seat numbers (clockwise). */
 	seat: number;
 	away?: boolean;
+	vip?: boolean;
 	hand: Card[];
 	/** Points so far this match: one per card left when someone else went out. Fewest wins. */
 	points: number;
@@ -397,6 +398,7 @@ export function publicView(game: Game, turn: { left: number; total: number } | n
 			bot: p.bot,
 			seat: p.seat,
 			away: !!p.away,
+			vip: !!p.vip,
 			cards: p.hand.length,
 			points: p.points,
 		})),

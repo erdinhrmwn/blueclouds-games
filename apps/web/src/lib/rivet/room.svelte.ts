@@ -23,7 +23,14 @@ type Conn = {
 export type BaseView = {
 	phase: 'lobby' | 'playing' | 'finished';
 	hostId: string | null;
-	players: { id: string; name: string; bot: boolean; seat: number; away: boolean }[];
+	players: {
+		id: string;
+		name: string;
+		bot: boolean;
+		seat: number;
+		away: boolean;
+		vip: boolean;
+	}[];
 	turnPlayerId: string | null;
 	turn: { left: number; total: number } | null;
 	round: number;

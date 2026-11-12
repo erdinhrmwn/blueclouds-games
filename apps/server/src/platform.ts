@@ -33,8 +33,13 @@ const MAX_DETAIL_LENGTH = 500;
 /** Statuses for a body the platform will never accept, so retrying is pointless. */
 const REJECTED_STATUSES = [400, 409, 422];
 
-const Claims = z.object({ sub: z.uuid(), name: z.string().trim().min(1).max(20) });
-export type Identity = { id: string; name: string };
+const Claims = z.object({
+	sub: z.uuid(),
+	name: z.string().trim().min(1).max(20),
+	// Tokens signed before the platform added it have no flag.
+	vip: z.boolean().default(false),
+});
+export type Identity = { id: string; name: string; vip: boolean };
 
 let publicKey: Promise<CryptoKey | Uint8Array> | undefined;
 let config: Env | undefined;
@@ -70,7 +75,7 @@ export async function verifyPlayToken(token: unknown): Promise<Identity | null> 
 		const claims = Claims.safeParse(payload);
 		if (!claims.success) return null;
 
-		return { id: claims.data.sub, name: claims.data.name };
+		return { id: claims.data.sub, name: claims.data.name, vip: claims.data.vip };
 	} catch {
 		return null;
 	}

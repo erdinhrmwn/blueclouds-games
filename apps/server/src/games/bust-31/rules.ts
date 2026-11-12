@@ -30,6 +30,7 @@ export type Player = {
 	seat: number;
 	/** A human who closed the game mid-match: their turns are played for them until they return. */
 	away?: boolean;
+	vip?: boolean;
 };
 
 export type GameEvent =
@@ -260,6 +261,7 @@ export function publicView(game: Game, turn: { left: number; total: number } | n
 			bot: p.bot,
 			seat: p.seat,
 			away: !!p.away,
+			vip: !!p.vip,
 		})),
 		deckCount: game.deck.length,
 		topCard: game.discard.at(-1) ?? null,

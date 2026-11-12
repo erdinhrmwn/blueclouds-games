@@ -46,7 +46,7 @@ import {
 } from "../shared/room";
 import { newMatch } from "../shared/match";
 import { BotIdInput } from "../shared/schema";
-import { markBack, removePlayer, takeSeat } from "../shared/table";
+import { markBack, markVip, removePlayer, takeSeat } from "../shared/table";
 
 const SLUG = "bust-31";
 const rng = () => Math.random();
@@ -90,6 +90,11 @@ export const bust31Room = actor({
 			if (!seated) {
 				const seat = await seatFor(c, who);
 				c.vars.game = apply(() => addPlayer(c.vars.game, who.id, who.name, false, seat));
+
+				if (who.vip) {
+					c.vars.game = markVip(c.vars.game, who.id);
+				}
+
 				await commit(c);
 
 				// The last one in starts a tournament table.

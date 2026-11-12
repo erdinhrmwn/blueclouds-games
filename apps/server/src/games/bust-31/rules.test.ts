@@ -10,11 +10,12 @@ import {
 	type Game,
 	LIMIT,
 	playCard,
+	publicView,
 	resetToLobby,
 	START_LIVES,
 	startGame,
 } from "./rules";
-import { markAway, markBack, removePlayer, RuleError, takeSeat } from "../shared/table";
+import { markAway, markBack, markVip, removePlayer, RuleError, takeSeat } from "../shared/table";
 
 const rng = () => 0.42;
 const card = (kind: Card["kind"], value: number, id = `${kind}${value}`): Card => ({
@@ -162,6 +163,18 @@ describe("away players", () => {
 		const done = { ...g, phase: "finished" as const };
 		expect(resetToLobby(done, "a").players.map((p) => p.id)).toEqual(["a"]);
 		expect(markBack(g, "b").players.find((p) => p.id === "b")?.away).toBe(false);
+	});
+});
+
+describe("VIP players", () => {
+	test("only the marked player shows as a VIP", () => {
+		const g = markVip(twoPlayerGame(), "b");
+		const shown = publicView(g).players.map((p) => [p.id, p.vip]);
+
+		expect(shown).toEqual([
+			["a", false],
+			["b", true],
+		]);
 	});
 });
 

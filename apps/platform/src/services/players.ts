@@ -248,9 +248,16 @@ export async function rename(sql: SQL, playerId: string, name: string): Promise<
 	return toPlayer(row);
 }
 
-/** Short-lived token for connecting to a room actor. Counts as the player being seen. */
+/** Short-lived token for connecting to a room actor, with the VIP flag the table shows. Counts as the player being seen. */
 export async function issuePlayToken(sql: SQL, signer: Signer, player: Player) {
-	await sql`UPDATE players SET last_seen_at = now() WHERE id = ${player.id}`;
+	const [row] = (await sql`
+		UPDATE players
+		SET last_seen_at = now()
+		WHERE id = ${player.id}
+		RETURNING is_vip
+	`) as { is_vip: boolean }[];
 
-	return signer.sign(player);
+	const vip = row?.is_vip ?? false;
+
+	return signer.sign({ id: player.id, name: player.name, vip });
 }

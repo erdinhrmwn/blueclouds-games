@@ -153,8 +153,22 @@ describe("play tokens", () => {
 		});
 		expect(payload.sub).toBe(player.id);
 		expect(payload.name).toBe("Bima");
+		expect(payload.vip).toBe(false);
 		expect(payload.exp! - payload.iat!).toBe(15 * 60);
 		expect(new Date(res.json.data.expiresAt).getTime()).toBe(payload.exp! * 1000);
+	});
+
+	test("tells the actors a VIP is one", async () => {
+		const { player, secret } = await guest(t.app);
+		await t.sql`UPDATE players SET is_vip = true WHERE id = ${player.id}`;
+
+		const res = await call(t.app, "POST", "/v1/play-tokens", { token: secret });
+		const { payload } = await jwtVerify(res.json.data.token, t.publicKey, {
+			audience: PLAY_TOKEN_AUDIENCE,
+			algorithms: ["EdDSA"],
+		});
+
+		expect(payload.vip).toBe(true);
 	});
 
 	test("disabled player cannot get a token", async () => {

@@ -48,7 +48,7 @@ import {
 } from "../shared/room";
 import { type MatchState, newMatch } from "../shared/match";
 import { BotIdInput } from "../shared/schema";
-import { markBack, removePlayer, takeSeat } from "../shared/table";
+import { markBack, markVip, removePlayer, takeSeat } from "../shared/table";
 
 const SLUG = "cloudburst";
 /** After a bot (or the timer) draws, it plays or passes this much later, so the draw shows first. */
@@ -87,6 +87,11 @@ export const cloudburstRoom = actor({
 			if (!seated) {
 				const seat = await seatFor(c, who);
 				c.vars.game = apply(() => addPlayer(c.vars.game, who.id, who.name, false, seat));
+
+				if (who.vip) {
+					c.vars.game = markVip(c.vars.game, who.id);
+				}
+
 				await commit(c);
 
 				// The last one in starts a tournament table.
