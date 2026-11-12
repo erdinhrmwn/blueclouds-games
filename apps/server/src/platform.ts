@@ -77,6 +77,7 @@ export async function reportMatch(report: { matchId: string }): Promise<{ result
 }
 
 const TournamentRoom = z.object({
+	visibility: z.enum(["public", "private"]),
 	minPlayers: z.number().int().min(1),
 	startedAt: z.string().nullable(),
 	closedAt: z.string().nullable(),

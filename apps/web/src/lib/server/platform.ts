@@ -136,9 +136,29 @@ export async function playToken(event: RequestEvent): Promise<string> {
 
 type Room = { id: string; code: string; game: string };
 
-/** Opens a new table: the platform picks the code. */
-export async function createRoom(event: RequestEvent, game: string): Promise<Room> {
-	return (await call<{ room: Room }>(event, '/rooms', { method: 'POST', secret: secretOrEnded(event.cookies), body: { game } })).room;
+export type Visibility = 'public' | 'private';
+
+/** Opens a new table: the platform picks the code. Public tables are listed in the lobby; private ones need an invite. */
+export async function createRoom(event: RequestEvent, game: string, visibility: Visibility): Promise<Room> {
+	return (await call<{ room: Room }>(event, '/rooms', { method: 'POST', secret: secretOrEnded(event.cookies), body: { game, visibility } })).room;
+}
+
+export type Invite = { kind: 'link'; token: string } | { kind: 'code'; code: string; expiresAt: string };
+
+/** The table's invite link token (the same one until it is reset), or a new short-lived invite code. */
+export async function createInvite(event: RequestEvent, code: string, kind: Invite['kind']): Promise<Invite> {
+	const path = `/rooms/${encodeURIComponent(code)}/invites`;
+	return (await call<{ invite: Invite }>(event, path, { method: 'POST', secret: secretOrEnded(event.cookies), body: { kind } })).invite;
+}
+
+/** Kills the table's invite link; only its opener may. */
+export async function resetInviteLink(event: RequestEvent, code: string): Promise<void> {
+	await call(event, `/rooms/${encodeURIComponent(code)}/invites/link`, { method: 'DELETE', secret: secretOrEnded(event.cookies) });
+}
+
+/** Redeems an invite link token or code: this player may now enter the table. */
+export async function redeemInvite(event: RequestEvent, invite: string): Promise<{ code: string; game: string }> {
+	return (await call<{ room: { code: string; game: string } }>(event, '/invites/redeem', { method: 'POST', secret: secretOrEnded(event.cookies), body: { invite } })).room;
 }
 
 /**

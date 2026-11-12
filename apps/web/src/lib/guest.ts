@@ -1,4 +1,6 @@
 export const isRoomCode = (code: string) => /^[A-Z0-9]{4,8}$/.test(code);
+/** A typed invite code: 6 characters from the platform's alphabet (no 0/O, 1/I). */
+export const isInviteCode = (code: string) => /^[A-HJ-NP-Z2-9]{6}$/.test(code);
 
 /** The page anyone without a player (guest or account) is sent to first. */
 export const WELCOME = '/welcome';

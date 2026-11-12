@@ -1,10 +1,11 @@
 <script lang="ts">
+	import { createInvite, resetInviteLink } from '#lib/platform.ts';
 	import type { BaseView, RoomConnection } from '#lib/rivet/room.svelte.ts';
 	import Felt from './Felt.svelte';
 	import Seat from './Seat.svelte';
 	import Dealer from './Dealer.svelte';
 
-	/** Any game's lobby: the table code, fixed seats, bots, and the host's Play button. */
+	/** Any game's lobby: invites, fixed seats, bots, and the host's Play button. */
 	let { room, code, minPlayers, seats }: { room: RoomConnection<BaseView, unknown>; code: string; minPlayers: number; seats: number } = $props();
 	const view = $derived(room.view!);
 	const canStart = $derived(view.players.length >= minPlayers);
@@ -24,16 +25,52 @@
 	};
 	const inSeat = (s: number) => view.players.find((p) => p.seat === s) ?? null;
 
+	// Invites: the table's link (the same one until the host resets it) and short-lived codes made on demand.
 	let copied = $state(false);
-	async function copyLink() {
+	/** Shown to copy by hand when the browser blocks the clipboard. */
+	let linkText = $state<string | null>(null);
+	let inviteCode = $state<{ code: string; until: string } | null>(null);
+	let shareNote = $state<string | null>(null);
+	let sharing = $state(false);
+
+	async function share(task: () => Promise<void>) {
+		if (sharing) return;
+		sharing = true;
+		shareNote = null;
 		try {
-			await navigator.clipboard.writeText(location.href);
-			copied = true;
-			setTimeout(() => (copied = false), 1500);
-		} catch {
-			copied = false; // clipboard blocked: the code is still visible to read out
+			await task();
+		} catch (e) {
+			shareNote = e instanceof Error ? e.message : 'Something went wrong. Try again.';
 		}
+		sharing = false;
 	}
+
+	const copyLink = () =>
+		share(async () => {
+			const { token } = await createInvite(room.game, code, 'link');
+			const link = `${location.origin}/invite/${token}`;
+			try {
+				await navigator.clipboard.writeText(link);
+				linkText = null;
+				copied = true;
+				setTimeout(() => (copied = false), 1500);
+			} catch {
+				linkText = link;
+			}
+		});
+
+	const makeCode = () =>
+		share(async () => {
+			const made = await createInvite(room.game, code, 'code');
+			inviteCode = { code: made.code, until: new Date(made.expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
+		});
+
+	const resetLink = () =>
+		share(async () => {
+			await resetInviteLink(room.game, code);
+			linkText = null;
+			shareNote = 'The old link no longer works. Copy the new one to share it.';
+		});
 </script>
 
 <!-- Spot 0 is the dealer at the head of the table; chairs 1–6 follow clockwise. -->
@@ -56,22 +93,42 @@
 		{/if}
 	{/snippet}
 
-	<div class="flex flex-col items-center gap-2 text-center">
-		<p class="label">Table code</p>
-		<p class="rounded-md border border-brass/50 bg-black/30 px-3 py-1 font-mono text-2xl tracking-[0.2em] text-brass sm:px-4 sm:text-4xl">
-			{code}
-		</p>
-		{#if tournament}
+	{#if tournament}
+		<div class="flex flex-col items-center gap-1 text-center">
+			<p class="label">Tournament table</p>
 			<p class="text-sm text-paper/80">{tournament.name}</p>
-		{:else}
-			<button class="link-btn" onclick={copyLink}>
-				{copied ? 'Link copied' : 'Copy invite link'}
-			</button>
-		{/if}
-	</div>
+		</div>
+	{:else if inviteCode}
+		<div class="flex flex-col items-center gap-1 text-center">
+			<p class="label">Invite code</p>
+			<p class="rounded-md border border-brass/50 bg-black/30 px-3 py-1 font-mono text-2xl tracking-[0.2em] text-brass sm:px-4 sm:text-4xl">
+				{inviteCode.code}
+			</p>
+			<p class="text-xs text-paper/75">Works until {inviteCode.until}</p>
+		</div>
+	{/if}
 </Felt>
 
 <div class="mt-6 flex flex-col items-center gap-3">
+	{#if !tournament}
+		<div class="flex flex-col items-center gap-1 text-center">
+			<p class="label">Invite friends</p>
+			<div class="flex flex-wrap justify-center">
+				<button class="link-btn" onclick={copyLink} disabled={sharing}>{copied ? 'Link copied' : 'Copy invite link'}</button>
+				<button class="link-btn" onclick={makeCode} disabled={sharing}>{inviteCode ? 'New code' : 'Get a code'}</button>
+				{#if room.isHost}
+					<button class="link-btn" onclick={resetLink} disabled={sharing}>Reset link</button>
+				{/if}
+			</div>
+			{#if linkText}
+				<label class="w-80 max-w-full text-left">
+					<span class="label">Copy this link</span>
+					<input class="field mt-1 text-sm" readonly value={linkText} onfocus={(e) => e.currentTarget.select()} />
+				</label>
+			{/if}
+			{#if shareNote}<p class="max-w-80 text-sm text-paper/80" role="status">{shareNote}</p>{/if}
+		</div>
+	{/if}
 	{#if tournament}
 		{#if tournament.closed}
 			<p class="text-sm text-ember" role="status">Not enough players showed up, so this table is closed.</p>

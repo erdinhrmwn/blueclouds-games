@@ -154,12 +154,14 @@ describe("tournament rooms", () => {
 		const refused = await call(t.app, "GET", `/v1/rooms/${code}`, { token: outsider.secret });
 		expect(refused.status).toBe(403);
 		expect(refused.json.error.message).toBe("This table is for players of Friday Cup.");
+		const share = await call(t.app, "POST", `/v1/rooms/${code}/invites`, { token: ann.secret, body: { kind: "link" } });
+		expect(share.status).toBe(403);
 	});
 
 	test("the actor reads its seats with the server key only", async () => {
 		expect((await call(t.app, "GET", `/v1/rooms/${code}/seats`, { token: ann.secret })).status).toBe(401);
 		const res = await server("GET", `/v1/rooms/${code}/seats`);
-		expect(res.json.data.room).toMatchObject({ code, game: "bust-31", minPlayers: 2, startedAt: null, tournament: { id, cancelled: false } });
+		expect(res.json.data.room).toMatchObject({ code, game: "bust-31", visibility: "private", minPlayers: 2, startedAt: null, tournament: { id, cancelled: false } });
 		expect(res.json.data.room.seats.map((s: { seat: number }) => s.seat)).toEqual([0, 1]);
 		expect((await server("GET", "/v1/rooms/ZZZZZ/seats")).status).toBe(404);
 	});

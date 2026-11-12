@@ -24,10 +24,16 @@ export const LATE_GRACE_MS = 3 * 60_000;
 export type TournamentRoom = { name: string; startsAt: number; cancelled: boolean; minPlayers: number; seats: Record<string, number | null>; closed: boolean };
 
 /**
- * What a room saves: the game, its turn timer, the match being played (null in the lobby), and its
- * tournament (null = an open room, undefined = not asked yet).
+ * What a room saves: the game, its turn timer, the match being played (null in the lobby), its
+ * tournament (null = an open room, undefined = not asked yet), and whether it is in the room list (public).
  */
-export type Saved<G extends Table, M extends MatchState = MatchState> = { game: G; timer: TurnTimer; match: M | null; tournament?: TournamentRoom | null };
+export type Saved<G extends Table, M extends MatchState = MatchState> = {
+	game: G;
+	timer: TurnTimer;
+	match: M | null;
+	tournament?: TournamentRoom | null;
+	listed?: boolean;
+};
 
 /**
  * What every room keeps in `c.vars`. Not saved: who each open connection is (connections close when
@@ -86,7 +92,7 @@ export async function commitRoom<G extends Table, M extends MatchState>(
 	if (match) ({ match, events } = stamp(game.noteMove ? game.noteMove(match, vars.game) : match, entries, Date.now()));
 	const finished = !!match && vars.game.phase === "finished";
 	vars.match = finished ? null : match;
-	const saved: Saved<G, M> = { game: vars.game, timer: vars.timer, match: vars.match, tournament: vars.tournament };
+	const saved: Saved<G, M> = { game: vars.game, timer: vars.timer, match: vars.match, tournament: vars.tournament, listed: vars.listed };
 	await c.db.transaction(
 		async (tx: Ctx) => {
 			for (const e of events) await tx.execute("INSERT INTO match_events (match_id, seq, body) VALUES (?, ?, ?)", match!.id, e.seq, JSON.stringify(e));
@@ -243,8 +249,9 @@ export function turnClock(timer: TurnTimer): { left: number; total: number } | n
  * The list is a convenience, so a failure is logged and the game carries on.
  */
 export async function reportToDirectory(c: Ctx, slug: string, leaving?: string): Promise<void> {
-	// Only rooms known to be open are listed: tournament tables are for their players only.
-	if ((await loadTournament(c).catch(() => undefined)) !== null) return;
+	// Only rooms known to be public are listed: private and tournament tables are for their players only.
+	await loadTournament(c).catch(() => undefined);
+	if (!c.vars.listed) return;
 	const code = c.key[0] as string;
 	const directory = c.client().roomList.getOrCreate([slug]);
 	const connected = [...c.conns.values()].filter((conn: { id: string }) => conn.id !== leaving).length;
@@ -287,12 +294,13 @@ export async function sendReports(c: Ctx): Promise<void> {
 }
 
 /**
- * The room's tournament, read from the platform once and again on every wake (to see a cancel).
+ * The room's tournament and whether it is listed, read from the platform once and again on every wake (to see a cancel).
  * If the platform can't be reached, the last known answer stands; with none yet, joining is refused.
  */
 export async function loadTournament(c: Ctx, refresh = false): Promise<TournamentRoom | null> {
 	const known = c.vars.tournament as TournamentRoom | null | undefined;
-	if (known !== undefined && !refresh) return known;
+	// `listed` is undefined in rooms saved before private tables existed: ask once more.
+	if (known !== undefined && c.vars.listed !== undefined && !refresh) return known;
 	let room: Awaited<ReturnType<typeof fetchRoomSeats>>;
 	try {
 		room = await fetchRoomSeats(c.key[0] as string);
@@ -302,6 +310,7 @@ export async function loadTournament(c: Ctx, refresh = false): Promise<Tournamen
 		throw new UserError("The table can't be reached right now. Try again shortly.", { code: "unavailable" });
 	}
 	const t = room?.tournament;
+	c.vars.listed = !t && room?.visibility === "public";
 	c.vars.tournament = t
 		? {
 				name: t.name,
