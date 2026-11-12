@@ -1,6 +1,6 @@
 import { goto } from '$app/navigation';
-import { isInviteCode, isRoomCode } from '#lib/guest.ts';
-import { openRoom, redeemInviteCode, type Visibility } from '#lib/platform.ts';
+import { isRoomCode } from '#lib/guest.ts';
+import { openRoom, type Visibility } from '#lib/platform.ts';
 
 const problem = (err: unknown) =>
 	err instanceof Error ? err.message : 'Something went wrong. Try again.';
@@ -18,20 +18,6 @@ export async function newTable(game: string, visibility: Visibility): Promise<st
 	try {
 		const { code } = await openRoom(game, visibility);
 		await goto(`/${game}/room/${code}`);
-		return null;
-	} catch (err) {
-		return problem(err);
-	}
-}
-
-/** Redeems an invite code from a friend and goes to its table. Returns an error to show, or null. */
-export async function joinWithInvite(input: string): Promise<string | null> {
-	const code = input.trim().toUpperCase();
-	if (!isInviteCode(code)) return 'An invite code is 6 letters or digits.';
-
-	try {
-		const room = await redeemInviteCode(code);
-		await goto(`/${room.game}/room/${room.code}`);
 		return null;
 	} catch (err) {
 		return problem(err);

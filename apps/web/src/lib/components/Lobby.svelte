@@ -45,11 +45,10 @@
 
 	const inSeat = (seat: number) => view.players.find((p) => p.seat === seat) ?? null;
 
-	// Invites: the table's link (the same one until the host resets it) and short-lived codes made on demand.
+	// Invites: the table's link, the same one until the host resets it.
 	let copied = $state(false);
 	/** Shown to copy by hand when the browser blocks the clipboard. */
 	let linkText = $state<string | null>(null);
-	let inviteCode = $state<{ code: string; until: string } | null>(null);
 	let shareNote = $state<string | null>(null);
 	let sharing = $state(false);
 
@@ -69,7 +68,7 @@
 
 	const copyLink = () =>
 		share(async () => {
-			const { token } = await createInvite(room.game, code, 'link');
+			const { token } = await createInvite(room.game, code);
 			const link = `${location.origin}/invite/${token}`;
 
 			try {
@@ -83,17 +82,6 @@
 				// The browser blocked the clipboard: show the link to copy by hand.
 				linkText = link;
 			}
-		});
-
-	const makeCode = () =>
-		share(async () => {
-			const made = await createInvite(room.game, code, 'code');
-			const until = new Date(made.expiresAt).toLocaleTimeString([], {
-				hour: '2-digit',
-				minute: '2-digit'
-			});
-
-			inviteCode = { code: made.code, until };
 		});
 
 	const resetLink = () =>
@@ -129,16 +117,6 @@
 			<p class="label">Tournament table</p>
 			<p class="text-sm text-paper/80">{tournament.name}</p>
 		</div>
-	{:else if inviteCode}
-		<div class="flex flex-col items-center gap-1 text-center">
-			<p class="label">Invite code</p>
-			<p
-				class="rounded-md border border-brass/50 bg-black/30 px-3 py-1 font-mono text-2xl tracking-[0.2em] text-brass sm:px-4 sm:text-4xl"
-			>
-				{inviteCode.code}
-			</p>
-			<p class="text-xs text-paper/75">Works until {inviteCode.until}</p>
-		</div>
 	{/if}
 </Felt>
 
@@ -149,9 +127,6 @@
 			<div class="flex flex-wrap justify-center">
 				<button class="link-btn" onclick={copyLink} disabled={sharing}
 					>{copied ? 'Link copied' : 'Copy invite link'}</button
-				>
-				<button class="link-btn" onclick={makeCode} disabled={sharing}
-					>{inviteCode ? 'New code' : 'Get a code'}</button
 				>
 				{#if room.isHost}
 					<button class="link-btn" onclick={resetLink} disabled={sharing}>Reset link</button>

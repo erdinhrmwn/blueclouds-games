@@ -19,9 +19,8 @@ const open = (game: string, token = ann.secret, visibility?: string) =>
 		headers: { "x-forwarded-for": "10.1.0.1" },
 	});
 const enter = (code: string, token: string) => call(t.app, "GET", `/v1/rooms/${code}`, { token });
-const invite = (code: string, kind: string, token = ann.secret) =>
+const invite = (code: string, token = ann.secret) =>
 	call(t.app, "POST", `/v1/rooms/${code}/invites`, {
-		body: { kind },
 		token,
 		headers: { "x-forwarded-for": "10.1.0.2" },
 	});
@@ -82,10 +81,10 @@ describe("rooms", () => {
 
 	test("an invite link lets a friend in; the opener can reset it, which kills the old one", async () => {
 		const { code } = (await open("bust-31")).json.data.room;
-		expect((await invite(code, "link", bob.secret)).status).toBe(403); // not a member yet
-		const first = (await invite(code, "link")).json.data.invite.token;
+		expect((await invite(code, bob.secret)).status).toBe(403); // not a member yet
+		const first = (await invite(code)).json.data.invite.token;
 		expect(first).toMatch(/^[0-9a-f]{32}$/);
-		expect((await invite(code, "link")).json.data.invite.token).toBe(first); // one live link per room
+		expect((await invite(code)).json.data.invite.token).toBe(first); // one live link per room
 		expect((await redeem(first)).json.data.room).toEqual({ code, game: "bust-31" });
 		expect((await enter(code, bob.secret)).status).toBe(200);
 		expect((await redeem(first)).status).toBe(200); // redeeming twice is fine
@@ -98,30 +97,18 @@ describe("rooms", () => {
 		).toBe(200);
 		const cy = await guest(t.app, "Cy");
 		expect((await redeem(first, cy.secret)).status).toBe(404);
-		const second = (await invite(code, "link")).json.data.invite.token;
+		const second = (await invite(code)).json.data.invite.token;
 		expect(second).not.toBe(first);
 		expect((await redeem(second, cy.secret)).status).toBe(200);
 	});
 
-	test("an invite code is short, made on demand and expires", async () => {
-		const { code } = (await open("cloudburst")).json.data.room;
-		const made = await invite(code, "code");
-		expect(made.status).toBe(201);
-		const { code: secret, expiresAt } = made.json.data.invite;
-		expect(secret).toMatch(/^[A-HJ-NP-Z2-9]{6}$/);
-		expect(Date.parse(expiresAt) - Date.now()).toBeGreaterThan(9 * 60_000);
-		expect((await invite(code, "code")).json.data.invite.code).not.toBe(secret);
-
-		const dee = await guest(t.app, "Dee");
-		await t.sql`UPDATE room_invites SET expires_at = now() - interval '1 second' WHERE secret = ${secret}`;
-		expect((await redeem(secret, dee.secret)).status).toBe(404);
-		expect((await enter(code, dee.secret)).status).toBe(403);
-	});
-
-	test("redeeming is rate-limited per IP, so codes can't be guessed in a row", async () => {
-		for (let i = 0; i < 10; i++)
-			expect((await redeem("ZZZZZZ", bob.secret, "10.9.9.9")).status).toBe(404);
-		expect((await redeem("ZZZZZZ", bob.secret, "10.9.9.9")).status).toBe(429);
+	test("redeeming is rate-limited per IP and takes only link tokens", async () => {
+		const unknown = "0".repeat(32);
+		for (let i = 0; i < 10; i++) {
+			expect((await redeem(unknown, bob.secret, "10.9.9.9")).status).toBe(404);
+		}
+		expect((await redeem(unknown, bob.secret, "10.9.9.9")).status).toBe(429);
+		expect((await redeem("ZZZZZZ", bob.secret, "10.9.9.8")).status).toBe(400); // an old-style code
 		expect((await redeem("bad invite!", bob.secret, "10.9.9.8")).status).toBe(400);
 	});
 });

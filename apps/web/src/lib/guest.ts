@@ -1,8 +1,5 @@
 export const isRoomCode = (code: string) => /^[A-Z0-9]{4,8}$/.test(code);
 
-/** A typed invite code: 6 characters from the platform's alphabet (no 0/O, 1/I). */
-export const isInviteCode = (code: string) => /^[A-HJ-NP-Z2-9]{6}$/.test(code);
-
 /** A starting guest name like "Player-87b1"; the visitor can change it before playing. */
 export function suggestGuestName(): string {
 	const bytes = crypto.getRandomValues(new Uint8Array(2));

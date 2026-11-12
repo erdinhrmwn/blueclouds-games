@@ -26,7 +26,7 @@
 		<p class="mt-3 text-paper/75" aria-live="polite">Looking for tables…</p>
 	{:else if list.status === 'error'}
 		<p class="mt-3 text-paper/75">
-			Could not load the tables. You can still join with an invite code.
+			Could not load the tables. You can still join a friend's table with their invite link.
 		</p>
 	{:else if list.rooms.length === 0}
 		<p class="mt-3 text-paper/75">No public tables right now. Open one and invite friends.</p>

@@ -228,20 +228,12 @@ export async function createRoom(
 	return room;
 }
 
-export type Invite =
-	{ kind: 'link'; token: string } | { kind: 'code'; code: string; expiresAt: string };
-
-/** The table's invite link token (the same one until it is reset), or a new short-lived invite code. */
-export async function createInvite(
-	event: RequestEvent,
-	code: string,
-	kind: Invite['kind']
-): Promise<Invite> {
+/** The table's invite link token, the same one until it is reset. */
+export async function createInvite(event: RequestEvent, code: string): Promise<{ token: string }> {
 	const path = `/rooms/${encodeURIComponent(code)}/invites`;
-	const { invite } = await call<{ invite: Invite }>(event, path, {
+	const { invite } = await call<{ invite: { token: string } }>(event, path, {
 		method: 'POST',
-		secret: secretOrEnded(event.cookies),
-		body: { kind }
+		secret: secretOrEnded(event.cookies)
 	});
 
 	return invite;
@@ -255,7 +247,7 @@ export async function resetInviteLink(event: RequestEvent, code: string): Promis
 	});
 }
 
-/** Redeems an invite link token or code: this player may now enter the table. */
+/** Redeems an invite link token: this player may now enter the table. */
 export async function redeemInvite(
 	event: RequestEvent,
 	invite: string

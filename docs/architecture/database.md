@@ -522,6 +522,7 @@ Four migrations, each applied by the runner in one transaction, so if any existi
 | `012_guest_usernames.sql` | Guests get a `guest_…` username (existing ones backfilled), `is_guest`, and the guest-prefix check. |
 | `013_guest_cleanup.sql` | Deleting a player takes its `player_secrets` with it and clears `rooms.created_by_player_id`; indexes for the guest sweep. |
 | `014_room_invites.sql` | `rooms.visibility` (existing rooms public, new ones private), `room_invites`, `room_members` (openers backfilled as members). |
+| `015_drop_invite_codes.sql` | Invite codes removed: their rows deleted, `room_invites.kind` and `expires_at` dropped, secrets must be 32 hex characters. |
 
 Before deploying, run these on the live database. Each must return 0 (or the listed rows must be fixed first):
 
@@ -538,26 +539,26 @@ SELECT count(*) FROM admin_audit WHERE target_id IS NOT NULL AND target_id NOT I
 
 Codes are unique across games now, so the second-to-last query must show no code used by two games (very unlikely with random codes; if it happens, that one match's code is fixed by hand first).
 
-### Invites: `room_invites` and `room_members` (migration 014)
+### Invites: `room_invites` and `room_members` (migrations 014, 015)
 
 Erdin, 2026-11-12: a table must not be joinable by typing its code. A private table is entered only through an invite:
 
 - **Invite link** `/invite/<token>`: 16 random bytes as 32 hex characters (letters and digits only), one live link per room, valid until reset. Anyone who may enter the table can copy it; only the player who opened the table can reset it, which kills the old link.
-- **Invite code**: 6 characters from the room code alphabet, made on demand by anyone at the table, valid 10 minutes (`INVITE_CODE_TTL_MS`). Redeeming is limited to 10 tries a minute per IP, so a code can't be guessed in a row. Codes stay unique forever (32^6 is about a billion); sweep expired ones if the table ever passes ~10 million rows.
-- Redeeming either (`POST /v1/invites/redeem`) adds the player to `room_members`, so reloads and reconnects keep working. The opener is a member from the start.
+- **No invite codes** (Erdin, 2026-11-12): the short typed codes from 014 were removed in 015; the link is the only way in.
+- Redeeming a link (`POST /v1/invites/redeem`, limited to 10 tries a minute per IP) adds the player to `room_members`, so reloads and reconnects keep working. The opener is a member from the start.
 - `rooms.visibility` is `public` or `private`. Rooms from before 014 stay public; new rooms (tournament rooms too) default to private. Room actors read it from `/v1/rooms/:code/seats` and only public, non-tournament tables report to the room list.
 - Membership is not history: a deleted guest takes its `room_members` rows along, and its invites forget who made them.
 
 ## Where it lives in the code
 
 - **Platform** (`apps/platform/src`, each feature as `routes/<feature>.ts` + `services/<feature>.ts`):
-  - rooms: `POST /v1/rooms` (new table, public or private), `GET /v1/rooms/:code` (may this player enter: 404 unknown, 403 for a tournament room they aren't assigned to or a cancelled tournament, or a private room they aren't a member of; assigned players may still enter a closed table to see how it ended), `POST /v1/rooms/:code/invites` (`link` or `code`), `DELETE /v1/rooms/:code/invites/link` (opener only), `POST /v1/invites/redeem`, and for the actor with the server key `GET /v1/rooms/:code/seats`, `POST /v1/rooms/:code/start`, `POST /v1/rooms/:code/close`.
+  - rooms: `POST /v1/rooms` (new table, public or private), `GET /v1/rooms/:code` (may this player enter: 404 unknown, 403 for a tournament room they aren't assigned to or a cancelled tournament, or a private room they aren't a member of; assigned players may still enter a closed table to see how it ended), `POST /v1/rooms/:code/invites` (the live link), `DELETE /v1/rooms/:code/invites/link` (opener only), `POST /v1/invites/redeem`, and for the actor with the server key `GET /v1/rooms/:code/seats`, `POST /v1/rooms/:code/start`, `POST /v1/rooms/:code/close`.
   - tournaments: `planRooms` (the even split) and `distributeIn` (shared with the backoffice) in `services/tournaments.ts`, the every-minute job in `jobs/index.ts` started by `index.ts`, `GET /v1/tournaments?game=`, `POST`/`DELETE /v1/tournaments/:id/registration`, `GET /v1/players/me/rooms`.
   - matches: a report names its room by code; a tournament room's report closes the room, and the tournament with its last room.
   - players: `POST /v1/players/register` (upgrades the guest whose secret is sent, or makes a new player), `POST /v1/players/login` (a new secret for this device; 5 wrong passwords lock the username for 15 minutes), `POST /v1/players/logout` (revokes this device's secret).
   - Creating and changing tournaments has no platform API: only the backoffice does that.
 - **Room actors** (`apps/server/src/games/shared/room.ts`, one place for both games): read the room's seats from the platform, let only assigned players sit (on their seat), turn off host controls, start by themselves at `starts_at` (early once everyone is in, otherwise after the 3-minute wait with whoever came), close the table when fewer than the game's minimum came, and stay off the public room list.
-- **Game web**: the tournaments panel on each game's home page (sign up, "Go to your table"), the countdown in a tournament table's lobby, the new-table choice (private or public) and invite code box on each home page, the invite link page (`/invite/<token>`) and the invite buttons in a table's lobby, and the account page (`/account`: create account, sign in, sign out).
+- **Game web**: the tournaments panel on each game's home page (sign up, "Go to your table"), the countdown in a tournament table's lobby, the new-table choice (private or public) on each home page, the invite link page (`/invite/<token>`) and the invite buttons in a table's lobby, and the account page (`/account`: create account, sign in, sign out).
 - **Backoffice**: Tournaments list and create form; a tournament's page registers players by pasted ids, hands out tables now, seats a player by hand or takes them off, and cancels; players show their account, bot and VIP flags, and VIP can be granted or taken back. Every change is an audit event. A match's page shows its table: the code, and the tournament it belongs to or who opened it.
 
 Decisions made while building, on top of the design above:

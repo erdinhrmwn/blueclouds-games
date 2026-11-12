@@ -12,18 +12,10 @@ const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const CODE_LENGTH = 8;
 const CODE_TRIES = 5;
 
-/**
- * An invite code is typed by hand, so it is short and lasts only a few minutes; redeeming is rate-limited per IP.
- * ponytail: codes stay unique forever (32^6 ≈ 1 billion), so a retry is rare for years. If room_invites
- * passes ~10 million rows, sweep expired codes.
- */
-const INVITE_CODE_LENGTH = 6;
-export const INVITE_CODE_TTL_MS = 10 * 60_000;
-
 /** 128 random bits. */
 const INVITE_TOKEN_BYTES = 16;
 
-/** Room codes and invite codes use the same readable alphabet. 32 divides 256, so `byte % 32` has no bias. */
+/** 32 divides 256, so `byte % 32` has no bias. */
 function randomCode(length: number): string {
 	const bytes = crypto.getRandomValues(new Uint8Array(length));
 	return Array.from(bytes, (byte) => CODE_CHARS[byte % CODE_CHARS.length]).join("");
@@ -150,13 +142,13 @@ async function inviteLink(sql: SQL, roomId: string, playerId: string): Promise<s
 		const [live] = await sql`
 			SELECT secret
 			FROM room_invites
-			WHERE room_id = ${roomId} AND kind = 'link' AND revoked_at IS NULL`;
+			WHERE room_id = ${roomId} AND revoked_at IS NULL`;
 
 		if (live) return live.secret;
 
 		const [made] = await sql`
-			INSERT INTO room_invites (room_id, kind, secret, created_by_player_id)
-			VALUES (${roomId}, 'link', ${newInviteToken()}, ${playerId})
+			INSERT INTO room_invites (room_id, secret, created_by_player_id)
+			VALUES (${roomId}, ${newInviteToken()}, ${playerId})
 			ON CONFLICT DO NOTHING
 			RETURNING secret`;
 
@@ -164,35 +156,6 @@ async function inviteLink(sql: SQL, roomId: string, playerId: string): Promise<s
 	}
 
 	throw new Error(`no invite link after ${CODE_TRIES} tries`);
-}
-
-/** A new invite code for the room, valid for INVITE_CODE_TTL_MS. */
-async function inviteCode(
-	sql: SQL,
-	roomId: string,
-	playerId: string,
-): Promise<{ code: string; expiresAt: string }> {
-	const ttlSeconds = INVITE_CODE_TTL_MS / 1000;
-
-	for (let i = 0; i < CODE_TRIES; i++) {
-		const [made] = await sql`
-			INSERT INTO room_invites (room_id, kind, secret, created_by_player_id, expires_at)
-			VALUES (
-				${roomId},
-				'code',
-				${randomCode(INVITE_CODE_LENGTH)},
-				${playerId},
-				now() + make_interval(secs => ${ttlSeconds})
-			)
-			ON CONFLICT (secret) DO NOTHING
-			RETURNING secret, expires_at`;
-
-		if (made) {
-			return { code: made.secret, expiresAt: made.expires_at.toISOString() };
-		}
-	}
-
-	throw new Error(`no free invite code after ${CODE_TRIES} tries`);
 }
 
 /** A player opens a new table: the platform picks its code. The opener is its first member. */
@@ -213,27 +176,17 @@ export async function openRoom(sql: SQL, game: string, visibility: Visibility, p
 }
 
 /**
- * Anyone who may enter an open table can invite: `link` answers the room's live link (made on first ask),
- * `code` makes a new short-lived code. Tournament tables have no invites.
+ * Anyone who may enter an open table can invite: they get the room's live link, made on first ask.
+ * Tournament tables have no invites.
  */
-export async function createInvite(
-	sql: SQL,
-	code: string,
-	playerId: string,
-	kind: "link" | "code",
-) {
+export async function createInvite(sql: SQL, code: string, playerId: string) {
 	const room = await enterable(sql, code, playerId);
 	if (room.tournament) {
 		throw new ApiError("forbidden", 403, "Tournament tables can't be shared.");
 	}
 
-	if (kind === "link") {
-		const token = await inviteLink(sql, room.id, playerId);
-		return { kind, token };
-	}
-
-	const invite = await inviteCode(sql, room.id, playerId);
-	return { kind, ...invite };
+	const token = await inviteLink(sql, room.id, playerId);
+	return { token };
 }
 
 /** The opener kills the live link (e.g. it was passed on too far). The next ask for a link makes a new one. */
@@ -250,10 +203,10 @@ export async function resetInviteLink(sql: SQL, code: string, playerId: string):
 	await sql`
 		UPDATE room_invites
 		SET revoked_at = now()
-		WHERE room_id = ${room.id} AND kind = 'link' AND revoked_at IS NULL`;
+		WHERE room_id = ${room.id} AND revoked_at IS NULL`;
 }
 
-/** A link token or a code: the player becomes a member of its room and gets the room to go to. */
+/** A link token: the player becomes a member of its room and gets the room to go to. */
 export async function redeemInvite(sql: SQL, invite: string, playerId: string) {
 	const [row] = await sql`
 		SELECT r.id, r.code, r.game_slug AS game
@@ -261,7 +214,6 @@ export async function redeemInvite(sql: SQL, invite: string, playerId: string) {
 		JOIN rooms r ON r.id = i.room_id
 		WHERE i.secret = ${invite}
 			AND i.revoked_at IS NULL
-			AND (i.expires_at IS NULL OR i.expires_at > now())
 			AND r.tournament_id IS NULL`;
 
 	if (!row) {

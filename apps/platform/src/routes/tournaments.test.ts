@@ -213,10 +213,7 @@ describe("tournament rooms", () => {
 		const refused = await call(t.app, "GET", `/v1/rooms/${code}`, { token: outsider.secret });
 		expect(refused.status).toBe(403);
 		expect(refused.json.error.message).toBe("This table is for players of Friday Cup.");
-		const share = await call(t.app, "POST", `/v1/rooms/${code}/invites`, {
-			token: ann.secret,
-			body: { kind: "link" },
-		});
+		const share = await call(t.app, "POST", `/v1/rooms/${code}/invites`, { token: ann.secret });
 		expect(share.status).toBe(403);
 	});
 

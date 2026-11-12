@@ -9,7 +9,7 @@ import * as rooms from "../services/rooms";
 /** Players open tables, so it is rate-limited like guest sign-ups, a bit looser. */
 const ROOM_LIMIT = { perIp: 20, windowMs: 60_000 };
 
-/** Making and redeeming invites, per IP. Redeeming is the tight one: it is where a code could be guessed. */
+/** Asking for and redeeming invite links, per IP. Redeeming is the tight one: it is where a link is tried. */
 const INVITE_LIMIT = { perIp: 20, windowMs: 60_000 };
 const REDEEM_LIMIT = { perIp: 10, windowMs: 60_000 };
 
@@ -18,12 +18,11 @@ const Visibility = z.enum(["public", "private"]);
 const Code = z.string().regex(/^[A-Z0-9]{4,8}$/, "Not a room code.");
 
 const NewRoom = z.object({ game: Game, visibility: Visibility.default("private") });
-const NewInvite = z.object({ kind: z.enum(["link", "code"]) });
 const Redeem = z.object({
 	invite: z
 		.string()
 		.trim()
-		.regex(/^[A-Za-z0-9]{6,64}$/, "That invite doesn't look right."),
+		.regex(/^[0-9a-f]{32}$/, "That invite link doesn't look right."),
 });
 const CloseBody = z.object({ reason: z.literal("not_enough_players") });
 
@@ -47,18 +46,16 @@ export function roomRoutes(sql: SQL, serverKey: string) {
 		return ok(c, { room });
 	});
 
-	/** 200 with the room's live link, 201 with a new code. */
+	/** The room's live invite link, made on first ask. */
 	app.post(
 		"/rooms/:code/invites",
 		rateLimit(INVITE_LIMIT.perIp, INVITE_LIMIT.windowMs),
 		auth,
 		async (c) => {
 			const code = parse(Code, c.req.param("code"));
-			const { kind } = parse(NewInvite, await readJson(c));
-			const invite = await rooms.createInvite(sql, code, c.get("player").id, kind);
-			const status = kind === "link" ? 200 : 201;
+			const invite = await rooms.createInvite(sql, code, c.get("player").id);
 
-			return ok(c, { invite }, status);
+			return ok(c, { invite });
 		},
 	);
 
