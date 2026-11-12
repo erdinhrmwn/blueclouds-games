@@ -49,19 +49,32 @@ The platform owns the schema and runs every migration, including the backoffice'
 
 ## Structure
 
+Layered, two layers: a route handles HTTP, a service holds the rules and the SQL.
+
 ```
 apps/platform/
   src/
-    index.ts        # starts the server
-    app.ts          # Hono app: middleware, routes, error envelope
-    http.ts         # ok() / fail() / parse() helpers
+    index.ts        # starts the server and the jobs, shuts down cleanly
+    app.ts          # Hono app: middleware, mounts the routes, error envelope, /v1/health
     config.ts       # env validation
-    auth.ts         # player secret + server key auth
-    tokens.ts       # play token signing
-    players.ts      # guest, me, play tokens
-    matches.ts      # match reports (with move logs) + history
-    migrate.ts      # migration runner
-    *.test.ts
+    test-helpers.ts # test database + app (the backoffice tests use it too)
+    routes/         # HTTP only: Zod input schemas, auth, rate limits, status codes, ok(c, …)
+      players.ts  rooms.ts  tournaments.ts  matches.ts   (+ *.test.ts, through the HTTP API)
+    services/       # business rules + SQL, as plain functions taking `sql` first
+      players.ts  guests.ts  rooms.ts  tournaments.ts  matches.ts
+    middleware/     # auth.ts (player secret, server key), rate-limit.ts
+    jobs/           # in-process loops: tournament-job.ts (30 s), guest-sweep.ts (daily)
+    lib/            # http.ts (envelope, ApiError, parse), log.ts, secrets.ts, play-tokens.ts
+    db/             # migrate.ts (runner), schema.test.ts
   migrations/       # NNN_name.sql, applied in order
   scripts/          # migrate.ts, keys-generate.ts
 ```
+
+Rules of the layout:
+
+- A route never runs SQL; it parses input, calls one service and shapes the response. A service never sees Hono's `Context`.
+- Services throw `ApiError` (from `lib/http.ts`) for anything the caller should see, so there is no second error type to map.
+- There is no repository layer: the queries are short and each runs in one place, so it would only pass calls through. If one service's SQL grows large, give that service its own file of queries.
+- A schema the service also depends on lives with the service (`MatchReport` in `services/matches.ts`, since the stored hash is built from it); every other input schema lives in its route.
+- No index files: import the file you need.
+- To add an endpoint: put the handler in `routes/<feature>.ts`, its logic in `services/<feature>.ts`, and a test next to the route. A new feature gets one file in each folder and is mounted in `app.ts`.

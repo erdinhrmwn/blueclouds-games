@@ -1,10 +1,10 @@
 import { SQL } from "bun";
 import { createApp } from "./app";
 import { loadConfig } from "./config";
-import { log } from "./log";
-import { createSigner } from "./tokens";
-import { startTournamentJob } from "./tournaments";
-import { startGuestSweep } from "./guests";
+import { log } from "./lib/log";
+import { createSigner } from "./lib/play-tokens";
+import { startTournamentJob } from "./jobs/tournament-job";
+import { startGuestSweep } from "./jobs/guest-sweep";
 
 const config = loadConfig();
 const sql = new SQL(config.db);

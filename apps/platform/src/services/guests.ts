@@ -1,9 +1,7 @@
 import type { SQL } from "bun";
-import { log } from "./log";
 
 /** A guest that never played a match is deleted after this long unseen (Erdin, 2026-11-11). */
 export const GUEST_UNUSED_DAYS = 30;
-const SWEEP_EVERY_MS = 24 * 60 * 60_000;
 /** Rows per sweep, so one run never holds a long lock; a backlog clears over the next days. */
 const SWEEP_BATCH = 5_000;
 
@@ -33,27 +31,4 @@ export async function sweepGuests(sql: SQL, days = GUEST_UNUSED_DAYS): Promise<n
 			LIMIT ${SWEEP_BATCH})
 		RETURNING id`;
 	return rows.length;
-}
-
-/**
- * Sweeps once at start, then daily, in this process.
- * ponytail: fine for one VPS; with several platform instances each sweeps, which is harmless (DELETE is idempotent).
- */
-export function startGuestSweep(sql: SQL): { stop: () => Promise<void> } {
-	let running: Promise<unknown> | null = null;
-	const tick = () => {
-		if (running) return;
-		running = sweepGuests(sql)
-			.then((deleted) => deleted > 0 && log.info({ msg: "guest sweep", deleted }))
-			.catch((err) => log.error({ msg: "guest sweep failed", err: String(err) }))
-			.finally(() => (running = null));
-	};
-	const timer = setInterval(tick, SWEEP_EVERY_MS);
-	tick();
-	return {
-		stop: async () => {
-			clearInterval(timer);
-			await running;
-		},
-	};
 }

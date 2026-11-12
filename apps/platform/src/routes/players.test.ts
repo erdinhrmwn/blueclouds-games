@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { jwtVerify } from "jose";
-import { PLAY_TOKEN_AUDIENCE } from "./tokens";
-import { call, guest, setupTestApp } from "./test-helpers";
+import { PLAY_TOKEN_AUDIENCE } from "../lib/play-tokens";
+import { call, guest, setupTestApp } from "../test-helpers";
 
 let t: Awaited<ReturnType<typeof setupTestApp>>;
 beforeAll(async () => {

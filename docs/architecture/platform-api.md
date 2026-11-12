@@ -125,7 +125,7 @@ Rules:
 - `error.code` is a fixed, machine-readable string; `error.message` is safe to show; `error.fields` only appears for validation errors. Stack traces and internal details go to logs only.
 - The HTTP status still matches the outcome (`ok: false` never comes with a `2xx`).
 - Every response carries an `X-Request-Id` header, also written to the logs.
-- One helper (`ok(data, status)` / `fail(code, status, message, fields?)` in `apps/platform/src/http.ts`) builds every response, and Hono's `app.onError` / `app.notFound` turn any thrown error or unknown route into the envelope (`internal` / `not_found`), so the shape cannot drift. Zod is called through one small `parse(schema, body)` helper that throws `bad_input` with `fields`, so no extra validator package is needed.
+- One helper (`ok(data, status)` / `fail(code, status, message, fields?)` in `apps/platform/src/lib/http.ts`) builds every response, and Hono's `app.onError` / `app.notFound` turn any thrown error or unknown route into the envelope (`internal` / `not_found`), so the shape cannot drift. Zod is called through one small `parse(schema, body)` helper that throws `bad_input` with `fields`, so no extra validator package is needed.
 
 | `error.code` | Status | When |
 |---|---|---|
@@ -197,7 +197,7 @@ Bearer player secret, no body. `200`, `data: { "token": "eyJ…", "expiresAt": "
 
 ### `POST /v1/players/register`, `POST /v1/players/login`, `POST /v1/players/logout`
 
-Player accounts (migration `011`). Register takes `{ "name", "username", "password" }`: with a guest's bearer secret it turns that guest into the account (same id and secret, `200`); without one it makes a new player and returns its secret (`201`). Login takes `{ "username", "password" }` and returns a new secret for this device. Logout revokes the bearer secret; a guest that never played a match is deleted then, since nothing can reach it again. The platform also sweeps daily (`src/guests.ts`): guests with no match, tournament sign-up, seat or audit entry, unseen for 30 days, are deleted. `GET /players/me` counts as being seen (one write an hour at most). Guests that played stay, so every match keeps all its players. Usernames are stored lowercase, and ones starting with `guest` are kept for guests (migration `012`). Errors: `400 bad_input` per field, `409 conflict` (username taken, or already an account), `401` wrong username or password (same answer for an unknown username), `403` disabled, `429` rate limited or 5 wrong passwords in 15 minutes.
+Player accounts (migration `011`). Register takes `{ "name", "username", "password" }`: with a guest's bearer secret it turns that guest into the account (same id and secret, `200`); without one it makes a new player and returns its secret (`201`). Login takes `{ "username", "password" }` and returns a new secret for this device. Logout revokes the bearer secret; a guest that never played a match is deleted then, since nothing can reach it again. The platform also sweeps daily (`src/jobs/guest-sweep.ts`): guests with no match, tournament sign-up, seat or audit entry, unseen for 30 days, are deleted. `GET /players/me` counts as being seen (one write an hour at most). Guests that played stay, so every match keeps all its players. Usernames are stored lowercase, and ones starting with `guest` are kept for guests (migration `012`). Errors: `400 bad_input` per field, `409 conflict` (username taken, or already an account), `401` wrong username or password (same answer for an unknown username), `403` disabled, `429` rate limited or 5 wrong passwords in 15 minutes.
 
 ### Rooms and tournaments
 
@@ -301,12 +301,12 @@ Each app validates its variables at startup and exits if one is missing. `bun ru
 apps/
   platform/            # new: Bun API
     src/
-      index.ts         # Hono app: requestId, bodyLimit, secureHeaders, onError, route mounting
-      http.ts          # ok() / fail() envelope helpers
+      app.ts           # Hono app: requestId, bodyLimit, secureHeaders, onError, route mounting
       config.ts        # env validation
-      players/         # routes + service + queries
-      matches/
-      tokens.ts        # play token signing (jose)
+      routes/          # HTTP: input schemas, auth, responses
+      services/        # rules + SQL
+      lib/             # http.ts envelope helpers, play-tokens.ts (jose), …
+                       # full layout: docs/apps/platform.md
     migrations/        # 001_init.sql, …
     scripts/           # migrate.ts, keys-generate.ts
     Dockerfile

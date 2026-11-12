@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { newRoomCode } from "./rooms";
-import { call, guest, setupTestApp } from "./test-helpers";
+import { newRoomCode } from "../services/rooms";
+import { call, guest, setupTestApp } from "../test-helpers";
 
 let t: Awaited<ReturnType<typeof setupTestApp>>;
 let ann: Awaited<ReturnType<typeof guest>>;

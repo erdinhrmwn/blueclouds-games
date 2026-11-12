@@ -1,7 +1,7 @@
 import { SQL } from "bun";
 import { loadDbConfig } from "../src/config";
-import { log } from "../src/log";
-import { migrate } from "../src/migrate";
+import { log } from "../src/lib/log";
+import { migrate } from "../src/db/migrate";
 
 let sql: SQL;
 try {

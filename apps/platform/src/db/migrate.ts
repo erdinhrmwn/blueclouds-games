@@ -2,7 +2,7 @@ import type { SQL } from "bun";
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 
-export const MIGRATIONS_DIR = join(import.meta.dir, "..", "migrations");
+export const MIGRATIONS_DIR = join(import.meta.dir, "..", "..", "migrations");
 
 /** Applies every `NNN_name.sql` not yet in `schema_migrations`, in order, each in its own transaction. */
 export async function migrate(sql: SQL, dir = MIGRATIONS_DIR): Promise<string[]> {

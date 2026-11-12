@@ -1,13 +1,8 @@
 import type { SQL } from "bun";
-import { Hono } from "hono";
-import { z } from "zod";
-import { playerAuth, type PlayerVariables } from "./auth";
-import { ApiError, ok, parse } from "./http";
-import { log } from "./log";
+import { ApiError } from "../lib/http";
+import { log } from "../lib/log";
 import { insertRoom } from "./rooms";
 
-/** How often the job distributes due tournaments and closes rooms nobody opened. */
-export const JOB_EVERY_MS = 30_000;
 const JOB_BATCH = 10;
 /**
  * A room nobody opened is closed this long after starts_at: the room's own 3-minute wait for late
@@ -149,102 +144,55 @@ export async function runTournamentJob(sql: SQL): Promise<{ distributed: number;
 	});
 }
 
-/**
- * Runs the job every JOB_EVERY_MS in this process; no cron needed.
- * ponytail: an in-process loop fits one VPS. SKIP LOCKED keeps it safe with more instances; only a far
- * larger number of jobs would call for a real queue.
- */
-export function startTournamentJob(sql: SQL): { stop: () => Promise<void> } {
-	let running: Promise<unknown> | null = null;
-	const tick = () => {
-		if (running) return; // the last tick is still busy
-		running = runTournamentJob(sql)
-			.then((r) => r.distributed + r.failed + r.closed > 0 && log.info({ msg: "tournament job", ...r }))
-			.catch((err) => log.error({ msg: "tournament job failed", err: String(err) }))
-			.finally(() => (running = null));
-	};
-	const timer = setInterval(tick, JOB_EVERY_MS);
-	tick();
-	return {
-		stop: async () => {
-			clearInterval(timer);
-			await running;
-		},
-	};
-}
-
-const GameQuery = z.object({ game: z.string().regex(/^[a-z0-9-]{2,32}$/, "Unknown game.") });
-const OptionalGame = z.object({ game: GameQuery.shape.game.optional() });
-const Id = z.uuid("Not a tournament id.");
 const LIST_LIMIT = 20;
 
-export function tournamentRoutes(sql: SQL) {
-	const app = new Hono<{ Variables: PlayerVariables }>();
-	const auth = playerAuth(sql);
+/** Tournaments of a game whose registration is open now, and whether this player is in. */
+export async function listOpen(sql: SQL, game: string, playerId: string) {
+	const rows = await sql`
+		SELECT t.id, t.name, t.starts_at, t.registration_closes_at, t.players_per_room,
+		       (SELECT count(*)::int FROM tournament_players x WHERE x.tournament_id = t.id) AS registered,
+		       EXISTS (SELECT 1 FROM tournament_players x WHERE x.tournament_id = t.id AND x.player_id = ${playerId}) AS joined
+		FROM tournaments t
+		WHERE t.game_slug = ${game} AND t.cancelled_at IS NULL AND t.distributed_at IS NULL
+		  AND t.registration_opens_at <= now() AND t.registration_closes_at > now()
+		ORDER BY t.starts_at LIMIT ${LIST_LIMIT}`;
+	return rows.map((r: any) => ({
+		id: r.id,
+		name: r.name,
+		startsAt: r.starts_at.toISOString(),
+		registrationClosesAt: r.registration_closes_at.toISOString(),
+		playersPerRoom: r.players_per_room,
+		registered: r.registered,
+		joined: r.joined,
+	}));
+}
 
-	/** Tournaments of a game whose registration is open now, and whether the signed-in player is in. */
-	app.get("/tournaments", auth, async (c) => {
-		const { game } = parse(GameQuery, c.req.query());
-		const me = c.get("player").id;
-		const rows = await sql`
-			SELECT t.id, t.name, t.starts_at, t.registration_closes_at, t.players_per_room,
-			       (SELECT count(*)::int FROM tournament_players x WHERE x.tournament_id = t.id) AS registered,
-			       EXISTS (SELECT 1 FROM tournament_players x WHERE x.tournament_id = t.id AND x.player_id = ${me}) AS joined
-			FROM tournaments t
-			WHERE t.game_slug = ${game} AND t.cancelled_at IS NULL AND t.distributed_at IS NULL
-			  AND t.registration_opens_at <= now() AND t.registration_closes_at > now()
-			ORDER BY t.starts_at LIMIT ${LIST_LIMIT}`;
-		return ok(c, {
-			tournaments: rows.map((r: any) => ({
-				id: r.id,
-				name: r.name,
-				startsAt: r.starts_at.toISOString(),
-				registrationClosesAt: r.registration_closes_at.toISOString(),
-				playersPerRoom: r.players_per_room,
-				registered: r.registered,
-				joined: r.joined,
-			})),
-		});
+/** Signs the player up (or out) while registration is open. FOR SHARE waits for a distribute run on the same tournament. */
+export async function setRegistration(sql: SQL, tournamentId: string, playerId: string, join: boolean): Promise<void> {
+	await sql.begin(async (tx) => {
+		const [t] = await tx`
+			SELECT cancelled_at, distributed_at, registration_opens_at <= now() AND registration_closes_at > now() AS open
+			FROM tournaments WHERE id = ${tournamentId} FOR SHARE`;
+		if (!t) throw new ApiError("not_found", 404, "There is no such tournament.");
+		if (t.cancelled_at) throw new ApiError("conflict", 409, "This tournament was cancelled.");
+		if (!t.open || t.distributed_at) throw new ApiError("conflict", 409, "Registration for this tournament is closed.");
+		if (join) await tx`INSERT INTO tournament_players (tournament_id, player_id) VALUES (${tournamentId}, ${playerId}) ON CONFLICT DO NOTHING`;
+		else await tx`DELETE FROM tournament_players WHERE tournament_id = ${tournamentId} AND player_id = ${playerId}`;
 	});
+}
 
-	/** Signs the player up (or out). FOR SHARE waits for a distribute run on the same tournament. */
-	const register = (join: boolean) =>
-		app[join ? "post" : "delete"]("/tournaments/:id/registration", auth, async (c) => {
-			const id = parse(Id, c.req.param("id"));
-			const me = c.get("player").id;
-			await sql.begin(async (tx) => {
-				const [t] = await tx`
-					SELECT cancelled_at, distributed_at, registration_opens_at <= now() AND registration_closes_at > now() AS open
-					FROM tournaments WHERE id = ${id} FOR SHARE`;
-				if (!t) throw new ApiError("not_found", 404, "There is no such tournament.");
-				if (t.cancelled_at) throw new ApiError("conflict", 409, "This tournament was cancelled.");
-				if (!t.open || t.distributed_at) throw new ApiError("conflict", 409, "Registration for this tournament is closed.");
-				if (join) await tx`INSERT INTO tournament_players (tournament_id, player_id) VALUES (${id}, ${me}) ON CONFLICT DO NOTHING`;
-				else await tx`DELETE FROM tournament_players WHERE tournament_id = ${id} AND player_id = ${me}`;
-			});
-			return ok(c, { registered: join });
-		});
-	register(true);
-	register(false);
-
-	/** The tournament tables the player is seated at, so the game's home page can show "your table". */
-	app.get("/players/me/rooms", auth, async (c) => {
-		const { game } = parse(OptionalGame, c.req.query());
-		const rows = await sql`
-			SELECT r.code, r.game_slug, ra.seat, t.id AS tournament_id, t.name, t.starts_at
-			FROM room_assignments ra JOIN rooms r ON r.id = ra.room_id JOIN tournaments t ON t.id = ra.tournament_id
-			WHERE ra.player_id = ${c.get("player").id} AND r.closed_at IS NULL AND t.cancelled_at IS NULL
-			  ${game ? sql`AND r.game_slug = ${game}` : sql``}
-			ORDER BY t.starts_at LIMIT ${LIST_LIMIT}`;
-		return ok(c, {
-			rooms: rows.map((r: any) => ({
-				code: r.code,
-				game: r.game_slug,
-				seat: r.seat,
-				tournament: { id: r.tournament_id, name: r.name, startsAt: r.starts_at.toISOString() },
-			})),
-		});
-	});
-
-	return app;
+/** The open tournament tables the player is seated at, so the game's home page can show "your table". */
+export async function seatedRooms(sql: SQL, playerId: string, game: string | undefined) {
+	const rows = await sql`
+		SELECT r.code, r.game_slug, ra.seat, t.id AS tournament_id, t.name, t.starts_at
+		FROM room_assignments ra JOIN rooms r ON r.id = ra.room_id JOIN tournaments t ON t.id = ra.tournament_id
+		WHERE ra.player_id = ${playerId} AND r.closed_at IS NULL AND t.cancelled_at IS NULL
+		  ${game ? sql`AND r.game_slug = ${game}` : sql``}
+		ORDER BY t.starts_at LIMIT ${LIST_LIMIT}`;
+	return rows.map((r: any) => ({
+		code: r.code,
+		game: r.game_slug,
+		seat: r.seat,
+		tournament: { id: r.tournament_id, name: r.name, startsAt: r.starts_at.toISOString() },
+	}));
 }
