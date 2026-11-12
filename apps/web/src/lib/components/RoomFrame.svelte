@@ -56,7 +56,7 @@
 </script>
 
 <div class="flex min-h-8 items-center justify-between gap-3 {player.playing ? 'pt-3' : 'pt-2'}">
-	<!-- Game name, then the room's name, then the round once dealt: one per line. -->
+	<!-- Game name, the room's name, its code, then the round once dealt: one per line. -->
 	<div class="min-w-0">
 		<h1 class="font-display text-lg leading-tight font-bold text-paper">{game.name}</h1>
 		<p class="flex min-w-0 items-center gap-1.5 text-xs font-semibold text-paper/90">
@@ -64,6 +64,9 @@
 				<span class="shrink-0 rounded-sm bg-brass px-1 text-[10px] text-ink">Tournament</span>
 			{/if}
 			<span class="truncate">{roomName}</span>
+		</p>
+		<p class="text-xs text-paper/70">
+			Room <span class="font-semibold tracking-wider text-paper/90 tabular-nums">{code}</span>
 		</p>
 		{#if room?.view && room.view.phase !== 'lobby'}
 			<p class="text-xs text-paper/70 tabular-nums">Round #{room.view.round}</p>
