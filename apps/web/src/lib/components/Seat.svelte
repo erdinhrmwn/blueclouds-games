@@ -88,14 +88,14 @@
 		<!-- Room below for the Away tag, kept on every seat so all their lines stay level. -->
 		<div class="relative mb-1.5" aria-hidden="true">
 			<div
-				class="relative grid size-14 place-items-center rounded-full border-2 font-display text-2xl font-bold sm:size-16
+				class="relative grid size-16 place-items-center rounded-full border-2 font-display text-2xl font-bold
 					{avatarLook}"
 			>
 				{#if player.bot}
 					<!-- robot head: bots get an icon instead of a monogram -->
 					<svg
 						viewBox="0 0 24 24"
-						class="size-7 sm:size-8"
+						class="size-8"
 						fill="none"
 						stroke="currentColor"
 						stroke-width="1.8"
@@ -116,7 +116,7 @@
 				{#if timeLeft !== null}
 					<!-- The timer runs on the avatar's own edge, so the seat on turn is no bigger than the others. -->
 					<svg
-						class="pointer-events-none absolute -inset-0.5 size-[calc(100%+0.25rem)] -rotate-90"
+						class="pointer-events-none absolute -inset-0.5 size-16 -rotate-90"
 						viewBox="0 0 40 40"
 						aria-hidden="true"
 					>
@@ -179,14 +179,12 @@
 	>
 		{#if onAddBot}
 			<button
-				class="mb-1.5 grid size-14 place-items-center rounded-full border-2 border-dashed border-brass/70 text-2xl leading-none text-brass transition hover:border-solid hover:bg-brass/10 disabled:opacity-40 sm:size-16"
+				class="mb-1.5 grid size-16 place-items-center rounded-full border-2 border-dashed border-brass/70 text-2xl leading-none text-brass transition hover:border-solid hover:bg-brass/10 disabled:opacity-40"
 				onclick={onAddBot}
 				aria-label="Add a bot to seat {number ?? ''}">+</button
 			>
 		{:else}
-			<div
-				class="mb-1.5 size-14 rounded-full border-2 border-dashed border-paper/40 sm:size-16"
-			></div>
+			<div class="mb-1.5 size-16 rounded-full border-2 border-dashed border-paper/40"></div>
 		{/if}
 		<div class="text-xs text-paper/70">Seat {number ?? ''}</div>
 		{#if onSit}
