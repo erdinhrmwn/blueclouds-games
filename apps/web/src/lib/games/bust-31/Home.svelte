@@ -4,34 +4,21 @@
 	import OpenTables from '#lib/components/OpenTables.svelte';
 	import Tournaments from '#lib/components/Tournaments.svelte';
 	import { LIMIT } from 'server/games/bust-31/rules';
-	import PlayingCard from './PlayingCard.svelte';
+	import Fan from './Fan.svelte';
 
 	let { game }: { game: GameEntry } = $props();
-
-	const SAMPLE = [
-		{ id: 's1', kind: 'number', value: 7 },
-		{ id: 's2', kind: 'minus', value: -5 },
-		{ id: 's3', kind: 'reverse', value: 0 }
-	] as const;
 </script>
 
 <div class="grid gap-12 pt-10 md:grid-cols-[1.1fr_1fr] md:items-center md:pt-16">
 	<section>
 		<p class="label mb-3">
-			{game.name}, a turn-based card game for {game.minPlayers} to {game.maxPlayers} players
+			{game.name}, a {game.kind} card game for {game.minPlayers} to {game.maxPlayers} players
 		</p>
 		<h1 class="font-display text-5xl leading-[0.95] font-black sm:text-6xl">
 			Don’t be the one<br />who <span class="text-ember italic">busts.</span>
 		</h1>
-		<div class="mt-8 flex" aria-hidden="true">
-			{#each SAMPLE as card, i (card.id)}
-				<div
-					class="-mr-3"
-					style="transform: rotate({(i - 1) * 8}deg) translateY({i === 1 ? -6 : 0}px)"
-				>
-					<PlayingCard {card} />
-				</div>
-			{/each}
+		<div class="mt-8">
+			<Fan />
 		</div>
 	</section>
 

@@ -3,36 +3,22 @@
 	import JoinPanel from '#lib/components/JoinPanel.svelte';
 	import OpenTables from '#lib/components/OpenTables.svelte';
 	import Tournaments from '#lib/components/Tournaments.svelte';
-	import { BURST_AT, type Card, HAND_SIZE } from 'server/games/cloudburst/rules';
-	import CloudCard from './CloudCard.svelte';
+	import { BURST_AT, HAND_SIZE } from 'server/games/cloudburst/rules';
+	import Fan from './Fan.svelte';
 
 	let { game }: { game: GameEntry } = $props();
-
-	const SAMPLE: Card[] = [
-		{ id: 's1', kind: 'number', suit: 'rain', value: 4 },
-		{ id: 's2', kind: 'number', suit: 'rain', value: 5 },
-		{ id: 's3', kind: 'gust', suit: 'wind', value: 0 },
-		{ id: 's4', kind: 'rainbow', suit: null, value: 0 }
-	];
 </script>
 
 <div class="grid gap-12 pt-10 md:grid-cols-[1.1fr_1fr] md:items-center md:pt-16">
 	<section>
 		<p class="label mb-3">
-			{game.name}, a shedding card game for {game.minPlayers} to {game.maxPlayers} players
+			{game.name}, a {game.kind} card game for {game.minPlayers} to {game.maxPlayers} players
 		</p>
 		<h1 class="font-display text-5xl leading-[0.95] font-black sm:text-6xl">
 			Empty your hand<br />before the sky <span class="text-ember italic">breaks.</span>
 		</h1>
-		<div class="mt-8 flex" aria-hidden="true">
-			{#each SAMPLE as card, i (card.id)}
-				<div
-					class="-mr-3"
-					style="transform: rotate({(i - 1.5) * 7}deg) translateY({i === 1 || i === 2 ? -6 : 0}px)"
-				>
-					<CloudCard {card} />
-				</div>
-			{/each}
+		<div class="mt-8">
+			<Fan />
 		</div>
 	</section>
 
