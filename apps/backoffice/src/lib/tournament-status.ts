@@ -1,3 +1,8 @@
+import dayjs from 'dayjs';
+import durationPlugin from 'dayjs/plugin/duration';
+
+dayjs.extend(durationPlugin);
+
 /** How a tournament is played (migration 019). A label for now: every format still plays one round per table. */
 export const TOURNAMENT_FORMATS = [
 	{ value: 'arena', label: 'Arena', note: 'Most points wins' },
@@ -46,14 +51,21 @@ export function tournamentStatus(
 	return { label: 'Sign-up opens later' };
 }
 
-/** "1 h 25 min" between two times, for how long a tournament or a table ran. */
+/** "42 sec", "3 min 5 sec" or "1 h 25 min" between two times, for how long a tournament or a table ran. */
 export function duration(from: Date, to: Date): string {
-	const elapsedMs = to.getTime() - from.getTime();
-	const minutes = Math.max(0, Math.round(elapsedMs / 60_000));
-	if (minutes < 60) return `${minutes} min`;
+	const elapsedMs = Math.max(0, dayjs(to).diff(from));
+	const elapsed = dayjs.duration(Math.round(elapsedMs / 1000), 'seconds');
 
-	const hours = Math.floor(minutes / 60);
-	return `${hours} h ${minutes % 60} min`;
+	if (elapsed.asMinutes() < 1) {
+		return elapsed.format('s [sec]');
+	}
+	if (elapsed.asHours() < 1) {
+		return elapsed.format('m [min] s [sec]');
+	}
+
+	// Past an hour the seconds are noise. Whole hours, so a long tournament doesn't wrap at a day.
+	const hours = Math.floor(elapsed.asHours());
+	return `${hours} h ${elapsed.minutes()} min`;
 }
 
 /** The pill for a status: red when it needs an admin, green while it's running, plain otherwise. */
