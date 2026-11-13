@@ -4,7 +4,7 @@
   "type": "module",
   "workspaces": ["apps/*"],
   "scripts": {
-    "dev": "bun run --parallel --no-exit-on-error dev:server dev:web",
+    "dev": "bun run --parallel --no-exit-on-error dev:server dev:web dev:platform",
     "dev:server": "bun run --filter server dev",
     "dev:web": "bun run --filter web dev",
     "dev:platform": "bun run --filter platform dev",
