@@ -13,9 +13,3 @@ export const SUIT_TEXT: Record<Suit, string> = {
 	wind: 'text-wind',
 	storm: 'text-storm'
 };
-export const SUIT_BG: Record<Suit, string> = {
-	sun: 'bg-sun',
-	rain: 'bg-rain',
-	wind: 'bg-wind',
-	storm: 'bg-storm'
-};

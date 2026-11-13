@@ -8,21 +8,35 @@ import {
 	type TableState
 } from '../replay.ts';
 
-// Keep in step with apps/server/src/games/bust-31/rules.ts (rules version 1).
+// Keep in step with apps/server/src/games/bust-31/rules.ts (rules version 2; version 1 logs hold no s, t or d cards).
 const LIMIT = 31;
 const START_LIVES = 3;
 const MINUS_VALUE = 5;
+const TEN_TOTAL = 10;
+const DOUBLE_PLAYS = 2;
 
-/** Card ids say what the card is: n7-2 is a 7, z-0 a zero, m-1 a minus five, r-3 a reverse. */
-function cardOf(id: string): { value: number; reverse: boolean; label: string } {
+type ReplayCard = {
+	value: number;
+	label: string;
+	effect: 'none' | 'reverse' | 'swap' | 'ten' | 'double';
+};
+
+/**
+ * Card ids say what the card is: n7-2 is a 7, z-0 a zero, m-1 a minus five, r-3 a reverse,
+ * s-0 a Swap, t-1 a Ten and d-0 a Double.
+ */
+function cardOf(id: string): ReplayCard {
 	const kind = id[0];
 	if (kind === 'n') {
 		const value = Number(id.slice(1, id.indexOf('-')));
-		return { value, reverse: false, label: String(value) };
+		return { value, label: String(value), effect: 'none' };
 	}
-	if (kind === 'm') return { value: -MINUS_VALUE, reverse: false, label: `-${MINUS_VALUE}` };
-	if (kind === 'r') return { value: 0, reverse: true, label: 'Reverse' };
-	return { value: 0, reverse: false, label: '0' };
+	if (kind === 'm') return { value: -MINUS_VALUE, label: `-${MINUS_VALUE}`, effect: 'none' };
+	if (kind === 'r') return { value: 0, label: 'Reverse', effect: 'reverse' };
+	if (kind === 's') return { value: 0, label: 'Swap', effect: 'swap' };
+	if (kind === 't') return { value: 0, label: 'Ten', effect: 'ten' };
+	if (kind === 'd') return { value: 0, label: 'Double', effect: 'double' };
+	return { value: 0, label: '0', effect: 'none' };
 }
 
 const BY: Record<string, string> = {
@@ -46,6 +60,7 @@ export function replayBust31(log: MatchLog, seats: ReplaySeat[]): Step[] {
 	let round = 0;
 	let total = 0;
 	let direction = 1;
+	let playsLeft = 1;
 	let turn: number | null = null;
 	let deck: string[] = [];
 	let pile: string[] = [];
@@ -102,6 +117,7 @@ export function replayBust31(log: MatchLog, seats: ReplaySeat[]): Step[] {
 				pile = [];
 				total = 0;
 				direction = 1;
+				playsLeft = 1;
 				turn = data.starter;
 
 				for (const [seat, state] of table) {
@@ -128,7 +144,7 @@ export function replayBust31(log: MatchLog, seats: ReplaySeat[]): Step[] {
 				}
 
 				expect('Turn', event.seat, turn);
-				total = Math.max(0, total + card.value);
+				total = card.effect === 'ten' ? TEN_TOTAL : Math.max(0, total + card.value);
 				expect('Total', data.total, total);
 				pile.push(data.card);
 
@@ -137,10 +153,31 @@ export function replayBust31(log: MatchLog, seats: ReplaySeat[]): Step[] {
 					expect('Card drawn', data.drew, drew);
 
 					if (player && drew) player.hand.push(drew);
-					if (card.reverse) direction = -direction;
+					if (card.effect === 'reverse') direction = -direction;
 
-					turn = nextAlive(event.seat!);
-					text = `${who} played ${card.label}. Total ${total}.${playedBy}`;
+					const next = nextAlive(event.seat!);
+					let swapText = '';
+					if (card.effect === 'swap') {
+						expect('Swapped with', data.swapped, next);
+
+						const other = table.get(next);
+						if (player && other) {
+							[player.hand, other.hand] = [other.hand, player.hand];
+						}
+						swapText = ` Swapped hands with ${name(next)}.`;
+					}
+
+					// A Double gives the next seat two plays; a seat that owes another play keeps the turn.
+					if (card.effect === 'double') {
+						turn = next;
+						playsLeft = DOUBLE_PLAYS;
+					} else if (playsLeft > 1) {
+						playsLeft -= 1;
+					} else {
+						turn = next;
+					}
+
+					text = `${who} played ${card.label}. Total ${total}.${swapText}${playedBy}`;
 					break;
 				}
 

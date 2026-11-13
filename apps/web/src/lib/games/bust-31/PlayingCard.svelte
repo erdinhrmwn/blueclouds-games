@@ -8,65 +8,67 @@
 		onplay
 	}: {
 		card: Card;
-		size?: 'sm' | 'md' | 'lg';
+		/** `pile`: the cards in the middle of the table, smaller than the hand. */
+		size?: 'pile' | 'sm' | 'md' | 'lg';
 		disabled?: boolean;
 		onplay?: (id: string) => void;
 	} = $props();
 
-	// corner glyph, caption, ink colour per card kind
-	const LOOK: Record<Card['kind'], [string, string, string]> = {
-		number: ['', '', 'text-ink'],
-		zero: ['0', 'skip', 'text-[#3d5a6c]'],
-		minus: ['−5', 'down', 'text-[#2f6b4f]'],
-		reverse: ['⇄', 'flip', 'text-[#a8401f]']
+	/** What a screen reader says for each special card. */
+	const SPOKEN: Record<Exclude<Card['kind'], 'number'>, string> = {
+		zero: 'skip, adds 0',
+		minus: 'minus 5',
+		reverse: 'flip the turn order',
+		swap: 'swap hands with the next player',
+		ten: 'set the total to 10',
+		double: 'next player plays 2 cards'
 	};
 
-	const [glyph, caption, ink] = $derived(LOOK[card.kind]);
-	const label = $derived(card.kind === 'number' ? String(card.value) : glyph);
-	const spoken = $derived(card.kind === 'number' ? `plus ${card.value}` : caption);
-
-	const LABEL_SIZE = { lg: 'text-5xl sm:text-6xl', md: 'text-5xl', sm: 'text-4xl' } as const;
-	const labelSize = $derived(LABEL_SIZE[size]);
+	/** The card faces are drawn in FigCraft (design/cards.figcraft) and exported to static/cards. */
+	const face = $derived(card.kind === 'number' ? `n${card.value}` : card.kind);
+	const src = $derived(`/cards/bust-31/${face}.svg`);
+	const spoken = $derived(card.kind === 'number' ? `plus ${card.value}` : SPOKEN[card.kind]);
 </script>
-
-{#snippet face()}
-	<span class="corner top-1.5 left-2">{label}</span>
-	<span class="font-display font-black {labelSize} leading-none">{label}</span>
-	{#if caption}<span class="mt-1 text-[11px] font-medium opacity-80">{caption}</span>{/if}
-	<span class="corner right-2 bottom-1.5 rotate-180">{label}</span>
-{/snippet}
 
 {#if onplay}
 	<button
 		type="button"
-		class="card {size} {ink} interactive"
+		class="card {size} interactive"
 		{disabled}
 		onclick={() => onplay(card.id)}
 		aria-label="Play card, {spoken}"
 	>
-		{@render face()}
+		<img {src} alt="" draggable="false" />
 	</button>
 {:else}
-	<div class="card {size} {ink}" role="img" aria-label="Card, {spoken}">
-		{@render face()}
+	<div class="card {size}" role="img" aria-label="Card, {spoken}">
+		<img {src} alt="" draggable="false" />
 	</div>
 {/if}
 
 <style>
 	.card {
 		position: relative;
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
+		display: block;
 		border-radius: 0.5rem;
-		background: var(--color-paper);
-		background-image: radial-gradient(circle at 30% 20%, #fffaf0 0%, transparent 70%);
-		box-shadow:
-			inset 0 0 0 1px rgb(34 28 22 / 0.15),
-			inset 0 0 0 5px var(--color-paper),
-			inset 0 0 0 6px rgb(34 28 22 / 0.12),
-			0 6px 14px rgb(0 0 0 / 0.45);
+		box-shadow: 0 6px 14px rgb(0 0 0 / 0.45);
+	}
+	.card img {
+		display: block;
+		width: 100%;
+		height: 100%;
+		user-select: none;
+	}
+	.pile {
+		width: 2.5rem;
+		height: 3.55rem;
+		border-radius: 0.3rem;
+	}
+	@media (min-width: 640px) {
+		.pile {
+			width: 3.25rem;
+			height: 4.6rem;
+		}
 	}
 	.sm {
 		width: 3.5rem;
@@ -86,13 +88,6 @@
 			height: 8.25rem;
 		}
 	}
-	.corner {
-		position: absolute;
-		font-family: var(--font-display);
-		font-weight: 700;
-		font-size: 0.85rem;
-		line-height: 1;
-	}
 	.interactive {
 		cursor: pointer;
 		transition:
@@ -103,12 +98,18 @@
 	.interactive:not(:disabled):hover,
 	.interactive:not(:disabled):focus-visible {
 		transform: translateY(-14px) rotate(0deg) !important;
-		box-shadow:
-			inset 0 0 0 1px rgb(34 28 22 / 0.15),
-			inset 0 0 0 5px var(--color-paper),
-			inset 0 0 0 6px rgb(34 28 22 / 0.12),
-			0 0 0 2px var(--color-brass),
-			0 14px 24px rgb(0 0 0 / 0.5);
+	}
+	.interactive:not(:disabled):hover {
+		box-shadow: 0 14px 24px rgb(0 0 0 / 0.5);
+	}
+	/* The ring is an outline, not a transitioned shadow, so it shows at once for keyboard users. */
+	.interactive:not(:disabled):hover,
+	.interactive:focus-visible {
+		outline: 2px solid var(--color-brass);
+		outline-offset: 0;
+	}
+	.interactive:not(:disabled):active {
+		transform: translateY(-10px) rotate(0deg) !important;
 	}
 	@media (prefers-reduced-motion: reduce) {
 		.interactive {

@@ -133,6 +133,18 @@ describe("logEvents", () => {
 		expect(logEvents(g, next, true)[0]!.data!.by).toBe("timeout");
 	});
 
+	test("a Swap records the seat it traded with, and the drawn card that went to that seat", () => {
+		const g = withHand(started(), [card("swap", 0, "s-0")], 10);
+		const next = playCard(g, "a", "s-0", rng);
+		const [play] = logEvents(g, next);
+
+		expect(play).toEqual({
+			type: "play",
+			seat: 0,
+			data: { card: "s-0", total: 10, drew: g.deck[0]!.id, swapped: 1, by: "player" },
+		});
+	});
+
 	test("an empty deck logs the reshuffle before the play", () => {
 		const g = {
 			...withHand(started(), [card("number", 2, "n2-0")]),

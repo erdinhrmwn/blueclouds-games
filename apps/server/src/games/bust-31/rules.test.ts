@@ -14,6 +14,7 @@ import {
 	resetToLobby,
 	START_LIVES,
 	startGame,
+	TEN_TOTAL,
 } from "./rules";
 import {
 	markAway,
@@ -36,6 +37,14 @@ function twoPlayerGame(): Game {
 	let g = createGame();
 	g = addPlayer(g, "a", "Ann");
 	g = addPlayer(g, "b", "Bob");
+	return startGame(g, "a", rng);
+}
+
+function threePlayerGame(): Game {
+	let g = createGame();
+	g = addPlayer(g, "a", "Ann");
+	g = addPlayer(g, "b", "Bob");
+	g = addPlayer(g, "c", "Cleo");
 	return startGame(g, "a", rng);
 }
 
@@ -95,12 +104,17 @@ describe("seats", () => {
 });
 
 describe("deal", () => {
-	test("deck has 48 unique cards and each player gets 3", () => {
+	test("deck has 54 unique cards and each player gets 3", () => {
 		const deck = buildDeck();
-		expect(new Set(deck.map((c) => c.id)).size).toBe(48);
+		expect(new Set(deck.map((c) => c.id)).size).toBe(54);
+
+		const rare = deck.filter((c) => c.kind === "swap" || c.kind === "ten" || c.kind === "double");
+		expect(rare).toHaveLength(6);
+
 		const g = twoPlayerGame();
 		expect(g.players.every((p) => p.hand.length === 3)).toBe(true);
-		expect(g.deck).toHaveLength(48 - 6);
+		expect(g.deck).toHaveLength(54 - 6);
+		expect(g.playsLeft).toBe(1);
 	});
 });
 
@@ -129,6 +143,78 @@ describe("playing", () => {
 	test("reverse flips direction", () => {
 		const g = withHand(twoPlayerGame(), [card("reverse", 0)]);
 		expect(playCard(g, g.players[g.turn]!.id, "reverse0", rng).direction).toBe(-1);
+	});
+
+	test("a Ten sets the total to 10, up or down", () => {
+		const high = withHand(twoPlayerGame(), [card("ten", 0)], 28);
+		expect(playCard(high, high.players[high.turn]!.id, "ten0", rng).total).toBe(TEN_TOTAL);
+
+		const low = withHand(twoPlayerGame(), [card("ten", 0)], 3);
+		expect(playCard(low, low.players[low.turn]!.id, "ten0", rng).total).toBe(TEN_TOTAL);
+	});
+
+	test("a Swap trades hands with the next player and passes the turn to them", () => {
+		let g = threePlayerGame();
+		const swap = card("swap", 0);
+		const theirs = [card("number", 1, "x1"), card("number", 2, "x2"), card("number", 3, "x3")];
+		g = withHand(g, [swap, card("number", 9, "k1"), card("number", 8, "k2")], 12);
+		const me = g.players[g.turn]!.id;
+		const nextSeat = (g.turn + 1) % g.players.length;
+		g = { ...g, players: g.players.map((p, i) => (i === nextSeat ? { ...p, hand: theirs } : p)) };
+		const drawnCard = g.deck[0]!;
+
+		const after = playCard(g, me, swap.id, rng);
+		const mine = after.players.find((p) => p.id === me)!.hand.map((c) => c.id);
+		const next = after.players[nextSeat]!;
+
+		expect(mine).toEqual(["x1", "x2", "x3"]);
+		expect(next.hand.map((c) => c.id)).toEqual(["k1", "k2", drawnCard.id]);
+		expect(after.turn).toBe(nextSeat);
+		expect(after.total).toBe(12);
+		expect(after.lastEvent).toMatchObject({ type: "played", swappedWith: next.id });
+	});
+
+	test("after a Double the next player plays two cards in a row, then the turn moves on", () => {
+		let g = withHand(threePlayerGame(), [card("double", 0)], 5);
+		const first = g.turn;
+		g = playCard(g, g.players[first]!.id, "double0", rng);
+
+		const second = g.turn;
+		expect(second).not.toBe(first);
+		expect(g.playsLeft).toBe(2);
+		expect(publicView(g).playsLeft).toBe(2);
+
+		g = withHand(g, [card("number", 1, "a1"), card("number", 2, "a2")]);
+		g = playCard(g, g.players[second]!.id, "a1", rng);
+		expect(g.turn).toBe(second);
+		expect(g.playsLeft).toBe(1);
+
+		g = playCard(g, g.players[second]!.id, "a2", rng);
+		expect(g.turn).not.toBe(second);
+		expect(g.playsLeft).toBe(1);
+		expect(g.total).toBe(8);
+	});
+
+	test("a Double played while owing two plays passes both plays on and ends your own", () => {
+		let g = withHand(threePlayerGame(), [card("double", 0, "d1")], 5);
+		g = playCard(g, g.players[g.turn]!.id, "d1", rng);
+		const owing = g.turn;
+
+		g = withHand(g, [card("double", 0, "d2")]);
+		g = playCard(g, g.players[owing]!.id, "d2", rng);
+		expect(g.turn).not.toBe(owing);
+		expect(g.playsLeft).toBe(2);
+	});
+
+	test("busting while owing two plays deals a new round with one play", () => {
+		let g = withHand(threePlayerGame(), [card("double", 0)], 25);
+		g = playCard(g, g.players[g.turn]!.id, "double0", rng);
+		const owing = g.players[g.turn]!.id;
+
+		g = withHand(g, [card("number", 9)]);
+		g = playCard(g, owing, "number9", rng);
+		expect(g.lastEvent?.type).toBe("bust");
+		expect(g.playsLeft).toBe(1);
 	});
 
 	test("reshuffles the discard pile when the deck runs out", () => {
@@ -240,5 +326,11 @@ describe("bot", () => {
 	test("falls back to a safe special card, then to the smallest card", () => {
 		expect(chooseBotCard([card("number", 9), card("minus", -5)], 30)?.kind).toBe("minus");
 		expect(chooseBotCard([card("number", 9), card("number", 4)], 30)?.id).toBe("number4");
+	});
+
+	test("keeps the Ten and the -5 for emergencies, and plays the Ten when nothing else is safe", () => {
+		const hand = [card("ten", 0), card("minus", -5), card("swap", 0)];
+		expect(chooseBotCard(hand, 30)?.kind).toBe("swap");
+		expect(chooseBotCard([card("number", 9), card("ten", 0)], 30)?.kind).toBe("ten");
 	});
 });

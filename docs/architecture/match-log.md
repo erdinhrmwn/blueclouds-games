@@ -55,7 +55,7 @@ Envelope (the same for every game, checked by the platform):
 | Type | Seat | Data |
 |---|---|---|
 | `deal` | — | `round`, `starter` (seat), `hands` (seat → card ids), `deck` (card ids, top first) |
-| `play` | player | `card`, `total` after, `drew` (card id or null), `by` |
+| `play` | player | `card`, `total` after, `drew` (card id or null), `by`; a Swap (`s-…`) adds `swapped` (the seat it traded hands with, which now holds the drawn card) |
 | `bust` | player | `card`, `total` after, `lives` left, `eliminated`, `by` |
 | `reshuffle` | — | `deck` (new order, top first), when the deck ran out mid-round |
 | `away` / `back` | player | — (closed the tab / came back) |
@@ -66,7 +66,7 @@ Envelope (the same for every game, checked by the platform):
 
 `by` is `player` (they chose), `timeout` (their 20 s ran out), `away` (played for an absent player) or `bot`.
 
-Card ids already say what the card is (`n7-1` = number 7, `z` zero, `m` −5, `r` reverse), so events stay small. Every random outcome (deal and reshuffle order) is in the log, so a replay never needs the random generator. Server outcomes (`total`, `lives`) are stored too: a replay recomputes them and flags any step where they disagree, which is exactly what an audit wants to catch.
+Card ids already say what the card is (`n7-1` = number 7, `z` zero, `m` −5, `r` reverse; from rules version 2 also `s` Swap, `t` Ten, `d` Double), so events stay small. Every random outcome (deal and reshuffle order) is in the log, so a replay never needs the random generator. Server outcomes (`total`, `lives`) are stored too: a replay recomputes them and flags any step where they disagree, which is exactly what an audit wants to catch.
 
 The events are derived in a pure function, `logEvents(before, after, auto)` in the game's `match.ts`, from the state change of each commit. `rules.ts` does not change.
 

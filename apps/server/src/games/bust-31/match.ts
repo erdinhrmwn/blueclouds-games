@@ -11,7 +11,8 @@ import {
 import type { RoundResult } from "../shared/rounds";
 
 /** Bump when a rule change makes old results incomparable to new ones. */
-export const RULES_VERSION = 1;
+/** 2: Swap, Ten and Double joined the deck. */
+export const RULES_VERSION = 2;
 /** Bump when the shape of a log event changes (see docs/architecture/match-log.md). */
 export const LOG_VERSION = 1;
 
@@ -113,18 +114,29 @@ export function logEvents(before: Game, after: Game, auto = false): LogEntry[] {
 				: missing(mover.hand, now.hand);
 
 		if (event?.type === "played") {
+			// Swap: the drawn card went to the seat that traded hands with the mover.
+			const swappedWith = after.players.find((p) => p.id === event.swappedWith);
+			const holder = swappedWith ?? now;
+			const drew = drawn(mover, holder);
+
 			if (before.deck.length === 0) {
 				entries.push({
 					type: "reshuffle",
-					data: { deck: [...drawn(mover, now), ...ids(after.deck)] },
+					data: { deck: [...drew, ...ids(after.deck)] },
 				});
 			}
 
-			entries.push({
-				type: "play",
-				seat: mover.seat,
-				data: { card: card.id, total: after.total, drew: drawn(mover, now)[0] ?? null, by },
-			});
+			const data: Record<string, unknown> = {
+				card: card.id,
+				total: after.total,
+				drew: drew[0] ?? null,
+				by,
+			};
+			if (swappedWith) {
+				data.swapped = swappedWith.seat;
+			}
+
+			entries.push({ type: "play", seat: mover.seat, data });
 		} else {
 			const total = event?.type === "bust" ? event.total : after.total;
 			entries.push({

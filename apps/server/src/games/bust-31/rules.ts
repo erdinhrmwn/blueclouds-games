@@ -12,12 +12,18 @@ export const TURN_MS = 20_000;
 /** Dealing animation timing, shared so the server holds the first turn of a round until it ends. */
 export const DEAL = { stepMs: 80, flightMs: 400, afterBustMs: 1300 };
 const MINUS_VALUE = 5;
+/** A Ten sets the total to this, whatever it was. */
+export const TEN_TOTAL = 10;
+/** After a Double, the next player plays this many cards in a row. */
+const DOUBLE_PLAYS = 2;
 const COPIES_PER_CARD = 4;
+/** Swap, Ten and Double are rarer than the first three special cards. */
+const COPIES_PER_RARE_CARD = 2;
 const HIGHEST_NUMBER = 9;
 /** Extra wait after the deal animation, so the first turn never starts mid-flight. */
 const DEAL_SETTLE_MS = 100;
 
-export type CardKind = "number" | "zero" | "minus" | "reverse";
+export type CardKind = "number" | "zero" | "minus" | "reverse" | "swap" | "ten" | "double";
 export type Card = { id: string; kind: CardKind; value: number };
 
 export type Player = {
@@ -36,7 +42,15 @@ export type Player = {
 export type GameEvent =
 	| { type: "joined"; playerId: string }
 	| { type: "started" }
-	| { type: "played"; playerId: string; card: Card; total: number; auto?: boolean }
+	| {
+			type: "played";
+			playerId: string;
+			card: Card;
+			total: number;
+			/** Swap: the player who got the swapper's hand (and gave theirs). */
+			swappedWith?: string;
+			auto?: boolean;
+	  }
 	| {
 			type: "bust";
 			playerId: string;
@@ -56,6 +70,8 @@ export type Game = {
 	total: number;
 	turn: number; // index into players
 	direction: 1 | -1;
+	/** Cards the player on turn still has to play this turn: 2 after a Double, otherwise 1. */
+	playsLeft: number;
 	round: number;
 	winnerId: string | null;
 	lastEvent: GameEvent | null;
@@ -73,6 +89,7 @@ export function createGame(): Game {
 		total: 0,
 		turn: 0,
 		direction: 1,
+		playsLeft: 1,
 		round: 0,
 		winnerId: null,
 		lastEvent: null,
@@ -80,7 +97,7 @@ export function createGame(): Game {
 	};
 }
 
-/** 48 cards: 1–9 four times each, plus four of each special card. */
+/** 54 cards: 1–9 four times each, four each of 0, −5 and reverse, two each of Swap, Ten and Double. */
 export function buildDeck(): Card[] {
 	const cards: Card[] = [];
 	for (let copy = 0; copy < COPIES_PER_CARD; copy++) {
@@ -92,7 +109,22 @@ export function buildDeck(): Card[] {
 		cards.push({ id: `r-${copy}`, kind: "reverse", value: 0 });
 	}
 
+	for (let copy = 0; copy < COPIES_PER_RARE_CARD; copy++) {
+		cards.push({ id: `s-${copy}`, kind: "swap", value: 0 });
+		cards.push({ id: `t-${copy}`, kind: "ten", value: 0 });
+		cards.push({ id: `d-${copy}`, kind: "double", value: 0 });
+	}
+
 	return cards;
+}
+
+/** The total after `card` is played on `total`: a Ten sets it, every other card adds its value (never below 0). */
+export function totalAfter(total: number, card: Card): number {
+	if (card.kind === "ten") {
+		return TEN_TOTAL;
+	}
+
+	return Math.max(0, total + card.value);
 }
 
 /** Sits a new player in `seat`, or in the first free one when no seat is given. */
@@ -127,7 +159,7 @@ export function playCard(game: Game, playerId: string, cardId: string, rng: Rng)
 	const card = current.hand.find((held) => held.id === cardId);
 	if (!card) throw new RuleError("That card is not in your hand.");
 
-	const total = Math.max(0, game.total + card.value);
+	const total = totalAfter(game.total, card);
 	const hand = current.hand.filter((held) => held.id !== cardId);
 
 	if (total > LIMIT) {
@@ -144,8 +176,27 @@ export function playCard(game: Game, playerId: string, cardId: string, rng: Rng)
 
 	const [drawn, ...rest] = deck;
 	const newHand = drawn ? [...hand, drawn] : hand;
-	const players = game.players.map((p) => (p.id === playerId ? { ...p, hand: newHand } : p));
+	let players = game.players.map((p) => (p.id === playerId ? { ...p, hand: newHand } : p));
 	const direction = card.kind === "reverse" ? (-game.direction as 1 | -1) : game.direction;
+	const next = nextAlive(players, game.turn, direction);
+
+	const event: GameEvent = { type: "played", playerId, card, total };
+	if (card.kind === "swap") {
+		players = swapHands(players, game.turn, next);
+		event.swappedWith = players[next]!.id;
+	}
+
+	// A Double hands the next player two plays (and ends any the player still owed).
+	// Otherwise a player who owes another play keeps the turn.
+	let turn = next;
+	let playsLeft = 1;
+	if (card.kind === "double") {
+		playsLeft = DOUBLE_PLAYS;
+	} else if ((game.playsLeft ?? 1) > 1) {
+		// Rooms saved before Double existed have no playsLeft: they owe one play.
+		turn = game.turn;
+		playsLeft = game.playsLeft - 1;
+	}
 
 	return {
 		...game,
@@ -154,10 +205,28 @@ export function playCard(game: Game, playerId: string, cardId: string, rng: Rng)
 		discard,
 		total,
 		direction,
-		turn: nextAlive(players, game.turn, direction),
-		lastEvent: { type: "played", playerId, card, total },
+		turn,
+		playsLeft,
+		lastEvent: event,
 		moves: game.moves + 1,
 	};
+}
+
+/** The players at `a` and `b` trade hands. */
+function swapHands(players: Player[], a: number, b: number): Player[] {
+	const handA = players[a]!.hand;
+	const handB = players[b]!.hand;
+
+	return players.map((player, index) => {
+		if (index === a) {
+			return { ...player, hand: handB };
+		}
+		if (index === b) {
+			return { ...player, hand: handA };
+		}
+
+		return player;
+	});
 }
 
 /** The total went over LIMIT: the player loses a life, then a new round, or the end of the match. */
@@ -239,6 +308,7 @@ function dealRound(game: Game, starter: number, rng: Rng): Game {
 		discard: [],
 		total: 0,
 		direction: 1,
+		playsLeft: 1,
 		turn: starter,
 		round,
 	};
@@ -272,6 +342,8 @@ export function publicView(game: Game, turn: { left: number; total: number } | n
 		limit: LIMIT,
 		turnPlayerId: game.phase === "playing" ? (game.players[game.turn]?.id ?? null) : null,
 		direction: game.direction,
+		/** Cards the player on turn still has to play this turn (2 after a Double). */
+		playsLeft: game.playsLeft ?? 1,
 		round: game.round,
 		winnerId: game.winnerId,
 		lastEvent: game.lastEvent,

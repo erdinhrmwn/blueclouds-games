@@ -78,7 +78,10 @@ export type CardFace = { mark: string; spoken: string; ink: string };
 const BUST_FACES: Record<string, CardFace> = {
 	z: { mark: '0', spoken: 'zero', ink: 'text-[#3d5a6c]' },
 	m: { mark: '−5', spoken: 'minus five', ink: 'text-[#2f6b4f]' },
-	r: { mark: '⇄', spoken: 'reverse', ink: 'text-[#a8401f]' }
+	r: { mark: '⇄', spoken: 'reverse', ink: 'text-[#a8401f]' },
+	s: { mark: '⇋', spoken: 'swap', ink: 'text-[#6a3d78]' },
+	t: { mark: '10', spoken: 'ten', ink: 'text-ink' },
+	d: { mark: '×2', spoken: 'double', ink: 'text-[#2c5f8a]' }
 };
 
 const CLOUD_ACTIONS: Record<string, string> = { calm: 'C', swirl: 'S', gust: 'G' };
