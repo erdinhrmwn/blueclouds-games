@@ -89,9 +89,14 @@
 		</p>
 	</div>
 	{#if room?.view}
-		<button class="btn-ghost shrink-0 px-4 text-xs" onclick={leave} aria-label="Leave table">
-			<span class="sm:hidden">Leave</span><span class="hidden sm:inline">Leave table</span>
-		</button>
+		<div class="flex shrink-0 items-center gap-2">
+			{#if room.status !== 'refused'}
+				<FairPlay {room} />
+			{/if}
+			<button class="btn-ghost shrink-0 px-4 text-xs" onclick={leave} aria-label="Leave table">
+				<span class="sm:hidden">Leave</span><span class="hidden sm:inline">Leave table</span>
+			</button>
+		</div>
 	{/if}
 </header>
 
@@ -122,10 +127,6 @@
 	<Lobby {room} {code} minPlayers={game.minPlayers} seats={game.maxPlayers} />
 {:else}
 	{@render table(room)}
-{/if}
-
-{#if room?.view && room.status !== 'refused'}
-	<FairPlay {room} />
 {/if}
 
 {#if room?.error}
