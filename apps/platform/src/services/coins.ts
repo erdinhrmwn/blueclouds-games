@@ -168,12 +168,17 @@ export async function refundSignUp(
 	return paid;
 }
 
-/** A cancelled tournament gives every fee back. Returns how many players were refunded. */
+/**
+ * A cancelled tournament gives every fee back, except a disqualified player's, which is kept. Returns how many
+ * players were refunded.
+ */
 export async function refundEveryone(tx: SQL, tournamentId: string): Promise<number> {
 	const owed = await tx`
 		SELECT player_id
 		FROM tournament_players
-		WHERE tournament_id = ${tournamentId} AND fee_paid > 0`;
+		WHERE tournament_id = ${tournamentId}
+			AND fee_paid > 0
+			AND status <> 'disqualified'`;
 
 	for (const { player_id: playerId } of owed) {
 		await refundSignUp(tx, tournamentId, playerId);

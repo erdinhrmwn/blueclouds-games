@@ -154,6 +154,29 @@ describe("tournament fees", () => {
 		await ledgerMatches(bob.id);
 	});
 
+	test("a disqualified player can't get their fee back by leaving, before or after the tables", async () => {
+		const ann = await account();
+		const bob = await account();
+		const cup = await tournament(200);
+		await join(cup, ann.secret);
+		await join(cup, bob.secret);
+
+		const disqualify = (playerId: string) => t.sql`
+			UPDATE tournament_players
+			SET status = 'disqualified', status_reason = 'Cheating', status_changed_at = now()
+			WHERE tournament_id = ${cup} AND player_id = ${playerId}`;
+
+		await disqualify(ann.id);
+		expect((await leave(cup, ann.secret)).status).toBe(200);
+		expect(await coinsOf(ann.secret)).toBe(SIGNUP_BONUS - 200);
+
+		await t.sql`UPDATE tournaments SET registration_closes_at = now() - interval '1 minute' WHERE id = ${cup}`;
+		await runTournamentJob(t.sql);
+		await disqualify(bob.id);
+		expect((await leave(cup, bob.secret)).status).toBe(200);
+		expect(await coinsOf(bob.secret)).toBe(SIGNUP_BONUS - 200);
+	});
+
 	test("a tournament cancelled for too few players gives everyone their fee back", async () => {
 		const ann = await account();
 		const cup = await tournament(150, { min: 4 });

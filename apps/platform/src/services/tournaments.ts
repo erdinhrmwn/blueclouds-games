@@ -772,6 +772,17 @@ export async function leaveTournament(sql: SQL, tournamentId: string, playerId: 
 	await sql.begin(async (tx) => {
 		const tournament = await lockTournament(tx, tournamentId);
 
+		// Only a player still in can leave: a withdrawn or disqualified one is already out, and gets no fee back
+		// by trying again (a disqualified player's fee is kept).
+		const [signUp] = await tx`
+			SELECT status
+			FROM tournament_players
+			WHERE tournament_id = ${tournamentId} AND player_id = ${playerId}
+			FOR UPDATE`;
+		if (signUp?.status !== "registered") {
+			return;
+		}
+
 		if (!tournament.distributed_at) {
 			requireOpenRegistration(tournament);
 

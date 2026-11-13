@@ -51,7 +51,7 @@ describe('coins in the backoffice', () => {
 		expect(n).toBe(2);
 	});
 
-	test('cancelling gives every fee back', async () => {
+	test('cancelling gives every fee back except a disqualified player’s', async () => {
 		const id = await cup();
 		const sky = await newPlayer('Sky');
 		await adjustCoins(sql, admin, sky, 100, 'For the fee', null);
@@ -66,8 +66,24 @@ describe('coins in the backoffice', () => {
 		});
 		expect(await balanceOf(sql, sky)).toBe(0);
 
+		const cheat = await newPlayer('Cheat');
+		await adjustCoins(sql, admin, cheat, 100, 'For the fee', null);
+		await sql.begin(async (tx) => {
+			await tx`
+				INSERT INTO tournament_players (tournament_id, player_id, fee_paid, status, status_reason, status_changed_at)
+				VALUES (${id}, ${cheat}, 100, 'disqualified', 'Cheating', now())`;
+			await moveCoins(tx, {
+				playerId: cheat,
+				amount: -100,
+				reason: 'tournament_fee',
+				tournamentId: id
+			});
+		});
+
 		await cancelTournament(sql, admin, id, null);
 		expect(await balanceOf(sql, sky)).toBe(100);
+		// A disqualified player's fee is kept.
+		expect(await balanceOf(sql, cheat)).toBe(0);
 	});
 
 	test('prizes go out once, to whoever finished in each paid place, only after the end', async () => {
