@@ -2,7 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { z } from "zod";
 import { chooseBotCard } from "./bots";
 import { buildReport, logEvents, type MatchState, noteMove } from "./match";
-import { type LogEntry, stamp, uuidv7 } from "../shared/match";
+import { newCommitment } from "../shared/fair-rng";
+import { type LogEntry, stamp } from "../shared/match";
 import { addPlayer, type Card, createGame, type Game, playCard, startGame } from "./rules";
 import { kickPlayer, markAway, markBack, randomRng } from "../shared/table";
 
@@ -80,12 +81,10 @@ test("noteMove does not count a player twice", () => {
 	expect(noteMove(noteMove(start, g), g).out).toEqual(["c"]);
 });
 
-test("uuidv7 is a valid, time-ordered UUIDv7", () => {
-	const a = uuidv7(1_700_000_000_000);
-	const b = uuidv7(1_700_000_000_001);
-	expect(z.uuidv7().safeParse(a).success).toBe(true);
-	expect(a.slice(0, 13)).toBe("018bcfe5-6800");
-	expect(a < b).toBe(true);
+test("match and round ids are UUIDv7, as the platform wants", () => {
+	const { matchId, firstRound } = newCommitment();
+	expect(z.uuidv7().safeParse(matchId).success).toBe(true);
+	expect(z.uuidv7().safeParse(firstRound.roundId).success).toBe(true);
 });
 
 const rng = randomRng(() => 0.42);

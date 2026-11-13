@@ -69,25 +69,6 @@ export function stamp<M extends MatchState>(
 }
 
 /**
- * A UUIDv7 (time-ordered), as the platform wants for match ids. Not Bun.randomUUIDv7():
- * the web app type-checks this file too, without Bun's types.
- */
-export function uuidv7(now = Date.now()): string {
-	const bytes = crypto.getRandomValues(new Uint8Array(16));
-
-	// The first 6 bytes are the 48-bit ms timestamp, big-endian.
-	for (let i = 0; i < 6; i++) {
-		bytes[i] = Math.floor(now / 2 ** (8 * (5 - i))) & 0xff;
-	}
-
-	bytes[6] = (bytes[6]! & 0x0f) | 0x70; // version 7
-	bytes[8] = (bytes[8]! & 0x3f) | 0x80; // RFC 9562 variant
-
-	const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
-	return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
-}
-
-/**
  * How a seat is reported. A bot a host added at an open table is a bot (`bot-…` id, no account). A bot account
  * the platform signed up for a tournament is a player like anyone: it reports under its own id, so its finish
  * counts in the tournament and its prize can be paid.

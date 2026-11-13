@@ -14,7 +14,6 @@ import {
 	type RoundSeed,
 	type ShuffleRecord,
 } from "./fairness";
-import { uuidv7 } from "./match";
 import type { Rng } from "./table";
 
 /** The next match, fixed before anyone sits down for it: its id and the commitment of its first round. */
@@ -27,11 +26,11 @@ export function newRoundSeed(): RoundSeed {
 	const serverSeed = randomBytes(SERVER_SEED_BYTES).toString("hex");
 	const serverSeedHash = createHash("sha256").update(serverSeed).digest("hex");
 
-	return { roundId: uuidv7(), serverSeed, serverSeedHash };
+	return { roundId: Bun.randomUUIDv7(), serverSeed, serverSeedHash };
 }
 
 export function newCommitment(): NextMatch {
-	return { matchId: uuidv7(), firstRound: newRoundSeed() };
+	return { matchId: Bun.randomUUIDv7(), firstRound: newRoundSeed() };
 }
 
 /** A match's seeds before its first deal: round 1 plays on the commitment the table showed in the lobby. */
