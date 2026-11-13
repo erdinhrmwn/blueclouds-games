@@ -3,6 +3,7 @@
 	import { untrack } from 'svelte';
 	import { createInvite, resetInviteLink } from '#lib/platform.ts';
 	import type { BaseView, RoomConnection } from '#lib/rivet/room.svelte.ts';
+	import { clock } from '#lib/when.ts';
 	import Felt from './Felt.svelte';
 	import Seat from './Seat.svelte';
 	import Dealer from './Dealer.svelte';
@@ -39,11 +40,7 @@
 	});
 
 	/** "4:07" until a time, counting down with `now`. */
-	const countdown = (until: number | null) => {
-		const seconds = Math.max(0, Math.ceil(((until ?? now) - now) / 1000));
-		const minutes = Math.floor(seconds / 60);
-		return `${minutes}:${String(seconds % 60).padStart(2, '0')}`;
-	};
+	const countdown = (until: number | null) => clock(Math.ceil(((until ?? now) - now) / 1000));
 
 	const inSeat = (seat: number) => view.players.find((p) => p.seat === seat) ?? null;
 

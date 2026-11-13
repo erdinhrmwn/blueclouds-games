@@ -1,5 +1,9 @@
 <script lang="ts">
+	import dayjs from 'dayjs';
+	import durationPlugin from 'dayjs/plugin/duration';
 	import type { Step } from '#lib/replay.ts';
+
+	dayjs.extend(durationPlugin);
 
 	type Props = {
 		steps: Step[];
@@ -48,10 +52,10 @@
 
 	/** "+3:07": minutes and seconds since the match started. */
 	const clock = (ms: number) => {
-		const minutes = Math.floor(ms / 60_000);
-		const seconds = String(Math.floor(ms / 1000) % 60).padStart(2, '0');
+		const elapsed = dayjs.duration(Math.floor(Math.max(0, ms) / 1000), 'seconds');
+		const minutes = Math.floor(elapsed.asMinutes());
 
-		return `+${minutes}:${seconds}`;
+		return `+${minutes}:${elapsed.format('ss')}`;
 	};
 
 	/** How a card label reads on a mini card: minus cards in red, words smaller. */

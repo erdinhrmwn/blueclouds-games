@@ -3,14 +3,13 @@
 	import PageHeader from '#lib/components/PageHeader.svelte';
 	import { utc } from '#lib/format.ts';
 	import { replay } from '#lib/replay.ts';
+	import { duration } from '#lib/tournament-status.ts';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
 	const match = $derived(data.match);
-	const minutes = $derived.by(() => {
-		const playedMs = new Date(match.endedAt).getTime() - new Date(match.startedAt).getTime();
-		return Math.max(1, Math.round(playedMs / 60_000));
-	});
+	/** "42 sec", "3 min 5 sec": how long the match took. */
+	const played = $derived(duration(new Date(match.startedAt), new Date(match.endedAt)));
 
 	const steps = $derived(data.log ? replay(match.game, data.log, match.seats) : []);
 	const flagged = $derived(steps.filter((s) => s.mismatch).length);
@@ -73,7 +72,7 @@
 			<dt>Match id</dt>
 			<dd class="font-mono text-xs leading-5 break-all">{match.id}</dd>
 			<dt>Played</dt>
-			<dd>{utc(match.startedAt)}, {minutes} min</dd>
+			<dd>{utc(match.startedAt)}, {played}</dd>
 			<dt>Ended</dt>
 			<dd>
 				{#if terminated}

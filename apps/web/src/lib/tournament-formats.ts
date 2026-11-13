@@ -1,4 +1,8 @@
+import dayjs from 'dayjs';
+import durationPlugin from 'dayjs/plugin/duration';
 import type { TournamentFormat } from '#lib/platform.ts';
+
+dayjs.extend(durationPlugin);
 
 type Format = {
 	label: string;
@@ -41,34 +45,30 @@ export const FORMATS: Record<TournamentFormat, Format> = {
 /** "3,500 coins", in the viewer's own number format. */
 export const coins = (amount: number) => `${amount.toLocaleString()} coins`;
 
-const MINUTE_MS = 60_000;
-const HOUR_MIN = 60;
-const DAY_MIN = 24 * HOUR_MIN;
-
 /** "Starts in 6h 32m", "Starts in 1d 4h", "Starts in 3 days", or "Starting now" once it is time. */
 export function startsIn(startsAt: string, now: number): string {
-	const minutes = Math.ceil((Date.parse(startsAt) - now) / MINUTE_MS);
-	if (minutes <= 0) {
+	// Rounded up, so "Starts in 1m" shows until the very start.
+	const minutesLeft = Math.ceil(dayjs(startsAt).diff(now, 'minute', true));
+	if (minutesLeft <= 0) {
 		return 'Starting now';
 	}
 
-	const days = Math.floor(minutes / DAY_MIN);
-	const hours = Math.floor((minutes % DAY_MIN) / HOUR_MIN);
-	const rest = minutes % HOUR_MIN;
+	const left = dayjs.duration(minutesLeft, 'minutes');
+	const days = Math.floor(left.asDays());
 
 	if (days >= 2) {
 		return `Starts in ${days} days`;
 	}
 
 	if (days === 1) {
-		return `Starts in 1d ${hours}h`;
+		return `Starts in 1d ${left.hours()}h`;
 	}
 
-	if (hours > 0) {
-		return `Starts in ${hours}h ${rest}m`;
+	if (left.hours() > 0) {
+		return `Starts in ${left.hours()}h ${left.minutes()}m`;
 	}
 
-	return `Starts in ${rest}m`;
+	return `Starts in ${left.minutes()}m`;
 }
 
 const ORDINAL_SUFFIX = ['th', 'st', 'nd', 'rd'];
@@ -83,14 +83,21 @@ export function ordinal(place: number): string {
 	return `${place}${suffix}`;
 }
 
-/** "1 h 12 min", or "45 min", between two times. */
+/** "42 sec", "3 min 5 sec" or "1 h 12 min": how long a tournament ran. */
 export function ranFor(from: string, to: string): string {
-	const minutes = Math.max(0, Math.round((Date.parse(to) - Date.parse(from)) / MINUTE_MS));
-	if (minutes < HOUR_MIN) {
-		return `${minutes} min`;
+	const elapsedMs = Math.max(0, dayjs(to).diff(from));
+	const elapsed = dayjs.duration(Math.round(elapsedMs / 1000), 'seconds');
+
+	if (elapsed.asMinutes() < 1) {
+		return elapsed.format('s [sec]');
+	}
+	if (elapsed.asHours() < 1) {
+		return elapsed.format('m [min] s [sec]');
 	}
 
-	return `${Math.floor(minutes / HOUR_MIN)} h ${minutes % HOUR_MIN} min`;
+	// Past an hour the seconds are noise. Whole hours, so a long tournament doesn't wrap at a day.
+	const hours = Math.floor(elapsed.asHours());
+	return `${hours} h ${elapsed.minutes()} min`;
 }
 
 /** Arena and Swiss rank by points; a knockout by how far you got. */

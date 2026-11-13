@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { cardFace, type RoundEvent } from '#lib/rounds.ts';
+	import { clock } from '#lib/when.ts';
 
 	/**
 	 * Everything that happened in a closed round, from its move log: the hands dealt and every move after, with
@@ -49,12 +50,8 @@
 			.sort((a, b) => a.seat - b.seat);
 	});
 
-	const clock = (t: number) => {
-		const seconds = Math.max(0, Math.round((t - dealtAt) / 1000));
-		const minutes = Math.floor(seconds / 60);
-
-		return `${minutes}:${String(seconds % 60).padStart(2, '0')}`;
-	};
+	/** "1:05" since the deal. */
+	const sinceDeal = (t: number) => clock(Math.round((t - dealtAt) / 1000));
 
 	/** Bust 31: the total after the card. Cloudburst: what the card did, or how many cards are left. */
 	function playNote(data: Record<string, unknown>): string {
@@ -88,7 +85,7 @@
 		const who = event.seat === undefined ? null : name(event.seat);
 		const base = {
 			seq: event.seq,
-			time: clock(event.t),
+			time: sinceDeal(event.t),
 			who,
 			card: null,
 			note: '',
