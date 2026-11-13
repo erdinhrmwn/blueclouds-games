@@ -6,7 +6,7 @@ Status: decisions made by Erdin 2026-11-13 (see the end); one PR per phase into 
 - Phase 2 (knockout rounds, final places): merged, PR #19.
   Players level at the end (say 2nd at two tables) are split by sign-up order; a player who never played a match gets no place.
 - Phase 3 (Arena and Swiss): merged, PR #20. No byes were needed: a round that can't fill every table to the game's minimum seats its players at fewer, fuller tables instead.
-- Phase 5 (players across rounds): branch `feat/tournament-live`. Design on the FigCraft page "Tournament live". The lobby's carousel shows playing tournaments (round, countdown, your place, top 3, Standings and Go to table) and, for a day, finished ones (podium with prizes, Results); their Detail lists the standings or the podium and final places; a table, once its match ends, says what's next (your next table, waiting, out, or your final place), polling the lobby list until the next round is seated.
+- Phase 5 (players across rounds): merged, PR #21. Design on the FigCraft page "Tournament live". The lobby's carousel shows playing tournaments (round, countdown, your place, top 3, Standings and Go to table) and, for a day, finished ones (podium with prizes, Results); their Detail lists the standings or the podium and final places; a table, once its match ends, says what's next (your next table, waiting, out, or your final place), polling the lobby list until the next round is seated.
 
 ## Where we are
 
@@ -126,7 +126,11 @@ Rough size: phase 1 and 2 about a day each, 3 and 4 a day or two each, 5 two day
 4. A one-round tournament with several tables: the table winners play a final round for 1st. A bracket view comes later.
 5. Name: **Round**, not Round, in the UI and the code (prefixed `tournament_` where a match round could be meant).
 
+## After the plan
+
+- Bracket (Erdin, 2026-11-13): the tournament's own page `/{game}/tournaments/{id}` with Bracket | Standings tabs. One column per round, each table a card with its players and their finish, lines carrying table winners to their next seat, then the champion; phones page through rounds with chips. Arena and Swiss show the same view as "Rounds". Design on the FigCraft page "Bracket".
+
 ## Not in this plan
 
 - **Wallet** (charging the fee on Join, paying prizes): needs a ledger, an audit trail and a legal look. `tournament_results.place` and `tournament_prizes.place` are what a payout would join later.
-- Spectating other tables and a bracket view for Knockout; both read the same rounds and results, so they can come later without schema changes.
+- Spectating other tables; it reads the same rounds and results, so it can come later without schema changes.

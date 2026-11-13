@@ -194,3 +194,132 @@ export async function listLive(sql: SQL, game: string, playerId: string) {
 		}),
 	);
 }
+
+/** One table of a round, with its players best finish first; a seat that wasn't played has no placement. */
+export type BoardTable = {
+	code: string;
+	startedAt: string | null;
+	closedAt: string | null;
+	closeReason: string | null;
+	players: { playerId: string; name: string; seat: number | null; placement: number | null }[];
+};
+
+/**
+ * Everything the tournament page shows: the tournament as the lobby lists it, every round with its tables and who
+ * finished where (the bracket), and the standings. Only distributed tournaments have rounds.
+ */
+export async function tournamentBoard(sql: SQL, tournamentId: string, playerId: string) {
+	const [tournament] = await sql`
+		SELECT
+			t.id,
+			t.game_slug,
+			t.name,
+			t.format,
+			t.rounds,
+			t.players_per_room,
+			t.starts_at,
+			t.ended_at,
+			t.cancelled_at,
+			coalesce(
+				(
+					SELECT json_agg(
+						json_build_object('place', prize.place, 'coins', prize.coins, 'extra', prize.extra)
+						ORDER BY prize.place
+					)
+					FROM tournament_prizes prize
+					WHERE prize.tournament_id = t.id
+				),
+				'[]'
+			) AS prizes
+		FROM tournaments t
+		WHERE t.id = ${tournamentId}`;
+
+	if (!tournament) {
+		throw new ApiError("not_found", 404, "There is no such tournament.");
+	}
+
+	const roundRows = await sql`
+		SELECT round, starts_at, ended_at
+		FROM tournament_rounds
+		WHERE tournament_id = ${tournamentId}
+		ORDER BY round`;
+
+	const tableRows = await sql`
+		SELECT
+			r.tournament_round AS round,
+			r.code,
+			r.started_at,
+			r.closed_at,
+			r.close_reason,
+			json_agg(
+				json_build_object(
+					'playerId', ra.player_id,
+					'name', p.display_name,
+					'seat', ra.seat,
+					'placement', mp.placement
+				)
+				ORDER BY mp.placement NULLS LAST, ra.seat
+			) AS players
+		FROM rooms r
+		JOIN room_assignments ra ON ra.room_id = r.id
+		JOIN players p ON p.id = ra.player_id
+		LEFT JOIN matches m ON m.room_id = r.id
+		LEFT JOIN match_players mp ON mp.match_id = m.id AND mp.player_id = ra.player_id
+		WHERE r.tournament_id = ${tournamentId}
+		GROUP BY r.id
+		ORDER BY r.tournament_round, r.code`;
+
+	const toIso = (value: Date | null) => value?.toISOString() ?? null;
+
+	const rounds = roundRows.map(
+		(row: { round: number; starts_at: Date; ended_at: Date | null }) => ({
+			round: row.round,
+			startsAt: row.starts_at.toISOString(),
+			endedAt: toIso(row.ended_at),
+			tables: tableRows
+				.filter((table: { round: number }) => table.round === row.round)
+				.map(
+					(table: {
+						code: string;
+						started_at: Date | null;
+						closed_at: Date | null;
+						close_reason: string | null;
+						players: BoardTable["players"];
+					}): BoardTable => ({
+						code: table.code,
+						startedAt: toIso(table.started_at),
+						closedAt: toIso(table.closed_at),
+						closeReason: table.close_reason,
+						players: table.players,
+					}),
+				),
+		}),
+	);
+
+	const standings = await standingsOf(sql, tournamentId);
+	const me = standings.find((standing) => standing.playerId === playerId) ?? null;
+	const players = new Set(
+		rounds.flatMap((round: { tables: BoardTable[] }) =>
+			round.tables.flatMap((table) => table.players.map((seat) => seat.playerId)),
+		),
+	).size;
+
+	return {
+		tournament: {
+			id: tournament.id,
+			game: tournament.game_slug,
+			name: tournament.name,
+			format: tournament.format,
+			rounds: tournament.rounds,
+			playersPerRoom: tournament.players_per_room,
+			startsAt: tournament.starts_at.toISOString(),
+			endedAt: toIso(tournament.ended_at),
+			cancelled: !!tournament.cancelled_at,
+			players,
+			prizes: tournament.prizes,
+		},
+		rounds,
+		standings,
+		me,
+	};
+}

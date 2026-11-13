@@ -4,7 +4,7 @@ import type { AppEnv } from "../app";
 import { z } from "zod";
 import { ok, validate } from "../lib/http";
 import { playerAuth } from "../middleware/auth";
-import { listLive, standingsOf } from "../services/tournament-live";
+import { listLive, standingsOf, tournamentBoard } from "../services/tournament-live";
 import { joinTournament, leaveTournament, listOpen, seatedRooms } from "../services/tournaments";
 
 const GameQuery = z.object({ game: z.string().regex(/^[a-z0-9-]{2,32}$/, "Unknown game.") });
@@ -27,6 +27,13 @@ export function tournamentRoutes(sql: SQL) {
 	});
 
 	const tournamentParam = validate("param", TournamentParam);
+
+	app.get("/tournaments/:id", auth, tournamentParam, async (c) => {
+		const { id } = c.req.valid("param");
+		const board = await tournamentBoard(sql, id, c.get("player").id);
+
+		return ok(c, board);
+	});
 
 	app.get("/tournaments/:id/standings", auth, tournamentParam, async (c) => {
 		const { id } = c.req.valid("param");
