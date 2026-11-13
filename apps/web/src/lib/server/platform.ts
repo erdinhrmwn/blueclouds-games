@@ -325,6 +325,25 @@ export async function tournamentsFor(
 	}
 }
 
+/** Whether a game is under maintenance (no new tables). False when it can't be asked, e.g. before a name. */
+export async function underMaintenance(event: RequestEvent, game: string): Promise<boolean> {
+	const secret = secretOf(event.cookies);
+	if (!secret) return false;
+
+	try {
+		const { games } = await call<{ games: { slug: string; maintenance: boolean }[] }>(
+			event,
+			'/games',
+			{ method: 'GET', secret }
+		);
+
+		return games.some((entry) => entry.slug === game && entry.maintenance);
+	} catch (err) {
+		if (lost(err)) return false;
+		throw err;
+	}
+}
+
 /** Signs the player up for a tournament. */
 export async function joinTournament(event: RequestEvent, id: string): Promise<void> {
 	const secret = secretOrNameFirst(event.cookies);

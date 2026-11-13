@@ -2,8 +2,11 @@
 	import type { Visibility } from '#lib/platform.ts';
 	import { newTable } from '#lib/tables.ts';
 
-	/** Open a new table, private or public. Friends join a private one with its invite link. */
-	let { game }: { game: string } = $props();
+	/**
+	 * Open a new table, private or public. Friends join a private one with its invite link. While the game is
+	 * under maintenance no new tables open; tables already running play on.
+	 */
+	let { game, maintenance = false }: { game: string; maintenance?: boolean } = $props();
 	let visibility = $state<Visibility>('private');
 	let error = $state<string | null>(null);
 	let busy = $state(false);
@@ -31,7 +34,15 @@
 				<span>Anyone, from Open tables</span>
 			</label>
 		</fieldset>
-		<button class="btn-brass w-full" type="submit" disabled={busy}
+		{#if maintenance}
+			<p
+				class="rounded-md border border-brass/40 bg-brass/10 px-3 py-2 text-sm text-brass"
+				role="status"
+			>
+				Under maintenance. New tables are paused for now; tables already running play on.
+			</p>
+		{/if}
+		<button class="btn-brass w-full" type="submit" disabled={busy || maintenance}
 			>{busy ? 'Please wait…' : 'Open a new table'}</button
 		>
 	</form>

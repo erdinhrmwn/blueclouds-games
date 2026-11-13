@@ -70,7 +70,7 @@ Storage estimate: the move log is the big one, about 25 KB per match before comp
 
 ### `games`
 
-No change. It was designed in `006` with checks already.
+No change. It was designed in `006` with checks already. Later: `maintenance_at` (migration 012, Erdin 2026-11-13): set while an admin has the game paused; the platform then refuses new tables (`409 under_maintenance`) and the backoffice new tournaments, while open tables play on.
 
 ### `tournaments`, `tournament_players`, `rooms` and `room_assignments` (new)
 

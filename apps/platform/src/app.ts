@@ -8,6 +8,7 @@ import { secureHeaders } from "hono/secure-headers";
 import type { Config } from "./config";
 import { ApiError, type ErrorCode, fail, ok } from "./lib/http";
 import { log } from "./lib/log";
+import { gameRoutes } from "./routes/games";
 import { matchRoutes } from "./routes/matches";
 import { playerRoutes } from "./routes/players";
 import { roomRoutes } from "./routes/rooms";
@@ -57,6 +58,7 @@ export function createApp(deps: Deps) {
 	app.route("/v1", matchRoutes(deps.sql, deps.config.serverKey));
 	app.route("/v1", roomRoutes(deps.sql, deps.config.serverKey));
 	app.route("/v1", tournamentRoutes(deps.sql));
+	app.route("/v1", gameRoutes(deps.sql));
 
 	app.notFound((c) => fail(c, new ApiError("not_found", 404, "Not found.")));
 

@@ -106,9 +106,16 @@ export async function createTournament(
 	input: z.output<typeof NewTournament>,
 	ip: string | null
 ): Promise<string> {
-	const [game] = await sql`SELECT min_players, max_players FROM games WHERE slug = ${input.game}`;
+	const [game] = await sql`
+		SELECT min_players, max_players, maintenance_at
+		FROM games
+		WHERE slug = ${input.game}`;
 	if (!game) {
 		throw new TournamentError('Pick a game.');
+	}
+
+	if (game.maintenance_at) {
+		throw new TournamentError('This game is under maintenance. End it on the Games page first.');
 	}
 
 	const { playersPerRoom } = input;

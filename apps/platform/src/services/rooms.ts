@@ -1,5 +1,6 @@
 import type { SQL } from "bun";
 import { ApiError } from "../lib/http";
+import { requirePlayable } from "./games";
 import { closeRoom } from "./tournaments";
 
 /** No 0/O or 1/I, so a code read aloud or copied by hand stays right. */
@@ -184,10 +185,7 @@ async function inviteLink(sql: SQL, roomId: string, playerId: string): Promise<I
 
 /** A player opens a new table: the platform picks its code. The opener is its first member. */
 export async function openRoom(sql: SQL, game: string, visibility: Visibility, playerId: string) {
-	const [known] = await sql`SELECT 1 FROM games WHERE slug = ${game}`;
-	if (!known) {
-		throw new ApiError("bad_input", 400, "Some fields are invalid.", { game: "Unknown game." });
-	}
+	await requirePlayable(sql, game);
 
 	const room = await sql.begin(async (tx) => {
 		const made = await insertRoom(tx, { game, visibility, playerId });

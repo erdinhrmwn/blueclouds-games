@@ -12,6 +12,7 @@ export type ErrorCode =
 	| "payload_too_large"
 	| "unknown_player"
 	| "unknown_room"
+	| "under_maintenance"
 	| "rate_limited"
 	| "internal";
 

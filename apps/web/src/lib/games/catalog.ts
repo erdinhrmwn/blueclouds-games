@@ -18,8 +18,8 @@ export type GameEntry = {
 	maxPlayers: number;
 	/** A few sample cards: the game's picture. */
 	Fan: Component<{ size?: 'sm' | 'md' }>;
-	/** The game's own page: rules plus the create/join forms. */
-	Home: Component<{ game: GameEntry }>;
+	/** The game's own page: rules plus the create/join forms. `maintenance`: no new tables for now. */
+	Home: Component<{ game: GameEntry; maintenance: boolean }>;
 	/** Everything inside a room: lobby, table, connection. */
 	Room: Component<{ game: GameEntry; code: string }>;
 };
