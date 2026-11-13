@@ -1,4 +1,3 @@
-/// <reference types="bun" />
 import { expect, test } from 'bun:test';
 import { ranFor, startsIn } from './tournament-formats';
 import { clock } from './when';

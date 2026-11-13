@@ -3,5 +3,7 @@
 	"compilerOptions": {
 		"strict": true
 	},
-	"include": ["src", "vite.config.ts"]
+	"include": ["src", "vite.config.ts"],
+	// Tests run under bun:test; checking them here would pull Bun's globals into the browser app.
+	"exclude": ["src/**/*.test.ts"]
 }
