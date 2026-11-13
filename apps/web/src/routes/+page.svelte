@@ -130,19 +130,21 @@
 							>
 								{game.tagline}
 							</p>
-							<p class="mt-1.5 text-xs text-paper/50">
+							<p class="mt-1.5 text-xs text-paper/50 sm:mb-5">
 								{game.kind.charAt(0).toUpperCase()}{game.kind.slice(1)}, {game.minPlayers}–{game.maxPlayers}
 								players
 							</p>
-							<span class="btn-brass mt-5 hidden h-11 rounded-xl sm:inline-flex" aria-hidden="true"
-								>Play {game.name}</span
+							<!-- mt-auto keeps every tile's button on the same line, however long its tagline. -->
+							<span
+								class="btn-brass mt-auto hidden h-11 rounded-xl sm:inline-flex"
+								aria-hidden="true">Play {game.name}</span
 							>
 						</div>
 					</a>
 				</li>
 			{/each}
 			<li
-				class="grid place-items-center rounded-2xl border border-dashed border-paper/22 p-6 text-center max-sm:py-5"
+				class="grid place-content-center rounded-2xl border border-dashed border-paper/22 p-6 text-center max-sm:py-5"
 			>
 				<p class="font-semibold text-paper/60">More tables on the way</p>
 				<p class="mt-1 text-sm text-paper/40 max-sm:hidden">New games show up here.</p>
