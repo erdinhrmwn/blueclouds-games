@@ -90,6 +90,7 @@ export async function distributeIn(
 		SELECT
 			t.game_slug,
 			t.players_per_room,
+			t.starts_at,
 			t.min_players AS tournament_min,
 			t.distributed_at,
 			t.cancelled_at,
@@ -123,6 +124,8 @@ export async function distributeIn(
 			)`;
 
 	const playerIds = registered.map((row: { player_id: string }) => row.player_id);
+	// ponytail: only round 1 is handed out here; later rounds come with the job that opens them (plan phase 3).
+	const round = 1;
 
 	if (tournament.tournament_min !== null && playerIds.length < tournament.tournament_min) {
 		throw new DistributeError(
@@ -132,16 +135,22 @@ export async function distributeIn(
 
 	const plan = planRooms(shuffle(playerIds), tournament.players_per_room, tournament.min_players);
 
+	await tx`
+		INSERT INTO tournament_rounds (tournament_id, round, starts_at)
+		VALUES (${tournamentId}, ${round}, ${tournament.starts_at})`;
+
 	for (const roomPlayers of plan) {
 		const room = await insertRoom(tx, {
 			game: tournament.game_slug,
 			tournamentId,
+			tournamentRound: round,
 			adminId: by.adminId,
 		});
 
 		const assignments = roomPlayers.map((playerId, seat) => ({
 			room_id: room.id,
 			tournament_id: tournamentId,
+			tournament_round: round,
 			player_id: playerId,
 			seat,
 		}));
