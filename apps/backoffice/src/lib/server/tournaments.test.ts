@@ -159,6 +159,42 @@ describe('tournaments', () => {
 		});
 	});
 
+	test('a later round: detail shows tables by round, seats there, and the results; take off frees only that seat', async () => {
+		const id = await newCup(2, 36, 2);
+		const ids = await players(4);
+		await registerPlayers(sql, admin, id, ids, null);
+		await distributeNow(sql, admin, id, null);
+
+		await sql`INSERT INTO tournament_rounds (tournament_id, round, starts_at) VALUES (${id}, 2, now() + interval '3 min')`;
+		const [{ id: final }] = await sql`
+			INSERT INTO rooms (game_slug, code, tournament_id, tournament_round)
+			VALUES ('bust-31', 'FINAL1', ${id}, 2)
+			RETURNING id`;
+		await sql`
+			INSERT INTO room_assignments (room_id, tournament_id, tournament_round, player_id, seat)
+			VALUES (${final}, ${id}, 2, ${ids[0]}, 0), (${final}, ${id}, 2, ${ids[1]}, 1)`;
+		await sql`
+			INSERT INTO tournament_results (tournament_id, player_id, place, wins, last_round)
+			VALUES (${id}, ${ids[0]}, 1, 2, 2), (${id}, ${ids[1]}, 2, 1, 2)`;
+
+		const detail = (await tournamentDetail(sql, id))!;
+		expect(detail.rooms.map((room) => room.round)).toEqual([2, 1, 1]);
+		expect(detail.rooms[0]!.seats).toEqual([
+			{ playerId: ids[0], seat: 0 },
+			{ playerId: ids[1], seat: 1 }
+		]);
+		expect(detail.players.find((p) => p.playerId === ids[0])!.roomCode).toBe('FINAL1');
+		expect(detail.results.map((result) => [result.place, result.playerId])).toEqual([
+			[1, ids[0]],
+			[2, ids[1]]
+		]);
+
+		await unassignPlayer(sql, admin, id, ids[0]!, null);
+		const [{ seats }] = await sql`
+			SELECT count(*)::int AS seats FROM room_assignments WHERE tournament_id = ${id} AND player_id = ${ids[0]}`;
+		expect(seats).toBe(1);
+	});
+
 	test('register by pasted ids, distribute now, then seat and take off by hand', async () => {
 		const id = await newCup();
 		const ids = await players(8);

@@ -54,6 +54,15 @@ export type TournamentRow = {
 
 export type Prize = { place: number; coins: number; extra: string | null };
 
+/** A final place, written once by the platform's job when the tournament finished. */
+export type TournamentResult = {
+	place: number;
+	playerId: string;
+	name: string;
+	wins: number;
+	lastRound: number;
+};
+
 export type PlayerStatus = 'registered' | 'withdrawn' | 'disqualified';
 
 export type Registered = {
@@ -72,6 +81,10 @@ export type Registered = {
 export type TournamentRoom = {
 	id: string;
 	code: string;
+	/** The tournament round this table played in. */
+	round: number;
+	/** Who sits where at this table. */
+	seats: { playerId: string; seat: number | null }[];
 	startedAt: Date | null;
 	closedAt: Date | null;
 	closeReason: string | null;
@@ -326,34 +339,62 @@ export async function tournamentDetail(sql: SQL, id: string) {
 			tp.status,
 			tp.status_reason AS "statusReason",
 			tp.status_changed_at AS "statusChangedAt",
-			r.code AS "roomCode",
-			ra.seat
+			latest.code AS "roomCode",
+			latest.seat
 		FROM tournament_players tp
 		JOIN players p ON p.id = tp.player_id
-		LEFT JOIN room_assignments ra
-			ON ra.tournament_id = tp.tournament_id AND ra.player_id = tp.player_id
-		LEFT JOIN rooms r ON r.id = ra.room_id
+		-- Where they sit in the latest round they were given a seat.
+		LEFT JOIN LATERAL (
+			SELECT r.code, ra.seat
+			FROM room_assignments ra
+			JOIN rooms r ON r.id = ra.room_id
+			WHERE ra.tournament_id = tp.tournament_id AND ra.player_id = tp.player_id
+			ORDER BY ra.tournament_round DESC
+			LIMIT 1
+		) latest ON true
 		WHERE tp.tournament_id = ${id}
-		ORDER BY r.code NULLS LAST, ra.seat, p.display_name`;
+		ORDER BY latest.code NULLS LAST, latest.seat, p.display_name`;
 
 	const roomsQuery = sql`
 		SELECT
 			r.id,
 			r.code,
+			r.tournament_round AS round,
 			r.started_at AS "startedAt",
 			r.closed_at AS "closedAt",
 			r.close_reason AS "closeReason",
-			(SELECT count(*)::int FROM room_assignments ra WHERE ra.room_id = r.id) AS players
+			(SELECT count(*)::int FROM room_assignments ra WHERE ra.room_id = r.id) AS players,
+			coalesce(
+				(
+					SELECT json_agg(json_build_object('playerId', ra.player_id, 'seat', ra.seat) ORDER BY ra.seat)
+					FROM room_assignments ra
+					WHERE ra.room_id = r.id
+				),
+				'[]'
+			) AS seats
 		FROM rooms r
 		WHERE r.tournament_id = ${id}
-		ORDER BY r.code`;
+		ORDER BY r.tournament_round DESC, r.code`;
 
-	const [players, rooms] = await Promise.all([playersQuery, roomsQuery]);
+	const resultsQuery = sql`
+		SELECT
+			tr.place,
+			tr.player_id AS "playerId",
+			p.display_name AS name,
+			tr.wins,
+			tr.last_round AS "lastRound"
+		FROM tournament_results tr
+		JOIN players p ON p.id = tr.player_id
+		WHERE tr.tournament_id = ${id}
+		ORDER BY tr.place`;
+
+	const [players, rooms, results] = await Promise.all([playersQuery, roomsQuery, resultsQuery]);
 
 	return {
 		tournament,
 		players: [...players] as Registered[],
-		rooms: [...rooms] as TournamentRoom[]
+		rooms: [...rooms] as TournamentRoom[],
+		results: [...results] as TournamentResult[]
 	};
 }
 
@@ -488,13 +529,14 @@ export async function unregisterPlayer(
 	await sql.begin(async (tx) => {
 		await lockOpen(tx, id);
 
-		const [seat] = await tx`
-			SELECT r.started_at
+		// Once they played any round, their seats are history: disqualify them instead.
+		const [seats] = await tx`
+			SELECT coalesce(bool_or(r.started_at IS NOT NULL), false) AS played
 			FROM room_assignments ra
 			JOIN rooms r ON r.id = ra.room_id
 			WHERE ra.tournament_id = ${id} AND ra.player_id = ${playerId}`;
 
-		if (seat?.started_at) {
+		if (seats.played) {
 			throw new TournamentError('Their table already started.');
 		}
 
@@ -690,11 +732,14 @@ export async function unassignPlayer(
 	await sql.begin(async (tx) => {
 		await lockOpen(tx, id);
 
+		// Their seat in the latest round they were given one.
 		const [seat] = await tx`
 			SELECT ra.room_id, r.started_at
 			FROM room_assignments ra
 			JOIN rooms r ON r.id = ra.room_id
-			WHERE ra.tournament_id = ${id} AND ra.player_id = ${playerId}`;
+			WHERE ra.tournament_id = ${id} AND ra.player_id = ${playerId}
+			ORDER BY ra.tournament_round DESC
+			LIMIT 1`;
 
 		if (!seat) {
 			throw new TournamentError('That player has no table.');
@@ -705,7 +750,7 @@ export async function unassignPlayer(
 
 		await tx`
 			DELETE FROM room_assignments
-			WHERE tournament_id = ${id} AND player_id = ${playerId}`;
+			WHERE room_id = ${seat.room_id} AND player_id = ${playerId}`;
 
 		await audit(tx, {
 			adminId: admin.id,
@@ -748,11 +793,17 @@ export async function disqualifyPlayer(
 		}
 
 		const [player] = await tx`
-			SELECT tp.status, r.id AS room_id, r.code, r.started_at, r.closed_at
+			SELECT tp.status, latest.room_id, latest.code, latest.started_at, latest.closed_at
 			FROM tournament_players tp
-			LEFT JOIN room_assignments ra
-				ON ra.tournament_id = tp.tournament_id AND ra.player_id = tp.player_id
-			LEFT JOIN rooms r ON r.id = ra.room_id
+			-- Their seat in the latest round they were given one.
+			LEFT JOIN LATERAL (
+				SELECT r.id AS room_id, r.code, r.started_at, r.closed_at
+				FROM room_assignments ra
+				JOIN rooms r ON r.id = ra.room_id
+				WHERE ra.tournament_id = tp.tournament_id AND ra.player_id = tp.player_id
+				ORDER BY ra.tournament_round DESC
+				LIMIT 1
+			) latest ON true
 			WHERE tp.tournament_id = ${id} AND tp.player_id = ${target.playerId}
 			FOR UPDATE OF tp`;
 
@@ -767,7 +818,7 @@ export async function disqualifyPlayer(
 		if (player.room_id && !running) {
 			await tx`
 				DELETE FROM room_assignments
-				WHERE tournament_id = ${id} AND player_id = ${target.playerId}`;
+				WHERE room_id = ${player.room_id} AND player_id = ${target.playerId}`;
 		}
 
 		await tx`

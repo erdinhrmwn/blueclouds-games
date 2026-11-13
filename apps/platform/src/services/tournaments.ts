@@ -1,7 +1,8 @@
-import type { SQL } from "bun";
+import type { SQL, TransactionSQL } from "bun";
 import { ApiError } from "../lib/http";
 import { log } from "../lib/log";
 import { insertRoom } from "./rooms";
+import { finalPlaces, type RoundSeat, tableWinners } from "./tournament-rounds";
 
 const JOB_BATCH = 10;
 
@@ -12,6 +13,9 @@ const JOB_BATCH = 10;
 const UNOPENED_CLOSE_AFTER = "4 minutes";
 
 const LIST_LIMIT = 20;
+
+/** The break between a round's last table closing and the next round's tables starting (Erdin, 2026-11-13). */
+const ROUND_BREAK = "3 minutes";
 
 /** How many of a tournament's first sign-ups the lobby's Detail names ("Rina, Erdin and 3 more"). */
 const PLAYERS_SHOWN = 5;
@@ -62,6 +66,33 @@ export function planRooms<T>(players: T[], perRoom: number, minPlayers: number):
 	}
 
 	return rooms;
+}
+
+/**
+ * Tables for a round after the first: like planRooms, but when the players left can't fill every table to the game's
+ * minimum (3 winners at 2 per table), they sit at fewer, fuller tables instead, up to the game's maximum.
+ */
+export function planRoundTables<T>(
+	players: T[],
+	perRoom: number,
+	minPlayers: number,
+	maxPlayers: number,
+): T[][] {
+	try {
+		return planRooms(players, perRoom, minPlayers);
+	} catch (err) {
+		if (!(err instanceof DistributeError)) {
+			throw err;
+		}
+
+		const tableCount = Math.floor(players.length / minPlayers);
+		const biggest = Math.ceil(players.length / Math.max(tableCount, 1));
+		if (tableCount < 1 || biggest > maxPlayers) {
+			throw err;
+		}
+
+		return planRooms(players, biggest, minPlayers);
+	}
 }
 
 /** Fisher-Yates shuffle with crypto randomness. */
@@ -124,8 +155,6 @@ export async function distributeIn(
 			)`;
 
 	const playerIds = registered.map((row: { player_id: string }) => row.player_id);
-	// ponytail: only round 1 is handed out here; later rounds come with the job that opens them (plan phase 3).
-	const round = 1;
 
 	if (tournament.tournament_min !== null && playerIds.length < tournament.tournament_min) {
 		throw new DistributeError(
@@ -133,29 +162,20 @@ export async function distributeIn(
 		);
 	}
 
-	const plan = planRooms(shuffle(playerIds), tournament.players_per_room, tournament.min_players);
+	const plan = planRooms<string>(
+		shuffle(playerIds),
+		tournament.players_per_room,
+		tournament.min_players,
+	);
 
-	await tx`
-		INSERT INTO tournament_rounds (tournament_id, round, starts_at)
-		VALUES (${tournamentId}, ${round}, ${tournament.starts_at})`;
-
-	for (const roomPlayers of plan) {
-		const room = await insertRoom(tx, {
-			game: tournament.game_slug,
-			tournamentId,
-			tournamentRound: round,
-			adminId: by.adminId,
-		});
-
-		const assignments = roomPlayers.map((playerId, seat) => ({
-			room_id: room.id,
-			tournament_id: tournamentId,
-			tournament_round: round,
-			player_id: playerId,
-			seat,
-		}));
-		await tx`INSERT INTO room_assignments ${tx(assignments)}`;
-	}
+	await seatRound(tx, {
+		tournamentId,
+		game: tournament.game_slug,
+		round: 1,
+		startsAt: tournament.starts_at,
+		tables: plan,
+		adminId: by.adminId,
+	});
 
 	await tx`
 		UPDATE tournaments
@@ -176,6 +196,41 @@ export async function distributeIn(
 		)`;
 
 	return result;
+}
+
+/** Writes a round, its tables and who sits where; each table starts by itself at `startsAt`. */
+async function seatRound(
+	tx: SQL,
+	round: {
+		tournamentId: string;
+		game: string;
+		round: number;
+		startsAt: Date;
+		tables: string[][];
+		adminId: string | null;
+	},
+): Promise<void> {
+	await tx`
+		INSERT INTO tournament_rounds (tournament_id, round, starts_at)
+		VALUES (${round.tournamentId}, ${round.round}, ${round.startsAt})`;
+
+	for (const tablePlayers of round.tables) {
+		const room = await insertRoom(tx, {
+			game: round.game,
+			tournamentId: round.tournamentId,
+			tournamentRound: round.round,
+			adminId: round.adminId,
+		});
+
+		const assignments = tablePlayers.map((playerId, seat) => ({
+			room_id: room.id,
+			tournament_id: round.tournamentId,
+			tournament_round: round.round,
+			player_id: playerId,
+			seat,
+		}));
+		await tx`INSERT INTO room_assignments ${tx(assignments)}`;
+	}
 }
 
 /**
@@ -228,23 +283,166 @@ export async function cancelIfShort(
 	return counts;
 }
 
-/** Sets ended_at on each of these tournaments whose rooms are all closed: when the last one closed. */
-export async function endIfDone(tx: SQL, tournamentIds: string[]): Promise<void> {
-	const ids = [...new Set(tournamentIds)];
-	if (ids.length === 0) return;
-
-	// greatest(): a room can close a moment before starts_at by the actor's clock.
-	await tx`
-		UPDATE tournaments t
-		SET ended_at = greatest(
-			t.starts_at,
-			(SELECT max(r.closed_at) FROM rooms r WHERE r.tournament_id = t.id)
-		)
-		WHERE t.id IN ${tx(ids)}
+/**
+ * A tournament whose current round has every table closed goes on: the round gets its end, then either the next
+ * round is seated (its table winners, after ROUND_BREAK) or the tournament finishes with its final places. Runs in
+ * the caller's transaction and locks the tournament, so two job runs never both move it.
+ */
+export async function advanceTournament(
+	tx: SQL,
+	tournamentId: string,
+): Promise<{ round: number; finished: boolean } | null> {
+	const [tournament] = await tx`
+		SELECT
+			t.game_slug,
+			t.players_per_room,
+			g.min_players,
+			g.max_players,
+			tr.round,
+			(SELECT max(r.closed_at) FROM rooms r WHERE r.tournament_id = t.id AND r.tournament_round = tr.round)
+				AS last_closed_at
+		FROM tournaments t
+		JOIN games g ON g.slug = t.game_slug
+		JOIN tournament_rounds tr ON tr.tournament_id = t.id
+		WHERE t.id = ${tournamentId}
+			AND t.cancelled_at IS NULL
+			AND t.ended_at IS NULL
+			AND tr.ended_at IS NULL
 			AND NOT EXISTS (
 				SELECT 1 FROM rooms r
-				WHERE r.tournament_id = t.id AND r.closed_at IS NULL
-			)`;
+				WHERE r.tournament_id = t.id
+					AND r.tournament_round = tr.round
+					AND r.closed_at IS NULL
+			)
+		ORDER BY tr.round DESC
+		LIMIT 1
+		FOR UPDATE OF t`;
+
+	if (!tournament) {
+		return null;
+	}
+
+	const round: number = tournament.round;
+
+	// greatest(): a table can close a moment before its start by the actor's clock.
+	const [{ ended_at: roundEndedAt }] = await tx`
+		UPDATE tournament_rounds
+		SET ended_at = greatest(starts_at, ${tournament.last_closed_at ?? null}::timestamptz)
+		WHERE tournament_id = ${tournamentId} AND round = ${round}
+		RETURNING ended_at`;
+
+	const seats = await roundSeats(tx, tournamentId);
+	const playable = await playablePlayers(tx, tournamentId);
+	const goingOn = tableWinners(seats, round).filter((playerId) => playable.has(playerId));
+
+	if (goingOn.length >= 2) {
+		const tables = planRoundTables(
+			shuffle(goingOn),
+			tournament.players_per_room,
+			tournament.min_players,
+			tournament.max_players,
+		);
+		const [{ starts_at: startsAt }] =
+			await tx`SELECT now() + ${ROUND_BREAK}::interval AS starts_at`;
+
+		await seatRound(tx, {
+			tournamentId,
+			game: tournament.game_slug,
+			round: round + 1,
+			startsAt,
+			tables,
+			adminId: null,
+		});
+
+		const detail = JSON.stringify({
+			round: round + 1,
+			rooms: tables.length,
+			players: goingOn.length,
+			auto: true,
+		});
+		await tx`
+			INSERT INTO admin_audit_events (admin_id, action, tournament_id, detail)
+			VALUES (NULL, 'tournament.distribute', ${tournamentId}, ${detail}::text::jsonb)`;
+
+		return { round: round + 1, finished: false };
+	}
+
+	const champion = goingOn.length === 1 ? goingOn[0]! : null;
+	await finishTournament(tx, tournamentId, seats, roundEndedAt, champion);
+	return { round, finished: true };
+}
+
+/** Every seat of the tournament with where its player finished; a seat they didn't play has no placement. */
+async function roundSeats(tx: SQL, tournamentId: string): Promise<RoundSeat[]> {
+	const rows = await tx`
+		SELECT
+			ra.player_id,
+			ra.tournament_round,
+			mp.placement
+		FROM room_assignments ra
+		JOIN tournament_players tp
+			ON tp.tournament_id = ra.tournament_id AND tp.player_id = ra.player_id
+		LEFT JOIN matches m ON m.room_id = ra.room_id
+		LEFT JOIN match_players mp ON mp.match_id = m.id AND mp.player_id = ra.player_id
+		WHERE ra.tournament_id = ${tournamentId}
+			AND tp.status <> 'disqualified'`;
+
+	return rows.map(
+		(row: { player_id: string; tournament_round: number; placement: number | null }) => ({
+			playerId: row.player_id,
+			round: row.tournament_round,
+			placement: row.placement,
+		}),
+	);
+}
+
+/** Players who may still be seated: registered (not withdrawn or disqualified) and not disabled. */
+async function playablePlayers(tx: SQL, tournamentId: string): Promise<Set<string>> {
+	const rows = await tx`
+		SELECT tp.player_id
+		FROM tournament_players tp
+		JOIN players p ON p.id = tp.player_id
+		WHERE tp.tournament_id = ${tournamentId}
+			AND tp.status = 'registered'
+			AND p.disabled_at IS NULL`;
+
+	return new Set(rows.map((row: { player_id: string }) => row.player_id));
+}
+
+/** Writes the final places once and ends the tournament when its last round ended. */
+async function finishTournament(
+	tx: SQL,
+	tournamentId: string,
+	seats: RoundSeat[],
+	endedAt: Date,
+	championId: string | null,
+): Promise<void> {
+	const signUps = await tx`
+		SELECT player_id
+		FROM tournament_players
+		WHERE tournament_id = ${tournamentId}
+		ORDER BY created_at, player_id`;
+	const signUpOrder = new Map<string, number>(
+		signUps.map((row: { player_id: string }, index: number) => [row.player_id, index]),
+	);
+
+	const places = finalPlaces(seats, signUpOrder, championId);
+
+	if (places.length > 0) {
+		const rows = places.map((place) => ({
+			tournament_id: tournamentId,
+			player_id: place.playerId,
+			place: place.place,
+			wins: place.wins,
+			last_round: place.lastRound,
+		}));
+		await tx`INSERT INTO tournament_results ${tx(rows)} ON CONFLICT DO NOTHING`;
+	}
+
+	await tx`
+		UPDATE tournaments
+		SET ended_at = greatest(starts_at, ${endedAt})
+		WHERE id = ${tournamentId}`;
 }
 
 /**
@@ -273,7 +471,7 @@ export async function closeRoom(
 		RETURNING tournament_id`;
 
 	if (room) {
-		await endIfDone(tx, [room.tournament_id]);
+		log.debug({ msg: "tournament table closed", roomId, reason });
 	}
 }
 
@@ -281,9 +479,14 @@ export async function closeRoom(
  * One tick of the job: distributes tournaments whose registration closed, and closes rooms nobody opened.
  * SKIP LOCKED keeps overlapping runs (or several platform instances) from doing the same tournament twice.
  */
-export async function runTournamentJob(
-	sql: SQL,
-): Promise<{ distributed: number; cancelled: number; failed: number; closed: number }> {
+export async function runTournamentJob(sql: SQL): Promise<{
+	distributed: number;
+	cancelled: number;
+	failed: number;
+	closed: number;
+	nextRounds: number;
+	finished: number;
+}> {
 	return sql.begin(async (tx) => {
 		const due = await tx`
 			SELECT id
@@ -322,18 +525,63 @@ export async function runTournamentJob(
 			UPDATE rooms r
 			SET closed_at = now(), close_reason = 'not_enough_players'
 			FROM tournaments t
+			JOIN tournament_rounds tr ON tr.tournament_id = t.id
 			WHERE t.id = r.tournament_id
+				AND tr.round = r.tournament_round
 				AND t.cancelled_at IS NULL
 				AND r.started_at IS NULL
 				AND r.closed_at IS NULL
-				AND t.starts_at + ${UNOPENED_CLOSE_AFTER}::interval <= now()
+				AND tr.starts_at + ${UNOPENED_CLOSE_AFTER}::interval <= now()
 			RETURNING r.tournament_id`;
 
-		const closedTournamentIds = closed.map((row: { tournament_id: string }) => row.tournament_id);
-		await endIfDone(tx, closedTournamentIds);
+		const advanced = await advanceDue(tx);
 
-		return { distributed, cancelled, failed, closed: closed.length };
+		return { distributed, cancelled, failed, closed: closed.length, ...advanced };
 	});
+}
+
+/** Moves on every tournament whose current round has all its tables closed, each in its own savepoint. */
+async function advanceDue(tx: TransactionSQL): Promise<{ nextRounds: number; finished: number }> {
+	const due = await tx`
+		SELECT t.id
+		FROM tournaments t
+		JOIN tournament_rounds tr ON tr.tournament_id = t.id AND tr.ended_at IS NULL
+		WHERE t.cancelled_at IS NULL
+			AND t.ended_at IS NULL
+			AND NOT EXISTS (
+				SELECT 1 FROM rooms r
+				WHERE r.tournament_id = t.id
+					AND r.tournament_round = tr.round
+					AND r.closed_at IS NULL
+			)
+		ORDER BY tr.starts_at
+		FOR UPDATE OF t SKIP LOCKED
+		LIMIT ${JOB_BATCH}`;
+
+	let nextRounds = 0;
+	let finished = 0;
+
+	for (const { id } of due) {
+		try {
+			const moved = await tx.savepoint((sp) => advanceTournament(sp, id));
+			if (!moved) {
+				continue;
+			}
+
+			if (moved.finished) {
+				finished += 1;
+				log.info({ msg: "tournament finished", tournamentId: id, round: moved.round });
+				continue;
+			}
+
+			nextRounds += 1;
+			log.info({ msg: "tournament round seated", tournamentId: id, round: moved.round });
+		} catch (err) {
+			log.error({ msg: "tournament round failed to advance", tournamentId: id, err });
+		}
+	}
+
+	return { nextRounds, finished };
 }
 
 /** Shows admins why the job could not distribute. Unknown errors are logged and get a generic message. */
@@ -480,17 +728,22 @@ export async function leaveTournament(sql: SQL, tournamentId: string, playerId: 
 			return;
 		}
 
+		// Their latest seat decides: one that is playing now is left from the table; a waiting one is freed; after a
+		// played round, withdrawing keeps them out of the next.
 		const [seat] = await tx`
-			SELECT r.started_at, r.closed_at
+			SELECT ra.room_id, r.started_at, r.closed_at
 			FROM room_assignments ra
 			JOIN rooms r ON r.id = ra.room_id
 			JOIN tournament_players tp
 				ON tp.tournament_id = ra.tournament_id AND tp.player_id = ra.player_id
 			WHERE ra.tournament_id = ${tournamentId}
 				AND ra.player_id = ${playerId}
-				AND tp.status = 'registered'`;
+				AND tp.status = 'registered'
+			ORDER BY ra.tournament_round DESC
+			LIMIT 1`;
 
-		if (seat?.started_at || seat?.closed_at) {
+		const playingNow = seat?.started_at && !seat.closed_at;
+		if (playingNow) {
 			throw new ApiError(
 				"conflict",
 				409,
@@ -498,9 +751,11 @@ export async function leaveTournament(sql: SQL, tournamentId: string, playerId: 
 			);
 		}
 
-		await tx`
-			DELETE FROM room_assignments
-			WHERE tournament_id = ${tournamentId} AND player_id = ${playerId}`;
+		if (seat && !seat.started_at) {
+			await tx`
+				DELETE FROM room_assignments
+				WHERE room_id = ${seat.room_id} AND player_id = ${playerId}`;
+		}
 
 		await tx`
 			UPDATE tournament_players

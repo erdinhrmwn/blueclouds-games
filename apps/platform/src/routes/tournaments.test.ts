@@ -147,6 +147,12 @@ describe("the distribute job", () => {
 		expect(
 			(await t.sql`SELECT ended_at FROM tournaments WHERE id = ${id}`)[0].ended_at,
 		).not.toBeNull();
+		// Nobody played, so nobody has a place.
+		expect(
+			(
+				await t.sql`SELECT count(*)::int AS n FROM tournament_results WHERE tournament_id = ${id}`
+			)[0].n,
+		).toBe(0);
 
 		const started = await tournament({ opens: -60, closes: -10, starts: -5 });
 		await register(started, 2);
@@ -154,7 +160,104 @@ describe("the distribute job", () => {
 		await runTournamentJob(t.sql);
 		await t.sql`UPDATE rooms SET started_at = now() WHERE tournament_id = ${started}`;
 		await t.sql`UPDATE tournaments SET starts_at = now() - interval '5 min' WHERE id = ${started}`;
+		await t.sql`UPDATE tournament_rounds SET starts_at = now() - interval '5 min' WHERE tournament_id = ${started}`;
 		expect((await runTournamentJob(t.sql)).closed).toBe(0);
+	});
+});
+
+describe("rounds", () => {
+	let matchNumber = 0;
+
+	/** Reports a table's match with players finishing in the order given. */
+	async function play(roomId: string, order: string[]) {
+		const [{ code }] = await t.sql`SELECT code FROM rooms WHERE id = ${roomId}`;
+		matchNumber += 1;
+		const now = new Date().toISOString();
+		const report = {
+			matchId: `01900000-0000-7000-8000-${String(matchNumber).padStart(12, "0")}`,
+			game: "bust-31",
+			roomCode: code,
+			rulesVersion: 1,
+			startedAt: now,
+			endedAt: now,
+			players: order.map((playerId, index) => ({
+				seat: index,
+				playerId,
+				bot: false,
+				placement: index + 1,
+				score: 0,
+			})),
+			log: { logVersion: 1, events: [{ seq: 0, t: 0, type: "started" }] },
+		};
+		expect((await server("POST", "/v1/matches", report)).status).toBe(201);
+	}
+
+	const tablesOf = (id: string, round: number) =>
+		t.sql`
+			SELECT r.id, array_agg(ra.player_id ORDER BY ra.seat) AS players
+			FROM rooms r
+			JOIN room_assignments ra ON ra.room_id = r.id
+			WHERE r.tournament_id = ${id} AND r.tournament_round = ${round}
+			GROUP BY r.id
+			ORDER BY r.id`;
+
+	test("table winners meet in a final round 3 minutes later; its winner is the champion", async () => {
+		const id = await tournament({ closes: -1, starts: 10, perRoom: 2 });
+		await register(id, 4);
+		await runTournamentJob(t.sql);
+
+		const firstRound = await tablesOf(id, 1);
+		expect(firstRound.length).toBe(2);
+		const winners = firstRound.map((table: { players: string[] }) => table.players[1]!);
+		for (const table of firstRound) {
+			await play(table.id, [table.players[1], table.players[0]]);
+		}
+
+		const moved = await runTournamentJob(t.sql);
+		expect(moved).toMatchObject({ nextRounds: 1, finished: 0 });
+
+		const [firstDone] =
+			await t.sql`SELECT ended_at FROM tournament_rounds WHERE tournament_id = ${id} AND round = 1`;
+		expect(firstDone.ended_at).not.toBeNull();
+
+		const [final] = await tablesOf(id, 2);
+		expect([...final.players].sort()).toEqual([...winners].sort());
+		const [{ minutes }] =
+			await t.sql`SELECT round(extract(epoch FROM starts_at - now()) / 60)::int AS minutes FROM tournament_rounds WHERE tournament_id = ${id} AND round = 2`;
+		expect(minutes).toBe(3);
+
+		// The champion's lobby shows the final table; nothing more happens until it is played.
+		expect((await runTournamentJob(t.sql)).nextRounds).toBe(0);
+		await play(final.id, [winners[1], winners[0]]);
+		expect(await runTournamentJob(t.sql)).toMatchObject({ finished: 1 });
+
+		const results =
+			await t.sql`SELECT player_id, place, wins, last_round FROM tournament_results WHERE tournament_id = ${id} ORDER BY place`;
+		expect(results.length).toBe(4);
+		expect(results[0]).toEqual({ player_id: winners[1], place: 1, wins: 2, last_round: 2 });
+		expect(results[1]).toEqual({ player_id: winners[0], place: 2, wins: 1, last_round: 2 });
+		expect(results.slice(2).map((row: { last_round: number }) => row.last_round)).toEqual([1, 1]);
+		expect(
+			(await t.sql`SELECT ended_at FROM tournaments WHERE id = ${id}`)[0].ended_at,
+		).not.toBeNull();
+	});
+
+	test("a withdrawn winner doesn't go on, and a lone winner is the champion straight away", async () => {
+		const id = await tournament({ closes: -1, starts: 10, perRoom: 2 });
+		await register(id, 4);
+		await runTournamentJob(t.sql);
+
+		const firstRound = await tablesOf(id, 1);
+		for (const table of firstRound) {
+			await play(table.id, [table.players[0], table.players[1]]);
+		}
+		const quitter = firstRound[1].players[0];
+		await t.sql`UPDATE tournament_players SET status = 'withdrawn', status_changed_at = now() WHERE tournament_id = ${id} AND player_id = ${quitter}`;
+
+		expect(await runTournamentJob(t.sql)).toMatchObject({ nextRounds: 0, finished: 1 });
+		const [champion] =
+			await t.sql`SELECT player_id FROM tournament_results WHERE tournament_id = ${id} AND place = 1`;
+		expect(champion.player_id).toBe(firstRound[0].players[0]);
 	});
 });
 
@@ -311,7 +414,7 @@ describe("tournament rooms", () => {
 		expect((await server("GET", "/v1/rooms/ZZZZZ/seats")).status).toBe(404);
 	});
 
-	test("start, then the match report closes the room and ends the tournament", async () => {
+	test("start, then the match report closes the room; the job then ends the tournament with its result", async () => {
 		expect((await server("POST", `/v1/rooms/${code}/start`)).status).toBe(200);
 		const now = new Date().toISOString();
 		const report = {
@@ -331,9 +434,19 @@ describe("tournament rooms", () => {
 		const [room] = await t.sql`SELECT started_at, close_reason FROM rooms WHERE code = ${code}`;
 		expect(room.close_reason).toBe("finished");
 		expect(room.started_at).not.toBeNull();
+		expect((await t.sql`SELECT ended_at FROM tournaments WHERE id = ${id}`)[0].ended_at).toBeNull();
+
+		// One table, so its winner is the champion: no further round.
+		await runTournamentJob(t.sql);
 		expect(
 			(await t.sql`SELECT ended_at FROM tournaments WHERE id = ${id}`)[0].ended_at,
 		).not.toBeNull();
+		expect(
+			await t.sql`SELECT player_id, place, wins, last_round FROM tournament_results WHERE tournament_id = ${id} ORDER BY place`,
+		).toEqual([
+			{ player_id: ann.player.id, place: 1, wins: 1, last_round: 1 },
+			{ player_id: ben.player.id, place: 2, wins: 0, last_round: 1 },
+		]);
 		expect((await call(t.app, "GET", `/v1/rooms/${code}`, { token: ann.secret })).status).toBe(200); // to see how it ended
 		expect(
 			(await call(t.app, "GET", "/v1/players/me/rooms", { token: ann.secret })).json.data.rooms,
