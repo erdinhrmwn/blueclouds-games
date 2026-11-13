@@ -221,6 +221,7 @@ Called by a room actor when a game finishes. Bearer `PLATFORM_SERVER_KEY`.
   "rulesVersion": 1,
   "startedAt": "2026-11-11T08:00:00Z",
   "endedAt": "2026-11-11T08:06:12Z",
+  "endReason": "finished",
   "players": [
     { "seat": 0, "playerId": "uuidv7", "bot": false, "placement": 1, "score": 2 },
     { "seat": 3, "playerId": null, "bot": true, "botName": "Bot Rain", "placement": 2, "score": 0 }
@@ -230,6 +231,8 @@ Called by a room actor when a game finishes. Bearer `PLATFORM_SERVER_KEY`.
 ```
 
 `score` (0–999) is a per-seat number each game defines (Bust 31 sends lives left). Rankings use `placement`; `score` is only shown.
+
+`endReason` is `finished` (the default when left out) or `terminated`: an admin terminated the table mid-match from the backoffice's Live tables. A terminated match is placed by the standings when it stopped (ties split by seat, so there is still one first place), its log ends with a `terminated` event, and it counts no win (`matches.end_reason`). The hash of a finished report leaves `endReason` out, as reports did before it existed.
 
 **Idempotent by `matchId`:**
 

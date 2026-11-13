@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import type { SQL } from 'bun';
 import { resetTestDatabase } from '../../../../platform/src/test-helpers';
-import { createAdmin, login, logout, sessionAdmin } from './auth';
+import { changeOwnPassword, createAdmin, login, logout, sessionAdmin } from './auth';
 
 // Runs against the platform's test database (DATABASE_TEST_NAME), migrated fresh.
 let sql: SQL;
@@ -65,5 +65,70 @@ describe('admin login', () => {
 		expect(createAdmin(sql, 'shorty', 'short')).rejects.toThrow('at least 12');
 		expect(createAdmin(sql, 'Bad Name', 'long enough password')).rejects.toThrow('Username');
 		expect(createAdmin(sql, 'root', 'long enough password')).rejects.toThrow('already exists');
+	});
+});
+
+describe('changing your own password', () => {
+	const signIn = async (username: string, password: string) => {
+		const res = await login(sql, username, password, null);
+		if (!res.ok) {
+			throw new Error(`expected ${username} to sign in`);
+		}
+
+		return res;
+	};
+
+	test('needs the right current password and keeps only the session that changed it', async () => {
+		await createAdmin(sql, 'changer', 'first long password');
+		const here = await signIn('changer', 'first long password');
+		const elsewhere = await signIn('changer', 'first long password');
+
+		const wrong = { current: 'not my password', next: 'second long password' };
+		expect(await changeOwnPassword(sql, here.admin, here.token, wrong, null)).toEqual({
+			ok: false,
+			reason: 'wrong_password'
+		});
+		expect(await failures('changer')).toBe(1);
+
+		const right = { current: 'first long password', next: 'second long password' };
+		expect(await changeOwnPassword(sql, here.admin, here.token, right, null)).toEqual({ ok: true });
+
+		expect(await sessionAdmin(sql, here.token)).not.toBeNull();
+		expect(await sessionAdmin(sql, elsewhere.token)).toBeNull();
+		expect((await login(sql, 'changer', 'first long password', null)).ok).toBe(false);
+		expect((await login(sql, 'changer', 'second long password', null)).ok).toBe(true);
+
+		const [row] = await sql`
+			SELECT count(*)::int AS n
+			FROM admin_audit_events
+			WHERE action = 'admin.password_change'
+				AND target_admin_id = ${here.admin.id}`;
+		expect(row.n).toBe(1);
+	});
+
+	test('refuses a short, an over-long or an unchanged new password', async () => {
+		await createAdmin(sql, 'picky', 'picky long password');
+		const session = await signIn('picky', 'picky long password');
+		const change = (next: string) =>
+			changeOwnPassword(
+				sql,
+				session.admin,
+				session.token,
+				{ current: 'picky long password', next },
+				null
+			);
+
+		expect(await change('short')).toEqual({ ok: false, reason: 'too_short' });
+		expect(await change('x'.repeat(257))).toEqual({ ok: false, reason: 'too_long' });
+		expect(await change('picky long password')).toEqual({ ok: false, reason: 'unchanged' });
+	});
+
+	test('root can change its own password', async () => {
+		const session = await signIn('root', 'correct horse battery');
+		const input = { current: 'correct horse battery', next: 'a brand new root password' };
+
+		expect(await changeOwnPassword(sql, session.admin, session.token, input, null)).toEqual({
+			ok: true
+		});
 	});
 });

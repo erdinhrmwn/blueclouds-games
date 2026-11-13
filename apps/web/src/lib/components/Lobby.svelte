@@ -45,6 +45,26 @@
 
 	const inSeat = (seat: number) => view.players.find((p) => p.seat === seat) ?? null;
 
+	/** What the host can do to a seated player: remove a bot, or kick someone else (who can't come back). */
+	const hostAction = (player: BaseView['players'][number] | null) => {
+		if (!host || !player || player.id === room.playerId) {
+			return undefined;
+		}
+
+		if (player.bot) {
+			return { label: 'remove', run: () => room.removeBot(player.id) };
+		}
+
+		const kick = () => {
+			const sure = confirm(`Kick ${player.name}? They can't come back to this table.`);
+			if (sure) {
+				void room.kick(player.seat);
+			}
+		};
+
+		return { label: 'kick', run: kick };
+	};
+
 	// Invites: the table's link, the same one until the host resets it.
 	let copied = $state(false);
 	/** Shown to copy by hand when the browser blocks the clipboard. */
@@ -105,7 +125,7 @@
 				number={k}
 				isHost={!tournament && p?.id === view.hostId}
 				isMe={p?.id === room.playerId}
-				action={host && p?.bot ? { label: 'remove', run: () => room.removeBot(p.id) } : undefined}
+				action={hostAction(p)}
 				onSit={p || tournament ? undefined : () => room.takeSeat(s)}
 				onAddBot={!p && host ? () => room.addBot(s) : undefined}
 			/>

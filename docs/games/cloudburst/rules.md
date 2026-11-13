@@ -100,8 +100,10 @@ Choices checked in the same simulation:
 | `pass` | player | `by` |
 | `reshuffle` | — | `deck` (new order, top first) |
 | `away` / `back` | player | — |
+| `kicked` | player | `by`, `reason` (as in Bust 31) |
 | `round_end` | — | `out` (seat that went out), `left` (seat → cards left), `points` (seat → total after this round) |
 | `finished` | — | `winner` (seat), `points` (seat → final total) |
+| `terminated` | — | `by`, `reason` (as in Bust 31) |
 
 `by` is `player`, `timeout`, `away` or `bot`, as in Bust 31. Card ids say what the card is (`sun-5-1` = Sun 5, copy 1; `rain-calm-0`; `rainbow-2`).
 

@@ -18,7 +18,13 @@ export function moveBy(mover: { bot: boolean; away?: boolean }, auto: boolean): 
 	return mover.away ? "away" : "timeout";
 }
 
-/** A finished match, as the platform's POST /v1/matches takes it. `score` is game-defined. */
+/** How a match ended: played to the end, or stopped by an admin terminating the table. */
+export type MatchEnd = "finished" | "terminated";
+
+/**
+ * A finished match, as the platform's POST /v1/matches takes it. `score` is game-defined. A terminated match is
+ * placed by the standings when it stopped, and counts no win.
+ */
 export type MatchReport = {
 	matchId: string;
 	game: string;
@@ -26,6 +32,7 @@ export type MatchReport = {
 	rulesVersion: number;
 	startedAt: string;
 	endedAt: string;
+	endReason: MatchEnd;
 	players: {
 		seat: number;
 		playerId: string | null;
@@ -36,6 +43,14 @@ export type MatchReport = {
 	}[];
 	log: { logVersion: number; events: LogEvent[] };
 };
+
+/**
+ * Placements from a best-first order of players: 1, 2, 3, … with no shared place, so a terminated match still has
+ * exactly one first place. Players the order leaves out are not expected.
+ */
+export function placementsInOrder(bestFirst: { id: string }[]): Map<string, number> {
+	return new Map(bestFirst.map((player, index) => [player.id, index + 1]));
+}
 
 /** Starts the record of a new match. */
 export const newMatch = (): MatchState => ({

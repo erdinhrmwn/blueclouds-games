@@ -15,6 +15,15 @@
 	const steps = $derived(data.log ? replay(match.game, data.log, match.seats) : []);
 	const flagged = $derived(steps.filter((s) => s.mismatch).length);
 
+	const terminated = $derived(match.endReason === 'terminated');
+	/** Why an admin stopped the match, from its last log event. */
+	const terminatedReason = $derived.by(() => {
+		const event = data.log?.events.findLast((e) => e.type === 'terminated');
+		const reason = event?.data?.reason;
+
+		return typeof reason === 'string' ? reason : null;
+	});
+
 	const nameOf = (seat: number) =>
 		match.seats.find((s) => s.seat === seat)?.name ?? `Seat ${seat + 1}`;
 </script>
@@ -65,6 +74,15 @@
 			<dd class="font-mono text-xs leading-5 break-all">{match.id}</dd>
 			<dt>Played</dt>
 			<dd>{utc(match.startedAt)}, {minutes} min</dd>
+			<dt>Ended</dt>
+			<dd>
+				{#if terminated}
+					<span class="tag-bad">Terminated by an admin</span>
+					{#if terminatedReason}<span class="mt-1 block text-sm">{terminatedReason}</span>{/if}
+				{:else}
+					Played to the end
+				{/if}
+			</dd>
 			<dt>Rules version</dt>
 			<dd>{match.rulesVersion}</dd>
 		</dl>
@@ -73,6 +91,9 @@
 	<section class="panel min-w-0 self-start" aria-labelledby="result">
 		<div class="panel-head">
 			<h2 id="result" class="font-semibold">Result</h2>
+			{#if terminated}
+				<p class="mt-0.5 text-sm text-muted">Standings when it was terminated. No win counted.</p>
+			{/if}
 		</div>
 		<div class="overflow-x-auto">
 			<table class="data-table min-w-[24rem]">
@@ -87,8 +108,10 @@
 				<tbody>
 					{#each match.seats as seat (seat.seat)}
 						<tr>
-							<td class="font-semibold tabular-nums {seat.placement === 1 ? 'text-felt' : ''}"
-								>{seat.placement}</td
+							<td
+								class="font-semibold tabular-nums {seat.placement === 1 && !terminated
+									? 'text-felt'
+									: ''}">{seat.placement}</td
 							>
 							<td>
 								{#if seat.playerId}

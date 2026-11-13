@@ -1,5 +1,6 @@
 // Actor-side helpers every game room shares: who is connected, the turn clock, leaving,
 // the room list and the match result outbox. Each game keeps its own actor and actions.
+import { createHash, timingSafeEqual } from "node:crypto";
 import { UserError } from "rivetkit";
 import {
 	fetchRoomSeats,
@@ -9,9 +10,24 @@ import {
 	reportMatch,
 	verifyPlayToken,
 } from "../../platform";
-import { type LogEntry, type LogEvent, type MatchReport, type MatchState, stamp } from "./match";
-import { ConnParams, SeatInput, tournamentListKey } from "./schema";
-import { markAway, removePlayer, RuleError, SEATS, showVips, type Table } from "./table";
+import {
+	type LogEntry,
+	type LogEvent,
+	type MatchEnd,
+	type MatchReport,
+	type MatchState,
+	stamp,
+} from "./match";
+import { AdminParams, PlayerParams, SeatInput, tournamentListKey } from "./schema";
+import {
+	kickPlayer,
+	markAway,
+	removePlayer,
+	RuleError,
+	SEATS,
+	showVips,
+	type Table,
+} from "./table";
 
 /** How long a closed tab has to come back (a refresh) before its player leaves the table. */
 export const GONE_AFTER_MS = 15_000;
@@ -42,9 +58,13 @@ export type TournamentRoom = {
 	closed: boolean;
 };
 
+/** An admin terminated the table: nobody plays or joins here again. */
+export type Termination = { at: number; reason: string };
+
 /**
  * What a room saves: the game, its turn timer, the match being played (null in the lobby), its
- * tournament (null = an open room, undefined = not asked yet), and whether it is in the room list (public).
+ * tournament (null = an open room, undefined = not asked yet), whether it is in the room list (public),
+ * the players kicked off it (they can't come back), and whether an admin terminated it.
  */
 export type Saved<G extends Table, M extends MatchState = MatchState> = {
 	game: G;
@@ -52,6 +72,8 @@ export type Saved<G extends Table, M extends MatchState = MatchState> = {
 	match: M | null;
 	tournament?: TournamentRoom | null;
 	listed?: boolean;
+	kicked?: string[];
+	terminated?: Termination | null;
 };
 
 /**
@@ -109,6 +131,8 @@ export async function loadRoom(c: Ctx): Promise<void> {
 
 	c.vars.timer ??= null;
 	c.vars.match ??= null;
+	c.vars.kicked ??= [];
+	c.vars.terminated ??= null;
 
 	// Matches started before the move log have no seq yet.
 	if (c.vars.match) c.vars.match.seq ??= 0;
@@ -119,8 +143,10 @@ export async function loadRoom(c: Ctx): Promise<void> {
 /**
  * After every change: arm the turn clock (`scheduleTurn`), log what changed, save room + log in one
  * transaction (so the log never skips or repeats a move), then push the view to everyone and each
- * hand to its owner. When the game just finished, its result and full log go to the outbox.
- * `auto` marks a move the server made (bot, timeout or away player) for the move log.
+ * hand to its owner. When the game just finished, or an admin terminated the table mid-match, its
+ * result and full log go to the outbox. `auto` marks a move the server made (bot, timeout or away
+ * player) for the move log; `extra` is logged before what the game's own diff finds (a kick, a
+ * termination).
  */
 export async function commitRoom<G extends Table, M extends MatchState>(
 	c: Ctx,
@@ -136,16 +162,26 @@ export async function commitRoom<G extends Table, M extends MatchState>(
 			roomCode: string,
 			endedAt: string,
 			log: LogEvent[],
+			end: MatchEnd,
 		) => MatchReport;
 		view: () => unknown;
 		handOf: (playerId: string) => unknown;
 	},
 	auto = false,
+	extra: LogEntry[] = [],
 ): Promise<void> {
-	await game.scheduleTurn();
-
 	const vars = c.vars as RoomVars<G, M>;
-	const entries = vars.match ? game.logEvents(vars.logged, vars.game, auto) : [];
+
+	// A terminated table runs no clock: nothing moves there again.
+	if (vars.terminated) {
+		vars.timer = null;
+	} else {
+		await game.scheduleTurn();
+	}
+
+	const entries = vars.match
+		? [...extra, ...withoutKickedAway(extra, game.logEvents(vars.logged, vars.game, auto))]
+		: [];
 	vars.logged = vars.game;
 
 	let match = vars.match;
@@ -155,7 +191,14 @@ export async function commitRoom<G extends Table, M extends MatchState>(
 		({ match, events } = stamp(noted, entries, Date.now()));
 	}
 
-	const finished = !!match && vars.game.phase === "finished";
+	let end: MatchEnd | null = null;
+	if (match && vars.terminated) {
+		end = "terminated";
+	} else if (match && vars.game.phase === "finished") {
+		end = "finished";
+	}
+
+	const finished = end !== null;
 	vars.match = finished ? null : match;
 
 	const saved: Saved<G, M> = {
@@ -164,6 +207,8 @@ export async function commitRoom<G extends Table, M extends MatchState>(
 		match: vars.match,
 		tournament: vars.tournament,
 		listed: vars.listed,
+		kicked: vars.kicked,
+		terminated: vars.terminated,
 	};
 	await c.db.transaction(
 		async (tx: Ctx) => {
@@ -184,7 +229,7 @@ export async function commitRoom<G extends Table, M extends MatchState>(
 				const log = rows.map((row: { body: string }) => JSON.parse(row.body) as LogEvent);
 				const roomCode = c.key[0] as string;
 				const endedAt = new Date().toISOString();
-				const report = game.buildReport(match!, vars.game, roomCode, endedAt, log);
+				const report = game.buildReport(match!, vars.game, roomCode, endedAt, log, end!);
 
 				await tx.execute(
 					"INSERT OR IGNORE INTO match_reports (match_id, body) VALUES (?, ?)",
@@ -213,6 +258,13 @@ export async function commitRoom<G extends Table, M extends MatchState>(
 	await reportToDirectory(c, game.slug);
 
 	if (finished) await c.schedule.after(0, "sendReports");
+}
+
+/** A kicked player's chair turns "away" in the game's diff; the "kicked" entry already says so. */
+function withoutKickedAway(extra: LogEntry[], entries: LogEntry[]): LogEntry[] {
+	const kickedSeats = extra.filter((entry) => entry.type === "kicked").map((entry) => entry.seat);
+
+	return entries.filter((entry) => entry.type !== "away" || !kickedSeats.includes(entry.seat));
 }
 
 // ponytail: helpers take `any` because rivetkit's context generics are long;
@@ -245,23 +297,81 @@ export function botName(players: { name: string }[]): string {
 	return free ?? `Bot ${players.length + 1}`;
 }
 
-/** onBeforeConnect: only connections with a valid play token get in. */
-export async function checkConnect(params: unknown): Promise<void> {
-	const parsed = ConnParams.safeParse(params);
-	const identity = parsed.success ? await verifyPlayToken(parsed.data.playToken) : null;
+/** Every refusal of a closed table carries this code, so the browser stops trying to reconnect. */
+export const TABLE_CLOSED = "table_closed";
 
-	if (!identity) {
-		throw new UserError("Your session expired. Reload the page.", { code: "unauthenticated" });
+const TERMINATED_MESSAGE = "An admin closed this table.";
+const KICKED_MESSAGE = "You were removed from this table.";
+
+const sha256 = (text: string) => createHash("sha256").update(text).digest();
+
+/**
+ * Whether `key` is the engine's admin token, which only our servers hold (the backoffice uses it for admin
+ * actions). Hashed first, so the comparison takes the same time whatever the length. No token set: never.
+ */
+function isAdminKey(key: string): boolean {
+	const expected = process.env.RIVET_TOKEN;
+	if (!expected) {
+		return false;
+	}
+
+	return timingSafeEqual(sha256(key), sha256(expected));
+}
+
+/** The connection is the backoffice, with the admin token. */
+function isAdminConn(conn: { params: unknown } | undefined): boolean {
+	const parsed = AdminParams.safeParse(conn?.params);
+
+	return parsed.success && isAdminKey(parsed.data.adminKey);
+}
+
+/** Throws when an admin terminated the table, or kicked this player off it. */
+function refuseIfClosed(c: Ctx, playerId: string): void {
+	if (c.vars.terminated) {
+		throw new UserError(TERMINATED_MESSAGE, { code: TABLE_CLOSED });
+	}
+	if ((c.vars.kicked as string[]).includes(playerId)) {
+		throw new UserError(KICKED_MESSAGE, { code: TABLE_CLOSED });
 	}
 }
 
-/** onConnect: remembers who the connection is. Checked again because onBeforeConnect can't hand its result over. */
+/**
+ * onBeforeConnect: only connections with a valid play token get in, or the backoffice with the admin token.
+ * A terminated table, or one the player was kicked from, refuses them.
+ */
+export async function checkConnect(c: Ctx, params: unknown): Promise<void> {
+	const admin = AdminParams.safeParse(params);
+	if (admin.success) {
+		if (isAdminKey(admin.data.adminKey)) {
+			return;
+		}
+
+		throw new UserError("Not allowed.", { code: "forbidden" });
+	}
+
+	const player = PlayerParams.safeParse(params);
+	const identity = player.success ? await verifyPlayToken(player.data.playToken) : null;
+	if (!identity) {
+		throw new UserError("Your session expired. Reload the page.", { code: "unauthenticated" });
+	}
+
+	refuseIfClosed(c, identity.id);
+}
+
+/**
+ * onConnect: remembers who the connection is. Checked again because onBeforeConnect can't hand its result over.
+ * Returns true for a player; the backoffice's connection is not one (it sits nowhere and gets no updates).
+ */
 export async function identify(
 	c: Ctx,
 	conn: { id: string; params: unknown; disconnect: (reason: string) => void },
 ): Promise<boolean> {
-	const { playToken } = ConnParams.parse(conn.params);
-	const who = await verifyPlayToken(playToken);
+	if (isAdminConn(conn)) {
+		return false;
+	}
+
+	const player = PlayerParams.safeParse(conn.params);
+	const who = player.success ? await verifyPlayToken(player.data.playToken) : null;
 	if (!who) {
 		conn.disconnect("unauthenticated");
 		return false;
@@ -271,14 +381,22 @@ export async function identify(
 	return true;
 }
 
-/** The identity of the connection calling an action. */
+/** The identity of the connection calling an action. Refused at a closed table. */
 export function caller(c: Ctx): Identity {
 	const who = c.vars.who[c.conn.id] as Identity | undefined;
 	if (!who) {
 		throw new UserError("Your session expired. Reload the page.", { code: "unauthenticated" });
 	}
 
+	refuseIfClosed(c, who.id);
 	return who;
+}
+
+/** For the backoffice's actions: the connection must carry the admin token. */
+export function requireAdmin(c: Ctx): void {
+	if (!isAdminConn(c.conn)) {
+		throw new UserError("Not allowed.", { code: "forbidden" });
+	}
 }
 
 /** The player a connection sits as, if they joined the table. */
@@ -296,6 +414,7 @@ export function requirePlayer(c: Ctx): string {
 		throw new UserError("Join the table first.", { code: "not_joined" });
 	}
 
+	refuseIfClosed(c, id);
 	return id;
 }
 
@@ -310,6 +429,13 @@ export function requireHost(c: Ctx): string {
 
 export function requireScheduler(c: Ctx): void {
 	if (!c.scheduledFire) throw new UserError("Not allowed.", { code: "forbidden" });
+}
+
+/** For scheduled game steps (turns, drops, starts, VIP tags): false once an admin terminated the table. */
+export function scheduledWhileOpen(c: Ctx): boolean {
+	requireScheduler(c);
+
+	return !c.vars.terminated;
 }
 
 /**
@@ -342,6 +468,156 @@ export async function dropIfGone(
 	}
 
 	return true;
+}
+
+/** Who was kicked, from which phase, and the match it happened in (null when none was running). */
+export type KickResult = {
+	playerId: string;
+	name: string;
+	seat: number;
+	phase: Table["phase"];
+	matchId: string | null;
+};
+
+/**
+ * Kicks the human in `seat` off the table and keeps them off it (see kickPlayer for what happens to the chair).
+ * The host may only kick before the game starts, and not themselves. The caller commits with `entries`, which
+ * log the kick when a match is running, then calls `closeKicked`.
+ */
+export function kickFromTable(
+	c: Ctx,
+	seat: number,
+	by: { kind: "admin"; reason: string } | { kind: "host"; hostId: string },
+): { result: KickResult; entries: LogEntry[] } {
+	if (c.vars.terminated) {
+		throw new UserError("This table is already closed.", { code: TABLE_CLOSED });
+	}
+
+	const game = c.vars.game as Table;
+	const target = game.players.find((p) => p.seat === seat);
+	if (!target) {
+		throw new UserError("Nobody sits in that seat.", { code: "rule" });
+	}
+	if (target.bot) {
+		throw new UserError("That is a bot. Remove it instead.", { code: "rule" });
+	}
+
+	if (by.kind === "host") {
+		if (game.phase !== "lobby") {
+			throw new UserError("Players can only be removed before the game starts.", { code: "rule" });
+		}
+		if (target.id === by.hostId) {
+			throw new UserError("Use Leave table to leave.", { code: "rule" });
+		}
+	}
+
+	c.vars.kicked = [...(c.vars.kicked as string[]), target.id];
+	c.vars.game = kickPlayer(game, target.id);
+
+	const data: Record<string, unknown> = { by: by.kind };
+	if (by.kind === "admin") {
+		data.reason = by.reason;
+	}
+
+	const result: KickResult = {
+		playerId: target.id,
+		name: target.name,
+		seat: target.seat,
+		phase: game.phase,
+		matchId: (c.vars.match as MatchState | null)?.id ?? null,
+	};
+
+	return { result, entries: [{ type: "kicked", seat: target.seat, data }] };
+}
+
+/**
+ * After a kick is committed: their turn, if it is running, is played at bot speed, and their connections close
+ * with the reason. `turn` is the running turn, as for dropIfGone.
+ */
+export async function closeKicked(
+	c: Ctx,
+	playerId: string,
+	turn: { playerId: string | null; key: number },
+): Promise<void> {
+	const game = c.vars.game as Table;
+	if (game.phase === "playing" && turn.playerId === playerId) {
+		await c.schedule.after(BOT_THINK_MS[0], "autoPlay", turn.key);
+	}
+
+	closeConnections(c, (conn) => c.vars.who[conn.id]?.id === playerId, KICKED_MESSAGE);
+}
+
+/** What the table was doing when an admin terminated it. */
+export type TerminateResult = {
+	phase: Table["phase"];
+	matchId: string | null;
+	round: number;
+	players: number;
+};
+
+/**
+ * An admin terminates the table: nothing moves there again and nobody can join. A running match ends as
+ * terminated, with `entries` as its last log event; the caller commits with them (which queues its report),
+ * then calls `closeTerminated`.
+ */
+export function terminateTable(
+	c: Ctx,
+	reason: string,
+): { result: TerminateResult; entries: LogEntry[] } {
+	if (c.vars.terminated) {
+		throw new UserError("This table is already closed.", { code: TABLE_CLOSED });
+	}
+
+	const game = c.vars.game as Table & { round?: number };
+	const termination: Termination = { at: Date.now(), reason };
+	c.vars.terminated = termination;
+
+	const result: TerminateResult = {
+		phase: game.phase,
+		matchId: (c.vars.match as MatchState | null)?.id ?? null,
+		round: game.round ?? 0,
+		players: game.players.length,
+	};
+
+	return { result, entries: [{ type: "terminated", data: { by: "admin", reason } }] };
+}
+
+/**
+ * After a termination is committed: every player's connection closes with the reason, and a tournament table
+ * that had no match running is closed on the platform (a running match's report closes it instead).
+ */
+export async function closeTerminated(c: Ctx, result: TerminateResult): Promise<void> {
+	closeConnections(c, (conn) => !!c.vars.who[conn.id], TERMINATED_MESSAGE);
+
+	const tournament = c.vars.tournament as TournamentRoom | null | undefined;
+	if (!tournament || tournament.closed || result.matchId) {
+		return;
+	}
+
+	c.vars.tournament = { ...tournament, closed: true };
+
+	const code = c.key[0] as string;
+	const marked = await markRoom(code, "close", "terminated");
+	if (!marked.ok) {
+		c.log.warn({ msg: "room termination not recorded", code, detail: marked.detail });
+	}
+}
+
+/** Tells each chosen connection why, then closes it. The browser stops reconnecting on TABLE_CLOSED. */
+function closeConnections(
+	c: Ctx,
+	chosen: (conn: { id: string }) => boolean,
+	message: string,
+): void {
+	for (const conn of c.conns.values()) {
+		if (!chosen(conn)) {
+			continue;
+		}
+
+		conn.send("closed", { code: TABLE_CLOSED, message });
+		// "<group>.<code>", the shape the Rivet client reads a close reason in.
+		conn.disconnect(`user.${TABLE_CLOSED}`);
+	}
 }
 
 /**
@@ -410,10 +686,13 @@ export async function reportToDirectory(c: Ctx, slug: string, leaving?: string):
 	const code = c.key[0] as string;
 	const directory = c.client().roomList.getOrCreate([listKey]);
 	const game = c.vars.game as Table & { round?: number };
-	const stayingConns = [...c.conns.values()].filter((conn: { id: string }) => conn.id !== leaving);
+	// Only players count: the backoffice's connection is not someone at the table.
+	const stayingConns = [...c.conns.values()].filter(
+		(conn: { id: string }) => conn.id !== leaving && c.vars.who[conn.id],
+	);
 
 	try {
-		if (stayingConns.length === 0) {
+		if (stayingConns.length === 0 || c.vars.terminated) {
 			await directory.remove(code);
 			return;
 		}
@@ -598,6 +877,9 @@ export async function tournamentTick(
 	const now = Date.now();
 
 	if (!tournament || tournament.closed || tournament.cancelled) return;
+	if (c.vars.terminated) {
+		return;
+	}
 	if (table.phase !== "lobby" || now < tournament.startsAt) return;
 
 	const present = table.players.filter((player) => !player.bot).length;

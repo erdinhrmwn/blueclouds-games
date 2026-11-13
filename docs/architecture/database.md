@@ -511,9 +511,9 @@ CREATE INDEX admin_audit_events_login_failed_idx ON admin_audit_events ((detail-
 
 ## Migration files
 
-The schema is built by eight files, applied in order by the runner (`apps/platform/src/db/migrate.ts`), each in one
-transaction. They only create: every table appears once, in its final shape, after the tables it references.
-No file alters, renames or drops anything. Each ends with its roll-back.
+The schema is built by the files below, applied in order by the runner (`apps/platform/src/db/migrate.ts`), each in
+one transaction. `001`–`008` only create: every table appears once, in its final shape, after the tables it
+references. Later files change that schema in place (widen a CHECK, add a column). Each ends with its roll-back.
 
 | File | What |
 |---|---|
@@ -525,6 +525,7 @@ No file alters, renames or drops anything. Each ends with its roll-back.
 | `006_rooms.sql` | `rooms`, `room_assignments`, `room_invites`, `room_members`. |
 | `007_matches.sql` | `matches`, `match_players`, `match_logs` (append-only). |
 | `008_admin_audit_events.sql` | `admin_audit_events` (append-only). |
+| `009_admin_table_controls.sql` | `matches.end_reason` (`finished`/`terminated`), `rooms.close_reason` `terminated`, audit actions `room.kick`, `room.terminate`, `admin.password_change`. |
 
 The files were squashed on 2026-11-12, before any production database existed (Erdin): a database made from the old
 files (`001_init.sql` … `016_admin_management.sql`) is dropped and rebuilt from these. A later change gets its own

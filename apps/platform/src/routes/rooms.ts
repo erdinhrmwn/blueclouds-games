@@ -25,7 +25,7 @@ const Redeem = z.object({
 		.trim()
 		.regex(/^[0-9a-f]{32}$/, "That invite link doesn't look right."),
 });
-const CloseBody = z.object({ reason: z.literal("not_enough_players") });
+const CloseBody = z.object({ reason: z.enum(["not_enough_players", "terminated"]) });
 
 export function roomRoutes(sql: SQL, serverKey: string) {
 	const app = new Hono<AppEnv>();

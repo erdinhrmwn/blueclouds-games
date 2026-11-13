@@ -3,6 +3,13 @@ import { roomClient, RoomRefused } from '#lib/rivet/client.ts';
 
 type Status = 'connecting' | 'connected' | 'reconnecting' | 'error' | 'refused';
 type RoomClient = Awaited<ReturnType<typeof roomClient>>['client'];
+
+/** The code a room refuses with once an admin terminated the table or kicked this player (TABLE_CLOSED in the server). */
+const TABLE_CLOSED = 'table_closed';
+
+/** A refusal for good: the table is closed to this player, so reconnecting is pointless. */
+const isTableClosed = (err: unknown) =>
+	typeof err === 'object' && err !== null && 'code' in err && err.code === TABLE_CLOSED;
 /** Every game's room actor has these actions; games add their own on top (see `call`). */
 type Conn = {
 	join(): Promise<{ playerId: string; view: never; hand: never }>;
@@ -10,6 +17,7 @@ type Conn = {
 	addBot(seat: number): Promise<void>;
 	takeSeat(seat: number): Promise<void>;
 	removeBot(id: string): Promise<void>;
+	kick(seat: number): Promise<void>;
 	reset(): Promise<void>;
 	leave(): Promise<void>;
 	on(event: string, fn: (data: never) => void): () => void;
@@ -109,6 +117,8 @@ export class RoomConnection<View extends BaseView, Hand> {
 			conn.on('hand', (hand: Hand) => {
 				this.hand = hand;
 			}),
+			// Sent just before the room closes this connection for good: kicked, or the table was terminated.
+			conn.on('closed', (closed: { message: string }) => this.#closed(closed.message)),
 			conn.onOpen(() => {
 				this.status = 'connected';
 				void this.#join();
@@ -117,6 +127,11 @@ export class RoomConnection<View extends BaseView, Hand> {
 				this.status = 'reconnecting';
 			}),
 			conn.onError((err) => {
+				if (isTableClosed(err)) {
+					this.#closed(message(err));
+					return;
+				}
+
 				this.status = 'error';
 				this.error = this.#tokenError ?? message(err);
 			})
@@ -124,6 +139,13 @@ export class RoomConnection<View extends BaseView, Hand> {
 
 		// The page closed while we were fetching the token.
 		if (this.#disposed) await this.dispose();
+	}
+
+	/** The room won't take this player again: show why and stop reconnecting. */
+	#closed(reason: string) {
+		this.status = 'refused';
+		this.error = reason;
+		void this.dispose();
 	}
 
 	get me(): View['players'][number] | null {
@@ -163,6 +185,7 @@ export class RoomConnection<View extends BaseView, Hand> {
 	addBot = (seat: number) => this.#run(() => this.#c.addBot(seat));
 	takeSeat = (seat: number) => this.#run(() => this.#c.takeSeat(seat));
 	removeBot = (id: string) => this.#run(() => this.#c.removeBot(id));
+	kick = (seat: number) => this.#run(() => this.#c.kick(seat));
 	reset = () => this.#run(() => this.#c.reset());
 	leave = () => this.#run(() => this.#c.leave());
 
