@@ -1,12 +1,16 @@
 // What every game sends the platform when a match ends: placements, a game-defined score
 // per seat, and the full move log (docs/architecture/match-log.md).
+import type { MatchSeeds } from "./fairness";
 
 /** One step of the move log, before it gets its place (`seq`) and time (`t`, ms since the start). */
 export type LogEntry = { type: string; seat?: number; data?: Record<string, unknown> };
 export type LogEvent = LogEntry & { seq: number; t: number };
 
-/** The match in progress: its id, when it started, and how many log events it has so far. */
-export type MatchState = { id: string; startedAt: string; seq: number };
+/**
+ * The match in progress: its id, when it started, and how many log events it has so far. `seeds` drive its
+ * shuffles (fairness.ts); matches started before provably fair shuffles have none.
+ */
+export type MatchState = { id: string; startedAt: string; seq: number; seeds?: MatchSeeds };
 
 /** Who made a logged move: the player, a bot, or the server for an away or timed-out human. */
 export type MoveBy = "player" | "bot" | "away" | "timeout";
@@ -42,6 +46,8 @@ export type MatchReport = {
 		score: number;
 	}[];
 	log: { logVersion: number; events: LogEvent[] };
+	/** The revealed seeds (fairness.ts). Missing for matches started before provably fair shuffles. */
+	fairness?: { serverSeed: string; serverSeedHash: string; clientSeed: string };
 };
 
 /**
@@ -51,13 +57,6 @@ export type MatchReport = {
 export function placementsInOrder(bestFirst: { id: string }[]): Map<string, number> {
 	return new Map(bestFirst.map((player, index) => [player.id, index + 1]));
 }
-
-/** Starts the record of a new match. */
-export const newMatch = (): MatchState => ({
-	id: uuidv7(),
-	startedAt: new Date().toISOString(),
-	seq: 0,
-});
 
 /** Gives new log entries their place and time. The clock may step back, so `t` never goes below 0. */
 export function stamp<M extends MatchState>(

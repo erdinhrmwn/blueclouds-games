@@ -1,4 +1,12 @@
-import type { LogEvent, MatchLog, ReplaySeat, SeatState, Step, TableState } from '../replay.ts';
+import {
+	fairnessText,
+	type LogEvent,
+	type MatchLog,
+	type ReplaySeat,
+	type SeatState,
+	type Step,
+	type TableState
+} from '../replay.ts';
 
 // Keep in step with apps/server/src/games/bust-31/rules.ts (rules version 1).
 const LIMIT = 31;
@@ -168,7 +176,7 @@ export function replayBust31(log: MatchLog, seats: ReplaySeat[]): Step[] {
 				text = `An admin terminated the table. Reason: ${data.reason}`;
 				break;
 			default:
-				text = `${event.type} ${JSON.stringify(event.data ?? {})}`;
+				text = fairnessText(event) ?? `${event.type} ${JSON.stringify(event.data ?? {})}`;
 		}
 
 		return {

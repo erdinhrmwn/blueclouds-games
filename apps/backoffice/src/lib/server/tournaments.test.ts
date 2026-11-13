@@ -6,6 +6,7 @@ import {
 	assignPlayer,
 	cancelTournament,
 	createTournament,
+	disqualifyPlayer,
 	distributeNow,
 	tournamentTables,
 	parseIds,
@@ -127,6 +128,52 @@ describe('tournaments', () => {
 			'room.unassign',
 			'tournament.unregister'
 		]);
+	});
+
+	test('disqualify frees a waiting seat, keeps a running one on record, and is audited', async () => {
+		const id = await newCup(2);
+		const ids = await players(4);
+		await registerPlayers(sql, admin, id, ids, null);
+		await distributeNow(sql, admin, id, null);
+		const before = (await tournamentDetail(sql, id))!;
+		const [waitingRoom, runningRoom] = before.rooms;
+		await sql`UPDATE rooms SET started_at = now() WHERE code = ${runningRoom!.code}`;
+		const at = (code: string) => before.players.filter((p) => p.roomCode === code);
+		const waiter = at(waitingRoom!.code)[0]!.playerId;
+		const runner = at(runningRoom!.code)[0]!.playerId;
+
+		await expect(
+			disqualifyPlayer(sql, admin, id, { playerId: waiter, reason: '  ' }, null)
+		).rejects.toThrow('Give a reason');
+		expect(
+			await disqualifyPlayer(sql, admin, id, { playerId: waiter, reason: 'Cheating' }, null)
+		).toEqual({ runningTable: null });
+		expect(
+			await disqualifyPlayer(sql, admin, id, { playerId: runner, reason: 'Abuse' }, null)
+		).toEqual({ runningTable: runningRoom!.code });
+		await expect(
+			disqualifyPlayer(sql, admin, id, { playerId: waiter, reason: 'Again' }, null)
+		).rejects.toThrow('already were disqualified');
+
+		const after = (await tournamentDetail(sql, id))!;
+		const byId = new Map(after.players.map((p) => [p.playerId, p]));
+		expect(byId.get(waiter)).toMatchObject({
+			status: 'disqualified',
+			statusReason: 'Cheating',
+			roomCode: null
+		});
+		expect(byId.get(runner)).toMatchObject({ status: 'disqualified', roomCode: runningRoom!.code });
+		expect(after.tournament.registered).toBe(2);
+		await expect(assignPlayer(sql, admin, id, waitingRoom!.code, waiter, null)).rejects.toThrow(
+			'were disqualified'
+		);
+
+		const [audit] = await sql`
+			SELECT player_id, detail FROM admin_audit_events
+			WHERE tournament_id = ${id} AND action = 'tournament.disqualify'
+			ORDER BY id
+			LIMIT 1`;
+		expect(audit).toMatchObject({ player_id: waiter, detail: { reason: 'Cheating' } });
 	});
 
 	test('too few players is refused with the reason; cancel stops further changes', async () => {

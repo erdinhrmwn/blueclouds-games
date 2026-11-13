@@ -6,7 +6,7 @@
 	import { LIMIT } from 'server/games/bust-31/rules';
 	import Fan from './Fan.svelte';
 
-	let { game }: { game: GameEntry } = $props();
+	let { game, maintenance }: { game: GameEntry; maintenance: boolean } = $props();
 </script>
 
 <div class="grid gap-12 pt-10 md:grid-cols-[1.1fr_1fr] md:items-center md:pt-16">
@@ -22,7 +22,7 @@
 		</div>
 	</section>
 
-	<JoinPanel game={game.slug} />
+	<JoinPanel game={game.slug} {maintenance} />
 </div>
 
 <Tournaments game={game.slug} />

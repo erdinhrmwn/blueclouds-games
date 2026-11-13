@@ -85,6 +85,32 @@
 			</dd>
 			<dt>Rules version</dt>
 			<dd>{match.rulesVersion}</dd>
+			<dt>Fairness</dt>
+			<dd>
+				{#if !data.fairness}
+					<span class="text-muted">Not recorded. Played before provably fair shuffles.</span>
+				{:else if data.fairness.ok}
+					<span class="tag-good">
+						Verified, {data.fairness.shuffles}
+						{data.fairness.shuffles === 1 ? 'shuffle' : 'shuffles'}
+					</span>
+				{:else if data.fairness.failed.length}
+					<span class="tag-bad">
+						{data.fairness.failed.length === 1 ? 'Shuffle' : 'Shuffles'}
+						{data.fairness.failed.join(', ')} do not match the seeds
+					</span>
+				{:else}
+					<span class="tag-bad">The log's seeds do not match the stored ones</span>
+				{/if}
+			</dd>
+			{#if match.serverSeed}
+				<dt>Server seed hash</dt>
+				<dd class="font-mono text-xs leading-5 break-all">{match.serverSeedHash}</dd>
+				<dt>Server seed</dt>
+				<dd class="font-mono text-xs leading-5 break-all">{match.serverSeed}</dd>
+				<dt>Client seed</dt>
+				<dd class="font-mono text-xs leading-5 break-all">{match.clientSeed}</dd>
+			{/if}
 		</dl>
 	</section>
 

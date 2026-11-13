@@ -2,7 +2,13 @@ import { describe, expect, test } from 'bun:test';
 // The real rules and log code, so the replay is checked against what the room actually records.
 import { chooseBotCard } from '../../../server/src/games/bust-31/bots';
 import { logEvents, type MatchState } from '../../../server/src/games/bust-31/match';
-import { stamp } from '../../../server/src/games/shared/match';
+import { fairRng, newCommitment } from '../../../server/src/games/shared/fair-rng';
+import {
+	checkFairness,
+	type MatchSeeds,
+	proofFromLog
+} from '../../../server/src/games/shared/fairness';
+import { type LogEntry, stamp } from '../../../server/src/games/shared/match';
 import {
 	addPlayer,
 	createGame,
@@ -12,23 +18,39 @@ import {
 } from '../../../server/src/games/bust-31/rules';
 import { type LogEvent, replay } from './replay.ts';
 
-/** A full 4-player bot game, logged the way the room logs it. */
+/** A full 4-player bot game, shuffled and logged the way the room does it (fairness events included). */
 function playedGame() {
 	let g = createGame();
 	for (let i = 0; i < 4; i++) g = addPlayer(g, `bot-${i}`, `Bot ${i}`, true);
 	let match: MatchState = { id: 'm', startedAt: new Date(0).toISOString(), out: [], seq: 0 };
+	const next = newCommitment();
+	let seeds: MatchSeeds = { ...next, clientSeed: 'm|', nonce: 0 };
+	let pending: LogEntry[] = [
+		{ type: 'fairness', data: { serverSeedHash: next.serverSeedHash, clientSeed: 'm|' } }
+	];
+	const rng = fairRng(
+		() => seeds,
+		(record) => {
+			pending.push({ type: 'shuffle', data: record });
+			seeds = { ...seeds, nonce: seeds.nonce + 1 };
+		}
+	);
 	const events: LogEvent[] = [];
 	const step = (next: Game) => {
-		const stamped = stamp(match, logEvents(g, next, true), events.length * 1000);
+		const ended =
+			next.phase === 'finished' ? [{ type: 'reveal', data: { serverSeed: seeds.serverSeed } }] : [];
+		const entries = [...pending, ...logEvents(g, next, true), ...ended];
+		pending = [];
+		const stamped = stamp(match, entries, events.length * 1000);
 		match = stamped.match;
 		events.push(...stamped.events);
 		g = next;
 	};
 	g = { ...g, hostId: 'bot-0' };
-	step(startGame(g, 'bot-0', Math.random));
+	step(startGame(g, 'bot-0', rng));
 	while (g.phase === 'playing') {
 		const p = g.players[g.turn]!;
-		step(playCard(g, p.id, chooseBotCard(p.hand, g.total)!.id, Math.random));
+		step(playCard(g, p.id, chooseBotCard(p.hand, g.total)!.id, rng));
 	}
 	const seats = g.players.map((p) => ({ seat: p.seat, name: p.name }));
 	return { game: g, log: { logVersion: 1, events }, seats };
@@ -40,12 +62,21 @@ describe('Bust 31 replay', () => {
 			const { game, log, seats } = playedGame();
 			const steps = replay('bust-31', log, seats);
 			expect(steps.filter((s) => s.mismatch)).toEqual([]);
-			const last = steps.at(-1)!;
+			const last = steps.findLast((s) => s.event.type === 'finished')!;
 			expect(last.text).toBe(`${game.players.find((p) => p.id === game.winnerId)!.name} wins.`);
+			expect(steps.at(-1)!.text).toStartWith('Server seed revealed: ');
 			expect(last.state!.seats.map((s) => s.lives)).toEqual(
 				game.players.map((p) => Math.max(0, p.lives))
 			);
 		}
+	});
+
+	test('the shuffles of a played game check out with its revealed seed', async () => {
+		const { log } = playedGame();
+		const proof = proofFromLog(log.events)!;
+
+		expect(proof.shuffles.length).toBeGreaterThan(0);
+		expect((await checkFairness(proof)).ok).toBe(true);
 	});
 
 	test('a tampered log is flagged', () => {

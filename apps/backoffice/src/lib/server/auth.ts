@@ -45,6 +45,7 @@ export type AuditAction =
 	| 'tournament.register'
 	| 'tournament.unregister'
 	| 'tournament.distribute'
+	| 'tournament.disqualify'
 	| 'room.assign'
 	| 'room.unassign'
 	| 'room.kick'
@@ -54,7 +55,9 @@ export type AuditAction =
 	| 'admin.enable'
 	| 'admin.password_reset'
 	| 'admin.role_change'
-	| 'admin.password_change';
+	| 'admin.password_change'
+	| 'game.maintenance_start'
+	| 'game.maintenance_end';
 
 export async function audit(
 	sql: SQL,

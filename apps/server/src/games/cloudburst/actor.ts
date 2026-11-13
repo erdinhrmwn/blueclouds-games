@@ -26,12 +26,15 @@ import {
 	checkConnect,
 	closeKicked,
 	closeTerminated,
+	beginMatch,
 	commitRoom,
 	type Ctx,
 	dropIfGone,
+	fairnessView,
 	GONE_AFTER_MS,
 	identify,
 	kickFromTable,
+	lastProof,
 	loadRoom,
 	migrateRoom,
 	parseSeat,
@@ -53,16 +56,15 @@ import {
 	tournamentView,
 	turnClock,
 	wakeTournament,
+	withRng,
 } from "../shared/room";
-import { type LogEntry, type MatchState, newMatch } from "../shared/match";
+import type { LogEntry, MatchState } from "../shared/match";
 import { AdminKickInput, AdminTerminateInput, BotIdInput } from "../shared/schema";
 import { markBack, markVip, removePlayer, takeSeat } from "../shared/table";
 
 const SLUG = "cloudburst";
 /** After a bot (or the timer) draws, it plays or passes this much later, so the draw shows first. */
 const AFTER_DRAW_MS = 900;
-
-const rng = () => Math.random();
 
 export const cloudburstRoom = actor({
 	// Shown in the Rivet dashboard.
@@ -200,18 +202,24 @@ export const cloudburstRoom = actor({
 			const parsed = PlayInput.safeParse(input);
 			if (!parsed.success) throw new UserError("Invalid move.", { code: "bad_input" });
 
-			c.vars.game = apply(() => playCard(c.vars.game, me, parsed.data, rng));
+			c.vars.game = withRng(c, (rng) => playCard(c.vars.game, me, parsed.data, rng));
 			await commit(c);
 		},
 		draw: async (c) => {
 			const me = requirePlayer(c);
-			c.vars.game = apply(() => drawCard(c.vars.game, me, rng));
+			c.vars.game = withRng(c, (rng) => drawCard(c.vars.game, me, rng));
 			await commit(c);
 		},
 		pass: async (c) => {
 			const me = requirePlayer(c);
 			c.vars.game = apply(() => pass(c.vars.game, me));
 			await commit(c);
+		},
+		/** The last match's seeds and shuffles, so a player can check it was dealt fairly. */
+		fairnessProof: async (c) => {
+			caller(c);
+
+			return lastProof(c);
 		},
 		reset: async (c) => {
 			requireOpenTable(c);
@@ -265,9 +273,9 @@ export const cloudburstRoom = actor({
 
 			let next: Game;
 			if (move.type === "play") {
-				next = playCard(game, player.id, move.input, rng);
+				next = withRng(c, (rng) => playCard(game, player.id, move.input, rng));
 			} else if (move.type === "draw") {
-				next = drawCard(game, player.id, rng);
+				next = withRng(c, (rng) => drawCard(game, player.id, rng));
 			} else {
 				next = pass(game, player.id);
 			}
@@ -315,12 +323,12 @@ function currentTurn(c: Ctx): { playerId: string | null; key: number } {
 const viewOf = (c: Ctx) => ({
 	...publicView(c.vars.game, turnClock(c.vars.timer)),
 	tournament: tournamentView(c),
+	fairness: fairnessView(c),
 });
 
 /** Starts the match; `by` must be the host. */
 function begin(c: Ctx, by: string): void {
-	c.vars.game = apply(() => startGame(c.vars.game, by, rng));
-	c.vars.match = newMatch();
+	beginMatch<Game, MatchState>(c, {}, (rng) => startGame(c.vars.game, by, rng));
 }
 
 /** How a tournament table starts itself: as its host would. */
@@ -344,6 +352,6 @@ function armTurnClock(c: Ctx, { resume }: { resume: boolean }): Promise<void> {
 		turnMs: TURN_MS,
 		pause: dealPauseMs(game),
 		resume,
-		rng,
+		rng: Math.random,
 	});
 }

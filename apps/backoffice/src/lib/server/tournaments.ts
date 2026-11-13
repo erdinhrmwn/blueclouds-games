@@ -9,6 +9,9 @@ import { isUuid } from './players.ts';
 export const REGISTER_MAX = 500;
 const LIST_LIMIT = 100;
 
+/** Longest reason a disqualification may give. */
+export const REASON_MAX = 200;
+
 /** How many unknown ids an error message names before it cuts off. */
 const UNKNOWN_IDS_SHOWN = 5;
 
@@ -35,11 +38,17 @@ export type TournamentRow = {
 	rooms: number;
 };
 
+export type PlayerStatus = 'registered' | 'withdrawn' | 'disqualified';
+
 export type Registered = {
 	playerId: string;
 	name: string;
 	disabled: boolean;
 	byAdmin: boolean;
+	status: PlayerStatus;
+	/** Why they were disqualified. */
+	statusReason: string | null;
+	statusChangedAt: Date | null;
 	roomCode: string | null;
 	seat: number | null;
 };
@@ -66,7 +75,10 @@ const COLUMNS = (sql: SQL) => sql`
 	t.distribute_error AS "distributeError",
 	t.cancelled_at AS "cancelledAt",
 	t.ended_at AS "endedAt",
-	(SELECT count(*)::int FROM tournament_players tp WHERE tp.tournament_id = t.id) AS registered,
+	(
+		SELECT count(*)::int FROM tournament_players tp
+		WHERE tp.tournament_id = t.id AND tp.status = 'registered'
+	) AS registered,
 	(SELECT count(*)::int FROM rooms r WHERE r.tournament_id = t.id) AS rooms`;
 
 /** Newest start first. */
@@ -106,9 +118,16 @@ export async function createTournament(
 	input: z.output<typeof NewTournament>,
 	ip: string | null
 ): Promise<string> {
-	const [game] = await sql`SELECT min_players, max_players FROM games WHERE slug = ${input.game}`;
+	const [game] = await sql`
+		SELECT min_players, max_players, maintenance_at
+		FROM games
+		WHERE slug = ${input.game}`;
 	if (!game) {
 		throw new TournamentError('Pick a game.');
+	}
+
+	if (game.maintenance_at) {
+		throw new TournamentError('This game is under maintenance. End it on the Games page first.');
 	}
 
 	const { playersPerRoom } = input;
@@ -185,6 +204,9 @@ export async function tournamentDetail(sql: SQL, id: string) {
 			p.display_name AS name,
 			p.disabled_at IS NOT NULL AS disabled,
 			tp.registered_by_admin_id IS NOT NULL AS "byAdmin",
+			tp.status,
+			tp.status_reason AS "statusReason",
+			tp.status_changed_at AS "statusChangedAt",
 			r.code AS "roomCode",
 			ra.seat
 		FROM tournament_players tp
@@ -229,7 +251,7 @@ export function parseIds(text: string): { ids: string[]; invalid: string[] } {
 /** Locks the tournament for a change and refuses one that is cancelled or already handed out its tables. */
 async function lockOpen(tx: SQL, id: string) {
 	const [tournament] = await tx`
-		SELECT name, distributed_at, cancelled_at, players_per_room
+		SELECT name, distributed_at, cancelled_at, ended_at, players_per_room
 		FROM tournaments
 		WHERE id = ${id}
 		FOR UPDATE`;
@@ -429,6 +451,15 @@ export async function assignPlayer(
 			throw new TournamentError('Unknown player id.');
 		}
 
+		const [signedUp] = await tx`
+			SELECT status
+			FROM tournament_players
+			WHERE tournament_id = ${id} AND player_id = ${playerId}`;
+
+		if (signedUp && signedUp.status !== 'registered') {
+			throw new TournamentError(`They ${outText(signedUp.status)} and can't play in it.`);
+		}
+
 		const [otherTable] = await tx`
 			SELECT r.code
 			FROM room_assignments ra
@@ -518,6 +549,77 @@ export async function unassignPlayer(
 			playerId,
 			ip
 		});
+	});
+}
+
+const outText = (status: PlayerStatus) =>
+	status === 'withdrawn'
+		? 'withdrew from this tournament'
+		: 'were disqualified from this tournament';
+
+/**
+ * Puts a player out of the tournament for good, with a reason; they can't sign up or sit down again. At a table
+ * that hasn't started their seat is freed, and the room drops them at the start if they already sat down. At a
+ * running table the seat stays on record and the room won't let them back in; returns that table, since they may
+ * still be playing at it.
+ */
+export async function disqualifyPlayer(
+	sql: SQL,
+	admin: Admin,
+	id: string,
+	target: { playerId: string; reason: string },
+	ip: string | null
+): Promise<{ runningTable: string | null }> {
+	const reason = target.reason.trim();
+	if (!reason || reason.length > REASON_MAX) {
+		throw new TournamentError(`Give a reason, up to ${REASON_MAX} characters.`);
+	}
+
+	return sql.begin(async (tx) => {
+		const tournament = await lockOpen(tx, id);
+		if (tournament.ended_at) {
+			throw new TournamentError('This tournament already ended.');
+		}
+
+		const [player] = await tx`
+			SELECT tp.status, r.id AS room_id, r.code, r.started_at, r.closed_at
+			FROM tournament_players tp
+			LEFT JOIN room_assignments ra
+				ON ra.tournament_id = tp.tournament_id AND ra.player_id = tp.player_id
+			LEFT JOIN rooms r ON r.id = ra.room_id
+			WHERE tp.tournament_id = ${id} AND tp.player_id = ${target.playerId}
+			FOR UPDATE OF tp`;
+
+		if (!player) {
+			throw new TournamentError('That player is not registered.');
+		}
+		if (player.status !== 'registered') {
+			throw new TournamentError(`They already ${outText(player.status)}.`);
+		}
+
+		const running = !!player.started_at;
+		if (player.room_id && !running) {
+			await tx`
+				DELETE FROM room_assignments
+				WHERE tournament_id = ${id} AND player_id = ${target.playerId}`;
+		}
+
+		await tx`
+			UPDATE tournament_players
+			SET status = 'disqualified', status_reason = ${reason}, status_changed_at = now()
+			WHERE tournament_id = ${id} AND player_id = ${target.playerId}`;
+
+		await audit(tx, {
+			adminId: admin.id,
+			action: 'tournament.disqualify',
+			tournamentId: id,
+			roomId: player.room_id,
+			playerId: target.playerId,
+			detail: { reason },
+			ip
+		});
+
+		return { runningTable: running && !player.closed_at ? player.code : null };
 	});
 }
 

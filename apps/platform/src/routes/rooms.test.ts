@@ -54,6 +54,31 @@ describe("rooms", () => {
 		expect((await open("chess")).json.error.fields).toEqual({ game: "Unknown game." });
 	});
 
+	test("a game under maintenance opens no new tables, and the catalog says so", async () => {
+		const { code } = (await open("cloudburst")).json.data.room;
+		await t.sql`UPDATE games SET maintenance_at = now() WHERE slug = 'cloudburst'`;
+
+		try {
+			const refused = await open("cloudburst");
+			expect(refused.status).toBe(409);
+			expect(refused.json.error.code).toBe("under_maintenance");
+			expect((await open("bust-31")).status).toBe(201);
+
+			// A table opened before still lets players in.
+			expect((await call(t.app, "GET", `/v1/rooms/${code}`, { token: ann.secret })).status).toBe(
+				200,
+			);
+
+			const { games } = (await call(t.app, "GET", "/v1/games", { token: ann.secret })).json.data;
+			const maintenance = Object.fromEntries(
+				games.map((game: { slug: string; maintenance: boolean }) => [game.slug, game.maintenance]),
+			);
+			expect(maintenance).toMatchObject({ "bust-31": false, cloudburst: true });
+		} finally {
+			await t.sql`UPDATE games SET maintenance_at = NULL WHERE slug = 'cloudburst'`;
+		}
+	});
+
 	test("join by code: a known code answers with its game, an unknown one is 404", async () => {
 		const { code } = (await open("bust-31")).json.data.room;
 		const found = await call(t.app, "GET", `/v1/rooms/${code}`, { token: ann.secret });

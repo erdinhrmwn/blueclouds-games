@@ -4,7 +4,7 @@ import { chooseBotCard } from "./bots";
 import { buildReport, logEvents, type MatchState, noteMove } from "./match";
 import { type LogEntry, stamp, uuidv7 } from "../shared/match";
 import { addPlayer, type Card, createGame, type Game, playCard, startGame } from "./rules";
-import { kickPlayer, markAway, markBack } from "../shared/table";
+import { kickPlayer, markAway, markBack, randomRng } from "../shared/table";
 
 function table(lives: Record<string, number>, winnerId: string | null): Game {
 	let g = createGame();
@@ -88,7 +88,7 @@ test("uuidv7 is a valid, time-ordered UUIDv7", () => {
 	expect(a < b).toBe(true);
 });
 
-const rng = () => 0.42;
+const rng = randomRng(() => 0.42);
 const card = (kind: Card["kind"], value: number, id: string): Card => ({ id, kind, value });
 
 /** Two players, Ann to move with a fixed hand. */
@@ -188,10 +188,10 @@ describe("logEvents", () => {
 			entries.push(...logEvents(g, next, true));
 			g = next;
 		};
-		step(startGame(g, "a", Math.random));
+		step(startGame(g, "a", randomRng()));
 		while (g.phase === "playing") {
 			const p = g.players[g.turn]!;
-			step(playCard(g, p.id, chooseBotCard(p.hand, g.total)!.id, Math.random));
+			step(playCard(g, p.id, chooseBotCard(p.hand, g.total)!.id, randomRng()));
 		}
 		const count = (type: string) => entries.filter((e) => e.type === type).length;
 		expect(count("deal")).toBe(g.round);

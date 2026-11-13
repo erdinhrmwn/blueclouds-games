@@ -6,4 +6,4 @@
 
 <svelte:head><title>{data.game.name} · BlueClouds Games</title></svelte:head>
 
-<data.game.Home game={data.game} />
+<data.game.Home game={data.game} maintenance={data.maintenance} />

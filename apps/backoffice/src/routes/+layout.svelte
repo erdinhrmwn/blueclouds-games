@@ -21,7 +21,8 @@
 				{ href: '/players', label: 'Players', icon: 'players' },
 				{ href: '/matches', label: 'Matches', icon: 'matches' },
 				{ href: '/live', label: 'Live tables', icon: 'live' },
-				{ href: '/tournaments', label: 'Tournaments', icon: 'tournaments' }
+				{ href: '/tournaments', label: 'Tournaments', icon: 'tournaments' },
+				{ href: '/games', label: 'Games', icon: 'games' }
 			]
 		},
 		{

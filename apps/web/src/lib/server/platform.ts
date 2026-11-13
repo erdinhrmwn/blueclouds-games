@@ -295,6 +295,8 @@ export type TournamentTable = {
 	code: string;
 	game: string;
 	seat: number | null;
+	/** Its match began: withdrawing is no longer possible, the player leaves from the table. */
+	started: boolean;
 	tournament: { id: string; name: string; startsAt: string };
 };
 
@@ -319,6 +321,25 @@ export async function tournamentsFor(
 		return { tournaments, tables: rooms };
 	} catch (err) {
 		if (lost(err)) return none;
+		throw err;
+	}
+}
+
+/** Whether a game is under maintenance (no new tables). False when it can't be asked, e.g. before a name. */
+export async function underMaintenance(event: RequestEvent, game: string): Promise<boolean> {
+	const secret = secretOf(event.cookies);
+	if (!secret) return false;
+
+	try {
+		const { games } = await call<{ games: { slug: string; maintenance: boolean }[] }>(
+			event,
+			'/games',
+			{ method: 'GET', secret }
+		);
+
+		return games.some((entry) => entry.slug === game && entry.maintenance);
+	} catch (err) {
+		if (lost(err)) return false;
 		throw err;
 	}
 }

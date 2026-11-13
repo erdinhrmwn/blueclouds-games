@@ -4,6 +4,7 @@
 	import { player } from '#lib/player.svelte.ts';
 	import type { BaseView, RoomConnection } from '#lib/rivet/room.svelte.ts';
 	import type { Snippet } from 'svelte';
+	import FairPlay from './FairPlay.svelte';
 	import Lobby from './Lobby.svelte';
 
 	/** Everything around a game's table: connecting, the lobby, reconnect and error lines, leaving. */
@@ -88,9 +89,30 @@
 		</p>
 	</div>
 	{#if room?.view}
-		<button class="btn-ghost shrink-0 px-4 text-xs" onclick={leave} aria-label="Leave table">
-			<span class="sm:hidden">Leave</span><span class="hidden sm:inline">Leave table</span>
-		</button>
+		<div class="flex shrink-0 items-center gap-2">
+			{#if room.status !== 'refused'}
+				<FairPlay {room} />
+			{/if}
+			<button
+				class="btn-ghost size-11 shrink-0 p-0"
+				onclick={leave}
+				aria-label="Leave table"
+				title="Leave table"
+			>
+				<svg
+					viewBox="0 0 20 20"
+					class="size-5"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="1.6"
+					stroke-linecap="round"
+					stroke-linejoin="round"
+					aria-hidden="true"
+				>
+					<path d="M8 4H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3M13 14l4-4-4-4M17 10H8" />
+				</svg>
+			</button>
+		</div>
 	{/if}
 </header>
 

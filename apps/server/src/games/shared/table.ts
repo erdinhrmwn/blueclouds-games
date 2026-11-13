@@ -3,8 +3,10 @@
 /** Every game has a table of 6 fixed chairs around the dealer. */
 export const SEATS = 6;
 
-/** Returns a float in [0, 1). Injected so tests are deterministic. */
-export type Rng = () => number;
+/**
+ * Shuffles a deck. Injected: a room shuffles provably fair (fair-rng.ts), tests pass `randomRng` with a fixed number.
+ */
+export type Rng = { shuffle: <T extends { id: string }>(items: T[]) => T[] };
 
 /** A rule was broken; the actor forwards the message to the player. */
 export class RuleError extends Error {}
@@ -28,14 +30,23 @@ export type Table<P extends Seated = Seated> = {
 	moves: number;
 };
 
-export function shuffle<T>(items: T[], rng: Rng): T[] {
-	const out = [...items];
-	for (let i = out.length - 1; i > 0; i--) {
-		const j = Math.floor(rng() * (i + 1));
-		[out[i], out[j]] = [out[j]!, out[i]!];
-	}
+export function shuffle<T extends { id: string }>(items: T[], rng: Rng): T[] {
+	return rng.shuffle(items);
+}
 
-	return out;
+/** A plain Fisher-Yates shuffle from `next` (a float in [0, 1)): for tests, and matches started before fairness. */
+export function randomRng(next: () => number = Math.random): Rng {
+	return {
+		shuffle: (items) => {
+			const out = [...items];
+			for (let i = out.length - 1; i > 0; i--) {
+				const j = Math.floor(next() * (i + 1));
+				[out[i], out[j]] = [out[j]!, out[i]!];
+			}
+
+			return out;
+		},
+	};
 }
 
 // Players are kept in seat order, so a turn index walks around the table.

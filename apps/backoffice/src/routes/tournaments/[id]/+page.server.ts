@@ -5,8 +5,10 @@ import { isUuid } from '#lib/server/players.ts';
 import {
 	assignPlayer,
 	cancelTournament,
+	disqualifyPlayer,
 	distributeNow,
 	parseIds,
+	REASON_MAX,
 	registerPlayers,
 	tournamentDetail,
 	TournamentError,
@@ -24,7 +26,7 @@ export const load: PageServerLoad = async ({ params }) => {
 	const detail = await tournamentDetail(sql, params.id);
 	if (!detail) error(404, 'Tournament not found');
 
-	return detail;
+	return { ...detail, reasonMax: REASON_MAX };
 };
 
 /** Runs a change; a broken rule comes back as the form's error instead of a 500. */
@@ -101,6 +103,24 @@ export const actions: Actions = {
 
 			return 'Player taken off their table. They are still registered.';
 		});
+	},
+	disqualify: async ({ params, request, locals, getClientAddress }) => {
+		const data = await request.formData();
+		const reason = field(data, 'reason');
+
+		return attempt(
+			async () => {
+				const ip = auditIp(getClientAddress());
+				const target = { playerId: playerIdOf(data), reason };
+				const { runningTable } = await disqualifyPlayer(sql, locals.admin!, params.id, target, ip);
+
+				const kickHint = runningTable
+					? ` Their table ${runningTable} is playing: kick them there from Live tables.`
+					: '';
+				return `Player disqualified. They can't play in this tournament anymore.${kickHint}`;
+			},
+			{ reason }
+		);
 	},
 	cancel: async ({ params, locals, getClientAddress }) =>
 		attempt(async () => {

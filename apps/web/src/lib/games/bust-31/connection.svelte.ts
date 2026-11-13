@@ -3,7 +3,7 @@ import { type BaseView, RoomConnection } from '#lib/rivet/room.svelte.ts';
 
 /** A Bust 31 room: the shared actions plus playing a card. */
 export class Bust31Connection extends RoomConnection<
-	PublicView & Pick<BaseView, 'tournament'>,
+	PublicView & Pick<BaseView, 'tournament' | 'fairness'>,
 	Card[]
 > {
 	constructor(code: string) {

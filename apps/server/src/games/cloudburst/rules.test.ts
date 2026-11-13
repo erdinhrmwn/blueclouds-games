@@ -20,9 +20,9 @@ import {
 	resetToLobby,
 	startGame,
 } from "./rules";
-import { RuleError } from "../shared/table";
+import { randomRng, RuleError } from "../shared/table";
 
-const rng = () => 0.42;
+const rng = randomRng(() => 0.42);
 const num = (suit: Card["suit"], value: number, copy = 0): Card => ({
 	id: `${suit}-${value}-${copy}`,
 	kind: "number",
@@ -267,7 +267,7 @@ describe("bots", () => {
 
 	test("bots finish whole matches with valid results and a complete move log", () => {
 		let seed = 7;
-		const random = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
+		const random = randomRng(() => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646);
 		for (let run = 0; run < 50; run++) {
 			let g = createGame();
 			const n = 2 + (run % 5);

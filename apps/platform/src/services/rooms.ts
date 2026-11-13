@@ -1,5 +1,6 @@
 import type { SQL } from "bun";
 import { ApiError } from "../lib/http";
+import { requirePlayable } from "./games";
 import { closeRoom } from "./tournaments";
 
 /** No 0/O or 1/I, so a code read aloud or copied by hand stays right. */
@@ -76,8 +77,8 @@ export async function insertRoom(
 
 /**
  * The room behind a code, if this player may enter it; throws otherwise. A tournament room lets in only its
- * assigned players (also after it closed, to see how it ended), and nobody once its tournament was cancelled.
- * A private room lets in its opener and players who redeemed an invite.
+ * assigned players who did not withdraw or get disqualified (also after it closed, to see how it ended), and nobody
+ * once its tournament was cancelled. A private room lets in its opener and players who redeemed an invite.
  */
 export async function enterable(sql: SQL, code: string, playerId: string): Promise<Access> {
 	const [row] = await sql`
@@ -94,6 +95,10 @@ export async function enterable(sql: SQL, code: string, playerId: string): Promi
 				SELECT 1 FROM room_assignments ra
 				WHERE ra.room_id = r.id AND ra.player_id = ${playerId}
 			) AS assigned,
+			(
+				SELECT tp.status FROM tournament_players tp
+				WHERE tp.tournament_id = r.tournament_id AND tp.player_id = ${playerId}
+			) AS status,
 			EXISTS (
 				SELECT 1 FROM room_members rm
 				WHERE rm.room_id = r.id AND rm.player_id = ${playerId}
@@ -110,6 +115,12 @@ export async function enterable(sql: SQL, code: string, playerId: string): Promi
 	if (isTournamentRoom) {
 		if (row.cancelled_at) {
 			throw new ApiError("forbidden", 403, `${row.name} was cancelled.`);
+		}
+		if (row.status === "disqualified") {
+			throw new ApiError("forbidden", 403, `You were disqualified from ${row.name}.`);
+		}
+		if (row.status === "withdrawn") {
+			throw new ApiError("forbidden", 403, `You withdrew from ${row.name}.`);
 		}
 		if (!row.assigned) {
 			throw new ApiError("forbidden", 403, `This table is for players of ${row.name}.`);
@@ -160,10 +171,7 @@ async function inviteLink(sql: SQL, roomId: string, playerId: string): Promise<s
 
 /** A player opens a new table: the platform picks its code. The opener is its first member. */
 export async function openRoom(sql: SQL, game: string, visibility: Visibility, playerId: string) {
-	const [known] = await sql`SELECT 1 FROM games WHERE slug = ${game}`;
-	if (!known) {
-		throw new ApiError("bad_input", 400, "Some fields are invalid.", { game: "Unknown game." });
-	}
+	await requirePlayable(sql, game);
 
 	const room = await sql.begin(async (tx) => {
 		const made = await insertRoom(tx, { game, visibility, playerId });
@@ -256,7 +264,10 @@ export async function roomSeats(sql: SQL, code: string) {
 				SELECT ra.player_id AS "playerId", ra.seat
 				FROM room_assignments ra
 				JOIN rooms r ON r.id = ra.room_id
+				JOIN tournament_players tp
+					ON tp.tournament_id = ra.tournament_id AND tp.player_id = ra.player_id
 				WHERE r.code = ${code}
+					AND tp.status = 'registered'
 				ORDER BY ra.seat`
 		: [];
 
