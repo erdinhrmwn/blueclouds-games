@@ -84,7 +84,13 @@ export async function distributeIn(
 	by: DistributeBy,
 ): Promise<{ rooms: number; players: number }> {
 	const [tournament] = await tx`
-		SELECT t.game_slug, t.players_per_room, t.distributed_at, t.cancelled_at, g.min_players
+		SELECT
+			t.game_slug,
+			t.players_per_room,
+			t.min_players AS tournament_min,
+			t.distributed_at,
+			t.cancelled_at,
+			g.min_players
 		FROM tournaments t
 		JOIN games g ON g.slug = t.game_slug
 		WHERE t.id = ${tournamentId}
@@ -114,6 +120,13 @@ export async function distributeIn(
 			)`;
 
 	const playerIds = registered.map((row: { player_id: string }) => row.player_id);
+
+	if (tournament.tournament_min !== null && playerIds.length < tournament.tournament_min) {
+		throw new DistributeError(
+			`It needs at least ${plural(tournament.tournament_min, "player")}; ${playerIds.length} can play.`,
+		);
+	}
+
 	const plan = planRooms(shuffle(playerIds), tournament.players_per_room, tournament.min_players);
 
 	for (const roomPlayers of plan) {
@@ -151,6 +164,56 @@ export async function distributeIn(
 		)`;
 
 	return result;
+}
+
+/**
+ * Cancels a tournament whose sign-up closed with fewer playable players (registered, not disabled) than its
+ * minimum, audited with no admin. Returns the counts when it did, null when it has enough (or no minimum).
+ */
+export async function cancelIfShort(
+	tx: SQL,
+	tournamentId: string,
+): Promise<{ registered: number; minPlayers: number } | null> {
+	const [tournament] = await tx`
+		SELECT
+			t.min_players,
+			(
+				SELECT count(*)::int
+				FROM tournament_players tp
+				JOIN players p ON p.id = tp.player_id
+				WHERE tp.tournament_id = t.id
+					AND tp.status = 'registered'
+					AND p.disabled_at IS NULL
+			) AS registered
+		FROM tournaments t
+		WHERE t.id = ${tournamentId}
+			AND t.cancelled_at IS NULL
+			AND t.distributed_at IS NULL
+		FOR UPDATE`;
+
+	if (!tournament || tournament.min_players === null) {
+		return null;
+	}
+
+	const counts = { registered: tournament.registered, minPlayers: tournament.min_players };
+	if (counts.registered >= counts.minPlayers) {
+		return null;
+	}
+
+	const reason = `Only ${counts.registered} of the ${counts.minPlayers} players needed signed up.`;
+
+	await tx`
+		UPDATE tournaments
+		SET cancelled_at = now(), cancel_reason = ${reason}
+		WHERE id = ${tournamentId}`;
+
+	const detail = JSON.stringify({ ...counts, auto: true });
+
+	await tx`
+		INSERT INTO admin_audit_events (admin_id, action, tournament_id, detail)
+		VALUES (NULL, 'tournament.cancel', ${tournamentId}, ${detail}::text::jsonb)`;
+
+	return counts;
 }
 
 /** Sets ended_at on each of these tournaments whose rooms are all closed: when the last one closed. */
@@ -208,7 +271,7 @@ export async function closeRoom(
  */
 export async function runTournamentJob(
 	sql: SQL,
-): Promise<{ distributed: number; failed: number; closed: number }> {
+): Promise<{ distributed: number; cancelled: number; failed: number; closed: number }> {
 	return sql.begin(async (tx) => {
 		const due = await tx`
 			SELECT id
@@ -221,10 +284,18 @@ export async function runTournamentJob(
 			LIMIT ${JOB_BATCH}`;
 
 		let distributed = 0;
+		let cancelled = 0;
 		let failed = 0;
 
 		for (const { id } of due) {
 			try {
+				const shortBy = await tx.savepoint((sp) => cancelIfShort(sp, id));
+				if (shortBy) {
+					cancelled += 1;
+					log.info({ msg: "tournament cancelled", tournamentId: id, ...shortBy });
+					continue;
+				}
+
 				const result = await tx.savepoint((sp) => distributeIn(sp, id, { adminId: null }));
 				distributed += 1;
 				log.info({ msg: "tournament distributed", tournamentId: id, ...result });
@@ -249,7 +320,7 @@ export async function runTournamentJob(
 		const closedTournamentIds = closed.map((row: { tournament_id: string }) => row.tournament_id);
 		await endIfDone(tx, closedTournamentIds);
 
-		return { distributed, failed, closed: closed.length };
+		return { distributed, cancelled, failed, closed: closed.length };
 	});
 }
 
@@ -279,6 +350,12 @@ export async function listOpen(sql: SQL, game: string, playerId: string) {
 			t.starts_at,
 			t.registration_closes_at,
 			t.players_per_room,
+			t.min_players,
+			t.max_players,
+			t.format,
+			t.description,
+			t.prize,
+			t.fee,
 			(
 				SELECT count(*)::int FROM tournament_players x
 				WHERE x.tournament_id = t.id AND x.status = 'registered'
@@ -304,6 +381,12 @@ export async function listOpen(sql: SQL, game: string, playerId: string) {
 		startsAt: row.starts_at.toISOString(),
 		registrationClosesAt: row.registration_closes_at.toISOString(),
 		playersPerRoom: row.players_per_room,
+		minPlayers: row.min_players,
+		maxPlayers: row.max_players,
+		format: row.format,
+		description: row.description,
+		prize: row.prize,
+		fee: row.fee,
 		registered: row.registered,
 		joined: row.joined,
 	}));
@@ -323,6 +406,12 @@ export async function joinTournament(sql: SQL, tournamentId: string, playerId: s
 		if (signedUp?.status === "disqualified") {
 			throw new ApiError("forbidden", 403, "You were disqualified from this tournament.");
 		}
+
+		if (signedUp?.status === "registered") {
+			return;
+		}
+
+		await requireFreePlace(tx, tournamentId, tournament.max_players);
 
 		await tx`
 			INSERT INTO tournament_players (tournament_id, player_id)
@@ -383,18 +472,19 @@ export async function leaveTournament(sql: SQL, tournamentId: string, playerId: 
 }
 
 /**
- * The tournament, refused when missing or cancelled. FOR SHARE holds the row for the transaction, so a distribute
- * run on the same tournament waits.
+ * The tournament, refused when missing or cancelled. FOR UPDATE holds the row for the transaction, so a distribute
+ * run on the same tournament waits, and two sign-ups can't both take its last place.
  */
 async function lockTournament(tx: SQL, tournamentId: string) {
 	const [tournament] = await tx`
 		SELECT
 			cancelled_at,
 			distributed_at,
+			max_players,
 			registration_opens_at <= now() AND registration_closes_at > now() AS open
 		FROM tournaments
 		WHERE id = ${tournamentId}
-		FOR SHARE`;
+		FOR UPDATE`;
 
 	if (!tournament) {
 		throw new ApiError("not_found", 404, "There is no such tournament.");
@@ -404,7 +494,31 @@ async function lockTournament(tx: SQL, tournamentId: string) {
 		throw new ApiError("conflict", 409, "This tournament was cancelled.");
 	}
 
-	return tournament as { distributed_at: Date | null; open: boolean };
+	return tournament as {
+		distributed_at: Date | null;
+		max_players: number | null;
+		open: boolean;
+	};
+}
+
+/**
+ * Refuses a sign-up when the tournament is full; NULL takes anyone. The caller holds the tournament row, so the
+ * count can't change under it.
+ */
+async function requireFreePlace(tx: SQL, tournamentId: string, maxPlayers: number | null) {
+	if (maxPlayers === null) {
+		return;
+	}
+
+	const [{ registered }] = await tx`
+		SELECT count(*)::int AS registered
+		FROM tournament_players
+		WHERE tournament_id = ${tournamentId}
+			AND status = 'registered'`;
+
+	if (registered >= maxPlayers) {
+		throw new ApiError("conflict", 409, "Sign-up is closed: this tournament is full.");
+	}
 }
 
 function requireOpenRegistration(tournament: { distributed_at: Date | null; open: boolean }) {

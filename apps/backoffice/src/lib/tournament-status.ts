@@ -1,3 +1,20 @@
+/** How a tournament is played (migration 019). A label for now: every format still plays one round per table. */
+export const TOURNAMENT_FORMATS = [
+	{ value: 'arena', label: 'Arena', note: 'Most points wins' },
+	{ value: 'knockout', label: 'Knockout', note: 'Lose and you’re out' },
+	{ value: 'swiss', label: 'Swiss', note: 'Paired by score' }
+] as const;
+
+export type TournamentFormat = (typeof TOURNAMENT_FORMATS)[number]['value'];
+
+/** "Knockout · Lose and you’re out". */
+export function formatLabel(value: TournamentFormat): string {
+	const format = TOURNAMENT_FORMATS.find((entry) => entry.value === value);
+	if (!format) return value;
+
+	return `${format.label} · ${format.note}`;
+}
+
 /** `bad` marks the ones that need an admin, `running` the ones players can sign up for or are playing in. */
 export type TournamentStatus = { label: string; bad?: boolean; running?: boolean };
 

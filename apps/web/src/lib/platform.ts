@@ -73,7 +73,12 @@ export const resetInviteLink = (game: string, code: string) =>
 
 // Tournaments
 
-export type { Tournament, TournamentTable, Visibility } from '#lib/server/platform.ts';
+export type {
+	Tournament,
+	TournamentFormat,
+	TournamentTable,
+	Visibility
+} from '#lib/server/platform.ts';
 export const fetchTournaments = (game: string) =>
 	request<{ tournaments: Tournament[]; tables: TournamentTable[] }>(
 		'GET',

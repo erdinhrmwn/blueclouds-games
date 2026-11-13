@@ -1,6 +1,8 @@
 import type { SQL } from 'bun';
 import { z } from 'zod';
 import { DistributeError, distributeIn } from '../../../../platform/src/services/tournaments.ts';
+import { FEE_MAX, MAX_PLAYERS_LIMIT, TOURNAMENT_TEXT_MAX } from '../limits.ts';
+import { TOURNAMENT_FORMATS, type TournamentFormat } from '../tournament-status.ts';
 import type { Admin } from './auth.ts';
 import { audit } from './auth.ts';
 import { isUuid } from './players.ts';
@@ -27,12 +29,23 @@ export type TournamentRow = {
 	gameName: string;
 	name: string;
 	playersPerRoom: number;
+	/** Fewest players it runs with, else the job cancels it; null for tournaments made before the limits existed. */
+	minPlayers: number | null;
+	/** Most sign-ups; reaching it closes sign-up. */
+	maxPlayers: number | null;
+	format: TournamentFormat | null;
+	description: string | null;
+	prize: string | null;
+	/** In coins; 0 is free. */
+	fee: number;
 	startsAt: Date;
 	registrationOpensAt: Date;
 	registrationClosesAt: Date;
 	distributedAt: Date | null;
 	distributeError: string | null;
 	cancelledAt: Date | null;
+	/** Why the platform cancelled it by itself; null when an admin did. */
+	cancelReason: string | null;
 	endedAt: Date | null;
 	registered: number;
 	rooms: number;
@@ -68,12 +81,19 @@ const COLUMNS = (sql: SQL) => sql`
 	g.name AS "gameName",
 	t.name,
 	t.players_per_room AS "playersPerRoom",
+	t.min_players AS "minPlayers",
+	t.max_players AS "maxPlayers",
+	t.format,
+	t.description,
+	t.prize,
+	t.fee,
 	t.starts_at AS "startsAt",
 	t.registration_opens_at AS "registrationOpensAt",
 	t.registration_closes_at AS "registrationClosesAt",
 	t.distributed_at AS "distributedAt",
 	t.distribute_error AS "distributeError",
 	t.cancelled_at AS "cancelledAt",
+	t.cancel_reason AS "cancelReason",
 	t.ended_at AS "endedAt",
 	(
 		SELECT count(*)::int FROM tournament_players tp
@@ -99,6 +119,20 @@ const UtcTime = z
 	.regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/, 'Pick a date and time.')
 	.transform((value) => new Date(`${value}:00Z`));
 
+const FORMAT_VALUES = TOURNAMENT_FORMATS.map((format) => format.value) as [
+	TournamentFormat,
+	...TournamentFormat[]
+];
+
+/** A text the admin may leave out; a blank one counts as left out. */
+const optionalText = (label: string, max: number) =>
+	z
+		.string()
+		.trim()
+		.max(max, `${label}: at most ${max} characters.`)
+		.optional()
+		.transform((value) => value || null);
+
 export const NewTournament = z.object({
 	game: z.string().min(1, 'Pick a game.'),
 	name: z
@@ -107,6 +141,21 @@ export const NewTournament = z.object({
 		.min(1, 'Give it a name of 1-80 characters.')
 		.max(80, 'Give it a name of 1-80 characters.'),
 	playersPerRoom: z.coerce.number().int('Must be a whole number.'),
+	minPlayers: z.coerce.number().int('Must be a whole number.'),
+	maxPlayers: z.coerce
+		.number()
+		.int('Must be a whole number.')
+		.max(MAX_PLAYERS_LIMIT, `At most ${MAX_PLAYERS_LIMIT} players.`),
+	format: z.enum(FORMAT_VALUES, { message: 'Pick a format.' }),
+	description: optionalText('Description', TOURNAMENT_TEXT_MAX.description),
+	prize: optionalText('Prize', TOURNAMENT_TEXT_MAX.prize),
+	// Coins; left empty, the tournament is free.
+	fee: z.coerce
+		.number()
+		.int('Fee: a whole number of coins.')
+		.min(0, 'Fee: 0 or more coins.')
+		.max(FEE_MAX, `Fee: at most ${FEE_MAX} coins.`)
+		.default(0),
 	startsAt: UtcTime,
 	registrationOpensAt: UtcTime.optional(),
 	registrationClosesAt: UtcTime.optional()
@@ -137,6 +186,17 @@ export async function createTournament(
 		);
 	}
 
+	if (input.maxPlayers < playersPerRoom) {
+		throw new TournamentError('Most players must be at least the players per table.');
+	}
+
+	const { minPlayers } = input;
+	if (minPlayers < game.min_players || minPlayers > input.maxPlayers) {
+		throw new TournamentError(
+			`Fewest players must be ${game.min_players}-${input.maxPlayers} for this game and most players.`
+		);
+	}
+
 	const now = new Date();
 	const defaultClose = new Date(input.startsAt.getTime() - CLOSE_BEFORE_START_MS);
 	const opens = input.registrationOpensAt ?? now;
@@ -159,6 +219,12 @@ export async function createTournament(
 				game_slug,
 				name,
 				players_per_room,
+				min_players,
+				max_players,
+				format,
+				description,
+				prize,
+				fee,
 				starts_at,
 				registration_opens_at,
 				registration_closes_at,
@@ -168,6 +234,12 @@ export async function createTournament(
 				${input.game},
 				${input.name},
 				${playersPerRoom},
+				${minPlayers},
+				${input.maxPlayers},
+				${input.format},
+				${input.description},
+				${input.prize},
+				${input.fee},
 				${input.startsAt},
 				${opens},
 				${closes},
@@ -251,7 +323,7 @@ export function parseIds(text: string): { ids: string[]; invalid: string[] } {
 /** Locks the tournament for a change and refuses one that is cancelled or already handed out its tables. */
 async function lockOpen(tx: SQL, id: string) {
 	const [tournament] = await tx`
-		SELECT name, distributed_at, cancelled_at, ended_at, players_per_room
+		SELECT name, distributed_at, cancelled_at, ended_at, players_per_room, max_players
 		FROM tournaments
 		WHERE id = ${id}
 		FOR UPDATE`;
@@ -302,6 +374,8 @@ export async function registerPlayers(
 			throw new TournamentError(`Unknown player ids: ${shown}${more}`);
 		}
 
+		await requireFreePlaces(tx, id, tournament.max_players, ids);
+
 		const rows = ids.map((playerId) => ({
 			tournament_id: id,
 			player_id: playerId,
@@ -325,6 +399,35 @@ export async function registerPlayers(
 
 		return { added: added.length, already: ids.length - added.length };
 	});
+}
+
+/**
+ * Refuses a paste that would take the tournament past its most players; ids already in don't count. NULL takes
+ * anyone. The caller holds the tournament row, so the count can't change under it.
+ */
+async function requireFreePlaces(
+	tx: SQL,
+	id: string,
+	maxPlayers: number | null,
+	ids: string[]
+): Promise<void> {
+	if (maxPlayers === null) return;
+
+	const [counts] = await tx`
+		SELECT
+			count(*) FILTER (WHERE status = 'registered')::int AS registered,
+			count(*) FILTER (WHERE player_id IN ${tx(ids)})::int AS already
+		FROM tournament_players
+		WHERE tournament_id = ${id}`;
+
+	const free = Math.max(maxPlayers - counts.registered, 0);
+	const adding = ids.length - counts.already;
+
+	if (adding > free) {
+		throw new TournamentError(
+			`Only ${free} of ${maxPlayers} places are left; this paste adds ${adding}.`
+		);
+	}
 }
 
 /** Takes a player out, and off their table first. Refused once their table started. */

@@ -27,7 +27,18 @@ test('maintenance starts and ends once each, audited, and blocks new tournaments
 	expect(await maintenanceOf('bust-31')).toBeNull();
 
 	const startsAt = new Date(Date.now() + 3_600_000);
-	const input = { game: 'cloudburst', name: 'Friday cup', playersPerRoom: 4, startsAt };
+	const input = {
+		game: 'cloudburst',
+		name: 'Friday cup',
+		playersPerRoom: 4,
+		minPlayers: 4,
+		maxPlayers: 16,
+		format: 'knockout' as const,
+		description: null,
+		prize: null,
+		fee: 0,
+		startsAt
+	};
 	await expect(createTournament(sql, admin, input, null)).rejects.toThrow(TournamentError);
 
 	expect(await setMaintenance(sql, admin, 'cloudburst', false, '10.0.0.1')).toBe(true);

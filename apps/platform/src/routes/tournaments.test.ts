@@ -17,12 +17,14 @@ async function tournament(opts: {
 	closes: number;
 	starts: number;
 	perRoom?: number;
+	min?: number;
+	max?: number;
 	game?: string;
 }) {
 	const at = (min: number) => new Date(Date.now() + min * 60_000);
 	const [row] = await t.sql`
-		INSERT INTO tournaments (game_slug, name, players_per_room, starts_at, registration_opens_at, registration_closes_at, created_by_admin_id)
-		VALUES (${opts.game ?? "bust-31"}, 'Friday Cup', ${opts.perRoom ?? 6}, ${at(opts.starts)}, ${at(opts.opens ?? -60)}, ${at(opts.closes)}, ${admin})
+		INSERT INTO tournaments (game_slug, name, players_per_room, min_players, max_players, starts_at, registration_opens_at, registration_closes_at, created_by_admin_id)
+		VALUES (${opts.game ?? "bust-31"}, 'Friday Cup', ${opts.perRoom ?? 6}, ${opts.min ?? null}, ${opts.max ?? null}, ${at(opts.starts)}, ${at(opts.opens ?? -60)}, ${at(opts.closes)}, ${admin})
 		RETURNING id`;
 	return row.id as string;
 }
@@ -110,6 +112,29 @@ describe("the distribute job", () => {
 		expect(await sizes(short)).toEqual([2, 2]);
 	});
 
+	test("cancels one that closed below its minimum, audited with no admin; one that reached it is handed out", async () => {
+		const short = await tournament({ closes: -1, starts: 10, perRoom: 2, min: 4 });
+		await register(short, 3);
+		const enough = await tournament({ closes: -1, starts: 10, perRoom: 2, min: 4 });
+		await register(enough, 4);
+
+		const run = await runTournamentJob(t.sql);
+		expect(run.cancelled).toBeGreaterThanOrEqual(1);
+
+		const [cancelled] =
+			await t.sql`SELECT cancelled_at, cancel_reason, distributed_at FROM tournaments WHERE id = ${short}`;
+		expect(cancelled.cancelled_at).toBeInstanceOf(Date);
+		expect(cancelled.cancel_reason).toBe("Only 3 of the 4 players needed signed up.");
+		expect(cancelled.distributed_at).toBeNull();
+		expect(await sizes(short)).toEqual([]);
+
+		const [audit] =
+			await t.sql`SELECT admin_id, detail FROM admin_audit_events WHERE tournament_id = ${short} AND action = 'tournament.cancel'`;
+		expect(audit).toEqual({ admin_id: null, detail: { registered: 3, minPlayers: 4, auto: true } });
+
+		expect(await sizes(enough)).toEqual([2, 2]);
+	});
+
 	test("closes a room nobody opened after starts_at + 4 min, never a started one, then ends the tournament", async () => {
 		const id = await tournament({ opens: -60, closes: -10, starts: -5, perRoom: 2 });
 		await register(id, 4);
@@ -163,6 +188,12 @@ describe("sign-up", () => {
 			registered: 1,
 			joined: true,
 			playersPerRoom: 6,
+			minPlayers: null,
+			maxPlayers: null,
+			format: null,
+			description: null,
+			prize: null,
+			fee: 0,
 		});
 		expect(
 			list.json.data.tournaments.some((x: { id: string }) => x.id === early || x.id === closed),
@@ -177,6 +208,31 @@ describe("sign-up", () => {
 				await t.sql`SELECT count(*)::int AS n FROM tournament_players WHERE tournament_id = ${open}`
 			)[0].n,
 		).toBe(0);
+	});
+});
+
+describe("a full tournament", () => {
+	test("refuses a new sign-up, but not one already in; a freed place can be taken again", async () => {
+		const cup = await tournament({ closes: 5, starts: 15, perRoom: 2, max: 2 });
+		await register(cup, 1);
+		const ann = await guest(t.app, "Ann");
+		const bob = await guest(t.app, "Bob");
+		const join = (secret: string) =>
+			call(t.app, "POST", `/v1/tournaments/${cup}/registration`, { token: secret });
+
+		expect((await join(ann.secret)).status).toBe(200);
+		expect((await join(ann.secret)).status).toBe(200);
+
+		const full = await join(bob.secret);
+		expect(full.status).toBe(409);
+		expect(full.json.error.message).toBe("Sign-up is closed: this tournament is full.");
+
+		const list = await call(t.app, "GET", "/v1/tournaments?game=bust-31", { token: bob.secret });
+		const listed = list.json.data.tournaments.find((x: { id: string }) => x.id === cup);
+		expect(listed).toMatchObject({ registered: 2, maxPlayers: 2, joined: false });
+
+		await call(t.app, "DELETE", `/v1/tournaments/${cup}/registration`, { token: ann.secret });
+		expect((await join(bob.secret)).status).toBe(200);
 	});
 });
 

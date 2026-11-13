@@ -51,49 +51,73 @@
 		No public tables right now. Open one and invite friends.
 	</p>
 {:else}
-	<ul class="space-y-2.5">
-		{#each list.rooms as r (r.code)}
-			{@const status = statusOf(r.phase, r.players, r.maxPlayers)}
-			<li
-				class="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl border border-paper/10 bg-panel px-4 py-3.5 sm:px-5"
-			>
-				<span class="min-w-0 flex-1">
-					<span class="block truncate font-medium text-paper"
-						>{r.name ?? (r.host ? `${r.host}’s table` : 'Table')}</span
-					>
-					<span class="mt-1 flex items-center gap-4 text-sm">
-						<span class="font-semibold text-brass">{r.code}</span>
-						<span
-							class="flex items-center gap-1"
-							role="img"
-							aria-label="{r.players} of {r.maxPlayers} seats taken"
-						>
-							{#each Array(r.maxPlayers) as _, seat (seat)}
-								<span
-									class="size-2 rounded-full {seat < r.players
-										? 'bg-paper/85'
-										: 'border border-paper/35'}"
-								></span>
-							{/each}
-							<span class="ml-1 text-xs text-paper/60 tabular-nums">{r.players}/{r.maxPlayers}</span
+	<!-- A table of tables: name, code, seats, status, Join. Phones fold the code and status under the name. -->
+	<div class="overflow-hidden rounded-2xl border border-paper/10 bg-panel">
+		<table class="w-full text-left text-sm">
+			<thead class="border-b border-paper/10 text-xs text-paper/55">
+				<tr>
+					<th scope="col" class="px-4 py-3 font-semibold sm:px-5">Table</th>
+					<th scope="col" class="px-4 py-3 font-semibold max-sm:hidden">Code</th>
+					<th scope="col" class="px-4 py-3 font-semibold">Seats</th>
+					<th scope="col" class="px-4 py-3 font-semibold max-sm:hidden">Status</th>
+					<th scope="col" class="px-4 py-3 sm:pr-5"><span class="sr-only">Join</span></th>
+				</tr>
+			</thead>
+			<tbody class="divide-y divide-paper/8">
+				{#each list.rooms as r (r.code)}
+					{@const status = statusOf(r.phase, r.players, r.maxPlayers)}
+					<tr>
+						<td class="w-full max-w-0 px-4 py-3.5 sm:w-[40%] sm:px-5">
+							<span class="block truncate font-medium text-paper"
+								>{r.name ?? (r.host ? `${r.host}’s table` : 'Table')}</span
 							>
-						</span>
-					</span>
-				</span>
-				<span class="rounded-full px-2.5 py-0.5 text-xs font-semibold {status.tone}"
-					>{status.label}</span
-				>
-				<button
-					class="h-9 shrink-0 rounded-lg px-5 text-sm font-semibold {status.open
-						? 'bg-brass text-ink hover:brightness-110'
-						: 'border border-paper/15 text-paper/40'}"
-					onclick={() => enterTable(game, r.code)}
-					disabled={!status.open}
-					aria-label="Join table {r.code}"
-				>
-					Join
-				</button>
-			</li>
-		{/each}
-	</ul>
+							<span class="mt-1 flex flex-col items-start gap-1.5 sm:hidden">
+								<span class="font-semibold text-brass">{r.code}</span>
+								<span class="rounded-full px-2.5 py-0.5 text-xs font-semibold {status.tone}"
+									>{status.label}</span
+								>
+							</span>
+						</td>
+						<td class="px-4 py-3.5 font-semibold text-brass max-sm:hidden">{r.code}</td>
+						<td class="px-4 py-3.5">
+							<span
+								class="flex items-center gap-1"
+								role="img"
+								aria-label="{r.players} of {r.maxPlayers} seats taken"
+							>
+								{#each Array(r.maxPlayers) as _, seat (seat)}
+									<span
+										class="size-2 rounded-full max-sm:hidden {seat < r.players
+											? 'bg-paper/85'
+											: 'border border-paper/35'}"
+									></span>
+								{/each}
+								<span class="text-xs text-paper/60 tabular-nums sm:ml-1"
+									>{r.players}/{r.maxPlayers}</span
+								>
+							</span>
+						</td>
+						<td class="px-4 py-3.5 max-sm:hidden">
+							<span
+								class="rounded-full px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap {status.tone}"
+								>{status.label}</span
+							>
+						</td>
+						<td class="px-4 py-3.5 text-right sm:pr-5">
+							<button
+								class="h-9 shrink-0 rounded-lg px-5 text-sm font-semibold {status.open
+									? 'bg-brass text-ink hover:brightness-110'
+									: 'border border-paper/15 text-paper/40'}"
+								onclick={() => enterTable(game, r.code)}
+								disabled={!status.open}
+								aria-label="Join table {r.code}"
+							>
+								Join
+							</button>
+						</td>
+					</tr>
+				{/each}
+			</tbody>
+		</table>
+	</div>
 {/if}

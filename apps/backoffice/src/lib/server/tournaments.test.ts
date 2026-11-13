@@ -8,6 +8,7 @@ import {
 	createTournament,
 	disqualifyPlayer,
 	distributeNow,
+	NewTournament,
 	tournamentTables,
 	parseIds,
 	registerPlayers,
@@ -23,11 +24,22 @@ const players = async (n: number) =>
 	(
 		await sql`INSERT INTO players ${sql(Array.from({ length: n }, (_, i) => ({ display_name: `P${i}` })))} RETURNING id`
 	).map((r: { id: string }) => r.id);
-const newCup = (perRoom = 6) =>
+const newCup = (perRoom = 6, maxPlayers = 36, minPlayers = 2) =>
 	createTournament(
 		sql,
 		admin,
-		{ game: 'bust-31', name: 'Friday Cup', playersPerRoom: perRoom, startsAt: inMinutes(60) },
+		{
+			game: 'bust-31',
+			name: 'Friday Cup',
+			playersPerRoom: perRoom,
+			minPlayers,
+			maxPlayers,
+			format: 'arena',
+			description: null,
+			prize: null,
+			fee: 0,
+			startsAt: inMinutes(60)
+		},
 		null
 	);
 
@@ -47,7 +59,18 @@ describe('tournaments', () => {
 			createTournament(
 				sql,
 				admin,
-				{ game: 'bust-31', name: 'Big', playersPerRoom: 7, startsAt: inMinutes(60) },
+				{
+					game: 'bust-31',
+					name: 'Big',
+					playersPerRoom: 7,
+					minPlayers: 2,
+					maxPlayers: 36,
+					format: 'arena',
+					description: null,
+					prize: null,
+					fee: 0,
+					startsAt: inMinutes(60)
+				},
 				null
 			)
 		).rejects.toThrow('2-6');
@@ -55,7 +78,18 @@ describe('tournaments', () => {
 			createTournament(
 				sql,
 				admin,
-				{ game: 'bust-31', name: 'Past', playersPerRoom: 6, startsAt: inMinutes(-1) },
+				{
+					game: 'bust-31',
+					name: 'Past',
+					playersPerRoom: 6,
+					minPlayers: 2,
+					maxPlayers: 36,
+					format: 'arena',
+					description: null,
+					prize: null,
+					fee: 0,
+					startsAt: inMinutes(-1)
+				},
 				null
 			)
 		).rejects.toThrow('future');
@@ -65,6 +99,59 @@ describe('tournaments', () => {
 			10 * 60_000 + 5_000
 		);
 		expect(tournament.registrationOpensAt.getTime()).toBeLessThanOrEqual(Date.now());
+	});
+
+	test('most players is at least a table, and a paste past it is refused whole', async () => {
+		await expect(newCup(6, 5)).rejects.toThrow('at least the players per table');
+		await expect(newCup(6, 36, 1)).rejects.toThrow('Fewest players must be 2-36');
+		await expect(newCup(6, 36, 37)).rejects.toThrow('Fewest players must be 2-36');
+
+		const id = await newCup(2, 3);
+		const ids = await players(4);
+		await registerPlayers(sql, admin, id, ids.slice(0, 2), null);
+
+		await expect(registerPlayers(sql, admin, id, ids.slice(1, 4), null)).rejects.toThrow(
+			'Only 1 of 3 places are left; this paste adds 2.'
+		);
+		expect(await registerPlayers(sql, admin, id, ids.slice(1, 3), null)).toEqual({
+			added: 1,
+			already: 1
+		});
+
+		const { tournament } = (await tournamentDetail(sql, id))!;
+		expect(tournament).toMatchObject({ registered: 3, maxPlayers: 3 });
+	});
+
+	test('format, description, prize and fee are kept; the fee is whole coins', async () => {
+		const form = {
+			game: 'bust-31',
+			name: 'Cup',
+			playersPerRoom: '6',
+			minPlayers: '2',
+			maxPlayers: '12',
+			format: 'swiss',
+			description: ' Five rounds. ',
+			prize: '10.000 coins',
+			fee: '250',
+			startsAt: '2099-01-01T20:00'
+		};
+		expect(NewTournament.safeParse({ ...form, format: 'bracket' }).success).toBe(false);
+		expect(NewTournament.safeParse({ ...form, fee: '2.5' }).success).toBe(false);
+		expect(NewTournament.safeParse({ ...form, fee: '-1' }).success).toBe(false);
+
+		const { fee: _fee, ...withoutFee } = form;
+		expect(NewTournament.parse(withoutFee).fee).toBe(0);
+
+		const parsed = NewTournament.parse(form);
+		const id = await createTournament(sql, admin, parsed, null);
+		const { tournament } = (await tournamentDetail(sql, id))!;
+
+		expect(tournament).toMatchObject({
+			format: 'swiss',
+			description: 'Five rounds.',
+			prize: '10.000 coins',
+			fee: 250
+		});
 	});
 
 	test('register by pasted ids, distribute now, then seat and take off by hand', async () => {

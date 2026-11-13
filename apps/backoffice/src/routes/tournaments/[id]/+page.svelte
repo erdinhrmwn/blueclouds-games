@@ -2,7 +2,7 @@
 	import { enhance } from '$app/forms';
 	import { utc } from '#lib/format.ts';
 	import PageHeader from '#lib/components/PageHeader.svelte';
-	import { duration, statusTag, tournamentStatus } from '#lib/tournament-status.ts';
+	import { duration, formatLabel, statusTag, tournamentStatus } from '#lib/tournament-status.ts';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
@@ -61,7 +61,19 @@
 		<dt>Status</dt>
 		<dd class={status.bad ? 'font-medium text-danger' : ''}>{status.label}</dd>
 		<dt>Game</dt>
-		<dd>{tournament.gameName}, {tournament.playersPerRoom} per table</dd>
+		<dd>
+			{tournament.gameName}, {tournament.playersPerRoom} per table{#if tournament.minPlayers !== null},
+				{tournament.minPlayers}-{tournament.maxPlayers} players{:else if tournament.maxPlayers !== null},
+				up to {tournament.maxPlayers} players{/if}
+		</dd>
+		{#if tournament.format}<dt>Format</dt>
+			<dd>{formatLabel(tournament.format)}</dd>{/if}
+		<dt>Prize</dt>
+		<dd>{tournament.prize ?? 'None'}</dd>
+		<dt>Fee</dt>
+		<dd>{tournament.fee === 0 ? 'Free' : `${tournament.fee.toLocaleString('en')} coins`}</dd>
+		{#if tournament.description}<dt>Description</dt>
+			<dd class="whitespace-pre-line">{tournament.description}</dd>{/if}
 		<dt>Starts</dt>
 		<dd>{utc(tournament.startsAt)}</dd>
 		<dt>Sign-up</dt>
@@ -73,7 +85,9 @@
 				{utc(tournament.endedAt)}, ran {duration(tournament.startsAt, tournament.endedAt)}
 			</dd>{/if}
 		{#if tournament.cancelledAt}<dt>Cancelled</dt>
-			<dd>{utc(tournament.cancelledAt)}</dd>{/if}
+			<dd>
+				{utc(tournament.cancelledAt)}{#if tournament.cancelReason}, by the platform: {tournament.cancelReason}{/if}
+			</dd>{/if}
 		<dt>Tournament id</dt>
 		<dd class="font-mono text-xs leading-5 break-all">{tournament.id}</dd>
 	</dl>

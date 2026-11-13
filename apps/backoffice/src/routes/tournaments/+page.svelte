@@ -2,7 +2,8 @@
 	import { enhance } from '$app/forms';
 	import PageHeader from '#lib/components/PageHeader.svelte';
 	import { utc } from '#lib/format.ts';
-	import { statusTag, tournamentStatus } from '#lib/tournament-status.ts';
+	import { FEE_MAX, MAX_PLAYERS_LIMIT, TOURNAMENT_TEXT_MAX } from '#lib/limits.ts';
+	import { statusTag, TOURNAMENT_FORMATS, tournamentStatus } from '#lib/tournament-status.ts';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
@@ -52,7 +53,10 @@
 									>
 								</td>
 								<td>{tournament.gameName}</td>
-								<td class="tabular-nums">{tournament.registered}</td>
+								<td class="tabular-nums">
+									{tournament.registered}{#if tournament.maxPlayers !== null}
+										/ {tournament.maxPlayers}{/if}
+								</td>
 								<td class="tabular-nums">{tournament.rooms}</td>
 								<td><span class={statusTag(status)}>{status.label}</span></td>
 							</tr>
@@ -131,6 +135,77 @@
 						value={values.playersPerRoom ?? picked?.maxPlayers}
 						required
 					/>
+				</div>
+				<div>
+					<label class="label" for="minPlayers">Fewest players (else cancelled)</label>
+					<input
+						class="field"
+						id="minPlayers"
+						name="minPlayers"
+						type="number"
+						min={picked?.minPlayers}
+						max={MAX_PLAYERS_LIMIT}
+						value={values.minPlayers ?? ''}
+						required
+						placeholder="8"
+					/>
+				</div>
+				<div>
+					<label class="label" for="maxPlayers">Most players (then sign-up closes)</label>
+					<input
+						class="field"
+						id="maxPlayers"
+						name="maxPlayers"
+						type="number"
+						min={values.playersPerRoom ?? picked?.maxPlayers}
+						max={MAX_PLAYERS_LIMIT}
+						value={values.maxPlayers ?? ''}
+						required
+						placeholder="36"
+					/>
+				</div>
+				<div>
+					<label class="label" for="format">Format</label>
+					<select class="field" id="format" name="format" value={values.format ?? 'arena'}>
+						{#each TOURNAMENT_FORMATS as format (format.value)}
+							<option value={format.value}>{format.label}: {format.note}</option>
+						{/each}
+					</select>
+				</div>
+				<div>
+					<label class="label" for="prize">Prize (shown as written)</label>
+					<input
+						class="field"
+						id="prize"
+						name="prize"
+						value={values.prize ?? ''}
+						maxlength={TOURNAMENT_TEXT_MAX.prize}
+						placeholder="5.000 coins"
+					/>
+				</div>
+				<div>
+					<label class="label" for="fee">Fee in coins (0 or empty = free)</label>
+					<input
+						class="field"
+						id="fee"
+						name="fee"
+						type="number"
+						min="0"
+						max={FEE_MAX}
+						step="1"
+						value={values.fee ?? ''}
+						placeholder="0"
+					/>
+				</div>
+				<div class="sm:col-span-2 xl:col-span-1">
+					<label class="label" for="description">Description</label>
+					<textarea
+						class="field min-h-24"
+						id="description"
+						name="description"
+						maxlength={TOURNAMENT_TEXT_MAX.description}
+						placeholder="How it's played and what's at stake.">{values.description ?? ''}</textarea
+					>
 				</div>
 				<div>
 					<label class="label" for="registrationOpensAt">Sign-up opens (UTC, empty = now)</label>

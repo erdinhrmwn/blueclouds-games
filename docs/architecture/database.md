@@ -85,12 +85,19 @@ CREATE TABLE tournaments (
   game_slug            text NOT NULL REFERENCES games(slug),
   name                 text NOT NULL CHECK (char_length(name) BETWEEN 1 AND 80 AND name = btrim(name)),
   players_per_room     smallint NOT NULL CHECK (players_per_room BETWEEN 1 AND 32),  -- most players in one room; within the game's min/max (checked on save)
+  min_players          smallint CHECK (min_players IS NULL OR min_players BETWEEN 1 AND coalesce(max_players, min_players)),  -- fewest it runs with, else the job cancels it (migration 018)
+  max_players          smallint CHECK (max_players IS NULL OR max_players BETWEEN players_per_room AND 10000),  -- most sign-ups, which closes sign-up; NULL (made before migration 017) takes anyone
+  format               text CHECK (format IS NULL OR format IN ('arena', 'knockout', 'swiss')),  -- a label until matchmaking for it exists (migration 019)
+  description          text,                  -- 1-1000 characters, shown in the lobby's Detail dialog
+  prize                text,                  -- 1-60 characters, shown as written; there is no wallet, nothing is paid out
+  fee                  integer NOT NULL DEFAULT 0,  -- in coins, 0 = free; shown only, nothing is charged
   starts_at            timestamptz NOT NULL,
   registration_opens_at   timestamptz NOT NULL DEFAULT now(),
   registration_closes_at  timestamptz NOT NULL,  -- also when players get rooms (default: starts_at - 10 min)
   distributed_at       timestamptz,           -- when that actually ran
   distribute_error     text,                  -- why the last automatic run couldn't, shown in the backoffice
   cancelled_at         timestamptz,
+  cancel_reason        text,                  -- why the platform cancelled it by itself; NULL when an admin did
   ended_at             timestamptz,           -- when its last room closed: ended_at - starts_at = how long it ran
   created_by_admin_id  uuid NOT NULL REFERENCES admins(id),
   created_at, updated_at,
@@ -156,9 +163,9 @@ CREATE INDEX room_assignments_player_id_idx ON room_assignments (player_id);
 
 How a tournament runs:
 
-1. **Create** the tournament in the backoffice: game, name, start time, players per room (for example 6 for Bust 31), and the registration window: opens (default: now) and closes (default: 10 minutes before the start).
-2. **Register players**, two ways: a player presses **Join** on the game's home page while registration is open (`registration_opens_at` to `registration_closes_at`; `registered_by_admin_id` is then null), or an admin pastes a list of player ids in the backoffice, any time until the tables are handed out. A player can leave again until it closes. Registering twice does nothing.
-3. **Distribute, automatically**: when registration closes (`registration_closes_at`) the platform's distribute job does it, with no admin needed (Erdin wanted it fully automatic). The backoffice also has a "Distribute now" button that runs the same code early. The platform shuffles the registered players who have no room yet, opens `ceil(n / players_per_room)` rooms, and splits them as evenly as possible, each on a seat. 20 players at 6 per room → 4 rooms of 5, not 6+6+6+2. If a room would end up below the game's minimum (3 players at 2 per room → 2 + 1), it refuses and says how many players to add or remove. Everything happens in one transaction with one audit event, and sets `distributed_at`. If the job can't distribute (too few players for the game's minimum, or nobody registered), it writes the reason to `distribute_error`, the tournament page shows it in red, and the job tries again on every tick until an admin fixes the registrations or cancels.
+1. **Create** the tournament in the backoffice: game, name, start time, players per room (for example 6 for Bust 31), fewest and most players (migrations 017 and 018; the lobby card shows "18 / 36 signed up"), and the registration window: opens (default: now) and closes (default: 10 minutes before the start).
+2. **Register players**, two ways: a player presses **Join** on the game's home page while registration is open (`registration_opens_at` to `registration_closes_at`; `registered_by_admin_id` is then null), or an admin pastes a list of player ids in the backoffice, any time until the tables are handed out. A player can leave again until it closes. Registering twice does nothing. Once `max_players` are registered, sign-up is closed: a new sign-up is refused (`409`, "Sign-up is closed: this tournament is full."), by a player or a pasted list; a player who leaves frees the place and opens it again. Seating a latecomer by hand after the hand-out isn't held to it, since the tables' seats limit that.
+3. **Distribute, automatically**: when registration closes (`registration_closes_at`) the platform's distribute job does it, with no admin needed (Erdin wanted it fully automatic). The backoffice also has a "Distribute now" button that runs the same code early. The platform shuffles the registered players who have no room yet, opens `ceil(n / players_per_room)` rooms, and splits them as evenly as possible, each on a seat. 20 players at 6 per room → 4 rooms of 5, not 6+6+6+2. If fewer than `min_players` can play when registration closes, the job cancels the tournament instead, keeps why in `cancel_reason`, and audits `tournament.cancel` with no admin; "Distribute now" refuses below it. If a room would end up below the game's minimum (3 players at 2 per room → 2 + 1), it refuses and says how many players to add or remove. Everything happens in one transaction with one audit event, and sets `distributed_at`. If the job can't distribute (too few players for the game's minimum, or nobody registered), it writes the reason to `distribute_error`, the tournament page shows it in red, and the job tries again on every tick until an admin fixes the registrations or cancels.
 4. **Late changes**: once registration has closed, nobody can sign up; an admin can still add a player by hand into a room with a free seat. Nobody already seated is ever moved. Unregistering a seated player removes their seat first.
 5. **Withdrawn and disqualified** (migration 013): once the tables are handed out, a player can **withdraw** from the game's home page until their table starts. Their seat is freed and the row stays as `withdrawn`. An admin can **disqualify** a player with a reason (audited as `tournament.disqualify`) until the tournament ends. A table that hasn't started frees their seat; at a running table the seat stays on record and the admin kicks them from Live tables. Either way the player can't sign up, enter the table or be seated again, the room no longer counts their seat, and at the start time the room drops anyone who sat down but no longer has a seat there.
 5. **Play**: players see their table on the game's home page and join before the start; every room starts on its own at `starts_at` (see "Inside the room" below).
@@ -389,12 +396,19 @@ CREATE TABLE tournaments (
   game_slug            text NOT NULL REFERENCES games(slug),
   name                 text NOT NULL CHECK (char_length(name) BETWEEN 1 AND 80 AND name = btrim(name)),
   players_per_room     smallint NOT NULL CHECK (players_per_room BETWEEN 1 AND 32),
+  min_players          smallint CHECK (min_players IS NULL OR min_players BETWEEN 1 AND coalesce(max_players, min_players)),
+  max_players          smallint CHECK (max_players IS NULL OR max_players BETWEEN players_per_room AND 10000),
+  format               text CHECK (format IS NULL OR format IN ('arena', 'knockout', 'swiss')),
+  description          text CHECK (description IS NULL OR char_length(description) BETWEEN 1 AND 1000),
+  prize                text CHECK (prize IS NULL OR char_length(prize) BETWEEN 1 AND 60),
+  fee                  integer NOT NULL DEFAULT 0 CHECK (fee BETWEEN 0 AND 1000000000),
   starts_at            timestamptz NOT NULL,
   registration_opens_at   timestamptz NOT NULL DEFAULT now(),
   registration_closes_at  timestamptz NOT NULL,  -- also when players get rooms (default: starts_at - 10 min)
   distributed_at       timestamptz,           -- when that actually ran
   distribute_error     text,                  -- why the last automatic run couldn't, shown in the backoffice
   cancelled_at         timestamptz,
+  cancel_reason        text,                  -- why the platform cancelled it by itself; NULL when an admin did
   ended_at             timestamptz,           -- when its last room closed: ended_at - starts_at = how long it ran
   created_by_admin_id  uuid NOT NULL REFERENCES admins(id),
   created_at           timestamptz NOT NULL DEFAULT now(),

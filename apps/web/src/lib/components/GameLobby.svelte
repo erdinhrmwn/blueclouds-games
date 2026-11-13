@@ -7,8 +7,8 @@
 	import Tournaments from './Tournaments.svelte';
 
 	/**
-	 * A game's own page, the same for every game: the game, open or join a table, its open tables and its
-	 * tournaments (side by side, or two tabs on a phone), then how to play.
+	 * A game's own page, the same for every game: the game, open or join a table, its tournaments (a row that
+	 * scrolls sideways), its open tables (a table), then how to play.
 	 */
 	let {
 		game,
@@ -23,12 +23,6 @@
 	let opening = $state(false);
 	let tableCount = $state(0);
 	let tournamentCount = $state(0);
-	let tab = $state<'tables' | 'tournaments'>('tables');
-
-	const TABS = [
-		{ id: 'tables', label: 'Tables' },
-		{ id: 'tournaments', label: 'Tournaments' }
-	] as const;
 </script>
 
 <nav class="pt-6 text-sm text-paper/55 md:pt-10" aria-label="Breadcrumb">
@@ -67,60 +61,26 @@
 
 <OpenTableDialog bind:open={opening} game={game.slug} gameName={game.name} {maintenance} />
 
-<!-- Phones: one list at a time behind two tabs. Wider screens show both side by side. -->
-<div class="mt-10 grid grid-cols-2 gap-1 rounded-xl bg-black/30 p-1 md:hidden" role="tablist">
-	{#each TABS as t (t.id)}
-		<button
-			role="tab"
-			aria-selected={tab === t.id}
-			aria-controls="lobby-{t.id}"
-			class="h-10 rounded-lg text-sm font-semibold {tab === t.id
-				? 'bg-paper text-ink'
-				: 'text-paper/75 hover:text-paper'}"
-			onclick={() => (tab = t.id)}
+<!-- Tournaments first, as a row that scrolls sideways; then the open tables. -->
+<section id="lobby-tournaments" aria-labelledby="tournaments-title" class="mt-10 md:mt-12">
+	<h2 id="tournaments-title" class="mb-4 flex items-center gap-2.5 font-display text-2xl font-bold">
+		Tournaments
+		<span class="rounded-full bg-black/35 px-2 py-0.5 font-sans text-xs text-paper/80 tabular-nums"
+			>{tournamentCount}</span
 		>
-			{t.label}
-			<span class="tabular-nums">{t.id === 'tables' ? tableCount : tournamentCount}</span>
-		</button>
-	{/each}
-</div>
+	</h2>
+	<Tournaments game={game.slug} bind:count={tournamentCount} />
+</section>
 
-<div class="mt-5 grid gap-10 md:mt-12 md:grid-cols-[1.45fr_1fr] md:gap-8">
-	<section
-		id="lobby-tables"
-		aria-labelledby="tables-title"
-		class={tab === 'tables' ? '' : 'max-md:hidden'}
-	>
-		<h2
-			id="tables-title"
-			class="mb-4 flex items-center gap-2.5 font-display text-2xl font-bold max-md:sr-only"
+<section id="lobby-tables" aria-labelledby="tables-title" class="mt-10 md:mt-12">
+	<h2 id="tables-title" class="mb-4 flex items-center gap-2.5 font-display text-2xl font-bold">
+		Open tables
+		<span class="rounded-full bg-black/35 px-2 py-0.5 font-sans text-xs text-paper/80 tabular-nums"
+			>{tableCount}</span
 		>
-			Open tables
-			<span
-				class="rounded-full bg-black/35 px-2 py-0.5 font-sans text-xs text-paper/80 tabular-nums"
-				>{tableCount}</span
-			>
-		</h2>
-		<OpenTables game={game.slug} bind:count={tableCount} />
-	</section>
-	<section
-		id="lobby-tournaments"
-		aria-labelledby="tournaments-title"
-		class={tab === 'tournaments' ? '' : 'max-md:hidden'}
-	>
-		<h2
-			id="tournaments-title"
-			class="mb-4 flex items-center gap-2.5 font-display text-2xl font-bold max-md:sr-only"
-		>
-			Tournaments
-			<span
-				class="rounded-full bg-black/35 px-2 py-0.5 font-sans text-xs text-paper/80 tabular-nums"
-				>{tournamentCount}</span
-			>
-		</h2>
-		<Tournaments game={game.slug} bind:count={tournamentCount} />
-	</section>
-</div>
+	</h2>
+	<OpenTables game={game.slug} bind:count={tableCount} />
+</section>
 
 <section id="how-to-play" class="mt-16 max-w-2xl scroll-mt-6" aria-label="How to play">
 	{@render rules()}

@@ -308,9 +308,22 @@ export type Tournament = {
 	startsAt: string;
 	registrationClosesAt: string;
 	playersPerRoom: number;
+	/** Fewest players it runs with, else it is cancelled when sign-up closes; null for no minimum. */
+	minPlayers: number | null;
+	/** Most sign-ups, which closes sign-up; null for a tournament that takes anyone. */
+	maxPlayers: number | null;
+	/** How it is played; a label until matchmaking for it exists. */
+	format: TournamentFormat | null;
+	description: string | null;
+	/** As the admin wrote it; nothing is paid out by the platform. */
+	prize: string | null;
+	/** In coins; 0 is free. Nothing is charged. */
+	fee: number;
 	registered: number;
 	joined: boolean;
 };
+
+export type TournamentFormat = 'arena' | 'knockout' | 'swiss';
 
 export type TournamentTable = {
 	code: string;
