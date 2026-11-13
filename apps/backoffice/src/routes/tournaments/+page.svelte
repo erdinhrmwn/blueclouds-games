@@ -6,6 +6,8 @@
 		FEE_MAX,
 		MAX_PLAYERS_LIMIT,
 		PRIZE_PLACES_MAX,
+		ROUNDS_DEFAULT,
+		ROUNDS_MAX,
 		TOURNAMENT_TEXT_MAX
 	} from '#lib/limits.ts';
 	import { statusTag, TOURNAMENT_FORMATS, tournamentStatus } from '#lib/tournament-status.ts';
@@ -18,6 +20,8 @@
 		data.games.find((g) => g.slug === (game || values.game)) ?? data.games[0]
 	);
 	let busy = $state(false);
+	/** The picked format: a knockout has no round count, it plays until one player is left. */
+	let format = $state('');
 
 	/** Paid places, 1st first; three to start with, as most tournaments pay a podium. */
 	const STARTING_PLACES = 3;
@@ -200,12 +204,34 @@
 				</div>
 				<div>
 					<label class="label" for="format">Format</label>
-					<select class="field" id="format" name="format" value={values.format ?? 'arena'}>
+					<select
+						class="field"
+						id="format"
+						name="format"
+						value={values.format ?? 'arena'}
+						onchange={(e) => (format = e.currentTarget.value)}
+					>
 						{#each TOURNAMENT_FORMATS as format (format.value)}
 							<option value={format.value}>{format.label}: {format.note}</option>
 						{/each}
 					</select>
 				</div>
+				{#if (format || values.format || 'arena') !== 'knockout'}
+					<div>
+						<label class="label" for="rounds">Rounds (Arena and Swiss)</label>
+						<input
+							class="field"
+							id="rounds"
+							name="rounds"
+							type="number"
+							min="1"
+							max={ROUNDS_MAX}
+							step="1"
+							value={values.rounds ?? ROUNDS_DEFAULT}
+							required
+						/>
+					</div>
+				{/if}
 				<fieldset class="sm:col-span-2 xl:col-span-1">
 					<legend class="label">Prizes by place (coins, and an optional extra like a badge)</legend>
 					<ol class="space-y-2">

@@ -71,8 +71,9 @@
 		<dt>Game</dt>
 		<dd>
 			{tournament.gameName}, {tournament.playersPerRoom} per table{#if tournament.minPlayers !== null},
-				{tournament.minPlayers}-{tournament.maxPlayers} players{:else if tournament.maxPlayers !== null},
-				up to {tournament.maxPlayers} players{/if}
+				{tournament.minPlayers}-{tournament.maxPlayers} players{#if tournament.rounds},
+					{tournament.rounds} rounds{/if}{:else if tournament.maxPlayers !== null}, up to {tournament.maxPlayers}
+				players{/if}
 		</dd>
 		{#if tournament.format}<dt>Format</dt>
 			<dd>{formatLabel(tournament.format)}</dd>{/if}
@@ -182,6 +183,9 @@
 						<a class="link" href="/players/{result.playerId}">{result.name}</a>
 					</span>
 					<span class="text-muted tabular-nums">
+						{#if tournament.format === 'arena' || tournament.format === 'swiss'}
+							{result.points} points ·
+						{/if}
 						{result.wins}
 						{result.wins === 1 ? 'win' : 'wins'} · reached round {result.lastRound}
 					</span>

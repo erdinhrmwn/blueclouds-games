@@ -34,6 +34,7 @@ test('maintenance starts and ends once each, audited, and blocks new tournaments
 		minPlayers: 4,
 		maxPlayers: 16,
 		format: 'knockout' as const,
+		rounds: 3,
 		description: null,
 		prizes: [],
 		fee: 0,

@@ -7,6 +7,10 @@ export const MAX_PLAYERS_LIMIT = 10_000;
 /** Longest texts a tournament keeps for its lobby card and Detail dialog (migration 019). */
 export const TOURNAMENT_TEXT_MAX = { description: 1000, prizeExtra: 40 } as const;
 
+/** Rounds an Arena or Swiss tournament may play (migration 023), and how many when left empty. */
+export const ROUNDS_MAX = 20;
+export const ROUNDS_DEFAULT = 3;
+
 /** Most finishing places a tournament pays (migration 020). */
 export const PRIZE_PLACES_MAX = 10;
 

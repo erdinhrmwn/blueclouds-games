@@ -314,6 +314,8 @@ export type Tournament = {
 	maxPlayers: number | null;
 	/** How it is played; a label until matchmaking for it exists. */
 	format: TournamentFormat | null;
+	/** Arena and Swiss: how many rounds it plays; null for a knockout. */
+	rounds: number | null;
 	description: string | null;
 	/** By finishing place, 1st first; nothing is paid out by the platform. */
 	prizes: TournamentPrize[];
