@@ -56,7 +56,10 @@ export const VIP_REFRESH_MS = 30_000;
 
 /** A tournament room as the actor knows it from the platform. `seats` maps each assigned player to their seat (null = any). */
 export type TournamentRoom = {
+	id: string;
 	name: string;
+	/** The tournament round this table plays in. */
+	round: number;
 	startsAt: number;
 	cancelled: boolean;
 	minPlayers: number;
@@ -1092,7 +1095,9 @@ export async function refreshTournament(c: Ctx): Promise<TournamentRoom | null> 
 
 	const seats = Object.fromEntries(room!.seats.map((seat) => [seat.playerId, seat.seat]));
 	c.vars.tournament = {
+		id: tournament.id,
 		name: tournament.name,
+		round: tournament.round,
 		startsAt: Date.parse(tournament.startsAt),
 		cancelled: tournament.cancelled,
 		minPlayers: room!.minPlayers,
@@ -1212,7 +1217,9 @@ export function tournamentView(c: Ctx) {
 
 	const now = Date.now();
 	return {
+		id: tournament.id,
 		name: tournament.name,
+		round: tournament.round,
 		startsIn: tournament.startsAt - now,
 		waitEndsIn: tournament.startsAt + LATE_GRACE_MS - now,
 		seats: Object.keys(tournament.seats).length,

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { Tournament } from '#lib/platform.ts';
-	import { coins, FORMATS, startsIn } from '#lib/tournament-formats.ts';
+	import { avatarTone, coins, FORMATS, startsIn } from '#lib/tournament-formats.ts';
 	import { when } from '#lib/when.ts';
 	import PrizeFee from './PrizeFee.svelte';
 	import SignUpBar from './SignUpBar.svelte';
@@ -115,17 +115,6 @@
 	/** Gold, silver and bronze for the podium; the rest plain. */
 	const MEDALS = ['bg-brass text-ink', 'bg-paper/75 text-ink', 'bg-rim-light text-paper'];
 	const medal = (place: number) => MEDALS[place - 1] ?? 'bg-paper/12 text-paper';
-
-	/** Avatar colours from the games' palette, picked by name so a player keeps theirs. */
-	const AVATAR_TONES = ['bg-ember', 'bg-rain', 'bg-wind', 'bg-storm', 'bg-sun'];
-	function tone(name: string): string {
-		let sum = 0;
-		for (const letter of name) {
-			sum += letter.codePointAt(0) ?? 0;
-		}
-
-		return AVATAR_TONES[sum % AVATAR_TONES.length]!;
-	}
 
 	/** "Rina, Erdin and 3 more". */
 	const whoSummary = $derived.by(() => {
@@ -320,7 +309,7 @@
 						<span class="flex -space-x-2" aria-hidden="true">
 							{#each tournament.players as name, index (index)}
 								<span
-									class="grid size-8 place-items-center rounded-full text-sm font-bold text-paper ring-[3px] ring-panel {tone(
+									class="grid size-8 place-items-center rounded-full text-sm font-bold text-paper ring-[3px] ring-panel {avatarTone(
 										name
 									)}">{name.charAt(0).toUpperCase()}</span
 								>

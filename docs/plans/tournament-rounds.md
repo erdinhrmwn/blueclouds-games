@@ -5,8 +5,8 @@ Status: decisions made by Erdin 2026-11-13 (see the end); one PR per phase into 
 - Phase 1 (rounds as data): merged, PR #18.
 - Phase 2 (knockout rounds, final places): merged, PR #19.
   Players level at the end (say 2nd at two tables) are split by sign-up order; a player who never played a match gets no place.
-- Phase 3 (Arena and Swiss): branch `feat/tournament-formats`. No byes were needed: a round that can't fill every table to the game's minimum seats its players at fewer, fuller tables instead.
-- The results API and web views wait for phase 5 and its design.
+- Phase 3 (Arena and Swiss): merged, PR #20. No byes were needed: a round that can't fill every table to the game's minimum seats its players at fewer, fuller tables instead.
+- Phase 5 (players across rounds): branch `feat/tournament-live`. Design on the FigCraft page "Tournament live". The lobby's carousel shows playing tournaments (round, countdown, your place, top 3, Standings and Go to table) and, for a day, finished ones (podium with prizes, Results); their Detail lists the standings or the podium and final places; a table, once its match ends, says what's next (your next table, waiting, out, or your final place), polling the lobby list until the next round is seated.
 
 ## Where we are
 

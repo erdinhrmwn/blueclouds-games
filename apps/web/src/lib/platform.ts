@@ -1,4 +1,10 @@
-import type { Tournament, TournamentTable, Visibility } from '#lib/server/platform.ts';
+import type {
+	LiveTournament,
+	Standing,
+	Tournament,
+	TournamentTable,
+	Visibility
+} from '#lib/server/platform.ts';
 
 /** The browser's side of the platform: our own /api routes, which call the platform server to server. */
 
@@ -74,6 +80,8 @@ export const resetInviteLink = (game: string, code: string) =>
 // Tournaments
 
 export type {
+	LiveTournament,
+	Standing,
 	Tournament,
 	TournamentFormat,
 	TournamentPrize,
@@ -81,10 +89,12 @@ export type {
 	Visibility
 } from '#lib/server/platform.ts';
 export const fetchTournaments = (game: string) =>
-	request<{ tournaments: Tournament[]; tables: TournamentTable[] }>(
+	request<{ tournaments: Tournament[]; live: LiveTournament[]; tables: TournamentTable[] }>(
 		'GET',
 		`/api/${encodeURIComponent(game)}/tournaments`
 	);
+export const fetchStandings = (id: string) =>
+	request<{ standings: Standing[] }>('GET', `/api/tournaments/${encodeURIComponent(id)}/standings`);
 export const joinTournament = (id: string) =>
 	request<{ registered: boolean }>(
 		'POST',

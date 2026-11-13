@@ -276,6 +276,7 @@ export async function roomSeats(sql: SQL, code: string) {
 			r.name AS room_name,
 			r.started_at,
 			r.closed_at,
+			r.tournament_round,
 			t.id AS tournament_id,
 			t.name,
 			coalesce(tr.starts_at, t.starts_at) AS starts_at,
@@ -309,6 +310,7 @@ export async function roomSeats(sql: SQL, code: string) {
 		? {
 				id: row.tournament_id,
 				name: row.name,
+				round: row.tournament_round,
 				startsAt: toIso(row.starts_at),
 				cancelled: !!row.cancelled_at,
 			}

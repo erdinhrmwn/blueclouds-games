@@ -121,7 +121,10 @@ const TournamentRoom = z.object({
 	closedAt: z.string().nullable(),
 	tournament: z
 		.object({
+			id: z.uuid(),
 			name: z.string(),
+			/** The tournament round this table plays in; older platforms don't send it. */
+			round: z.number().int().min(1).default(1),
 			startsAt: z.iso.datetime({ offset: true }),
 			cancelled: z.boolean(),
 		})

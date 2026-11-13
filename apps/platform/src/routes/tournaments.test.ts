@@ -293,6 +293,66 @@ describe("rounds", () => {
 		expect([...winnersTable.players].sort()).toEqual([...winners].sort());
 	});
 
+	test("the lobby's live list: round, your place and table while it runs, then the winners for a day", async () => {
+		const id = await tournament({ closes: -1, starts: 10, perRoom: 2 });
+		const people = await Promise.all(["Ann", "Bob", "Cy", "Dee"].map((name) => guest(t.app, name)));
+		await t.sql`INSERT INTO tournament_players ${t.sql(people.map((p) => ({ tournament_id: id, player_id: p.player.id })))}`;
+		await runTournamentJob(t.sql);
+
+		const live = async (secret: string) => {
+			const list = await call(t.app, "GET", "/v1/tournaments?game=bust-31", { token: secret });
+			return list.json.data.live.find((x: { id: string }) => x.id === id);
+		};
+
+		const ann = people[0]!;
+		const first = await live(ann.secret);
+		expect(first).toMatchObject({ round: 1, players: 4, endedAt: null, roundStarted: false });
+		expect(first.table.code).toEqual(expect.any(String));
+		expect(first.top).toEqual([]);
+
+		for (const table of await tablesOf(id, 1)) {
+			await play(table.id, [table.players[0], table.players[1]]);
+		}
+		await runTournamentJob(t.sql);
+
+		const winners = (await tablesOf(id, 2))[0].players as string[];
+		const winner = people.find((p) => p.player.id === winners[0])!;
+		const loser = people.find((p) => !winners.includes(p.player.id))!;
+
+		const running = await live(winner.secret);
+		expect(running).toMatchObject({ round: 2, roundStarted: false });
+		expect(running.table).toMatchObject({ started: false, closed: false });
+		expect(running.me).toMatchObject({ lastRound: 2, wins: 1 });
+		expect((await live(loser.secret)).table).toBeNull();
+
+		const standings = await call(t.app, "GET", `/v1/tournaments/${id}/standings`, {
+			token: loser.secret,
+		});
+		expect(standings.json.data.standings.length).toBe(4);
+		expect(standings.json.data.standings[0]).toMatchObject({
+			lastRound: 2,
+			name: expect.any(String),
+		});
+
+		await play((await tablesOf(id, 2))[0].id, winners);
+		await runTournamentJob(t.sql);
+
+		const finished = await live(loser.secret);
+		expect(finished.endedAt).not.toBeNull();
+		expect(finished.top.map((x: { playerId: string }) => x.playerId).slice(0, 2)).toEqual(winners);
+		expect(finished.top[0]).toMatchObject({ place: 1, wins: 2 });
+
+		await t.sql`
+			UPDATE tournaments
+			SET
+				registration_opens_at = now() - interval '50 hours',
+				registration_closes_at = now() - interval '27 hours',
+				starts_at = now() - interval '26 hours',
+				ended_at = now() - interval '25 hours'
+			WHERE id = ${id}`;
+		expect(await live(loser.secret)).toBeUndefined();
+	});
+
 	test("a withdrawn winner doesn't go on, and a lone winner is the champion straight away", async () => {
 		const id = await tournament({ closes: -1, starts: 10, perRoom: 2 });
 		await register(id, 4);
