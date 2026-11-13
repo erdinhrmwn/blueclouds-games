@@ -145,6 +145,25 @@
 		return FAN.cardPx - step;
 	};
 
+	/**
+	 * Your hand fans out to fit its row: each card shows as much as fits, up to the full overlap look, but never less
+	 * than 44px to tap. A hand too long for that scrolls sideways. Card widths match CloudCard's `lg`.
+	 */
+	const HAND = {
+		phone: { cardPx: 72, mostShownPx: 46, paddingPx: 16 },
+		wide: { cardPx: 88, mostShownPx: 60, paddingPx: 32 },
+		leastShownPx: 44
+	};
+	let handWidth = $state(0);
+	const handOverlap = $derived.by(() => {
+		const size = wide.current ? HAND.wide : HAND.phone;
+		const space = handWidth - size.paddingPx - size.cardPx;
+		const fits = hand.length > 1 ? Math.floor(space / (hand.length - 1)) : size.mostShownPx;
+		const shown = Math.max(HAND.leastShownPx, Math.min(size.mostShownPx, fits));
+
+		return size.cardPx - shown;
+	});
+
 	let reveal = $state<{
 		moves: number;
 		left: Record<string, Card[]>;
@@ -632,9 +651,11 @@
 		{/if}
 
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
+		<!-- On a phone the row runs edge to edge, past the page gutter, so a full hand of seven fits. -->
 		<div
-			class="hand flex max-w-full justify-start overflow-x-auto px-4 pt-4 pb-2 sm:justify-center"
+			class="hand -mx-4 flex w-[calc(100%+2rem)] justify-center-safe overflow-x-auto px-2 pt-4 pb-2 sm:mx-0 sm:w-full sm:px-4"
 			class:pointer-events-none={dealing}
+			bind:clientWidth={handWidth}
 			onkeydown={arrows}
 		>
 			{#each hand as card, index (card.id)}
@@ -642,8 +663,9 @@
 				{@const isPending = pending?.card.id === card.id}
 				{@const landed = !dealing || index < dealtCount}
 				<div
-					class="hand-card shrink-0 {dealing && landed ? 'dealt-in' : ''}"
+					class="shrink-0 {dealing && landed ? 'dealt-in' : ''}"
 					class:invisible={placing?.id === card.id || !landed}
+					style={index ? `margin-left: -${handOverlap}px` : ''}
 					data-card={card.id}
 				>
 					<CloudCard
@@ -666,15 +688,6 @@
 {/if}
 
 <style>
-	/* Overlap the hand, but always leave at least 44px of each card to tap. */
-	.hand-card + .hand-card {
-		margin-left: -1.6rem;
-	}
-	@media (min-width: 640px) {
-		.hand-card + .hand-card {
-			margin-left: -1.75rem;
-		}
-	}
 	.hand {
 		scrollbar-width: thin;
 	}
