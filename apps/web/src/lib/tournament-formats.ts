@@ -70,3 +70,41 @@ export function startsIn(startsAt: string, now: number): string {
 
 	return `Starts in ${rest}m`;
 }
+
+const ORDINAL_SUFFIX = ['th', 'st', 'nd', 'rd'];
+
+/** "1st", "2nd", "3rd", "4th", "11th", "21st"… */
+export function ordinal(place: number): string {
+	const lastTwo = place % 100;
+	const last = place % 10;
+	const teen = lastTwo >= 11 && lastTwo <= 13;
+	const suffix = teen ? 'th' : (ORDINAL_SUFFIX[last] ?? 'th');
+
+	return `${place}${suffix}`;
+}
+
+/** "1 h 12 min", or "45 min", between two times. */
+export function ranFor(from: string, to: string): string {
+	const minutes = Math.max(0, Math.round((Date.parse(to) - Date.parse(from)) / MINUTE_MS));
+	if (minutes < HOUR_MIN) {
+		return `${minutes} min`;
+	}
+
+	return `${Math.floor(minutes / HOUR_MIN)} h ${minutes % HOUR_MIN} min`;
+}
+
+/** Arena and Swiss rank by points; a knockout by how far you got. */
+export const ranksByPoints = (format: TournamentFormat | null) =>
+	format === 'arena' || format === 'swiss';
+
+/** Avatar colours from the games' palette, picked by name so a player keeps theirs everywhere. */
+const AVATAR_TONES = ['bg-ember', 'bg-rain', 'bg-wind', 'bg-storm', 'bg-sun'];
+
+export function avatarTone(name: string): string {
+	let sum = 0;
+	for (const letter of name) {
+		sum += letter.codePointAt(0) ?? 0;
+	}
+
+	return AVATAR_TONES[sum % AVATAR_TONES.length]!;
+}

@@ -12,6 +12,7 @@
 		startsAt,
 		back,
 		countdown,
+		headline,
 		children
 	}: {
 		label: string;
@@ -22,6 +23,8 @@
 		back: string;
 		/** The Detail dialog's big "Starts in 6h 32m"; the band grows to hold it. */
 		countdown?: string;
+		/** The small band's line in place of the start time, e.g. "Starts in 3m" for a running tournament. */
+		headline?: string;
 		children?: Snippet;
 	} = $props();
 
@@ -55,7 +58,7 @@
 		</p>
 		<p class="relative mt-1 text-sm font-semibold text-paper/80">{when(startsAt)}</p>
 	{:else}
-		<p class="mt-2 text-sm font-bold text-paper">{when(startsAt)}</p>
+		<p class="mt-2 text-sm font-bold text-paper">{headline ?? when(startsAt)}</p>
 	{/if}
 	<!-- The backs keep clear of what is top right: below it in the tall band, beside it in the short one. -->
 	<div class="absolute {backsPlace} flex" aria-hidden="true">

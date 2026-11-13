@@ -408,7 +408,7 @@ export async function advanceTournament(
 }
 
 /** Every seat of the tournament with where its player finished; a seat they didn't play has no placement. */
-async function roundSeats(tx: SQL, tournamentId: string): Promise<RoundSeat[]> {
+export async function roundSeats(tx: SQL, tournamentId: string): Promise<RoundSeat[]> {
 	const rows = await tx`
 		SELECT
 			ra.player_id,
@@ -452,7 +452,7 @@ async function playablePlayers(tx: SQL, tournamentId: string): Promise<Set<strin
 }
 
 /** Each player's place in the sign-up line, earliest 0: the last tie-break. */
-async function signUpOrderOf(tx: SQL, tournamentId: string): Promise<Map<string, number>> {
+export async function signUpOrderOf(tx: SQL, tournamentId: string): Promise<Map<string, number>> {
 	const signUps = await tx`
 		SELECT player_id
 		FROM tournament_players

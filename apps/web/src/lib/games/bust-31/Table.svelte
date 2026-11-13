@@ -8,6 +8,7 @@
 	import BustStamp from './BustStamp.svelte';
 	import Felt from '#lib/components/Felt.svelte';
 	import WinCascade from '#lib/components/WinCascade.svelte';
+	import TournamentNext from '#lib/components/TournamentNext.svelte';
 	import PlayingCard from './PlayingCard.svelte';
 	import Seat from '#lib/components/Seat.svelte';
 	import HandBar from '#lib/components/HandBar.svelte';
@@ -324,7 +325,16 @@
 					{nameOf(view.winnerId)}
 				</p>
 				{#if view.tournament}
-					<p class="text-sm text-paper/75">This {view.tournament.name} table is done.</p>
+					{#if view.tournament.id}
+						<TournamentNext
+							game={room.game}
+							tournamentId={view.tournament.id}
+							tournamentName={view.tournament.name}
+							round={view.tournament.round ?? 1}
+						/>
+					{:else}
+						<p class="text-sm text-paper/75">This {view.tournament.name} table is done.</p>
+					{/if}
 				{:else if room.isHost}
 					<button class="btn-brass mt-2" onclick={room.reset} disabled={room.busy}
 						>Shuffle &amp; play again</button

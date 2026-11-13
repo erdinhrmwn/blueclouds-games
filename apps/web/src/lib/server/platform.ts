@@ -330,6 +330,41 @@ export type Tournament = {
 
 export type TournamentFormat = 'arena' | 'knockout' | 'swiss';
 
+/** One row of a tournament's standings; the final places once it finished. */
+export type Standing = {
+	place: number;
+	playerId: string;
+	name: string;
+	points: number;
+	wins: number;
+	/** The furthest round they were seated in; in a knockout, below the current round means out. */
+	lastRound: number;
+};
+
+/** A tournament that is playing, or finished within the last day, as the lobby shows it. */
+export type LiveTournament = {
+	id: string;
+	name: string;
+	format: TournamentFormat | null;
+	/** Arena and Swiss: rounds in all; null for a knockout. */
+	rounds: number | null;
+	/** The latest round, and when its tables start. */
+	round: number;
+	roundStartsAt: string;
+	roundStarted: boolean;
+	/** When round 1 started; with `endedAt`, how long it ran. */
+	startsAt: string;
+	endedAt: string | null;
+	/** How many sat down in round 1. */
+	players: number;
+	prizes: TournamentPrize[];
+	/** The top of the standings (or the winners). */
+	top: Standing[];
+	me: Standing | null;
+	/** The player's table in the latest round, if they have one. */
+	table: { code: string; started: boolean; closed: boolean } | null;
+};
+
 export type TournamentPrize = { place: number; coins: number; extra: string | null };
 
 export type TournamentTable = {
@@ -345,21 +380,25 @@ export type TournamentTable = {
 export async function tournamentsFor(
 	event: RequestEvent,
 	game: string
-): Promise<{ tournaments: Tournament[]; tables: TournamentTable[] }> {
+): Promise<{ tournaments: Tournament[]; live: LiveTournament[]; tables: TournamentTable[] }> {
 	const secret = secretOf(event.cookies);
-	const none = { tournaments: [], tables: [] };
+	const none = { tournaments: [], live: [], tables: [] };
 	if (!secret) return none;
 
 	const query = `game=${encodeURIComponent(game)}`;
 	const get = { method: 'GET', secret };
 
 	try {
-		const [{ tournaments }, { rooms }] = await Promise.all([
-			call<{ tournaments: Tournament[] }>(event, `/tournaments?${query}`, get),
+		const [{ tournaments, live }, { rooms }] = await Promise.all([
+			call<{ tournaments: Tournament[]; live: LiveTournament[] }>(
+				event,
+				`/tournaments?${query}`,
+				get
+			),
 			call<{ rooms: TournamentTable[] }>(event, `/players/me/rooms?${query}`, get)
 		]);
 
-		return { tournaments, tables: rooms };
+		return { tournaments, live, tables: rooms };
 	} catch (err) {
 		if (lost(err)) return none;
 		throw err;
@@ -393,6 +432,18 @@ export async function joinTournament(event: RequestEvent, id: string): Promise<v
 		method: 'POST',
 		secret
 	});
+}
+
+/** A tournament's standings: worked out from the matches so far, or its final places once it finished. */
+export async function tournamentStandings(event: RequestEvent, id: string): Promise<Standing[]> {
+	const secret = secretOrNameFirst(event.cookies);
+	const { standings } = await call<{ standings: Standing[] }>(
+		event,
+		`/tournaments/${encodeURIComponent(id)}/standings`,
+		{ method: 'GET', secret }
+	);
+
+	return standings;
 }
 
 /** Signs the player out of a tournament, while sign-up is open. */

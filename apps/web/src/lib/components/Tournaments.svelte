@@ -4,31 +4,57 @@
 		fetchTournaments,
 		joinTournament,
 		leaveTournament,
-		type Tournament,
-		type TournamentTable
+		type LiveTournament,
+		type Tournament
 	} from '#lib/platform.ts';
 	import { player } from '#lib/player.svelte.ts';
 	import { enterTable } from '#lib/tables.ts';
 	import { gameBySlug } from '#lib/games/catalog.ts';
-	import { FORMATS } from '#lib/tournament-formats.ts';
+	import {
+		coins,
+		FORMATS,
+		ordinal,
+		ranFor,
+		ranksByPoints,
+		startsIn
+	} from '#lib/tournament-formats.ts';
 	import { when } from '#lib/when.ts';
 	import { prefersReducedMotion } from 'svelte/motion';
 	import PrizeFee from './PrizeFee.svelte';
 	import SignUpBar from './SignUpBar.svelte';
 	import TournamentDialog from './TournamentDialog.svelte';
 	import TournamentFelt from './TournamentFelt.svelte';
+	import TournamentLiveDialog from './TournamentLiveDialog.svelte';
 
 	/**
-	 * A game's tournaments as a row of cards that scrolls sideways: the player's own table first, then the ones open
-	 * for sign-up. `count` reports how many.
+	 * A game's tournaments as a row of cards that scrolls sideways: the ones playing (with the player's place and
+	 * table), the ones open for sign-up, then the ones that finished in the last day. `count` reports how many.
 	 */
 	let { game, count = $bindable(0) }: { game: string; count?: number } = $props();
 
 	/** The game's own card back, shown on the felt at the top of each card. */
 	const back = $derived(gameBySlug(game)?.back ?? '');
 
-	let tables = $state<TournamentTable[]>([]);
+	let live = $state<LiveTournament[]>([]);
 	let open = $state<Tournament[]>([]);
+	const running = $derived(live.filter((tournament) => !tournament.endedAt));
+	const finished = $derived(live.filter((tournament) => tournament.endedAt));
+
+	/** The countdowns on running cards tick while any is waiting for its round. */
+	const TICK_MS = 15_000;
+	let now = $state(Date.now());
+
+	$effect(() => {
+		if (running.length === 0) {
+			return;
+		}
+
+		const timer = setInterval(() => {
+			now = Date.now();
+		}, TICK_MS);
+
+		return () => clearInterval(timer);
+	});
 	let busy = $state<string | null>(null);
 	let error = $state<string | null>(null);
 
@@ -62,7 +88,7 @@
 
 	// The cards change when the lists reload; the arrows follow.
 	$effect(() => {
-		void tables.length;
+		void live.length;
 		void open.length;
 		updateArrows();
 	});
@@ -71,27 +97,23 @@
 		try {
 			const result = await fetchTournaments(game);
 			open = result.tournaments;
-			tables = result.tables;
+			live = result.live;
+			now = Date.now();
 		} catch {
 			// Tournaments are extra: the rest of the page works without them.
 		}
 	}
 
 	$effect(() => {
-		count = tables.length + open.length;
+		count = live.length + open.length;
 	});
 
 	/** `dot`: the colour of the dot beside the label. The chip itself is always dark, so it reads on any felt. */
 	type Status = { label: string; dot: string };
 
-	const IN_PLAY: Status = { label: 'In play', dot: 'bg-paper' };
-	const SEATED: Status = { label: 'Seated', dot: 'bg-brass' };
 	const SIGN_UP_OPEN: Status = { label: 'Sign-up open', dot: 'bg-go' };
 	const STARTING_SOON: Status = { label: 'Starting soon', dot: 'bg-brass' };
 	const FULL: Status = { label: 'Sign-up closed', dot: 'bg-ember' };
-
-	/** A tournament you sit at: its match has begun, or your seat is waiting for the start. */
-	const tableStatus = (table: TournamentTable): Status => (table.started ? IN_PLAY : SEATED);
 
 	const isFull = (tournament: Tournament) =>
 		tournament.maxPlayers !== null && tournament.registered >= tournament.maxPlayers;
@@ -149,8 +171,8 @@
 	});
 
 	/** Gives up a seat already handed out. The platform keeps the player out of this tournament from then on. */
-	async function withdraw(table: TournamentTable) {
-		const { id, name } = table.tournament;
+	async function withdraw(tournament: LiveTournament) {
+		const { id, name } = tournament;
 		const sure = await ask({
 			title: `Withdraw from ${name}?`,
 			body: 'Your seat is given up and you can’t come back to this tournament.',
@@ -173,6 +195,64 @@
 		}
 	}
 
+	/** "Round 2 of 3" for Arena and Swiss; a knockout plays until one is left, so just "Round 2". */
+	function roundLabel(tournament: LiveTournament): string {
+		if (!ranksByPoints(tournament.format)) {
+			return `Round ${tournament.round}`;
+		}
+
+		return `Round ${tournament.round} of ${tournament.rounds ?? 3}`;
+	}
+
+	/** The felt's line: when the round starts, or that it is being played. */
+	function roundLine(tournament: LiveTournament): string {
+		if (tournament.roundStarted) {
+			return `Round ${tournament.round} in play`;
+		}
+
+		return startsIn(tournament.roundStartsAt, now);
+	}
+
+	/** The brass line under the name: where the player stands. */
+	function myLine(tournament: LiveTournament): string | null {
+		const me = tournament.me;
+		if (!me) {
+			return tournament.table ? 'You’re in' : null;
+		}
+
+		if (ranksByPoints(tournament.format)) {
+			return `You’re ${ordinal(me.place)} with ${me.points} points`;
+		}
+
+		if (tournament.table) {
+			return `You’re in round ${tournament.round}`;
+		}
+
+		return `You’re out · ${ordinal(me.place)}`;
+	}
+
+	/** A card row's right side: points, or how far a knockout player got. */
+	function rowNote(tournament: LiveTournament, standing: LiveTournament['top'][number]): string {
+		if (ranksByPoints(tournament.format)) {
+			return `${standing.points} pts`;
+		}
+
+		return standing.lastRound >= tournament.round ? 'in' : `out in round ${standing.lastRound}`;
+	}
+
+	const prizeFor = (tournament: LiveTournament, place: number) =>
+		tournament.prizes.find((prize) => prize.place === place);
+
+	/** Whose live Detail is open. */
+	let liveId = $state<string | null>(null);
+	let liveOpen = $state(false);
+	const liveDetail = $derived(live.find((tournament) => tournament.id === liveId) ?? null);
+
+	function showLive(tournament: LiveTournament) {
+		liveId = tournament.id;
+		liveOpen = true;
+	}
+
 	async function toggle(tournament: Tournament) {
 		busy = tournament.id;
 		error = null;
@@ -193,7 +273,7 @@
 	}
 </script>
 
-{#if tables.length === 0 && open.length === 0}
+{#if live.length === 0 && open.length === 0}
 	<p class="rounded-xl border border-dashed border-paper/20 p-6 text-sm text-paper/70">
 		No tournaments open for sign-up right now.
 	</p>
@@ -206,35 +286,62 @@
 			onscroll={updateArrows}
 			class="carousel -mx-4 flex snap-x snap-mandatory scroll-px-4 gap-4 overflow-x-auto px-4 pb-3 sm:mx-0 sm:scroll-px-0 sm:px-0"
 		>
-			{#each tables as t (t.code)}
-				{@const status = tableStatus(t)}
-				<li class="tournament border-[1.5px] border-brass">
+			{#each running as t (t.id)}
+				{@const line = myLine(t)}
+				<li class="tournament {t.table ? 'border-[1.5px] border-brass' : 'border border-paper/10'}">
 					<TournamentFelt
-						label={status.label}
-						dot={status.dot}
-						startsAt={t.tournament.startsAt}
+						label={roundLabel(t)}
+						dot="bg-paper"
+						startsAt={t.roundStartsAt}
+						headline={roundLine(t)}
 						{back}
 					/>
 					<div class="flex flex-1 flex-col p-4 pt-3">
-						<h3 class="font-display text-lg font-bold text-paper">{t.tournament.name}</h3>
-						<p class="mt-0.5 text-xs text-paper/55">
-							You’re in. Your table is <span class="font-semibold text-brass">{t.code}</span>
-						</p>
-						<div class="mt-auto grid gap-2 pt-4 {t.started ? '' : 'grid-cols-2'}">
-							{#if !t.started}
-								<button
-									class="btn-ghost h-11 rounded-xl"
-									onclick={() => withdraw(t)}
-									disabled={busy === t.tournament.id}
-									aria-label="Withdraw from {t.tournament.name}"
+						<h3 class="font-display text-lg font-bold text-paper">{t.name}</h3>
+						<p class="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+							{#if t.format}
+								<span class="rounded-md border border-brass/55 px-1.5 py-0.5 font-bold text-brass"
+									>{FORMATS[t.format].label}</span
 								>
-									{busy === t.tournament.id ? 'Saving…' : 'Withdraw'}
-								</button>
 							{/if}
+							{#if line}
+								<span class="font-bold text-brass">{line}</span>
+							{:else}
+								<span class="text-paper/55">{t.players} players</span>
+							{/if}
+						</p>
+						{#if t.top.length > 0}
+							<ol class="mt-3 space-y-1 text-sm" aria-label="Top of the standings">
+								{#each t.top as standing (standing.playerId)}
+									{@const mine = standing.playerId === t.me?.playerId}
+									<li
+										class="flex items-center gap-3 rounded-md px-2 py-1 {mine ? 'bg-brass/12' : ''}"
+									>
+										<span class="w-4 font-extrabold text-brass tabular-nums">{standing.place}</span>
+										<span class="min-w-0 flex-1 truncate {mine ? 'font-bold' : ''}"
+											>{standing.name}{mine ? ' (you)' : ''}</span
+										>
+										<span class="text-xs text-paper/70 tabular-nums">{rowNote(t, standing)}</span>
+									</li>
+								{/each}
+							</ol>
+						{:else}
+							<p class="mt-3 text-xs text-paper/55">Standings show once the first tables finish.</p>
+						{/if}
+						<div
+							class="mt-auto grid gap-2.5 pt-4 {t.table && !t.table.closed ? 'grid-cols-2' : ''}"
+						>
 							<button
-								class="btn-brass h-11 rounded-xl"
-								onclick={() => (error = enterTable(game, t.code))}>Go to table</button
+								class="btn-ghost h-11 rounded-xl"
+								onclick={() => showLive(t)}
+								aria-label="Standings of {t.name}">Standings</button
 							>
+							{#if t.table && !t.table.closed}
+								<button
+									class="btn-brass h-11 rounded-xl"
+									onclick={() => (error = enterTable(game, t.table!.code))}>Go to table</button
+								>
+							{/if}
 						</div>
 					</div>
 				</li>
@@ -288,6 +395,57 @@
 					</div>
 				</li>
 			{/each}
+			{#each finished as t (t.id)}
+				<li class="tournament border border-paper/10">
+					<TournamentFelt
+						label="Finished"
+						dot="bg-brass"
+						startsAt={t.endedAt ?? t.roundStartsAt}
+						headline="Ran {ranFor(t.startsAt, t.endedAt ?? t.startsAt)}"
+						{back}
+					/>
+					<div class="flex flex-1 flex-col p-4 pt-3">
+						<h3 class="font-display text-lg font-bold text-paper">{t.name}</h3>
+						<p class="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-paper/55">
+							{#if t.format}
+								<span class="rounded-md border border-brass/55 px-1.5 py-0.5 font-bold text-brass"
+									>{FORMATS[t.format].label}</span
+								>
+							{/if}
+							{t.players} players · {t.round}
+							{t.round === 1 ? 'round' : 'rounds'}
+						</p>
+						<ol class="mt-3 space-y-2 text-sm" aria-label="Winners">
+							{#each t.top as standing (standing.playerId)}
+								{@const prize = prizeFor(t, standing.place)}
+								<li class="flex items-center gap-3">
+									<span
+										class="grid size-6 shrink-0 place-items-center rounded-full text-xs font-extrabold {standing.place ===
+										1
+											? 'bg-brass text-ink'
+											: 'bg-paper/15 text-paper'}">{standing.place}</span
+									>
+									<span class="min-w-0 flex-1 truncate font-semibold">{standing.name}</span>
+									{#if prize && prize.coins > 0}
+										<span
+											class="text-xs font-bold tabular-nums {standing.place === 1
+												? 'text-brass'
+												: 'text-paper/80'}">{coins(prize.coins)}</span
+										>
+									{/if}
+								</li>
+							{/each}
+						</ol>
+						<div class="mt-auto pt-4">
+							<button
+								class="btn-ghost h-11 w-full rounded-xl"
+								onclick={() => showLive(t)}
+								aria-label="Results of {t.name}">Results</button
+							>
+						</div>
+					</div>
+				</li>
+			{/each}
 		</ul>
 		{#if canGoBack}
 			<button
@@ -314,6 +472,15 @@
 	</div>
 {/if}
 {#if error}<p class="mt-3 text-sm text-ember" role="alert">{error}</p>{/if}
+
+<TournamentLiveDialog
+	bind:open={liveOpen}
+	tournament={liveDetail}
+	{game}
+	{back}
+	{now}
+	onwithdraw={withdraw}
+/>
 
 <TournamentDialog
 	bind:open={detailOpen}

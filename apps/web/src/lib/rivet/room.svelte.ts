@@ -46,7 +46,11 @@ export type BaseView = {
 	roomName?: string | null;
 	/** Set at a tournament table: it starts by itself. Times are ms from when the view was sent. */
 	tournament: {
+		/** Present from rooms made after tournament rounds; older ones leave it out. */
+		id?: string;
 		name: string;
+		/** The tournament round this table plays in. */
+		round?: number;
 		startsIn: number;
 		waitEndsIn: number;
 		seats: number;
