@@ -65,11 +65,19 @@
 		const [x, y] = k === 0 ? [50, 0] : chairs[k - 1];
 		return `left: ${x}%; top: ${y}%;`;
 	}
+
+	/**
+	 * The dealer is centred on its spot. A chair is pinned by its avatar's centre (Seat's 56px `size-14` avatar, so
+	 * 28px down), with the name and any status or button hanging below, so every avatar sits on the U at the same
+	 * height whatever is under it.
+	 */
+	const anchor = (k: number) => (k === 0 ? '-translate-y-1/2' : '-translate-y-7');
 </script>
 
-<!-- Phones get a taller top gutter so the badge above the dealer clears the room header. -->
+<!-- Phones get a taller top gutter so the badge above the dealer clears the room header. The bottom gutter holds
+	 the name, status and button under the lowest chairs. -->
 <div
-	class="relative mx-auto aspect-[3/4] w-full max-w-3xl px-10 pt-20 pb-14 sm:aspect-[16/10] sm:px-16 sm:py-16"
+	class="relative mx-auto aspect-[3/4] w-full max-w-3xl px-10 pt-20 pb-[5.5rem] sm:aspect-[16/10] sm:px-16 sm:pt-16 sm:pb-24"
 >
 	<div class="table-rim u relative h-full w-full p-3 sm:p-4">
 		<div class="felt u relative grid h-full w-full place-items-center">
@@ -77,15 +85,12 @@
 		</div>
 	</div>
 	<div
-		class="pointer-events-none absolute inset-x-12 top-20 bottom-14 sm:inset-x-16 sm:inset-y-16"
+		class="pointer-events-none absolute inset-x-12 top-20 bottom-[5.5rem] sm:inset-x-16 sm:top-16 sm:bottom-24"
 		bind:clientWidth={width}
 		bind:clientHeight={height}
 	>
 		{#each Array(count) as _, k (k)}
-			<div
-				class="pointer-events-auto absolute -translate-x-1/2 -translate-y-1/2"
-				style={position(k)}
-			>
+			<div class="pointer-events-auto absolute -translate-x-1/2 {anchor(k)}" style={position(k)}>
 				{@render seat(k)}
 			</div>
 		{/each}
