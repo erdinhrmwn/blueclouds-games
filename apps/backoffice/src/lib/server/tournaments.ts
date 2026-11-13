@@ -1,7 +1,14 @@
 import type { SQL } from 'bun';
 import { z } from 'zod';
 import { DistributeError, distributeIn } from '../../../../platform/src/services/tournaments.ts';
-import { FEE_MAX, MAX_PLAYERS_LIMIT, PRIZE_PLACES_MAX, TOURNAMENT_TEXT_MAX } from '../limits.ts';
+import {
+	FEE_MAX,
+	MAX_PLAYERS_LIMIT,
+	PRIZE_PLACES_MAX,
+	ROUNDS_DEFAULT,
+	ROUNDS_MAX,
+	TOURNAMENT_TEXT_MAX
+} from '../limits.ts';
 import { TOURNAMENT_FORMATS, type TournamentFormat } from '../tournament-status.ts';
 import type { Admin } from './auth.ts';
 import { audit } from './auth.ts';
@@ -34,6 +41,8 @@ export type TournamentRow = {
 	/** Most sign-ups; reaching it closes sign-up. */
 	maxPlayers: number | null;
 	format: TournamentFormat | null;
+	/** Arena and Swiss: how many rounds it plays; null for a knockout (until one player is left). */
+	rounds: number | null;
 	description: string | null;
 	/** By finishing place, 1st first. */
 	prizes: Prize[];
@@ -60,6 +69,8 @@ export type TournamentResult = {
 	playerId: string;
 	name: string;
 	wins: number;
+	/** Arena and Swiss points; 0 in a knockout. */
+	points: number;
 	lastRound: number;
 };
 
@@ -100,6 +111,7 @@ const COLUMNS = (sql: SQL) => sql`
 	t.min_players AS "minPlayers",
 	t.max_players AS "maxPlayers",
 	t.format,
+	t.rounds,
 	t.description,
 	coalesce(
 		(
@@ -186,6 +198,13 @@ export const NewTournament = z.object({
 		.int('Must be a whole number.')
 		.max(MAX_PLAYERS_LIMIT, `At most ${MAX_PLAYERS_LIMIT} players.`),
 	format: z.enum(FORMAT_VALUES, { message: 'Pick a format.' }),
+	// Arena and Swiss only; a knockout plays until one player is left.
+	rounds: z.coerce
+		.number()
+		.int('Rounds: a whole number.')
+		.min(1, `Rounds: 1-${ROUNDS_MAX}.`)
+		.max(ROUNDS_MAX, `Rounds: 1-${ROUNDS_MAX}.`)
+		.default(ROUNDS_DEFAULT),
 	description: optionalText('Description', TOURNAMENT_TEXT_MAX.description),
 	// 1st place first; a place may pay only an extra, like a badge.
 	prizes: z
@@ -274,6 +293,7 @@ export async function createTournament(
 				min_players,
 				max_players,
 				format,
+				rounds,
 				description,
 				fee,
 				starts_at,
@@ -288,6 +308,7 @@ export async function createTournament(
 				${minPlayers},
 				${input.maxPlayers},
 				${input.format},
+				${input.format === 'knockout' ? null : input.rounds},
 				${input.description},
 				${input.fee},
 				${input.startsAt},
@@ -382,6 +403,7 @@ export async function tournamentDetail(sql: SQL, id: string) {
 			tr.player_id AS "playerId",
 			p.display_name AS name,
 			tr.wins,
+			tr.points,
 			tr.last_round AS "lastRound"
 		FROM tournament_results tr
 		JOIN players p ON p.id = tr.player_id

@@ -2,7 +2,14 @@ import type { SQL, TransactionSQL } from "bun";
 import { ApiError } from "../lib/http";
 import { log } from "../lib/log";
 import { insertRoom } from "./rooms";
-import { finalPlaces, type RoundSeat, tableWinners } from "./tournament-rounds";
+import {
+	type FinalPlace,
+	finalPlaces,
+	pointsPlaces,
+	type RoundSeat,
+	swissOrder,
+	tableWinners,
+} from "./tournament-rounds";
 
 const JOB_BATCH = 10;
 
@@ -16,6 +23,9 @@ const LIST_LIMIT = 20;
 
 /** The break between a round's last table closing and the next round's tables starting (Erdin, 2026-11-13). */
 const ROUND_BREAK = "3 minutes";
+
+/** Rounds an Arena or Swiss tournament plays when the admin set none (Erdin, 2026-11-13). */
+const DEFAULT_ROUNDS = 3;
 
 /** How many of a tournament's first sign-ups the lobby's Detail names ("Rina, Erdin and 3 more"). */
 const PLAYERS_SHOWN = 5;
@@ -296,6 +306,8 @@ export async function advanceTournament(
 		SELECT
 			t.game_slug,
 			t.players_per_room,
+			t.format,
+			t.rounds,
 			g.min_players,
 			g.max_players,
 			tr.round,
@@ -333,43 +345,66 @@ export async function advanceTournament(
 
 	const seats = await roundSeats(tx, tournamentId);
 	const playable = await playablePlayers(tx, tournamentId);
-	const goingOn = tableWinners(seats, round).filter((playerId) => playable.has(playerId));
+	const signUpOrder = await signUpOrderOf(tx, tournamentId);
+	const isKnockout = tournament.format === null || tournament.format === "knockout";
 
-	if (goingOn.length >= 2) {
-		const tables = planRoundTables(
-			shuffle(goingOn),
-			tournament.players_per_room,
-			tournament.min_players,
-			tournament.max_players,
-		);
-		const [{ starts_at: startsAt }] =
-			await tx`SELECT now() + ${ROUND_BREAK}::interval AS starts_at`;
+	// Who plays next, already in seating order; empty when the tournament is done.
+	let next: string[];
+	let places: () => FinalPlace[];
 
-		await seatRound(tx, {
-			tournamentId,
-			game: tournament.game_slug,
-			round: round + 1,
-			startsAt,
-			tables,
-			adminId: null,
-		});
+	if (isKnockout) {
+		const winners = tableWinners(seats, round).filter((playerId) => playable.has(playerId));
+		next = winners.length >= 2 ? shuffle(winners) : [];
+		const champion = winners.length === 1 ? winners[0]! : null;
+		places = () => finalPlaces(seats, signUpOrder, champion);
+	} else {
+		// Arena and Swiss: everyone who sat down and may still play goes on, until the last round.
+		const seated = new Set(seats.map((seat) => seat.playerId));
+		const stillIn = [...seated].filter((playerId) => playable.has(playerId));
+		const roundsLeft = round < (tournament.rounds ?? DEFAULT_ROUNDS);
+		const canFillATable = stillIn.length >= tournament.min_players;
 
-		const detail = JSON.stringify({
-			round: round + 1,
-			rooms: tables.length,
-			players: goingOn.length,
-			auto: true,
-		});
-		await tx`
-			INSERT INTO admin_audit_events (admin_id, action, tournament_id, detail)
-			VALUES (NULL, 'tournament.distribute', ${tournamentId}, ${detail}::text::jsonb)`;
-
-		return { round: round + 1, finished: false };
+		next = [];
+		if (roundsLeft && canFillATable) {
+			next =
+				tournament.format === "swiss" ? swissOrder(stillIn, seats, signUpOrder) : shuffle(stillIn);
+		}
+		places = () => pointsPlaces(seats, signUpOrder);
 	}
 
-	const champion = goingOn.length === 1 ? goingOn[0]! : null;
-	await finishTournament(tx, tournamentId, seats, roundEndedAt, champion);
-	return { round, finished: true };
+	if (next.length === 0) {
+		await finishTournament(tx, tournamentId, places(), roundEndedAt);
+		return { round, finished: true };
+	}
+
+	const tables = planRoundTables(
+		next,
+		tournament.players_per_room,
+		tournament.min_players,
+		tournament.max_players,
+	);
+	const [{ starts_at: startsAt }] = await tx`SELECT now() + ${ROUND_BREAK}::interval AS starts_at`;
+
+	await seatRound(tx, {
+		tournamentId,
+		game: tournament.game_slug,
+		round: round + 1,
+		startsAt,
+		tables,
+		adminId: null,
+	});
+
+	const detail = JSON.stringify({
+		round: round + 1,
+		rooms: tables.length,
+		players: next.length,
+		auto: true,
+	});
+	await tx`
+		INSERT INTO admin_audit_events (admin_id, action, tournament_id, detail)
+		VALUES (NULL, 'tournament.distribute', ${tournamentId}, ${detail}::text::jsonb)`;
+
+	return { round: round + 1, finished: false };
 }
 
 /** Every seat of the tournament with where its player finished; a seat they didn't play has no placement. */
@@ -378,7 +413,8 @@ async function roundSeats(tx: SQL, tournamentId: string): Promise<RoundSeat[]> {
 		SELECT
 			ra.player_id,
 			ra.tournament_round,
-			mp.placement
+			mp.placement,
+			(SELECT count(*)::int FROM match_players x WHERE x.match_id = m.id) AS table_size
 		FROM room_assignments ra
 		JOIN tournament_players tp
 			ON tp.tournament_id = ra.tournament_id AND tp.player_id = ra.player_id
@@ -387,13 +423,19 @@ async function roundSeats(tx: SQL, tournamentId: string): Promise<RoundSeat[]> {
 		WHERE ra.tournament_id = ${tournamentId}
 			AND tp.status <> 'disqualified'`;
 
-	return rows.map(
-		(row: { player_id: string; tournament_round: number; placement: number | null }) => ({
-			playerId: row.player_id,
-			round: row.tournament_round,
-			placement: row.placement,
-		}),
-	);
+	type Row = {
+		player_id: string;
+		tournament_round: number;
+		placement: number | null;
+		table_size: number;
+	};
+
+	return rows.map((row: Row) => ({
+		playerId: row.player_id,
+		round: row.tournament_round,
+		placement: row.placement,
+		tableSize: row.table_size,
+	}));
 }
 
 /** Players who may still be seated: registered (not withdrawn or disqualified) and not disabled. */
@@ -409,31 +451,33 @@ async function playablePlayers(tx: SQL, tournamentId: string): Promise<Set<strin
 	return new Set(rows.map((row: { player_id: string }) => row.player_id));
 }
 
-/** Writes the final places once and ends the tournament when its last round ended. */
-async function finishTournament(
-	tx: SQL,
-	tournamentId: string,
-	seats: RoundSeat[],
-	endedAt: Date,
-	championId: string | null,
-): Promise<void> {
+/** Each player's place in the sign-up line, earliest 0: the last tie-break. */
+async function signUpOrderOf(tx: SQL, tournamentId: string): Promise<Map<string, number>> {
 	const signUps = await tx`
 		SELECT player_id
 		FROM tournament_players
 		WHERE tournament_id = ${tournamentId}
 		ORDER BY created_at, player_id`;
-	const signUpOrder = new Map<string, number>(
+
+	return new Map<string, number>(
 		signUps.map((row: { player_id: string }, index: number) => [row.player_id, index]),
 	);
+}
 
-	const places = finalPlaces(seats, signUpOrder, championId);
-
+/** Writes the final places once and ends the tournament when its last round ended. */
+async function finishTournament(
+	tx: SQL,
+	tournamentId: string,
+	places: FinalPlace[],
+	endedAt: Date,
+): Promise<void> {
 	if (places.length > 0) {
 		const rows = places.map((place) => ({
 			tournament_id: tournamentId,
 			player_id: place.playerId,
 			place: place.place,
 			wins: place.wins,
+			points: place.points,
 			last_round: place.lastRound,
 		}));
 		await tx`INSERT INTO tournament_results ${tx(rows)} ON CONFLICT DO NOTHING`;
@@ -446,9 +490,9 @@ async function finishTournament(
 }
 
 /**
- * Closes a tournament room, and its tournament if it was the last open room. A match report (finished, or
- * terminated by an admin) also overrides an earlier "not enough players" (the job closed a room whose start call
- * got lost).
+ * Closes a tournament room; the job moves its round on once every table of it closed. A match report (finished,
+ * or terminated by an admin) also overrides an earlier "not enough players" (the job closed a room whose start
+ * call got lost).
  */
 export async function closeRoom(
 	tx: SQL,
@@ -613,6 +657,7 @@ export async function listOpen(sql: SQL, game: string, playerId: string) {
 			t.min_players,
 			t.max_players,
 			t.format,
+			t.rounds,
 			t.description,
 			t.registration_opens_at,
 			coalesce(
@@ -670,6 +715,7 @@ export async function listOpen(sql: SQL, game: string, playerId: string) {
 		minPlayers: row.min_players,
 		maxPlayers: row.max_players,
 		format: row.format,
+		rounds: row.rounds,
 		description: row.description,
 		registrationOpensAt: row.registration_opens_at.toISOString(),
 		prizes: row.prizes,

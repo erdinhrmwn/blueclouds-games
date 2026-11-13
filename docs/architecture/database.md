@@ -87,7 +87,8 @@ CREATE TABLE tournaments (
   players_per_room     smallint NOT NULL CHECK (players_per_room BETWEEN 1 AND 32),  -- most players in one room; within the game's min/max (checked on save)
   min_players          smallint CHECK (min_players IS NULL OR min_players BETWEEN 1 AND coalesce(max_players, min_players)),  -- fewest it runs with, else the job cancels it (migration 018)
   max_players          smallint CHECK (max_players IS NULL OR max_players BETWEEN players_per_room AND 10000),  -- most sign-ups, which closes sign-up; NULL (made before migration 017) takes anyone
-  format               text CHECK (format IS NULL OR format IN ('arena', 'knockout', 'swiss')),  -- a label until matchmaking for it exists (migration 019)
+  format               text CHECK (format IS NULL OR format IN ('arena', 'knockout', 'swiss')),  -- how rounds go on (migration 019; NULL plays as a knockout)
+  rounds               smallint CHECK (rounds IS NULL OR rounds BETWEEN 1 AND 20),  -- Arena and Swiss: rounds played, NULL = 3; a knockout keeps NULL (migration 023)
   description          text,                  -- 1-1000 characters, shown in the lobby's Detail dialog
   fee                  integer NOT NULL DEFAULT 0,  -- in coins, 0 = free; shown only, nothing is charged
   starts_at            timestamptz NOT NULL,
@@ -121,9 +122,10 @@ CREATE TABLE tournament_rounds (
 -- rooms.tournament_round: the round a tournament table plays in (set exactly when tournament_id is).
 -- room_assignments.tournament_round: a player sits at one table per round, UNIQUE (tournament_id, tournament_round, player_id).
 
--- Final places (migration 022), written once by the job when the last round is done. Until Arena and Swiss get
--- their own rules (plan phase 3) every format plays as a knockout: each table's winner goes on to the next round,
--- 3 minutes after the last table of a round closes, until one player is left.
+-- Final places (migration 022), written once by the job when the last round is done. Rounds go on 3 minutes after
+-- the last table of a round closes. Knockout: each table's winner goes on until one player is left. Arena: everyone
+-- still in plays `rounds` rounds, reshuffled; Swiss: the same, seated by points. Points per match are table size −
+-- placement + 1; ties go to more wins, then the better average placement, then sign-up order.
 CREATE TABLE tournament_results (
   tournament_id  uuid NOT NULL REFERENCES tournaments(id),
   player_id      uuid NOT NULL REFERENCES players(id),

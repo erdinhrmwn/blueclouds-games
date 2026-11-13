@@ -19,12 +19,14 @@ async function tournament(opts: {
 	perRoom?: number;
 	min?: number;
 	max?: number;
+	format?: "arena" | "knockout" | "swiss";
+	rounds?: number;
 	game?: string;
 }) {
 	const at = (min: number) => new Date(Date.now() + min * 60_000);
 	const [row] = await t.sql`
-		INSERT INTO tournaments (game_slug, name, players_per_room, min_players, max_players, starts_at, registration_opens_at, registration_closes_at, created_by_admin_id)
-		VALUES (${opts.game ?? "bust-31"}, 'Friday Cup', ${opts.perRoom ?? 6}, ${opts.min ?? null}, ${opts.max ?? null}, ${at(opts.starts)}, ${at(opts.opens ?? -60)}, ${at(opts.closes)}, ${admin})
+		INSERT INTO tournaments (game_slug, name, players_per_room, min_players, max_players, format, rounds, starts_at, registration_opens_at, registration_closes_at, created_by_admin_id)
+		VALUES (${opts.game ?? "bust-31"}, 'Friday Cup', ${opts.perRoom ?? 6}, ${opts.min ?? null}, ${opts.max ?? null}, ${opts.format ?? null}, ${opts.rounds ?? null}, ${at(opts.starts)}, ${at(opts.opens ?? -60)}, ${at(opts.closes)}, ${admin})
 		RETURNING id`;
 	return row.id as string;
 }
@@ -240,6 +242,55 @@ describe("rounds", () => {
 		expect(
 			(await t.sql`SELECT ended_at FROM tournaments WHERE id = ${id}`)[0].ended_at,
 		).not.toBeNull();
+	});
+
+	test("Arena: everyone plays every round, reshuffled; most points wins after the last one", async () => {
+		const id = await tournament({ closes: -1, starts: 10, perRoom: 2, format: "arena", rounds: 2 });
+		const ids = await register(id, 4);
+		await runTournamentJob(t.sql);
+
+		// Round 1: the second-seated player wins each table.
+		for (const table of await tablesOf(id, 1)) {
+			await play(table.id, [table.players[1], table.players[0]]);
+		}
+		expect(await runTournamentJob(t.sql)).toMatchObject({ nextRounds: 1 });
+
+		const secondRound = await tablesOf(id, 2);
+		const seatedAgain = secondRound.flatMap((table: { players: string[] }) => table.players);
+		expect([...seatedAgain].sort()).toEqual([...ids].sort());
+
+		for (const table of secondRound) {
+			await play(table.id, [table.players[0], table.players[1]]);
+		}
+		expect(await runTournamentJob(t.sql)).toMatchObject({ finished: 1 });
+
+		const results =
+			await t.sql`SELECT player_id, place, points, wins, last_round FROM tournament_results WHERE tournament_id = ${id} ORDER BY place`;
+		expect(results.length).toBe(4);
+		// Tables of two: a win is 2 points, a loss 1; four matches each round.
+		const total = results.reduce((sum: number, row: { points: number }) => sum + row.points, 0);
+		expect(total).toBe(12);
+		expect(results.every((row: { last_round: number }) => row.last_round === 2)).toBe(true);
+		expect(results[0].points).toBeGreaterThanOrEqual(results[3].points);
+	});
+
+	test("Swiss: round 2 seats round 1's winners together", async () => {
+		const id = await tournament({ closes: -1, starts: 10, perRoom: 2, format: "swiss", rounds: 3 });
+		await register(id, 4);
+		await runTournamentJob(t.sql);
+
+		const firstRound = await tablesOf(id, 1);
+		const winners = firstRound.map((table: { players: string[] }) => table.players[0]!);
+		for (const table of firstRound) {
+			await play(table.id, [table.players[0], table.players[1]]);
+		}
+		await runTournamentJob(t.sql);
+
+		const secondRound = await tablesOf(id, 2);
+		const winnersTable = secondRound.find((table: { players: string[] }) =>
+			table.players.includes(winners[0]),
+		);
+		expect([...winnersTable.players].sort()).toEqual([...winners].sort());
 	});
 
 	test("a withdrawn winner doesn't go on, and a lone winner is the champion straight away", async () => {

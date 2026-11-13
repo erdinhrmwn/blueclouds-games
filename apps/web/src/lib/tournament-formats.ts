@@ -3,8 +3,8 @@ import type { TournamentFormat } from '#lib/platform.ts';
 type Format = {
 	label: string;
 	note: string;
-	/** "How it plays" in the Detail dialog, given the players per table. */
-	steps: (perTable: number) => string[];
+	/** "How it plays" in the Detail dialog, given the players per table and (Arena, Swiss) the rounds. */
+	steps: (perTable: number, rounds: number) => string[];
 };
 
 /** How each tournament format reads on a card and in its Detail dialog. Keep in step with the backoffice's list. */
@@ -12,10 +12,10 @@ export const FORMATS: Record<TournamentFormat, Format> = {
 	arena: {
 		label: 'Arena',
 		note: 'Most points wins',
-		steps: (perTable) => [
-			`Everyone is seated at tables of up to ${perTable} when sign-up closes.`,
-			'Every match gives points by finishing place.',
-			'The most points at the end wins.'
+		steps: (perTable, rounds) => [
+			`Everyone plays ${rounds} rounds at tables of up to ${perTable}, reshuffled each round.`,
+			'Each match gives points by finishing place: 1st at a table of 6 scores 6, last scores 1.',
+			'The most points after the last round wins.'
 		]
 	},
 	knockout: {
@@ -30,10 +30,10 @@ export const FORMATS: Record<TournamentFormat, Format> = {
 	swiss: {
 		label: 'Swiss',
 		note: 'Paired by score',
-		steps: (perTable) => [
-			`Everyone is seated at tables of up to ${perTable} when sign-up closes.`,
-			'Each round seats you with players on the same score.',
-			'Nobody is knocked out; the best score at the end wins.'
+		steps: (perTable, rounds) => [
+			`Everyone plays ${rounds} rounds at tables of up to ${perTable}, scoring points by finishing place.`,
+			'From round 2 you sit with players on a similar score.',
+			'Nobody is knocked out; the most points after the last round wins.'
 		]
 	}
 };

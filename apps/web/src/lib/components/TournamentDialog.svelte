@@ -61,7 +61,13 @@
 	});
 
 	const format = $derived(tournament?.format ? FORMATS[tournament.format] : null);
-	const steps = $derived(tournament && format ? format.steps(tournament.playersPerRoom) : []);
+	/** Arena and Swiss play this many rounds when the admin set none (the platform's default). */
+	const DEFAULT_ROUNDS = 3;
+	const steps = $derived(
+		tournament && format
+			? format.steps(tournament.playersPerRoom, tournament.rounds ?? DEFAULT_ROUNDS)
+			: []
+	);
 
 	type Moment = { label: string; at: string };
 	type Step = Moment & { state: 'done' | 'next' | 'later' };

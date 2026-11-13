@@ -36,6 +36,7 @@ const newCup = (perRoom = 6, maxPlayers = 36, minPlayers = 2) =>
 			minPlayers,
 			maxPlayers,
 			format: 'arena',
+			rounds: 3,
 			description: null,
 			prizes: [],
 			fee: 0,
@@ -67,6 +68,7 @@ describe('tournaments', () => {
 					minPlayers: 2,
 					maxPlayers: 36,
 					format: 'arena',
+					rounds: 3,
 					description: null,
 					prizes: [],
 					fee: 0,
@@ -86,6 +88,7 @@ describe('tournaments', () => {
 					minPlayers: 2,
 					maxPlayers: 36,
 					format: 'arena',
+					rounds: 3,
 					description: null,
 					prizes: [],
 					fee: 0,
@@ -139,6 +142,8 @@ describe('tournaments', () => {
 		expect(NewTournament.safeParse({ ...form, format: 'bracket' }).success).toBe(false);
 		expect(NewTournament.safeParse({ ...form, fee: '2.5' }).success).toBe(false);
 		expect(NewTournament.safeParse({ ...form, fee: '-1' }).success).toBe(false);
+		expect(NewTournament.safeParse({ ...form, rounds: '21' }).success).toBe(false);
+		expect(NewTournament.parse(form).rounds).toBe(3);
 
 		const { fee: _fee, ...withoutFee } = form;
 		expect(NewTournament.parse(withoutFee).fee).toBe(0);
@@ -149,6 +154,7 @@ describe('tournaments', () => {
 
 		expect(tournament).toMatchObject({
 			format: 'swiss',
+			rounds: 3,
 			description: 'Five rounds.',
 			prizes: [
 				{ place: 1, coins: 2000, extra: 'Night Owl badge' },
