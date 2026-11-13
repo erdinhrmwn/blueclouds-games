@@ -9,6 +9,7 @@ import {
 	disqualifyPlayer,
 	distributeNow,
 	NewTournament,
+	prizeRows,
 	tournamentTables,
 	parseIds,
 	registerPlayers,
@@ -36,7 +37,7 @@ const newCup = (perRoom = 6, maxPlayers = 36, minPlayers = 2) =>
 			maxPlayers,
 			format: 'arena',
 			description: null,
-			prize: null,
+			prizes: [],
 			fee: 0,
 			startsAt: inMinutes(60)
 		},
@@ -67,7 +68,7 @@ describe('tournaments', () => {
 					maxPlayers: 36,
 					format: 'arena',
 					description: null,
-					prize: null,
+					prizes: [],
 					fee: 0,
 					startsAt: inMinutes(60)
 				},
@@ -86,7 +87,7 @@ describe('tournaments', () => {
 					maxPlayers: 36,
 					format: 'arena',
 					description: null,
-					prize: null,
+					prizes: [],
 					fee: 0,
 					startsAt: inMinutes(-1)
 				},
@@ -122,7 +123,7 @@ describe('tournaments', () => {
 		expect(tournament).toMatchObject({ registered: 3, maxPlayers: 3 });
 	});
 
-	test('format, description, prize and fee are kept; the fee is whole coins', async () => {
+	test('format, description, prizes by place and fee are kept; the fee is whole coins', async () => {
 		const form = {
 			game: 'bust-31',
 			name: 'Cup',
@@ -131,7 +132,7 @@ describe('tournaments', () => {
 			maxPlayers: '12',
 			format: 'swiss',
 			description: ' Five rounds. ',
-			prize: '10.000 coins',
+			prizes: prizeRows(['2000', '', ' ', '500'], ['Night Owl badge', 'Mug', '', '']),
 			fee: '250',
 			startsAt: '2099-01-01T20:00'
 		};
@@ -149,7 +150,11 @@ describe('tournaments', () => {
 		expect(tournament).toMatchObject({
 			format: 'swiss',
 			description: 'Five rounds.',
-			prize: '10.000 coins',
+			prizes: [
+				{ place: 1, coins: 2000, extra: 'Night Owl badge' },
+				{ place: 2, coins: 0, extra: 'Mug' },
+				{ place: 3, coins: 500, extra: null }
+			],
 			fee: 250
 		});
 	});

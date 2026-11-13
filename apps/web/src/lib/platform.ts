@@ -76,6 +76,7 @@ export const resetInviteLink = (game: string, code: string) =>
 export type {
 	Tournament,
 	TournamentFormat,
+	TournamentPrize,
 	TournamentTable,
 	Visibility
 } from '#lib/server/platform.ts';

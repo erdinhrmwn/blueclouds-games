@@ -259,7 +259,7 @@
 							>
 						</p>
 						<div class="mt-3">
-							<PrizeFee prize={t.prize} fee={t.fee} />
+							<PrizeFee prizes={t.prizes} fee={t.fee} />
 						</div>
 						<div class="mt-auto pt-4">
 							<SignUpBar

@@ -315,8 +315,11 @@ export type Tournament = {
 	/** How it is played; a label until matchmaking for it exists. */
 	format: TournamentFormat | null;
 	description: string | null;
-	/** As the admin wrote it; nothing is paid out by the platform. */
-	prize: string | null;
+	/** By finishing place, 1st first; nothing is paid out by the platform. */
+	prizes: TournamentPrize[];
+	registrationOpensAt: string;
+	/** Names of the first few to sign up, in the order they did. */
+	players: string[];
 	/** In coins; 0 is free. Nothing is charged. */
 	fee: number;
 	registered: number;
@@ -324,6 +327,8 @@ export type Tournament = {
 };
 
 export type TournamentFormat = 'arena' | 'knockout' | 'swiss';
+
+export type TournamentPrize = { place: number; coins: number; extra: string | null };
 
 export type TournamentTable = {
 	code: string;

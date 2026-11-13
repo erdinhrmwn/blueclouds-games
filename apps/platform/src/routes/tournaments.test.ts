@@ -192,7 +192,8 @@ describe("sign-up", () => {
 			maxPlayers: null,
 			format: null,
 			description: null,
-			prize: null,
+			prizes: [],
+			players: ["Ann"],
 			fee: 0,
 		});
 		expect(
@@ -208,6 +209,25 @@ describe("sign-up", () => {
 				await t.sql`SELECT count(*)::int AS n FROM tournament_players WHERE tournament_id = ${open}`
 			)[0].n,
 		).toBe(0);
+	});
+});
+
+describe("the lobby list", () => {
+	test("names the first sign-ups and lists prizes by place", async () => {
+		const cup = await tournament({ closes: 5, starts: 15 });
+		await register(cup, 7);
+		await t.sql`INSERT INTO tournament_prizes (tournament_id, place, coins, extra) VALUES (${cup}, 2, 1000, NULL), (${cup}, 1, 2000, 'Night Owl badge')`;
+		const ann = await guest(t.app, "Ann");
+
+		const list = await call(t.app, "GET", "/v1/tournaments?game=bust-31", { token: ann.secret });
+		const listed = list.json.data.tournaments.find((x: { id: string }) => x.id === cup);
+
+		expect(listed.players).toEqual(["P0", "P1", "P2", "P3", "P4"]);
+		expect(listed.prizes).toEqual([
+			{ place: 1, coins: 2000, extra: "Night Owl badge" },
+			{ place: 2, coins: 1000, extra: null },
+		]);
+		expect(listed.registrationOpensAt).toEqual(expect.any(String));
 	});
 });
 

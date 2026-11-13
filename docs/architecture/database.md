@@ -89,7 +89,6 @@ CREATE TABLE tournaments (
   max_players          smallint CHECK (max_players IS NULL OR max_players BETWEEN players_per_room AND 10000),  -- most sign-ups, which closes sign-up; NULL (made before migration 017) takes anyone
   format               text CHECK (format IS NULL OR format IN ('arena', 'knockout', 'swiss')),  -- a label until matchmaking for it exists (migration 019)
   description          text,                  -- 1-1000 characters, shown in the lobby's Detail dialog
-  prize                text,                  -- 1-60 characters, shown as written; there is no wallet, nothing is paid out
   fee                  integer NOT NULL DEFAULT 0,  -- in coins, 0 = free; shown only, nothing is charged
   starts_at            timestamptz NOT NULL,
   registration_opens_at   timestamptz NOT NULL DEFAULT now(),
@@ -109,6 +108,15 @@ CREATE INDEX tournaments_starts_at_idx ON tournaments (starts_at DESC);
 CREATE INDEX tournaments_due_idx ON tournaments (registration_closes_at) WHERE distributed_at IS NULL AND cancelled_at IS NULL;  -- the distribute job
 
 -- Players registered for a tournament, before and after they get a room.
+-- Prizes by finishing place (migration 020): shown as a podium, their sum as the prize pool. Nothing is paid out.
+CREATE TABLE tournament_prizes (
+  tournament_id  uuid NOT NULL REFERENCES tournaments(id),
+  place          smallint NOT NULL CHECK (place BETWEEN 1 AND 10),
+  coins          integer NOT NULL CHECK (coins BETWEEN 0 AND 1000000000),
+  extra          text,                  -- 1-40 characters, e.g. a badge
+  PRIMARY KEY (tournament_id, place)
+);
+
 CREATE TABLE tournament_players (
   tournament_id                uuid NOT NULL REFERENCES tournaments(id),
   player_id               uuid NOT NULL REFERENCES players(id),
@@ -400,7 +408,6 @@ CREATE TABLE tournaments (
   max_players          smallint CHECK (max_players IS NULL OR max_players BETWEEN players_per_room AND 10000),
   format               text CHECK (format IS NULL OR format IN ('arena', 'knockout', 'swiss')),
   description          text CHECK (description IS NULL OR char_length(description) BETWEEN 1 AND 1000),
-  prize                text CHECK (prize IS NULL OR char_length(prize) BETWEEN 1 AND 60),
   fee                  integer NOT NULL DEFAULT 0 CHECK (fee BETWEEN 0 AND 1000000000),
   starts_at            timestamptz NOT NULL,
   registration_opens_at   timestamptz NOT NULL DEFAULT now(),

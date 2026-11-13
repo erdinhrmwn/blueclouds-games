@@ -68,8 +68,21 @@
 		</dd>
 		{#if tournament.format}<dt>Format</dt>
 			<dd>{formatLabel(tournament.format)}</dd>{/if}
-		<dt>Prize</dt>
-		<dd>{tournament.prize ?? 'None'}</dd>
+		<dt>Prizes</dt>
+		<dd>
+			{#if tournament.prizes.length === 0}
+				None
+			{:else}
+				<ol>
+					{#each tournament.prizes as prize (prize.place)}
+						<li>
+							{prize.place}. {prize.coins.toLocaleString('en')} coins{#if prize.extra}
+								+ {prize.extra}{/if}
+						</li>
+					{/each}
+				</ol>
+			{/if}
+		</dd>
 		<dt>Fee</dt>
 		<dd>{tournament.fee === 0 ? 'Free' : `${tournament.fee.toLocaleString('en')} coins`}</dd>
 		{#if tournament.description}<dt>Description</dt>

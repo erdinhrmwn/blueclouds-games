@@ -13,6 +13,9 @@ const UNOPENED_CLOSE_AFTER = "4 minutes";
 
 const LIST_LIMIT = 20;
 
+/** How many of a tournament's first sign-ups the lobby's Detail names ("Rina, Erdin and 3 more"). */
+const PLAYERS_SHOWN = 5;
+
 /** Why a tournament can't be distributed; the message is shown to admins as is. */
 export class DistributeError extends Error {}
 
@@ -354,7 +357,33 @@ export async function listOpen(sql: SQL, game: string, playerId: string) {
 			t.max_players,
 			t.format,
 			t.description,
-			t.prize,
+			t.registration_opens_at,
+			coalesce(
+				(
+					SELECT json_agg(
+						json_build_object('place', prize.place, 'coins', prize.coins, 'extra', prize.extra)
+						ORDER BY prize.place
+					)
+					FROM tournament_prizes prize
+					WHERE prize.tournament_id = t.id
+				),
+				'[]'
+			) AS prizes,
+			coalesce(
+				(
+					SELECT json_agg(first_in.display_name ORDER BY first_in.created_at, first_in.player_id)
+					FROM (
+						SELECT p.display_name, x.created_at, x.player_id
+						FROM tournament_players x
+						JOIN players p ON p.id = x.player_id
+						WHERE x.tournament_id = t.id
+							AND x.status = 'registered'
+						ORDER BY x.created_at, x.player_id
+						LIMIT ${PLAYERS_SHOWN}
+					) first_in
+				),
+				'[]'
+			) AS players,
 			t.fee,
 			(
 				SELECT count(*)::int FROM tournament_players x
@@ -385,7 +414,9 @@ export async function listOpen(sql: SQL, game: string, playerId: string) {
 		maxPlayers: row.max_players,
 		format: row.format,
 		description: row.description,
-		prize: row.prize,
+		registrationOpensAt: row.registration_opens_at.toISOString(),
+		prizes: row.prizes,
+		players: row.players,
 		fee: row.fee,
 		registered: row.registered,
 		joined: row.joined,

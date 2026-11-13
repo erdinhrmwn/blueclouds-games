@@ -2,7 +2,12 @@
 	import { enhance } from '$app/forms';
 	import PageHeader from '#lib/components/PageHeader.svelte';
 	import { utc } from '#lib/format.ts';
-	import { FEE_MAX, MAX_PLAYERS_LIMIT, TOURNAMENT_TEXT_MAX } from '#lib/limits.ts';
+	import {
+		FEE_MAX,
+		MAX_PLAYERS_LIMIT,
+		PRIZE_PLACES_MAX,
+		TOURNAMENT_TEXT_MAX
+	} from '#lib/limits.ts';
 	import { statusTag, TOURNAMENT_FORMATS, tournamentStatus } from '#lib/tournament-status.ts';
 	import type { PageProps } from './$types';
 
@@ -13,6 +18,35 @@
 		data.games.find((g) => g.slug === (game || values.game)) ?? data.games[0]
 	);
 	let busy = $state(false);
+
+	/** Paid places, 1st first; three to start with, as most tournaments pay a podium. */
+	const STARTING_PLACES = 3;
+	type PrizeRow = { key: number; coins: string; extra: string };
+	let nextKey = 0;
+	const newRow = (coins = '', extra = ''): PrizeRow => {
+		nextKey += 1;
+		return { key: nextKey, coins, extra };
+	};
+	let prizes = $state<PrizeRow[]>(Array.from({ length: STARTING_PLACES }, () => newRow()));
+
+	// A refused form comes back with what was typed.
+	$effect(() => {
+		if (form?.prizes) {
+			prizes = form.prizes.map((row) => newRow(row.coins, row.extra));
+		}
+	});
+
+	function addPlace() {
+		prizes.push(newRow());
+	}
+
+	function removePlace(index: number) {
+		prizes.splice(index, 1);
+	}
+
+	const PLACE_SUFFIX = ['st', 'nd', 'rd'];
+	/** "1st", "2nd", "3rd", "4th"… */
+	const placeName = (index: number) => `${index + 1}${PLACE_SUFFIX[index] ?? 'th'}`;
 </script>
 
 <svelte:head><title>Tournaments · Backoffice</title></svelte:head>
@@ -172,17 +206,45 @@
 						{/each}
 					</select>
 				</div>
-				<div>
-					<label class="label" for="prize">Prize (shown as written)</label>
-					<input
-						class="field"
-						id="prize"
-						name="prize"
-						value={values.prize ?? ''}
-						maxlength={TOURNAMENT_TEXT_MAX.prize}
-						placeholder="5.000 coins"
-					/>
-				</div>
+				<fieldset class="sm:col-span-2 xl:col-span-1">
+					<legend class="label">Prizes by place (coins, and an optional extra like a badge)</legend>
+					<ol class="space-y-2">
+						{#each prizes as prize, index (prize.key)}
+							<li class="grid grid-cols-[2.5rem_1fr_1fr_auto] items-center gap-2">
+								<span class="text-sm font-semibold text-muted tabular-nums">{placeName(index)}</span
+								>
+								<input
+									class="field"
+									name="prizeCoins"
+									type="number"
+									min="0"
+									max={FEE_MAX}
+									step="1"
+									bind:value={prize.coins}
+									placeholder="Coins"
+									aria-label="{placeName(index)} place coins"
+								/>
+								<input
+									class="field"
+									name="prizeExtra"
+									bind:value={prize.extra}
+									maxlength={TOURNAMENT_TEXT_MAX.prizeExtra}
+									placeholder="Extra"
+									aria-label="{placeName(index)} place extra"
+								/>
+								<button
+									type="button"
+									class="btn-quiet"
+									onclick={() => removePlace(index)}
+									aria-label="Remove {placeName(index)} place">Remove</button
+								>
+							</li>
+						{/each}
+					</ol>
+					{#if prizes.length < PRIZE_PLACES_MAX}
+						<button type="button" class="btn-quiet mt-2" onclick={addPlace}>Add a place</button>
+					{/if}
+				</fieldset>
 				<div>
 					<label class="label" for="fee">Fee in coins (0 or empty = free)</label>
 					<input

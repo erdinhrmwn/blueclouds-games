@@ -1,7 +1,7 @@
 import type { SQL } from 'bun';
 import { z } from 'zod';
 import { DistributeError, distributeIn } from '../../../../platform/src/services/tournaments.ts';
-import { FEE_MAX, MAX_PLAYERS_LIMIT, TOURNAMENT_TEXT_MAX } from '../limits.ts';
+import { FEE_MAX, MAX_PLAYERS_LIMIT, PRIZE_PLACES_MAX, TOURNAMENT_TEXT_MAX } from '../limits.ts';
 import { TOURNAMENT_FORMATS, type TournamentFormat } from '../tournament-status.ts';
 import type { Admin } from './auth.ts';
 import { audit } from './auth.ts';
@@ -35,7 +35,8 @@ export type TournamentRow = {
 	maxPlayers: number | null;
 	format: TournamentFormat | null;
 	description: string | null;
-	prize: string | null;
+	/** By finishing place, 1st first. */
+	prizes: Prize[];
 	/** In coins; 0 is free. */
 	fee: number;
 	startsAt: Date;
@@ -50,6 +51,8 @@ export type TournamentRow = {
 	registered: number;
 	rooms: number;
 };
+
+export type Prize = { place: number; coins: number; extra: string | null };
 
 export type PlayerStatus = 'registered' | 'withdrawn' | 'disqualified';
 
@@ -85,7 +88,17 @@ const COLUMNS = (sql: SQL) => sql`
 	t.max_players AS "maxPlayers",
 	t.format,
 	t.description,
-	t.prize,
+	coalesce(
+		(
+			SELECT json_agg(
+				json_build_object('place', prize.place, 'coins', prize.coins, 'extra', prize.extra)
+				ORDER BY prize.place
+			)
+			FROM tournament_prizes prize
+			WHERE prize.tournament_id = t.id
+		),
+		'[]'
+	) AS prizes,
 	t.fee,
 	t.starts_at AS "startsAt",
 	t.registration_opens_at AS "registrationOpensAt",
@@ -124,6 +137,19 @@ const FORMAT_VALUES = TOURNAMENT_FORMATS.map((format) => format.value) as [
 	...TournamentFormat[]
 ];
 
+/**
+ * Prize rows from the form's repeated `prizeCoins` and `prizeExtra` fields, in place order. Rows left fully blank
+ * are dropped, so the places that follow move up.
+ */
+export function prizeRows(coins: string[], extras: string[]) {
+	const rows = coins.map((value, index) => ({
+		coins: value.trim(),
+		extra: (extras[index] ?? '').trim()
+	}));
+
+	return rows.filter((row) => row.coins !== '' || row.extra !== '');
+}
+
 /** A text the admin may leave out; a blank one counts as left out. */
 const optionalText = (label: string, max: number) =>
 	z
@@ -148,7 +174,20 @@ export const NewTournament = z.object({
 		.max(MAX_PLAYERS_LIMIT, `At most ${MAX_PLAYERS_LIMIT} players.`),
 	format: z.enum(FORMAT_VALUES, { message: 'Pick a format.' }),
 	description: optionalText('Description', TOURNAMENT_TEXT_MAX.description),
-	prize: optionalText('Prize', TOURNAMENT_TEXT_MAX.prize),
+	// 1st place first; a place may pay only an extra, like a badge.
+	prizes: z
+		.array(
+			z.object({
+				coins: z.coerce
+					.number()
+					.int('Prize: a whole number of coins.')
+					.min(0, 'Prize: 0 or more coins.')
+					.max(FEE_MAX, `Prize: at most ${FEE_MAX} coins.`),
+				extra: optionalText('Prize extra', TOURNAMENT_TEXT_MAX.prizeExtra)
+			})
+		)
+		.max(PRIZE_PLACES_MAX, `At most ${PRIZE_PLACES_MAX} paid places.`)
+		.default([]),
 	// Coins; left empty, the tournament is free.
 	fee: z.coerce
 		.number()
@@ -223,7 +262,6 @@ export async function createTournament(
 				max_players,
 				format,
 				description,
-				prize,
 				fee,
 				starts_at,
 				registration_opens_at,
@@ -238,7 +276,6 @@ export async function createTournament(
 				${input.maxPlayers},
 				${input.format},
 				${input.description},
-				${input.prize},
 				${input.fee},
 				${input.startsAt},
 				${opens},
@@ -246,6 +283,16 @@ export async function createTournament(
 				${admin.id}
 			)
 			RETURNING id`;
+
+		if (input.prizes.length > 0) {
+			const prizes = input.prizes.map((prize, index) => ({
+				tournament_id: row.id,
+				place: index + 1,
+				coins: prize.coins,
+				extra: prize.extra
+			}));
+			await tx`INSERT INTO tournament_prizes ${tx(prizes)}`;
+		}
 
 		await audit(tx, {
 			adminId: admin.id,

@@ -5,6 +5,7 @@ import {
 	createTournament,
 	listTournaments,
 	NewTournament,
+	prizeRows,
 	TournamentError
 } from '#lib/server/tournaments.ts';
 import type { Actions, PageServerLoad } from './$types';
@@ -27,24 +28,32 @@ export const load: PageServerLoad = async () => {
 
 export const actions: Actions = {
 	create: async ({ request, locals, getClientAddress }) => {
-		const form = Object.fromEntries(await request.formData());
-		const entries = Object.entries(form).map(([key, value]) => [key, String(value)]);
+		const data = await request.formData();
+		const coins = data.getAll('prizeCoins').map(String);
+		const extras = data.getAll('prizeExtra').map(String);
+		const prizes = prizeRows(coins, extras);
+
+		const entries = [...data.entries()]
+			.filter(([key]) => key !== 'prizeCoins' && key !== 'prizeExtra')
+			.map(([key, value]) => [key, String(value)]);
 		const values = Object.fromEntries(entries);
 
 		// Empty fields count as left out, so their defaults apply.
 		const filled = Object.fromEntries(entries.filter(([, value]) => value !== ''));
-		const parsed = NewTournament.safeParse(filled);
+		const parsed = NewTournament.safeParse({ ...filled, prizes });
 
 		if (!parsed.success) {
 			const error = parsed.error.issues[0]?.message ?? 'Some fields are invalid.';
-			return fail(400, { values, error });
+			return fail(400, { values, prizes, error });
 		}
 
 		let id: string;
 		try {
 			id = await createTournament(sql, locals.admin!, parsed.data, auditIp(getClientAddress()));
 		} catch (err) {
-			if (err instanceof TournamentError) return fail(400, { values, error: err.message });
+			if (err instanceof TournamentError) {
+				return fail(400, { values, prizes, error: err.message });
+			}
 			throw err;
 		}
 
