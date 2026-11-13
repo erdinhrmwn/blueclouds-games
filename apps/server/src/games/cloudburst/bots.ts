@@ -1,19 +1,20 @@
 import { nextIndex } from "../shared/table";
-import { type Card, fits, type Game, type PlayInput, type Suit, SUITS } from "./rules";
+import { type Card, fits, type Game, isWild, type PlayInput, type Suit, SUITS } from "./rules";
 
 export type BotMove = { type: "play"; input: PlayInput } | { type: "draw" } | { type: "pass" };
 
 /** Slow the leader down when the next player is about to go out. */
-const STOPPERS = ["calm", "gust", "swirl"] as const;
+const STOPPERS = ["calm", "downpour", "gust", "swirl"] as const;
 
 /** The next player counts as "about to go out" at this many cards or fewer. */
 const NEARLY_OUT = 2;
 
 /**
  * Rule-based bot (also plays for timed-out and away humans):
- * 1. next player has 1–2 cards: Calm, then Gust, then Swirl, if one fits;
- * 2. otherwise a fitting non-Rainbow card, from the suit it holds most of;
- * 3. Rainbow only when nothing else fits; nothing fits: draw, then play the card if it fits, or pass.
+ * 1. next player has 1–2 cards: Calm, then Downpour, then Gust, then Swirl, if one fits;
+ * 2. otherwise a fitting non-wild card, from the suit it holds most of;
+ * 3. a wild card (Rainbow, Tempest) only when nothing else fits; nothing fits: draw, then play the card if it
+ *    fits, or pass.
  */
 export function chooseBotMove(game: Game): BotMove {
 	const me = game.players[game.turn]!;
@@ -33,7 +34,7 @@ export function chooseBotMove(game: Game): BotMove {
 	const rest = me.hand.filter((held) => held.id !== card.id);
 	const input: PlayInput = { cardId: card.id };
 
-	if (card.kind === "rainbow") {
+	if (isWild(card)) {
 		input.suit = mostHeld(rest) ?? game.suit;
 	}
 	if (card.kind === "gust" && rest.length > 0) {
@@ -43,7 +44,7 @@ export function chooseBotMove(game: Game): BotMove {
 	return { type: "play", input };
 }
 
-/** Rules 1–3 above: a stopper when needed, else a card of the most-held suit, else a Rainbow. */
+/** Rules 1–3 above: a stopper when needed, else a card of the most-held suit, else a wild card. */
 function pickCard(game: Game, hand: Card[], canPlay: Card[]): Card {
 	const next = game.players[nextIndex(game.players, game.turn, game.direction)]!;
 	if (next.hand.length <= NEARLY_OUT) {
@@ -55,7 +56,7 @@ function pickCard(game: Game, hand: Card[], canPlay: Card[]): Card {
 
 	const count = suitCounts(hand);
 	const [bestPlain] = canPlay
-		.filter((card) => card.kind !== "rainbow")
+		.filter((card) => !isWild(card))
 		.sort((a, b) => count.get(b.suit!)! - count.get(a.suit!)!);
 
 	return bestPlain ?? canPlay[0]!;
@@ -78,10 +79,10 @@ function mostHeld(hand: Card[]): Suit | undefined {
 	return SUITS.find((suit) => count.get(suit) === best);
 }
 
-/** Never a Rainbow (unless that is all it has); otherwise a card of the suit it holds fewest of. */
+/** Never a wild card (unless that is all it has); otherwise a card of the suit it holds fewest of. */
 function leastUseful(hand: Card[]): Card {
 	const count = suitCounts(hand);
-	const plain = hand.filter((card) => card.kind !== "rainbow");
+	const plain = hand.filter((card) => !isWild(card));
 	const [fewestHeld] = plain.sort((a, b) => count.get(a.suit!)! - count.get(b.suit!)!);
 
 	return fewestHeld ?? hand[0]!;

@@ -35,9 +35,17 @@
 	const nameOf = (id: string | null | undefined) =>
 		view.players.find((p) => p.id === id)?.name ?? '?';
 
-	// Your hand, sorted by suit, then numbers before actions; Rainbows last.
-	const ORDER = { number: 0, calm: 1, swirl: 2, gust: 3, rainbow: 4 } as const;
-	/** Rainbows have no suit and sort after every suit. */
+	// Your hand, sorted by suit, then numbers before actions; wild cards last.
+	const ORDER = {
+		number: 0,
+		calm: 1,
+		swirl: 2,
+		gust: 3,
+		downpour: 4,
+		rainbow: 5,
+		tempest: 6
+	} as const;
+	/** Wild cards have no suit and sort after every suit. */
 	const NO_SUIT_RANK = 9;
 	const suitRank = (card: Card) => (card.suit ? SUITS.indexOf(card.suit) : NO_SUIT_RANK);
 
@@ -106,7 +114,7 @@
 		if (pending?.needs === 'give') return send(pending.card, { giveId: card.id });
 		if (!playable(card)) return;
 
-		if (card.kind === 'rainbow') {
+		if (card.suit === null) {
 			pending = { card, needs: 'suit' };
 		} else if (card.kind === 'gust' && hand.length > 1) {
 			pending = { card, needs: 'give' };
@@ -373,9 +381,10 @@
 		return { ms: Math.max(0, room.turnEndsAt - Date.now()), total: room.turnTotal };
 	});
 
-	/** "Sun 7", "Rain Gust", or "a Rainbow". */
+	/** "Sun 7", "Rain Gust", "a Rainbow" or "a Tempest". */
 	function cardName(card: Card): string {
 		if (card.kind === 'rainbow') return 'a Rainbow';
+		if (card.kind === 'tempest') return 'a Tempest';
 
 		const face =
 			card.kind === 'number'
@@ -396,8 +405,13 @@
 			case 'dealt':
 				return `Round ${event.round}. Seven cards each.`;
 			case 'played': {
-				const nextSuit = event.card.kind === 'rainbow' ? `, ${SUIT_NAME[view.suit]} next` : '';
-				const skip = event.skipped ? `. ${nameOf(event.skipped)} is skipped` : '';
+				const nextSuit = event.card.suit === null ? `, ${SUIT_NAME[view.suit]} next` : '';
+				const drawn = event.forced === 1 ? '1 card' : `${event.forced} cards`;
+				const skip = !event.skipped
+					? ''
+					: event.forced !== undefined
+						? `. ${nameOf(event.skipped)} draws ${drawn} and is skipped`
+						: `. ${nameOf(event.skipped)} is skipped`;
 				const gift = event.gaveTo ? ` and handed ${nameOf(event.gaveTo)} a card` : '';
 				return `${nameOf(event.playerId)} played ${cardName(event.card)}${nextSuit}${skip}${gift}${auto}.`;
 			}

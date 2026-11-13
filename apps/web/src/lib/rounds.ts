@@ -84,7 +84,7 @@ const BUST_FACES: Record<string, CardFace> = {
 	d: { mark: '×2', spoken: 'double', ink: 'text-[#2c5f8a]' }
 };
 
-const CLOUD_ACTIONS: Record<string, string> = { calm: 'C', swirl: 'S', gust: 'G' };
+const CLOUD_ACTIONS: Record<string, string> = { calm: 'C', swirl: 'S', gust: 'G', downpour: '+2' };
 
 /** A table's own entry for `key`, never one inherited from Object (card ids come from the server). */
 const own = <T>(table: Record<string, T>, key: string): T | undefined =>
@@ -107,6 +107,9 @@ export function cardFace(game: string, id: string): CardFace {
 
 	if (head === 'rainbow') {
 		return { mark: '✦', spoken: 'rainbow', ink: 'text-ink' };
+	}
+	if (head === 'tempest') {
+		return { mark: '+4', spoken: 'tempest', ink: 'text-ink' };
 	}
 
 	const face = parts.at(1) ?? '';

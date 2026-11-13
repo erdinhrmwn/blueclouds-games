@@ -23,8 +23,10 @@
 			the next player,
 			<b class="text-paper">Swirl</b> turns the table the other way, and
 			<b class="text-paper">Gust</b>
-			lets you hand one of your cards to the next player. A <b class="text-paper">Rainbow</b> fits anything
-			and picks the weather.
+			lets you hand one of your cards to the next player, and <b class="text-paper">Downpour</b>
+			makes the next player draw two and lose their turn. A <b class="text-paper">Rainbow</b> fits
+			anything and picks the weather; a <b class="text-paper">Tempest</b> does too, and the next player
+			draws four and loses their turn. Draw cards don’t stack.
 		</p>
 	{/snippet}
 </GameLobby>

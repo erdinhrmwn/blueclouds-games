@@ -23,14 +23,19 @@
 		wind: 'bg-wind',
 		storm: 'bg-storm'
 	};
-	const ACTION: Record<string, string> = { calm: 'Calm', swirl: 'Swirl', gust: 'Gust' };
+	const ACTION: Record<string, string> = {
+		calm: 'Calm',
+		swirl: 'Swirl',
+		gust: 'Gust',
+		downpour: 'Downpour'
+	};
 	const LOWEST = 1;
 	const HIGHEST = 8;
 
-	/** "Rain, 5 or 7", "Rain or Gust", or just "Rain" after a Rainbow. */
+	/** "Rain, 5 or 7", "Rain or Gust", or just "Rain" after a wild card. */
 	const hint = $derived.by(() => {
 		const name = SUIT_NAME[suit];
-		if (!top || top.kind === 'rainbow') {
+		if (!top || top.suit === null) {
 			return name;
 		}
 		if (top.kind !== 'number') {

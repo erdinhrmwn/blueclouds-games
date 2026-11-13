@@ -23,25 +23,30 @@
 		onplay?: (id: string) => void;
 	} = $props();
 
-	const WORD = { calm: 'Calm', swirl: 'Swirl', gust: 'Gust' } as const;
+	const WORD = { calm: 'Calm', swirl: 'Swirl', gust: 'Gust', downpour: 'Downpour +2' } as const;
+	/** Card art file names where they differ from the card's kind. */
+	const FILE: Partial<Record<Card['kind'], string>> = { downpour: 'draw' };
 
 	/** The card faces are drawn in FigCraft (design/cards.figcraft) and exported to static/cards. */
 	const face = $derived.by(() => {
-		if (card.kind === 'rainbow') {
-			return 'rainbow';
+		if (card.suit === null) {
+			return card.kind;
 		}
 		if (card.kind === 'number') {
 			return `${card.suit}-${card.value}`;
 		}
 
-		return `${card.suit}-${card.kind}`;
+		return `${card.suit}-${FILE[card.kind] ?? card.kind}`;
 	});
 	const src = $derived(`/cards/cloudburst/${face}.svg`);
 
-	/** What a screen reader says: "Sun 7", "Rain Gust" or "Rainbow". */
+	/** What a screen reader says: "Sun 7", "Rain Gust", "Rainbow" or "Tempest +4". */
 	const spoken = $derived.by(() => {
 		if (card.kind === 'rainbow') {
 			return 'Rainbow';
+		}
+		if (card.kind === 'tempest') {
+			return 'Tempest +4';
 		}
 
 		const value = card.kind === 'number' ? card.value : WORD[card.kind];

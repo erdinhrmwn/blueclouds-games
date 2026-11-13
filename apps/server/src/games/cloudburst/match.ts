@@ -11,7 +11,8 @@ import type { RoundResult } from "../shared/rounds";
 import { type Card, type Game, placements } from "./rules";
 
 /** Bump when a rule change makes old results incomparable to new ones. */
-export const RULES_VERSION = 1;
+/** 2: Downpour (+2) and Tempest (+4) joined the deck. */
+export const RULES_VERSION = 2;
 /** Bump when the shape of a log event changes (see docs/games/cloudburst/rules.md). */
 export const LOG_VERSION = 1;
 
@@ -79,8 +80,22 @@ export function logEvents(before: Game, after: Game, auto = false): LogEntry[] {
 		const cardsLeft = event.type === "roundEnd" ? 0 : after.players[before.turn]!.hand.length;
 		const data: Record<string, unknown> = { card: card.id, left: cardsLeft, by };
 
-		if (card.kind === "rainbow" && event.type === "played") {
+		if (card.suit === null && event.type === "played") {
 			data.suit = after.suit;
+		}
+
+		if (event.type === "played" && event.forced !== undefined && event.skipped) {
+			const victim = before.players.find((p) => p.id === event.skipped)!;
+			const now = after.players.find((p) => p.id === event.skipped)!;
+			// The drawn cards are appended in draw order.
+			const forcedCards = ids(now.hand.slice(victim.hand.length));
+			const fromOldDeck = Math.min(before.deck.length, forcedCards.length);
+			if (fromOldDeck < forcedCards.length) {
+				// The deck ran out mid-draw: everything under the top card was shuffled into a new one.
+				const fromNewDeck = forcedCards.slice(fromOldDeck);
+				entries.push({ type: "reshuffle", data: { deck: [...fromNewDeck, ...ids(after.deck)] } });
+			}
+			data.forced = { seat: victim.seat, cards: forcedCards };
 		}
 
 		if (event.type === "played" && event.gaveTo) {

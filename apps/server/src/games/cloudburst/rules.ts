@@ -7,6 +7,9 @@ export const HAND_SIZE = 7;
 const COPIES_PER_CARD = 2;
 const HIGHEST_NUMBER = 8;
 const RAINBOWS = 4;
+const TEMPESTS = 4;
+/** Cards the next player draws (and the turn they lose) after a Downpour or a Tempest. No stacking. */
+export const FORCED_DRAW = { downpour: 2, tempest: 4 } as const;
 /** Extra wait after the deal animation, so the first turn never starts mid-flight. */
 const DEAL_SETTLE_MS = 100;
 export const MIN_PLAYERS = 2;
@@ -20,9 +23,11 @@ export const DEAL = { stepMs: 60, flightMs: 400, roundEndMs: 4000 };
 
 export const SUITS = ["sun", "rain", "wind", "storm"] as const;
 export type Suit = (typeof SUITS)[number];
-export const ACTIONS = ["calm", "swirl", "gust"] as const;
-export type CardKind = "number" | (typeof ACTIONS)[number] | "rainbow";
-/** `value` is 1–8 for numbers and 0 otherwise; `suit` is null only for a Rainbow. */
+export const ACTIONS = ["calm", "swirl", "gust", "downpour"] as const;
+/** Wild cards fit anything and let their player pick the suit to follow. */
+export const WILDS = ["rainbow", "tempest"] as const;
+export type CardKind = "number" | (typeof ACTIONS)[number] | (typeof WILDS)[number];
+/** `value` is 1–8 for numbers and 0 otherwise; `suit` is null only for a wild card. */
 export type Card = { id: string; kind: CardKind; suit: Suit | null; value: number };
 
 export type Player = {
@@ -50,6 +55,8 @@ export type GameEvent =
 			playerId: string;
 			card: Card;
 			skipped?: string;
+			/** Downpour or Tempest: how many cards the skipped player had to draw. */
+			forced?: number;
 			gaveTo?: string;
 			auto?: boolean;
 	  }
@@ -110,7 +117,7 @@ export function createGame(): Game {
 	};
 }
 
-/** 92 cards: per suit, numbers 1–8 and Calm, Swirl, Gust, two of each; plus four Rainbows. */
+/** 104 cards: per suit, numbers 1–8 and Calm, Swirl, Gust, Downpour, two of each; plus four Rainbows and four Tempests. */
 export function buildDeck(): Card[] {
 	const cards: Card[] = [];
 	for (const suit of SUITS) {
@@ -127,13 +134,18 @@ export function buildDeck(): Card[] {
 	for (let i = 0; i < RAINBOWS; i++) {
 		cards.push({ id: `rainbow-${i}`, kind: "rainbow", suit: null, value: 0 });
 	}
+	for (let i = 0; i < TEMPESTS; i++) {
+		cards.push({ id: `tempest-${i}`, kind: "tempest", suit: null, value: 0 });
+	}
 
 	return cards;
 }
 
-/** Same suit, a number exactly one up or down, the same action, or any Rainbow. A same number alone does not fit. */
+export const isWild = (card: Card) => card.suit === null;
+
+/** Same suit, a number exactly one up or down, the same action, or any wild card. A same number alone does not fit. */
 export function fits(card: Card, top: Card, suit: Suit): boolean {
-	if (card.kind === "rainbow" || card.suit === suit) return true;
+	if (isWild(card) || card.suit === suit) return true;
 
 	if (card.kind === "number") {
 		return top.kind === "number" && Math.abs(card.value - top.value) === 1;
@@ -185,7 +197,7 @@ export function playCard(game: Game, playerId: string, input: PlayInput, rng: Rn
 
 	const top = game.discard.at(-1)!;
 	if (!fits(card, top, game.suit)) throw new RuleError("That card does not fit the pile.");
-	if (card.kind === "rainbow" && !input.suit) throw new RuleError("Pick a suit for the Rainbow.");
+	if (isWild(card) && !input.suit) throw new RuleError("Pick a suit for the wild card.");
 	if (input.suit && !SUITS.includes(input.suit)) throw new RuleError("That suit does not exist.");
 
 	let hand = current.hand.filter((held) => held.id !== card.id);
@@ -220,25 +232,61 @@ export function playCard(game: Game, playerId: string, input: PlayInput, rng: Rn
 	const direction = card.kind === "swirl" ? (-game.direction as 1 | -1) : game.direction;
 	let turn = nextIndex(players, game.turn, direction);
 	let skipped: string | undefined;
-	if (card.kind === "calm") {
-		skipped = players[turn]!.id;
-		turn = nextIndex(players, turn, direction);
+	let forced: number | undefined;
+	let after: Game = { ...played, direction };
+
+	// A Downpour or Tempest makes the next player draw and lose their turn.
+	if (card.kind === "downpour" || card.kind === "tempest") {
+		after = forceDraw(after, turn, FORCED_DRAW[card.kind], rng);
+		forced = after.players[turn]!.hand.length - played.players[turn]!.hand.length;
+	}
+	if (card.kind === "calm" || forced !== undefined) {
+		skipped = after.players[turn]!.id;
+		turn = nextIndex(after.players, turn, direction);
 	}
 
 	return {
-		...played,
-		direction,
+		...after,
 		turn,
 		lastEvent: {
 			type: "played",
 			playerId,
 			card,
 			...(skipped ? { skipped } : {}),
+			...(forced !== undefined ? { forced } : {}),
 			...(give ? { gaveTo: players[nextUp]!.id } : {}),
 		},
 		moves: game.moves + 1,
 		turnKey: game.turnKey + 1,
 	};
+}
+
+/**
+ * The player at `seatIndex` draws `count` cards, one at a time; an empty deck is refilled from everything
+ * under the top card, like a normal draw. With no cards left anywhere they draw fewer.
+ */
+function forceDraw(game: Game, seatIndex: number, count: number, rng: Rng): Game {
+	let { deck, discard } = game;
+	const drawn: Card[] = [];
+
+	for (let i = 0; i < count; i++) {
+		if (deck.length === 0 && discard.length > 1) {
+			deck = shuffle(discard.slice(0, -1), rng, game.round);
+			discard = discard.slice(-1);
+		}
+
+		const [next, ...rest] = deck;
+		if (!next) break;
+
+		drawn.push(next);
+		deck = rest;
+	}
+
+	const players = game.players.map((player, index) =>
+		index === seatIndex ? { ...player, hand: [...player.hand, ...drawn] } : player,
+	);
+
+	return { ...game, players, deck, discard };
 }
 
 /** Draws one card. Afterwards the player may play that card (if it fits) or pass. */
@@ -333,8 +381,8 @@ function dealRound(game: Game, rng: Rng): Game {
 		return { ...player, hand };
 	});
 
-	// A Rainbow can't start the pile (nobody chose its suit): it goes back under the deck.
-	const startAt = deck.findIndex((card) => card.kind !== "rainbow");
+	// A wild card can't start the pile (nobody chose its suit): it stays in the deck.
+	const startAt = deck.findIndex((card) => !isWild(card));
 	const start = deck[startAt]!;
 	deck = [...deck.slice(0, startAt), ...deck.slice(startAt + 1)];
 

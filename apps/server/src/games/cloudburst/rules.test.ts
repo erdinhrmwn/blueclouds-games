@@ -29,13 +29,14 @@ const num = (suit: Card["suit"], value: number, copy = 0): Card => ({
 	suit,
 	value,
 });
-const act = (suit: Card["suit"], kind: "calm" | "swirl" | "gust", copy = 0): Card => ({
+const act = (suit: Card["suit"], kind: "calm" | "swirl" | "gust" | "downpour", copy = 0): Card => ({
 	id: `${suit}-${kind}-${copy}`,
 	kind,
 	suit,
 	value: 0,
 });
 const rainbow: Card = { id: "rainbow-0", kind: "rainbow", suit: null, value: 0 };
+const tempest: Card = { id: "tempest-0", kind: "tempest", suit: null, value: 0 };
 
 function table(n = 3): Game {
 	let g = createGame();
@@ -54,11 +55,13 @@ function setup(g: Game, hands: Card[][], top: Card, suit = top.suit!): Game {
 }
 
 describe("deck and fitting", () => {
-	test("92 cards with unique ids", () => {
+	test("104 cards with unique ids", () => {
 		const deck = buildDeck();
-		expect(deck).toHaveLength(92);
-		expect(new Set(deck.map((c) => c.id)).size).toBe(92);
+		expect(deck).toHaveLength(104);
+		expect(new Set(deck.map((c) => c.id)).size).toBe(104);
 		expect(deck.filter((c) => c.kind === "rainbow")).toHaveLength(4);
+		expect(deck.filter((c) => c.kind === "tempest")).toHaveLength(4);
+		expect(deck.filter((c) => c.kind === "downpour")).toHaveLength(8);
 	});
 
 	test("same suit, one step, same action or Rainbow fit; a same number alone does not", () => {
@@ -69,6 +72,9 @@ describe("deck and fitting", () => {
 		expect(fits(num("rain", 5), top, "sun")).toBe(false);
 		expect(fits(num("rain", 7), top, "sun")).toBe(false);
 		expect(fits(rainbow, top, "sun")).toBe(true);
+		expect(fits(tempest, top, "sun")).toBe(true);
+		expect(fits(act("rain", "downpour"), act("sun", "downpour"), "sun")).toBe(true);
+		expect(fits(act("rain", "downpour"), top, "sun")).toBe(false);
 		expect(fits(act("rain", "calm"), act("sun", "calm"), "sun")).toBe(true);
 		expect(fits(act("rain", "calm"), act("sun", "gust"), "sun")).toBe(false);
 		// After a Rainbow only the chosen suit fits (no number to step from).
@@ -139,6 +145,47 @@ describe("a round", () => {
 		expect(() => playCard(g, "a", { cardId: "rainbow-0" }, rng)).toThrow(RuleError);
 		g = playCard(g, "a", { cardId: "rainbow-0", suit: "storm" }, rng);
 		expect(g.suit).toBe("storm");
+	});
+
+	test("Downpour makes the next player draw 2 and lose their turn; no stacking", () => {
+		let g = setup(
+			table(),
+			[[act("sun", "downpour"), num("sun", 1)], [act("rain", "downpour")]],
+			num("sun", 5),
+		);
+		const drawn = g.deck.slice(0, 2).map((c) => c.id);
+		g = playCard(g, "a", { cardId: "sun-downpour-0" }, rng);
+		expect(g.players[1]!.hand.map((c) => c.id)).toEqual(["rain-downpour-0", ...drawn]);
+		expect(g.turn).toBe(2);
+		expect(g.lastEvent).toMatchObject({ type: "played", skipped: "b", forced: 2 });
+		// The view says how many, never which cards.
+		expect(JSON.stringify(publicView(g))).not.toContain(drawn[0]!);
+	});
+
+	test("Tempest needs a suit, then the next player draws 4 and loses their turn", () => {
+		let g = setup(table(), [[tempest, num("sun", 1)], [num("rain", 2)]], num("sun", 5));
+		expect(() => playCard(g, "a", { cardId: "tempest-0" }, rng)).toThrow(RuleError);
+		g = playCard(g, "a", { cardId: "tempest-0", suit: "wind" }, rng);
+		expect(g.suit).toBe("wind");
+		expect(g.players[1]!.hand).toHaveLength(5);
+		expect(g.turn).toBe(2);
+		expect(g.lastEvent).toMatchObject({ skipped: "b", forced: 4 });
+	});
+
+	test("a forced draw refills an empty deck from under the top card, and logs it", () => {
+		const base = setup(table(), [[act("sun", "downpour"), num("sun", 1)]], num("sun", 5));
+		const g = {
+			...base,
+			deck: [num("wind", 3, 1)],
+			discard: [num("rain", 4, 1), num("storm", 6, 1), num("sun", 5)],
+		};
+		const after = playCard(g, "a", { cardId: "sun-downpour-0" }, rng);
+		expect(after.players[1]!.hand.slice(-2).map((c) => c.id)[0]).toBe("wind-3-1");
+		expect(after.lastEvent).toMatchObject({ forced: 2 });
+		expect(after.discard.map((c) => c.id)).toEqual(["sun-downpour-0"]);
+		const entries = logEvents(g, after);
+		expect(entries.map((e) => e.type)).toEqual(["reshuffle", "play"]);
+		expect((entries[1]!.data as { forced: { cards: string[] } }).forced.cards).toHaveLength(2);
 	});
 
 	test("draw, then play only the drawn card or pass; the turn key stays during the draw", () => {

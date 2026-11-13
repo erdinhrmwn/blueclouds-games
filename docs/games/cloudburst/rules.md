@@ -10,7 +10,7 @@ A race to empty your hand, over several rounds. Play a card that matches the sky
 - In the lobby you pick an empty seat ("Sit here"); the host puts a bot in a seat with its "+" button and starts the game.
 - Closing the tab works like Bust 31: in the lobby you leave after 15 seconds (a refresh is fine); mid-game your seat is marked "away" and played for you until you come back.
 
-## The deck (92 cards)
+## The deck (104 cards)
 
 Four suits, each a kind of weather: **Sun**, **Rain**, **Wind** and **Storm**.
 
@@ -20,17 +20,19 @@ Four suits, each a kind of weather: **Sun**, **Rain**, **Wind** and **Storm**.
 | **Calm** | 2 | 8 | The next player misses their turn. |
 | **Swirl** | 2 | 8 | Reverses the turn order. |
 | **Gust** | 2 | 8 | You also hand one other card from your hand to the next player. |
+| **Downpour** (+2) | 2 | 8 | The next player draws 2 cards and misses their turn. |
 | **Rainbow** | (no suit) | 4 | Fits on anything. You choose the suit the next player must follow. |
+| **Tempest** (+4) | (no suit) | 4 | Like a Rainbow, and the next player draws 4 cards and misses their turn. |
 
 ## A turn
 
-The dealer deals 7 cards to each player and turns one card face up to start the pile (a Rainbow goes back into the deck; an action card turned up this way has no effect). Then, on your turn, you do one of two things:
+The dealer deals 7 cards to each player and turns one card face up to start the pile (a Rainbow or Tempest stays in the deck; an action card turned up this way has no effect). Then, on your turn, you do one of two things:
 
 1. **Play one card that fits** the top of the pile:
    - the **same suit** (for a Rainbow: the suit its player chose), or
    - a number **exactly one higher or one lower** (a 5 fits on a 4 or a 6, in any suit; there is no wrap from 8 to 1), or
-   - the **same action** (Calm on Calm, Swirl on Swirl, Gust on Gust), or
-   - a **Rainbow**, which fits on anything.
+   - the **same action** (Calm on Calm, Swirl on Swirl, Gust on Gust, Downpour on Downpour), or
+   - a **Rainbow** or **Tempest**, which fit on anything.
 2. **Draw one card.** If it fits, you may play it right away; otherwise (or if you'd rather keep it) press **Pass**. You may draw even when you hold a card that fits.
 
 A same number does **not** fit by itself (a 5 on a 5 needs the same suit). This "one step" rule is what makes Cloudburst its own game: you plan little runs up and down the numbers.
@@ -42,7 +44,9 @@ When the deck runs out, everything under the top card is shuffled into a new dec
 - **Calm**: the player after you is skipped. With 2 players you go again.
 - **Swirl**: play now goes the other way. With 2 players it changes nothing (the other player is next either way).
 - **Gust**: after the Gust lands, you pick one card from your hand and it goes face down to the next player in the (current) direction. If the Gust was your last card, you went out and nothing is given. Only you and the receiver see which card it was.
-- **Rainbow**: pick Sun, Rain, Wind or Storm. The next player follows that suit (or plays another Rainbow). Nothing fits a Rainbow "by number".
+- **Downpour**: the next player draws 2 cards and is skipped. Draw cards don't stack: a Downpour played back does not pass the 2 on, it is a new Downpour for the player after.
+- **Rainbow**: pick Sun, Rain, Wind or Storm. The next player follows that suit (or plays another wild card). Nothing fits a Rainbow "by number".
+- **Tempest**: pick the suit like a Rainbow; the next player also draws 4 cards and is skipped. If the deck runs out mid-draw, everything under the top card is shuffled into a new deck first. Added in rules version 2 with the Downpour (Erdin, 2026-11-13).
 
 ## Rounds and points
 
@@ -95,7 +99,7 @@ Choices checked in the same simulation:
 | Type | Seat | Data |
 |---|---|---|
 | `deal` | — | `round`, `hands` (seat → card ids), `deck` (top first), `start` (first pile card), `starter` (seat) |
-| `play` | player | `card`, `suit` (chosen, Rainbow only), `gave` (card id, Gust only), `left` (cards in hand after), `by` |
+| `play` | player | `card`, `suit` (chosen, wild cards only), `gave` (card id, Gust only), `forced` (`{ seat, cards }`: what a Downpour or Tempest made the next seat draw, in draw order; a `reshuffle` right before the play means the deck ran out mid-draw), `left` (cards in hand after), `by` |
 | `draw` | player | `card` (id or null when the deck was empty), `by` |
 | `pass` | player | `by` |
 | `reshuffle` | — | `deck` (new order, top first) |
