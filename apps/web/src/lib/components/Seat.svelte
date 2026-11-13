@@ -31,6 +31,7 @@
 		timeLeft?: number | null;
 		/** Time left when this deadline arrived; the ring animates down from it. */
 		drain?: { ms: number; total: number } | null;
+		/** A host's action on this seat (remove a bot, kick a player): a small × on the avatar's corner. */
 		action?: { label: string; run: () => void };
 		/** Chair number shown to people (1-based). */
 		number?: number;
@@ -86,10 +87,11 @@
 		aria-label={seatLabel}
 	>
 		<!-- Room below for the Away tag, kept on every seat so all their lines stay level. -->
-		<div class="relative mb-1.5" aria-hidden="true">
+		<div class="relative mb-1.5">
 			<div
 				class="relative grid size-14 place-items-center rounded-[14px] border-2 font-display text-xl font-bold
 					{avatarLook}"
+				aria-hidden="true"
 			>
 				{#if player.bot}
 					<!-- robot head: bots get an icon instead of a monogram -->
@@ -135,16 +137,17 @@
 					</svg>
 				{/if}
 			</div>
-			<!-- Tags sit on the avatar's edge lines: roles on the top one (Host left, VIP right), away on the bottom one.
+			<!-- Every mark has one fixed spot, so none can meet another: Host on the top left corner, the host's ×
+				 (or + on an empty chair) on the top right, Away on the bottom edge, VIP in the name tag below.
 				 The ring cuts a gap where a tag crosses the edge or the timer. -->
 			{#if isHost}
-				<span class="seat-tag -top-2 -left-1.5 bg-brass text-ink">Host</span>
-			{/if}
-			{#if player.vip}
-				<span class="seat-tag -top-2 -right-1.5 border border-brass/70 bg-ink text-brass">VIP</span>
+				<span class="seat-tag -top-2 -left-1.5 bg-brass text-ink" aria-hidden="true">Host</span>
 			{/if}
 			{#if player.away}
-				<span class="seat-tag -bottom-2 left-1/2 -translate-x-1/2 bg-paper text-ink">
+				<span
+					class="seat-tag -bottom-2 left-1/2 -translate-x-1/2 bg-paper text-ink"
+					aria-hidden="true"
+				>
 					<!-- moon -->
 					<svg viewBox="0 0 24 24" class="size-2.5" fill="currentColor">
 						<path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z" />
@@ -152,23 +155,29 @@
 					Away
 				</span>
 			{/if}
+			{#if action}
+				{@render cornerButton(`${action.label} ${player.name}`, action.run, 'remove')}
+			{/if}
 		</div>
 		<div
-			class="max-w-full truncate rounded-sm bg-black/45 px-2 py-0.5 text-xs font-medium
+			class="flex max-w-full items-center gap-1 rounded-sm bg-black/45 px-2 py-0.5 text-xs font-medium
 				{player.away ? 'text-paper/70' : ''}"
 			aria-hidden="true"
 		>
-			{player.name}{#if isMe}<span class="text-paper/75">&nbsp;(you)</span>{/if}
+			{#if player.vip}
+				<span
+					class="shrink-0 rounded-[3px] bg-brass px-1 text-[9px] leading-[14px] font-bold text-ink"
+					>VIP</span
+				>
+			{/if}
+			<span class="min-w-0 truncate"
+				>{player.name}{#if isMe}<span class="text-paper/75">&nbsp;(you)</span>{/if}</span
+			>
 		</div>
 		{#if status}
 			<div class="flex items-center gap-1 {awayFade}">
 				{@render status()}
 			</div>
-		{/if}
-		{#if action}
-			<button class="link-btn -my-2 text-xs" onclick={action.run}>
-				{action.label}
-			</button>
 		{/if}
 	</div>
 {:else}
@@ -177,23 +186,91 @@
 		role="group"
 		aria-label="Seat {number ?? ''}, empty"
 	>
-		{#if onAddBot}
-			<button
-				class="mb-1.5 grid size-14 place-items-center rounded-[14px] border-2 border-dashed border-brass/70 text-2xl leading-none text-brass transition hover:border-solid hover:bg-brass/10 disabled:opacity-40"
-				onclick={onAddBot}
-				aria-label="Add a bot to seat {number ?? ''}">+</button
-			>
-		{:else}
-			<div class="mb-1.5 size-14 rounded-[14px] border-2 border-dashed border-paper/40"></div>
-		{/if}
+		<!-- The chair itself is the main button: sit down here. The host adds a bot with the small + on its corner. -->
+		<div class="relative mb-1.5">
+			{#if onSit}
+				<button
+					class="grid size-14 place-items-center rounded-[14px] border-2 border-dashed border-paper/40 text-paper/60 transition hover:border-solid hover:border-brass/70 hover:bg-brass/10 hover:text-brass"
+					onclick={onSit}
+					aria-label="Sit in seat {number ?? ''}"
+					title="Sit here"
+				>
+					{@render sitIcon('size-6')}
+				</button>
+			{:else}
+				<div class="size-14 rounded-[14px] border-2 border-dashed border-paper/40"></div>
+			{/if}
+			{#if onAddBot}
+				{@render cornerButton(`Add a bot to seat ${number ?? ''}`, onAddBot, 'add')}
+			{/if}
+		</div>
 		<div class="text-xs text-paper/70">Seat {number ?? ''}</div>
-		{#if onSit}
-			<button class="link-btn -my-2 text-xs" onclick={onSit}>Sit here</button>
-		{/if}
 	</div>
 {/if}
 
+<!-- An arrow going into the chair. -->
+{#snippet sitIcon(size: string)}
+	<svg
+		viewBox="0 0 20 20"
+		class={size}
+		fill="none"
+		stroke="currentColor"
+		stroke-width="1.8"
+		stroke-linecap="round"
+		stroke-linejoin="round"
+		aria-hidden="true"
+	>
+		<path d="M12 4h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1h-3M7 14l4-4-4-4M11 10H3" />
+	</svg>
+{/snippet}
+
+<!-- A small round button on the avatar's top right corner, with a full 44px tap area around it. -->
+{#snippet cornerButton(label: string, run: () => void, kind: 'remove' | 'add')}
+	<button
+		class="corner group absolute -top-[1.375rem] -right-[1.375rem] z-20 grid size-11 place-items-center"
+		onclick={run}
+		aria-label={label}
+		title={label}
+	>
+		<span
+			class="grid size-6 place-items-center rounded-full border transition
+				{kind === 'remove'
+				? 'border-paper/40 bg-ink text-paper/85 group-hover:border-ember group-hover:bg-ember group-hover:text-paper'
+				: 'border-brass bg-brass text-ink group-hover:brightness-110'}"
+		>
+			{#if kind === 'remove'}
+				<svg
+					viewBox="0 0 20 20"
+					class="size-3"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="2.4"
+					stroke-linecap="round"
+					aria-hidden="true"
+				>
+					<path d="M5 5l10 10M15 5 5 15" />
+				</svg>
+			{:else}
+				<svg
+					viewBox="0 0 20 20"
+					class="size-3.5"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="2.4"
+					stroke-linecap="round"
+					aria-hidden="true"
+				>
+					<path d="M10 4.5v11M4.5 10h11" />
+				</svg>
+			{/if}
+		</span>
+	</button>
+{/snippet}
+
 <style>
+	.corner > span {
+		box-shadow: 0 0 0 2px var(--color-felt-deep);
+	}
 	.seat-tag {
 		position: absolute;
 		z-index: 10;

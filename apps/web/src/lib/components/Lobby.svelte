@@ -53,7 +53,7 @@
 		}
 
 		if (player.bot) {
-			return { label: 'remove', run: () => room.removeBot(player.id) };
+			return { label: 'Remove', run: () => room.removeBot(player.id) };
 		}
 
 		const kick = () => {
@@ -63,7 +63,7 @@
 			}
 		};
 
-		return { label: 'kick', run: kick };
+		return { label: 'Kick', run: kick };
 	};
 
 	// Invites: the table's link, the same one until the host resets it.
