@@ -1,6 +1,9 @@
 # Plan: tournament automation (rounds, standings, winners)
 
-Status: decisions made by Erdin 2026-11-13 (see the end). Branch `feat/tournament-rounds`, one PR per phase into `develop`.
+Status: decisions made by Erdin 2026-11-13 (see the end); one PR per phase into `develop`.
+
+- Phase 1 (rounds as data): merged, PR #18.
+- Phase 2 (knockout rounds, final places): branch `feat/tournament-standings`. Every format plays as a knockout until phase 3. Players level at the end (say 2nd at two tables) are split by sign-up order; a player who never played a match gets no place. The results API and web views wait for phase 5 and its design.
 
 ## Where we are
 

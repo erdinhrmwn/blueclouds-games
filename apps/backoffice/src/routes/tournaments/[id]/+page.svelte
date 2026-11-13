@@ -30,6 +30,14 @@
 		};
 	};
 
+	const playersById = $derived(new Map(data.players.map((p) => [p.playerId, p])));
+	/** The players at a table, with their seat there (a past round's table too). */
+	const seatedAt = (room: (typeof data.rooms)[number]) =>
+		room.seats.flatMap((taken) => {
+			const p = playersById.get(taken.playerId);
+			return p ? [{ ...p, seat: taken.seat }] : [];
+		});
+
 	const roomState = (room: (typeof data.rooms)[number]) => {
 		if (room.closeReason === 'finished') {
 			return `Finished after ${duration(room.startedAt ?? tournament.startsAt, room.closedAt!)}`;
@@ -161,6 +169,28 @@
 	</section>
 {/if}
 
+{#if data.results.length}
+	<section class="mt-6 max-w-3xl panel" aria-labelledby="results">
+		<div class="panel-head">
+			<h2 id="results" class="font-semibold">Results</h2>
+		</div>
+		<ol class="divide-y divide-line text-sm">
+			{#each data.results as result (result.playerId)}
+				<li class="flex items-center justify-between gap-3 px-5 py-2.5">
+					<span>
+						<span class="font-semibold tabular-nums">{result.place}.</span>
+						<a class="link" href="/players/{result.playerId}">{result.name}</a>
+					</span>
+					<span class="text-muted tabular-nums">
+						{result.wins}
+						{result.wins === 1 ? 'win' : 'wins'} · reached round {result.lastRound}
+					</span>
+				</li>
+			{/each}
+		</ol>
+	</section>
+{/if}
+
 {#if data.rooms.length}
 	<h2 class="mt-8 font-semibold">Tables</h2>
 	<div class="mt-3 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -168,13 +198,15 @@
 			<section class="panel p-5" aria-label="Table {r.code}">
 				<p class="flex items-baseline justify-between gap-2">
 					<span class="font-mono text-lg tracking-[0.15em]">{r.code}</span>
-					<span class="text-sm text-muted">{r.players}/{tournament.playersPerRoom}</span>
+					<span class="text-sm text-muted">
+						Round {r.round} · {r.players}/{tournament.playersPerRoom}
+					</span>
 				</p>
 				<p class="text-sm {r.closeReason === 'not_enough_players' ? 'text-danger' : 'text-muted'}">
 					{roomState(r)}
 				</p>
 				<ol class="mt-2 space-y-1 text-sm">
-					{#each data.players.filter((p) => p.roomCode === r.code) as p (p.playerId)}
+					{#each seatedAt(r) as p (p.playerId)}
 						<li class="flex items-center justify-between gap-2">
 							<span>
 								<span class="text-muted tabular-nums">{(p.seat ?? 0) + 1}.</span>

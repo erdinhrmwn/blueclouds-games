@@ -121,6 +121,19 @@ CREATE TABLE tournament_rounds (
 -- rooms.tournament_round: the round a tournament table plays in (set exactly when tournament_id is).
 -- room_assignments.tournament_round: a player sits at one table per round, UNIQUE (tournament_id, tournament_round, player_id).
 
+-- Final places (migration 022), written once by the job when the last round is done. Until Arena and Swiss get
+-- their own rules (plan phase 3) every format plays as a knockout: each table's winner goes on to the next round,
+-- 3 minutes after the last table of a round closes, until one player is left.
+CREATE TABLE tournament_results (
+  tournament_id  uuid NOT NULL REFERENCES tournaments(id),
+  player_id      uuid NOT NULL REFERENCES players(id),
+  place          smallint NOT NULL,     -- 1 = champion; UNIQUE per tournament
+  wins           smallint NOT NULL,     -- tables won across all rounds
+  points         int NOT NULL,          -- Arena and Swiss, later
+  last_round     smallint NOT NULL,     -- the furthest round they were seated in
+  PRIMARY KEY (tournament_id, player_id)
+);
+
 -- Prizes by finishing place (migration 020): shown as a podium, their sum as the prize pool. Nothing is paid out.
 CREATE TABLE tournament_prizes (
   tournament_id  uuid NOT NULL REFERENCES tournaments(id),
@@ -210,7 +223,7 @@ Rules the database holds, so neither app can get them wrong:
 | That match is reported (`POST /v1/matches`) | Same transaction: `rooms.closed_at`, `close_reason = 'finished'` |
 | The room gives up (below the game's minimum after the 3-minute wait) | The room tells the platform (`POST /v1/rooms/:code/close`) → `close_reason = 'not_enough_players'` |
 | Nobody ever opened the room (no assigned player connected, so the actor never woke) | The every-minute job closes it at `starts_at + 4 min` (the 3-minute wait plus a margin) with `not_enough_players` |
-| The last room of a tournament closes | Same transaction: `tournaments.ended_at = now()` |
+| The last table of a round closes | The every-minute job ends the round, then seats the table winners in the next round (starting 3 minutes later), or, with one player left, writes `tournament_results` and sets `tournaments.ended_at` |
 
 A started room is never closed by the job: its match always reaches the platform through the room's outbox, however long it takes. If the room's start call got lost and the job closed it as `not_enough_players`, the match report still switches it to `finished`. ponytail: a room whose actor dies for good mid-match keeps its tournament open; if that ever happens, add a "close table" button to the tournament page.
 
