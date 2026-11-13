@@ -294,6 +294,7 @@ The full schema, its rules and the migration path are in [database.md](database.
 | `PLATFORM_URL` | game frontend (server side) + actor server | `http://platform:3000` (private network) |
 | `RIVET_TOKEN` | game frontend (server side) + actor server | Engine admin token; the game's server turns it into per-room browser tokens |
 | `PUBLIC_RIVET_ENDPOINT` | game frontend | `https://engine.nblueclouds.online` (already exists) |
+| `LOG_LEVEL` | every app | Least severe pino level written (`trace` … `fatal`, `silent`); default `info`. Each app configures its own pino logger: readable lines via `pino-pretty` in dev, JSON lines when `NODE_ENV=production` (the Dockerfile sets it) or in a SvelteKit build |
 | `DOMAIN` | Caddy | `nblueclouds.online`; hostnames are built from it |
 
 Each app validates its variables at startup and exits if one is missing. `bun run keys:generate` prints a fresh Ed25519 key pair. All apps read one root `.env` (template `.env.example`). Keys used by one app carry its prefix (`PLATFORM_`); keys several apps share (`DATABASE_*`, `PLAY_TOKEN_*`, `PLATFORM_SERVER_KEY`) have no app prefix.

@@ -32,7 +32,7 @@ export function startJobs(sql: SQL): { stop: () => Promise<void> } {
 				// Errors are caught here: an unhandled rejection from a cron callback exits the process.
 				const p: Promise<unknown> = run()
 					.then((fields) => fields && log.info({ msg: name, ...fields }))
-					.catch((err) => log.error({ msg: `${name} failed`, err: String(err) }))
+					.catch((err) => log.error({ msg: `${name} failed`, err }))
 					.finally(() => running.delete(p));
 				running.add(p);
 				return p;

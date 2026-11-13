@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { createInvite, resetInviteLink } from '#lib/platform.ts';
 	import type { BaseView, RoomConnection } from '#lib/rivet/room.svelte.ts';
 	import Felt from './Felt.svelte';
@@ -66,16 +67,19 @@
 	};
 
 	// Invites: the table's link, the same one until the host resets it or it runs out (24 hours).
-	let copied = $state(false);
-	/** When the copied link stops working, as the player's local time. */
+	let inviteLink = $state<string | null>(null);
+	/** When the link stops working, as the player's local time. */
 	let linkExpires = $state<string | null>(null);
-	/** Shown to copy by hand when the browser blocks the clipboard. */
-	let linkText = $state<string | null>(null);
+	let linkBox = $state<HTMLDivElement>();
+	let copied = $state(false);
 	let shareNote = $state<string | null>(null);
 	let sharing = $state(false);
 
 	async function share(task: () => Promise<void>) {
-		if (sharing) return;
+		if (sharing) {
+			return;
+		}
+
 		sharing = true;
 		shareNote = null;
 
@@ -88,35 +92,60 @@
 		sharing = false;
 	}
 
-	const copyLink = () =>
-		share(async () => {
-			const { token, expiresAt } = await createInvite(room.game, code);
-			const link = `${location.origin}/invite/${token}`;
-			linkExpires = new Date(expiresAt).toLocaleString(undefined, {
-				weekday: 'short',
-				hour: '2-digit',
-				minute: '2-digit'
-			});
-
-			try {
-				await navigator.clipboard.writeText(link);
-				linkText = null;
-				copied = true;
-				setTimeout(() => {
-					copied = false;
-				}, COPIED_NOTE_MS);
-			} catch {
-				// The browser blocked the clipboard: show the link to copy by hand.
-				linkText = link;
-			}
+	/** Asks for the table's live link; the platform makes one if there is none. */
+	async function loadLink() {
+		const { token, expiresAt } = await createInvite(room.game, code);
+		inviteLink = `${location.origin}/invite/${token}`;
+		linkExpires = new Date(expiresAt).toLocaleString(undefined, {
+			weekday: 'short',
+			hour: '2-digit',
+			minute: '2-digit'
 		});
+	}
+
+	$effect(() => {
+		if (tournament) {
+			return;
+		}
+
+		// Untracked: `share` reads and writes `sharing`, which would re-run this effect.
+		untrack(() => share(loadLink));
+	});
+
+	async function copyLink() {
+		// The link failed to load earlier: try again before copying.
+		if (!inviteLink) {
+			await share(loadLink);
+		}
+
+		if (!inviteLink) {
+			return;
+		}
+
+		try {
+			await navigator.clipboard.writeText(inviteLink);
+		} catch {
+			// The browser blocked the clipboard: select the link so it can be copied by hand.
+			if (linkBox) {
+				window.getSelection()?.selectAllChildren(linkBox);
+			}
+
+			shareNote = 'Copying is blocked here. The link is selected, copy it yourself.';
+			return;
+		}
+
+		shareNote = null;
+		copied = true;
+		setTimeout(() => {
+			copied = false;
+		}, COPIED_NOTE_MS);
+	}
 
 	const resetLink = () =>
 		share(async () => {
 			await resetInviteLink(room.game, code);
-			linkText = null;
-			linkExpires = null;
-			shareNote = 'The old link no longer works. Copy the new one to share it.';
+			await loadLink();
+			shareNote = 'New link made. The old one no longer works.';
 		});
 </script>
 
@@ -150,31 +179,33 @@
 
 <div class="mt-6 flex flex-col items-center gap-3">
 	{#if !tournament}
-		<div class="flex flex-col items-center gap-1 text-center">
+		<div class="flex w-full max-w-md flex-col items-center gap-2 text-center">
 			<p class="label">Invite friends</p>
+			<!-- Tapping the link selects all of it, to copy by hand. -->
+			<div
+				class="w-full truncate rounded-md border border-paper/20 bg-black/30 px-4 py-2.5 font-mono text-sm select-all"
+				bind:this={linkBox}
+			>
+				{#if inviteLink}
+					{inviteLink}
+				{:else}
+					<span class="text-paper/55">{sharing ? 'Making a link…' : 'No link yet'}</span>
+				{/if}
+			</div>
+			{#if linkExpires}
+				<p class="text-xs text-paper/60">The link works for 24 hours, until {linkExpires}.</p>
+			{/if}
 			<div class="flex flex-wrap justify-center">
 				<button class="link-btn" onclick={copyLink} disabled={sharing}
-					>{copied ? 'Link copied' : 'Copy invite link'}</button
+					>{copied ? 'Link copied' : 'Copy link'}</button
 				>
 				{#if room.isHost}
 					<button class="link-btn" onclick={resetLink} disabled={sharing}>Reset link</button>
 				{/if}
 			</div>
-			{#if linkText}
-				<label class="w-80 max-w-full text-left">
-					<span class="label">Copy this link</span>
-					<input
-						class="field mt-1 text-sm"
-						readonly
-						value={linkText}
-						onfocus={(e) => e.currentTarget.select()}
-					/>
-				</label>
+			{#if shareNote}
+				<p class="text-sm text-paper/80" role="status">{shareNote}</p>
 			{/if}
-			{#if linkExpires}
-				<p class="text-xs text-paper/60">The link works for 24 hours, until {linkExpires}.</p>
-			{/if}
-			{#if shareNote}<p class="max-w-80 text-sm text-paper/80" role="status">{shareNote}</p>{/if}
 		</div>
 	{/if}
 	{#if tournament}

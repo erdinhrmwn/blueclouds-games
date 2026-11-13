@@ -1,6 +1,7 @@
 import { json } from '@sveltejs/kit';
 import { isRoomCode } from '#lib/guest.ts';
 import { apiError, BUSY_MESSAGE, failure, roomFor } from '#lib/server/platform.ts';
+import { log } from '#lib/server/log.ts';
 import { hasRooms, issueRoomToken } from '#lib/server/rivet.ts';
 import type { RequestHandler } from './$types';
 
@@ -25,7 +26,7 @@ export const POST: RequestHandler = async (event) => {
 		const access = await issueRoomToken(params.game, params.code);
 		return json(access, { headers: { 'Cache-Control': 'no-store' } });
 	} catch (err) {
-		console.error('room token failed', String(err));
+		log.error({ msg: 'room token failed', game: params.game, code: params.code, err });
 		return apiError(503, 'unavailable', BUSY_MESSAGE);
 	}
 };

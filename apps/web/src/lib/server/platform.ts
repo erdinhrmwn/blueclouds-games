@@ -1,6 +1,7 @@
 import { error, json, type Cookies, type RequestEvent } from '@sveltejs/kit';
 import { dev } from '$app/env';
 import { PLATFORM_URL } from '$app/env/private';
+import { log } from './log.ts';
 
 /**
  * The game's server side of the platform: the browser calls our /api routes, and this module
@@ -51,7 +52,7 @@ async function call<T>(
 			signal: AbortSignal.timeout(TIMEOUT_MS)
 		});
 	} catch (err) {
-		console.error('platform unreachable', path, String(err));
+		log.error({ msg: 'platform unreachable', path, err });
 		throw new PlatformError(503, 'unavailable', 'The game server is busy. Try again in a moment.');
 	}
 

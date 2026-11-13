@@ -1,5 +1,7 @@
 import { defineEnvVars } from '@sveltejs/kit/env';
 
+const LOG_LEVELS = ['trace', 'debug', 'info', 'warn', 'error', 'fatal', 'silent'];
+
 export const variables = defineEnvVars({
 	PUBLIC_RIVET_ENDPOINT: {
 		public: true,
@@ -36,6 +38,17 @@ export const variables = defineEnvVars({
 			const url = value || 'http://127.0.0.1:3000';
 			if (!URL.canParse(url)) throw new Error('PLATFORM_URL must be a URL');
 			return url.replace(/\/+$/, '');
+		}
+	},
+	LOG_LEVEL: {
+		description: 'Least severe server log level written. Defaults to info.',
+		schema: (value) => {
+			const level = value || 'info';
+			if (!LOG_LEVELS.includes(level)) {
+				throw new Error(`LOG_LEVEL must be one of ${LOG_LEVELS.join(', ')}`);
+			}
+
+			return level;
 		}
 	}
 });

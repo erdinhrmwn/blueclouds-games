@@ -6,6 +6,7 @@ import {
 	failure,
 	type Visibility
 } from '#lib/server/platform.ts';
+import { log } from '#lib/server/log.ts';
 import { hasRooms, listRooms } from '#lib/server/rivet.ts';
 import type { RequestHandler } from './$types';
 
@@ -27,7 +28,7 @@ export const GET: RequestHandler = async ({ params }) => {
 
 		return json({ rooms }, { headers: { 'Cache-Control': 'no-store' } });
 	} catch (err) {
-		console.error('room list failed', String(err));
+		log.error({ msg: 'room list failed', game: params.game, err });
 		return apiError(503, 'unavailable', BUSY_MESSAGE);
 	}
 };
