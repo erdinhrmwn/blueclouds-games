@@ -127,26 +127,6 @@ describe("rooms", () => {
 		expect((await redeem(second, cy.secret)).status).toBe(200);
 	});
 
-	test("a link runs out after 24 hours; asking again makes a new one", async () => {
-		const { code } = (await open("bust-31")).json.data.room;
-		const first = (await invite(code)).json.data.invite;
-		const hoursLeft = (Date.parse(first.expiresAt) - Date.now()) / 3_600_000;
-		expect(hoursLeft).toBeGreaterThan(23.9);
-		expect(hoursLeft).toBeLessThanOrEqual(24);
-
-		await t.sql`
-			UPDATE room_invites
-			SET created_at = now() - interval '25 hours', expires_at = now() - interval '1 hour'
-			WHERE secret = ${first.token}`;
-
-		const dee = await guest(t.app, "Dee");
-		expect((await redeem(first.token, dee.secret)).status).toBe(404);
-
-		const second = (await invite(code)).json.data.invite;
-		expect(second.token).not.toBe(first.token);
-		expect((await redeem(second.token, dee.secret)).status).toBe(200);
-	});
-
 	test("redeeming is rate-limited per IP and takes only link tokens", async () => {
 		const unknown = "0".repeat(32);
 		for (let i = 0; i < 10; i++) {

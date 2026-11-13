@@ -229,13 +229,10 @@ export async function createRoom(
 	return room;
 }
 
-/** The table's invite link token and when it runs out; the same one until it is reset or runs out. */
-export async function createInvite(
-	event: RequestEvent,
-	code: string
-): Promise<{ token: string; expiresAt: string }> {
+/** The table's invite link token, the same one until it is reset. */
+export async function createInvite(event: RequestEvent, code: string): Promise<{ token: string }> {
 	const path = `/rooms/${encodeURIComponent(code)}/invites`;
-	const { invite } = await call<{ invite: { token: string; expiresAt: string } }>(event, path, {
+	const { invite } = await call<{ invite: { token: string } }>(event, path, {
 		method: 'POST',
 		secret: secretOrEnded(event.cookies)
 	});

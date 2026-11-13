@@ -531,7 +531,7 @@ references. Later files change that schema in place (widen a CHECK, add a column
 | `008_admin_audit_events.sql` | `admin_audit_events` (append-only). |
 | `009_admin_table_controls.sql` | `matches.end_reason` (`finished`/`terminated`), `rooms.close_reason` `terminated`, audit actions `room.kick`, `room.terminate`, `admin.password_change`. |
 | `010_fair_shuffles.sql` | `matches.server_seed_hash`, `server_seed`, `client_seed` ([fairness.md](fairness.md)). |
-| `011_invite_expiry.sql` | `room_invites.expires_at`: a link works for 24 hours. |
+| `011` | Not used: invite link expiry was dropped before it was merged (Erdin, 2026-11-13). |
 | `012_game_maintenance.sql` | `games.maintenance_at`, audit actions `game.maintenance_start`, `game.maintenance_end`. |
 | `013_tournament_player_status.sql` | `tournament_players.status` (registered, withdrawn, disqualified), `status_reason`, `status_changed_at`, audit action `tournament.disqualify`. |
 
@@ -543,7 +543,7 @@ new file after `008`.
 
 Erdin, 2026-11-12: a table must not be joinable by typing its code. A private table is entered only through an invite:
 
-- **Invite link** `/invite/<token>`: 16 random bytes as 32 hex characters (letters and digits only), one live link per room, valid until reset or for 24 hours (`expires_at`, migration 011, Erdin 2026-11-13); asking for the link after that makes a new one. Anyone who may enter the table can copy it; only the player who opened the table can reset it, which kills the old link.
+- **Invite link** `/invite/<token>`: 16 random bytes as 32 hex characters (letters and digits only), one live link per room, valid until reset. Anyone who may enter the table can copy it; only the player who opened the table can reset it, which kills the old link.
 - **No invite codes** (Erdin, 2026-11-12): short typed codes were tried and removed; the link is the only way in.
 - Redeeming a link (`POST /v1/invites/redeem`, limited to 10 tries a minute per IP) adds the player to `room_members`, so reloads and reconnects keep working. The opener is a member from the start.
 - `rooms.visibility` is `public` or `private`. New rooms (tournament rooms too) default to private. Room actors read it from `/v1/rooms/:code/seats` and only public, non-tournament tables report to the room list.

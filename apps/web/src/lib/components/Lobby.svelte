@@ -66,10 +66,8 @@
 		return { label: 'kick', run: kick };
 	};
 
-	// Invites: the table's link, the same one until the host resets it or it runs out (24 hours).
+	// Invites: the table's link, the same one until the host resets it.
 	let inviteLink = $state<string | null>(null);
-	/** When the link stops working, as the player's local time. */
-	let linkExpires = $state<string | null>(null);
 	let linkBox = $state<HTMLDivElement>();
 	let copied = $state(false);
 	let shareNote = $state<string | null>(null);
@@ -94,13 +92,8 @@
 
 	/** Asks for the table's live link; the platform makes one if there is none. */
 	async function loadLink() {
-		const { token, expiresAt } = await createInvite(room.game, code);
+		const { token } = await createInvite(room.game, code);
 		inviteLink = `${location.origin}/invite/${token}`;
-		linkExpires = new Date(expiresAt).toLocaleString(undefined, {
-			weekday: 'short',
-			hour: '2-digit',
-			minute: '2-digit'
-		});
 	}
 
 	$effect(() => {
@@ -192,9 +185,6 @@
 					<span class="text-paper/55">{sharing ? 'Making a link…' : 'No link yet'}</span>
 				{/if}
 			</div>
-			{#if linkExpires}
-				<p class="text-xs text-paper/60">The link works for 24 hours, until {linkExpires}.</p>
-			{/if}
 			<div class="flex flex-wrap justify-center">
 				<button class="link-btn" onclick={copyLink} disabled={sharing}
 					>{copied ? 'Link copied' : 'Copy link'}</button

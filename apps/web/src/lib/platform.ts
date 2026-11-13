@@ -62,7 +62,7 @@ export const signOut = () => post<{ signedOut: true }>('/api/account/logout', {}
 export const openRoom = (game: string, visibility: Visibility) =>
 	post<{ code: string }>(`/api/${encodeURIComponent(game)}/rooms`, { visibility });
 export const createInvite = (game: string, code: string) =>
-	post<{ token: string; expiresAt: string }>(invitesPath(game, code), {});
+	post<{ token: string }>(invitesPath(game, code), {});
 export const resetInviteLink = (game: string, code: string) =>
 	request<{ revoked: true }>('DELETE', `${invitesPath(game, code)}/link`);
 
