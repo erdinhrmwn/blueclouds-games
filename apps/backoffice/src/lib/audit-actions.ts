@@ -16,14 +16,24 @@ export const AUDIT_ACTIONS: Record<string, string> = {
 	'tournament.distribute': 'Handed out tables',
 	'room.assign': 'Seated player',
 	'room.unassign': 'Took player off table',
+	'room.kick': 'Kicked player from table',
+	'room.terminate': 'Terminated table',
 	'admin.create': 'Added admin',
 	'admin.disable': 'Disabled admin',
 	'admin.enable': 'Enabled admin',
-	'admin.password_reset': 'Reset admin password'
+	'admin.password_reset': 'Reset admin password',
+	'admin.role_change': 'Changed admin role',
+	'admin.password_change': 'Changed own password'
 };
 
 /** Actions worth a second look, shown in the danger colour. */
-const ALARMING = new Set(['login_failed', 'player.disable', 'admin.disable']);
+const ALARMING = new Set([
+	'login_failed',
+	'player.disable',
+	'admin.disable',
+	'room.kick',
+	'room.terminate'
+]);
 
 export const auditLabel = (action: string) => AUDIT_ACTIONS[action] ?? action;
 
@@ -42,6 +52,9 @@ export function auditNote(row: AuditRow): string {
 	const { action, detail } = row;
 
 	if (action === 'login_failed') return `as “${detail.username}”`;
+	if (action === 'room.kick' || action === 'room.terminate') {
+		return `Table ${row.roomCode ?? detail.code}. Reason: ${detail.reason}`;
+	}
 	if (typeof detail.reason === 'string') return `Reason: ${detail.reason}`;
 
 	if (action === 'tournament.distribute') {

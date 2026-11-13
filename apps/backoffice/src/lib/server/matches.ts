@@ -18,6 +18,8 @@ export type MatchRow = {
 	gameName: string;
 	roomCode: string;
 	endedAt: Date;
+	/** terminated: an admin stopped it; it has no winner. */
+	endReason: 'finished' | 'terminated';
 	players: number;
 	winner: string | null;
 };
@@ -35,12 +37,15 @@ export async function listMatches(
 			g.name AS "gameName",
 			r.code AS "roomCode",
 			m.ended_at AS "endedAt",
+			m.end_reason AS "endReason",
 			(SELECT count(*)::int FROM match_players x WHERE x.match_id = m.id) AS players,
 			(
 				SELECT coalesce(p.display_name, w.bot_name)
 				FROM match_players w
 				LEFT JOIN players p ON p.id = w.player_id
-				WHERE w.match_id = m.id AND w.placement = 1
+				WHERE w.match_id = m.id
+					AND w.placement = 1
+					AND m.end_reason = 'finished'
 				LIMIT 1
 			) AS winner
 		FROM matches m
@@ -125,6 +130,7 @@ export async function matchDetail(sql: SQL, id: string): Promise<MatchDetail | n
 			m.rules_version AS "rulesVersion",
 			m.started_at AS "startedAt",
 			m.ended_at AS "endedAt",
+			m.end_reason AS "endReason",
 			r.tournament_id AS "tournamentId",
 			t.name AS "tournamentName",
 			r.created_by_player_id AS "openedByPlayerId",

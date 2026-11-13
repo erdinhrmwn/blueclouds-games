@@ -183,15 +183,22 @@
 					{/if}
 
 					<div class="ml-auto flex items-center gap-2">
-						<span
-							class="grid size-9 place-items-center rounded-full bg-felt-soft text-sm font-semibold text-felt uppercase"
-							aria-hidden="true">{data.admin.username.slice(0, 1)}</span
+						<a
+							href="/account"
+							class="flex min-h-11 items-center gap-2 rounded-lg px-1.5 hover:bg-subtle sm:pr-3"
+							aria-current={current('/account') ? 'page' : undefined}
+							title="Your account"
 						>
-						<span class="hidden text-sm leading-tight sm:block">
-							<span class="sr-only">Signed in as</span>
-							<span class="block font-medium">{data.admin.username}</span>
-							<span class="block text-xs text-muted capitalize">{data.admin.role}</span>
-						</span>
+							<span
+								class="grid size-9 place-items-center rounded-full bg-felt-soft text-sm font-semibold text-felt uppercase"
+								aria-hidden="true">{data.admin.username.slice(0, 1)}</span
+							>
+							<span class="sr-only sm:not-sr-only sm:block sm:text-sm sm:leading-tight">
+								<span class="sr-only">Your account, signed in as</span>
+								<span class="block font-medium">{data.admin.username}</span>
+								<span class="block text-xs text-muted capitalize">{data.admin.role}</span>
+							</span>
+						</a>
 						<form method="POST" action="/logout" class="ml-1">
 							<button
 								class="grid size-11 place-items-center rounded-lg text-muted hover:bg-subtle hover:text-ink"

@@ -119,11 +119,12 @@ export type PlayerMatch = {
 	gameName: string;
 	roomCode: string;
 	endedAt: Date;
+	endReason: 'finished' | 'terminated';
 	placement: number;
 	players: number;
 };
 
-/** Finished matches a player sat in, and how many of them they won (placed first). */
+/** Matches a player sat in, and how many of them they won (placed first in a match played to the end). */
 export type PlayerStats = {
 	played: number;
 	won: number;
@@ -149,6 +150,7 @@ export async function playerDetail(
 			g.name AS "gameName",
 			r.code AS "roomCode",
 			m.ended_at AS "endedAt",
+			m.end_reason AS "endReason",
 			mp.placement,
 			(SELECT count(*)::int FROM match_players x WHERE x.match_id = m.id) AS players
 		FROM match_players mp
@@ -162,9 +164,10 @@ export async function playerDetail(
 	const [stats] = (await sql`
 		SELECT
 			count(*)::int AS played,
-			count(*) FILTER (WHERE placement = 1)::int AS won
-		FROM match_players
-		WHERE player_id = ${id}`) as PlayerStats[];
+			count(*) FILTER (WHERE mp.placement = 1 AND m.end_reason = 'finished')::int AS won
+		FROM match_players mp
+		JOIN matches m ON m.id = mp.match_id
+		WHERE mp.player_id = ${id}`) as PlayerStats[];
 
 	return { player, matches, stats: stats! };
 }

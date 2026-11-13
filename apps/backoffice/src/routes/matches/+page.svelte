@@ -86,7 +86,13 @@
 							<td>{match.gameName}</td>
 							<td class="font-mono text-xs">{match.roomCode}</td>
 							<td class="tabular-nums">{match.players}</td>
-							<td>{match.winner ?? ''}</td>
+							<td>
+								{#if match.endReason === 'terminated'}
+									<span class="tag-bad">Terminated</span>
+								{:else}
+									{match.winner ?? ''}
+								{/if}
+							</td>
 						</tr>
 					{/each}
 				</tbody>

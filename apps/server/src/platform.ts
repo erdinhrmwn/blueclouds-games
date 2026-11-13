@@ -161,14 +161,18 @@ export async function fetchVipIds(ids: string[]): Promise<Set<string>> {
 	return new Set(vipIds);
 }
 
-/** Tells the platform a tournament room's match began, or that it gave up. A lost call is fixed by the platform's job and the match report. */
+/**
+ * Tells the platform a tournament room's match began, or that it closed without one: too few players came, or an
+ * admin terminated it. A lost call is fixed by the platform's job and the match report.
+ */
 export async function markRoom(
 	code: string,
 	change: "start" | "close",
+	reason: "not_enough_players" | "terminated" = "not_enough_players",
 ): Promise<{ ok: boolean; detail?: string }> {
 	try {
 		const path = `/rooms/${encodeURIComponent(code)}/${change}`;
-		const body = change === "close" ? { reason: "not_enough_players" } : undefined;
+		const body = change === "close" ? { reason } : undefined;
 
 		const res = await callPlatform("POST", path, body);
 		if (res.ok) return { ok: true };

@@ -22,32 +22,38 @@ import {
 	botName,
 	caller,
 	checkConnect,
+	closeKicked,
+	closeTerminated,
 	commitRoom,
 	type Ctx,
 	dropIfGone,
 	GONE_AFTER_MS,
 	identify,
+	kickFromTable,
 	loadRoom,
 	migrateRoom,
 	parseSeat,
 	playerOf,
 	refreshVips,
 	reportToDirectory,
+	requireAdmin,
 	requireHost,
 	requireOpenTable,
 	requirePlayer,
 	requireScheduler,
 	resumeReports,
 	roomVars,
+	scheduledWhileOpen,
 	seatFor,
 	sendReports,
+	terminateTable,
 	tournamentTick,
 	tournamentView,
 	turnClock,
 	wakeTournament,
 } from "../shared/room";
-import { newMatch } from "../shared/match";
-import { BotIdInput } from "../shared/schema";
+import { type LogEntry, newMatch } from "../shared/match";
+import { AdminKickInput, AdminTerminateInput, BotIdInput } from "../shared/schema";
 import { markBack, markVip, removePlayer, takeSeat } from "../shared/table";
 
 const SLUG = "bust-31";
@@ -72,7 +78,7 @@ export const bust31Room = actor({
 		await resumeReports(c);
 		await wakeTournament(c);
 	},
-	onBeforeConnect: async (_c, params: unknown) => checkConnect(params),
+	onBeforeConnect: async (c, params: unknown) => checkConnect(c, params),
 	onConnect: async (c, conn) => {
 		if (!(await identify(c, conn))) return;
 
@@ -147,6 +153,45 @@ export const bust31Room = actor({
 			c.vars.game = removePlayer(c.vars.game, id);
 			await commit(c);
 		},
+		/** Host only, in the lobby: takes a player off the table; they can't come back to it. */
+		kick: async (c, seatInput: unknown) => {
+			requireOpenTable(c);
+			const hostId = requireHost(c);
+			const seat = parseSeat(seatInput);
+
+			const kick = kickFromTable(c, seat, { kind: "host", hostId });
+			await commit(c, false, kick.entries);
+			await closeKicked(c, kick.result.playerId, currentTurn(c));
+		},
+		/** Backoffice only: kicks a player off the table, in the lobby or mid-game. */
+		adminKick: async (c, input: unknown) => {
+			requireAdmin(c);
+			const parsed = AdminKickInput.safeParse(input);
+			if (!parsed.success) {
+				throw new UserError("Pick a seat and give a reason.", { code: "bad_input" });
+			}
+
+			const by = { kind: "admin" as const, reason: parsed.data.reason };
+			const kick = kickFromTable(c, parsed.data.seat, by);
+			await commit(c, false, kick.entries);
+			await closeKicked(c, kick.result.playerId, currentTurn(c));
+
+			return kick.result;
+		},
+		/** Backoffice only: ends the table for good; a running match is saved as terminated. */
+		adminTerminate: async (c, input: unknown) => {
+			requireAdmin(c);
+			const parsed = AdminTerminateInput.safeParse(input);
+			if (!parsed.success) {
+				throw new UserError("Give a reason.", { code: "bad_input" });
+			}
+
+			const termination = terminateTable(c, parsed.data.reason);
+			await commit(c, false, termination.entries);
+			await closeTerminated(c, termination.result);
+
+			return termination.result;
+		},
 		start: async (c) => {
 			requireOpenTable(c);
 			begin(c, requirePlayer(c));
@@ -168,23 +213,28 @@ export const bust31Room = actor({
 		},
 		/** Internal (scheduler only): a closed tab did not come back. */
 		dropIfGone: async (c, id: unknown) => {
-			requireScheduler(c);
-			const { game } = c.vars;
-			const turn = { playerId: game.players[game.turn]?.id ?? null, key: game.moves };
+			if (!scheduledWhileOpen(c)) {
+				return;
+			}
 
-			const dropped = await dropIfGone(c, id, turn);
+			const dropped = await dropIfGone(c, id, currentTurn(c));
 			if (dropped) await commit(c);
 		},
 		/** Internal (scheduler only): shows a VIP grant or revoke on a seated player's tag. */
 		refreshVips: async (c, at: unknown) => {
-			requireScheduler(c);
+			if (!scheduledWhileOpen(c)) {
+				return;
+			}
 
 			const changed = await refreshVips(c, at);
 			if (changed) await commit(c);
 		},
 		/** Internal (scheduler only): a tournament table's start time, or the end of its wait for late players. */
 		tournamentStart: async (c) => {
-			requireScheduler(c);
+			if (!scheduledWhileOpen(c)) {
+				return;
+			}
+
 			await tournamentTick(c, tournament(c));
 		},
 		/** Internal (scheduler only): sends queued match results to the platform. */
@@ -194,7 +244,10 @@ export const bust31Room = actor({
 		},
 		/** Internal (scheduler only): plays for a bot, or for a human whose time ran out. */
 		autoPlay: async (c, moves: unknown) => {
-			requireScheduler(c);
+			if (!scheduledWhileOpen(c)) {
+				return;
+			}
+
 			const { game } = c.vars;
 			// A stale or duplicate timer (e.g. after a wake) must not move twice.
 			if (game.phase !== "playing" || moves !== game.moves) return;
@@ -218,7 +271,7 @@ export const bust31Room = actor({
 });
 
 /** Saves the change (with its move log), then pushes the view to everyone and each hand to its owner. */
-const commit = (c: Ctx, auto = false) =>
+const commit = (c: Ctx, auto = false, extra: LogEntry[] = []) =>
 	commitRoom<Game, MatchState>(
 		c,
 		{
@@ -231,7 +284,16 @@ const commit = (c: Ctx, auto = false) =>
 			handOf: (id) => handOf(c.vars.game, id),
 		},
 		auto,
+		extra,
 	);
+
+/** The running turn: whose it is and its key, for scheduling a move made for them. */
+function currentTurn(c: Ctx): { playerId: string | null; key: number } {
+	const game = c.vars.game as Game;
+	const playerId = game.players[game.turn]?.id ?? null;
+
+	return { playerId, key: game.moves };
+}
 
 const viewOf = (c: Ctx) => ({
 	...publicView(c.vars.game, turnClock(c.vars.timer)),

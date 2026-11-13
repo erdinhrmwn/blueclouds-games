@@ -59,7 +59,9 @@ Envelope (the same for every game, checked by the platform):
 | `bust` | player | `card`, `total` after, `lives` left, `eliminated`, `by` |
 | `reshuffle` | — | `deck` (new order, top first), when the deck ran out mid-round |
 | `away` / `back` | player | — (closed the tab / came back) |
+| `kicked` | player | `by` (`admin` or `host`), `reason` (admin only); their turns are played for them from here |
 | `finished` | — | `winner` (seat) |
+| `terminated` | — | `by` (`admin`), `reason`; always the last event of a match an admin stopped (no `finished`) |
 
 `by` is `player` (they chose), `timeout` (their 20 s ran out), `away` (played for an absent player) or `bot`.
 

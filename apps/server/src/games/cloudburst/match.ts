@@ -1,9 +1,11 @@
 import {
 	type LogEntry,
 	type LogEvent,
+	type MatchEnd,
 	type MatchReport,
 	type MatchState,
 	moveBy,
+	placementsInOrder,
 } from "../shared/match";
 import { type Card, type Game, placements } from "./rules";
 
@@ -12,19 +14,23 @@ export const RULES_VERSION = 1;
 /** Bump when the shape of a log event changes (see docs/games/cloudburst/rules.md). */
 export const LOG_VERSION = 1;
 
-/** The result of a finished match: placed by points (fewest first), and each seat's points as its score. */
+/**
+ * The result of a match: placed by points (fewest first), and each seat's points as its score. A terminated match
+ * is placed the same way, with equal points split by seat so only one player places first.
+ */
 export function buildReport(
 	match: MatchState,
 	game: Game,
 	roomCode: string,
 	endedAt: string,
 	events: LogEvent[],
+	end: MatchEnd = "finished",
 ): MatchReport {
-	if (game.phase !== "finished" || !game.winnerId) {
+	if (end === "finished" && (game.phase !== "finished" || !game.winnerId)) {
 		throw new Error("buildReport needs a finished game");
 	}
 
-	const place = placements(game);
+	const place = end === "finished" ? placements(game) : standings(game);
 
 	return {
 		matchId: match.id,
@@ -33,6 +39,7 @@ export function buildReport(
 		rulesVersion: RULES_VERSION,
 		startedAt: match.startedAt,
 		endedAt,
+		endReason: end,
 		players: game.players.map((p) => ({
 			seat: p.seat,
 			playerId: p.bot ? null : p.id,
@@ -43,6 +50,13 @@ export function buildReport(
 		})),
 		log: { logVersion: LOG_VERSION, events },
 	};
+}
+
+/** Where everyone stands mid-game: fewest points first, then by seat. */
+function standings(game: Game): Map<string, number> {
+	const bestFirst = [...game.players].sort((a, b) => a.points - b.points || a.seat - b.seat);
+
+	return placementsInOrder(bestFirst);
 }
 
 /**

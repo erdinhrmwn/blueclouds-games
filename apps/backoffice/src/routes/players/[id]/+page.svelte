@@ -210,15 +210,19 @@
 					</thead>
 					<tbody>
 						{#each data.matches as match (match.id)}
+							{@const won = match.placement === 1 && match.endReason === 'finished'}
 							<tr>
 								<td class="whitespace-nowrap">
 									<a class="link" href="/matches/{match.id}">{utc(match.endedAt)}</a>
 								</td>
 								<td>{match.gameName}</td>
 								<td class="font-mono text-xs">{match.roomCode}</td>
-								<td class="tabular-nums {match.placement === 1 ? 'font-semibold text-felt' : ''}"
-									>{match.placement} of {match.players}</td
-								>
+								<td class="tabular-nums {won ? 'font-semibold text-felt' : ''}">
+									{match.placement} of {match.players}
+									{#if match.endReason === 'terminated'}
+										<span class="ml-1 tag-bad">Terminated</span>
+									{/if}
+								</td>
 							</tr>
 						{/each}
 					</tbody>

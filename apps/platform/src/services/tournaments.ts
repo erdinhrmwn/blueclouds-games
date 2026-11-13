@@ -172,13 +172,14 @@ export async function endIfDone(tx: SQL, tournamentIds: string[]): Promise<void>
 }
 
 /**
- * Closes a tournament room, and its tournament if it was the last open room. A finished match also
- * overrides an earlier "not enough players" (the job closed a room whose start call got lost).
+ * Closes a tournament room, and its tournament if it was the last open room. A match report (finished, or
+ * terminated by an admin) also overrides an earlier "not enough players" (the job closed a room whose start call
+ * got lost).
  */
 export async function closeRoom(
 	tx: SQL,
 	roomId: string,
-	reason: "finished" | "not_enough_players",
+	reason: "finished" | "not_enough_players" | "terminated",
 	startedAt?: string,
 ): Promise<void> {
 	const [room] = await tx`
@@ -189,7 +190,10 @@ export async function closeRoom(
 			started_at = coalesce(started_at, ${startedAt ?? null}::timestamptz)
 		WHERE id = ${roomId}
 			AND tournament_id IS NOT NULL
-			AND (closed_at IS NULL OR (${reason} = 'finished' AND close_reason <> 'finished'))
+			AND (
+				closed_at IS NULL
+				OR (${reason} <> 'not_enough_players' AND close_reason = 'not_enough_players')
+			)
 		RETURNING tournament_id`;
 
 	if (room) {

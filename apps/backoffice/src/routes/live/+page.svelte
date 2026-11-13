@@ -1,10 +1,14 @@
 <script lang="ts">
+	import { enhance } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
 	import PageHeader from '#lib/components/PageHeader.svelte';
 	import { seatSlots } from '#lib/seat-slots.ts';
 	import type { PageProps } from './$types';
 
-	let { data }: PageProps = $props();
+	let { data, form }: PageProps = $props();
+
+	/** Same limit as the server's REASON_MAX. */
+	const REASON_MAX = 200;
 
 	/** How often the list reloads by itself while the tab is visible. */
 	const REFRESH_MS = 15_000;
@@ -64,6 +68,43 @@
 		return `Updated ${Math.floor(seconds / 60)} min ago`;
 	});
 
+	const canManage = $derived(data.admin?.role !== 'viewer');
+
+	// One dialog for every table: kick a player or terminate the table, with the reason both go to the logs with.
+	let dialog = $state<HTMLDialogElement>();
+	let managedCode = $state<string | null>(null);
+	let acting = $state(false);
+	/** The table being managed, as the latest refresh has it; null once it has left the list. */
+	const managed = $derived(data.tables.find((table) => table.code === managedCode) ?? null);
+	/** Humans sitting in a chair: the ones a kick can reach. */
+	const kickable = $derived(
+		(managed?.seats ?? []).filter((seat) => !seat.bot && seat.seat !== null)
+	);
+
+	const manage = (code: string) => {
+		managedCode = code;
+		dialog?.showModal();
+	};
+
+	const act = () => {
+		acting = true;
+
+		return async ({
+			result,
+			update
+		}: {
+			result: { type: string };
+			update: (o?: { reset?: boolean }) => Promise<void>;
+		}) => {
+			await update();
+			acting = false;
+
+			if (result.type === 'success') {
+				dialog?.close();
+			}
+		};
+	};
+
 	const refresh = async () => {
 		refreshing = true;
 		await invalidateAll();
@@ -101,6 +142,12 @@
 		</button>
 	{/snippet}
 </PageHeader>
+
+{#if form?.message}
+	<p class="panel mb-6 border-felt/30 bg-felt-soft px-4 py-3 text-sm text-felt" role="status">
+		{form.message}
+	</p>
+{/if}
 
 <dl class="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
 	{#each stats as stat (stat.label)}
@@ -226,9 +273,109 @@
 						{#if !table.tournament}
 							<span class="truncate text-muted">Host {table.host ?? 'unknown'}</span>
 						{/if}
+						{#if canManage}
+							<button
+								class="btn-quiet min-h-9 px-3"
+								onclick={() => manage(table.code)}
+								aria-label="Manage table {table.code}">Manage</button
+							>
+						{/if}
 					</div>
 				</li>
 			{/each}
 		</ul>
 	{/if}
 </section>
+
+<dialog
+	bind:this={dialog}
+	aria-labelledby="manage-title"
+	class="m-auto w-[min(32rem,calc(100vw-2rem))] rounded-xl bg-surface p-0 text-ink shadow-xl backdrop:bg-ink/50"
+	onclose={() => (managedCode = null)}
+>
+	<div class="flex items-start justify-between gap-3 border-b border-line px-5 py-4">
+		<div class="min-w-0">
+			<h2 id="manage-title" class="font-semibold">
+				Manage table <span class="font-mono tracking-[0.15em]">{managedCode}</span>
+			</h2>
+			{#if managed}
+				<p class="mt-0.5 truncate text-sm text-muted">
+					{managed.gameName} · {PHASES[managed.phase].label}
+					{#if managed.phase === 'playing' && managed.round > 0}· Round {managed.round}{/if}
+				</p>
+			{/if}
+		</div>
+		<button class="btn-quiet min-h-9 px-3" onclick={() => dialog?.close()}>Close</button>
+	</div>
+
+	{#if !managed}
+		<p class="px-5 py-8 text-center text-sm text-muted">
+			This table has left the list: everyone left, or it closed.
+		</p>
+	{:else}
+		<form method="POST" class="space-y-6 px-5 py-5" use:enhance={act}>
+			<input type="hidden" name="game" value={managed.game} />
+			<input type="hidden" name="code" value={managed.code} />
+
+			<div>
+				<label class="label" for="reason">Reason</label>
+				<textarea
+					class="field min-h-20 py-2"
+					id="reason"
+					name="reason"
+					maxlength={REASON_MAX}
+					required
+					aria-describedby="reason-hint"></textarea>
+				<p id="reason-hint" class="mt-1.5 text-xs text-muted">
+					Saved in the audit log, and in the match log when a match is running.
+				</p>
+			</div>
+
+			<fieldset>
+				<legend class="label">Kick a player</legend>
+				{#if kickable.length === 0}
+					<p class="text-sm text-muted">Nobody but bots sits at this table.</p>
+				{:else}
+					<ul class="divide-y divide-line rounded-md border border-line">
+						{#each kickable as seat (seat.seat)}
+							<li class="flex items-center justify-between gap-3 px-3 py-2">
+								<span class="min-w-0 truncate text-sm">
+									<span class="font-medium">{seat.name}</span>
+									<span class="text-muted">· Seat {(seat.seat ?? 0) + 1}</span>
+								</span>
+								<button
+									class="btn-quiet min-h-9 px-3"
+									formaction="?/kick"
+									name="seat"
+									value={seat.seat}
+									disabled={acting}>Kick</button
+								>
+							</li>
+						{/each}
+					</ul>
+					<p class="mt-1.5 text-xs text-muted">
+						{managed.phase === 'playing'
+							? 'Mid-game their seat is played for them until the match ends.'
+							: 'Their seat empties.'}
+						They can't come back to this table.
+					</p>
+				{/if}
+			</fieldset>
+
+			<div class="rounded-md border border-danger/30 bg-danger-soft p-4">
+				<p class="text-sm font-semibold text-danger">Terminate table</p>
+				<p class="mt-1 text-sm text-danger">
+					Everyone is sent away and nobody can play here again.
+					{managed.phase === 'playing' ? 'The match is saved as terminated and counts no win.' : ''}
+				</p>
+				<button class="btn-danger mt-3" formaction="?/terminate" disabled={acting}
+					>Terminate table</button
+				>
+			</div>
+
+			{#if form?.error && form.code === managed.code}
+				<p class="text-sm text-danger" role="alert">{form.error}</p>
+			{/if}
+		</form>
+	{/if}
+</dialog>

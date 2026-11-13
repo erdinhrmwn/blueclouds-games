@@ -157,6 +157,16 @@ export function replayBust31(log: MatchLog, seats: ReplaySeat[]): Step[] {
 				turn = null;
 				text = `${name(data.winner)} wins.`;
 				break;
+			case 'kicked': {
+				const by = data.by === 'host' ? 'the host' : 'an admin';
+				const reason = data.reason ? ` Reason: ${data.reason}` : '';
+				text = `${who} was kicked by ${by}. Their turns are played for them.${reason}`;
+				break;
+			}
+			case 'terminated':
+				turn = null;
+				text = `An admin terminated the table. Reason: ${data.reason}`;
+				break;
 			default:
 				text = `${event.type} ${JSON.stringify(event.data ?? {})}`;
 		}

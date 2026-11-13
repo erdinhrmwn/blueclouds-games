@@ -101,6 +101,25 @@ export function removePlayer<G extends Table>(game: G, id: string): G {
 	return { ...game, players, hostId };
 }
 
+/**
+ * Takes a kicked human off the table. In the lobby their chair empties. Mid-game the chair stays, so the turn order
+ * holds, and is played for them like an away player's; going back to the lobby drops it. The host role moves on.
+ */
+export function kickPlayer<G extends Table>(game: G, id: string): G {
+	if (game.phase === "lobby") {
+		return removePlayer(game, id);
+	}
+
+	const kicked = markAway(game, id);
+	if (kicked.hostId !== id) {
+		return kicked;
+	}
+
+	const nextHost = kicked.players.find((p) => !p.bot && !p.away)?.id ?? null;
+
+	return { ...kicked, hostId: nextHost };
+}
+
 /** A human who closed the game mid-match: their turns are played for them until they return. */
 export const markAway = <G extends Table>(game: G, id: string): G => withAway(game, id, true);
 

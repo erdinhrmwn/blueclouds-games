@@ -2,9 +2,11 @@ import type { Card, Game, Player } from "./rules";
 import {
 	type LogEntry,
 	type LogEvent,
+	type MatchEnd,
 	type MatchReport,
 	type MatchState as SharedMatch,
 	moveBy,
+	placementsInOrder,
 } from "../shared/match";
 
 /** Bump when a rule change makes old results incomparable to new ones. */
@@ -24,23 +26,24 @@ export function noteMove(match: MatchState, game: Game): MatchState {
 	return out.length ? { ...match, out: [...match.out, ...out] } : match;
 }
 
-/** The result of a finished game: the winner places 1st, the last one out 2nd, and so on. */
+/**
+ * The result of a match. Finished: the winner places 1st, the last one out 2nd, and so on. Terminated: the players
+ * still in, most lives first (then by seat), ahead of those out, the last one out first.
+ */
 export function buildReport(
 	match: MatchState,
 	game: Game,
 	roomCode: string,
 	endedAt: string,
 	events: LogEvent[],
+	end: MatchEnd = "finished",
 ): MatchReport {
-	if (game.phase !== "finished" || !game.winnerId) {
+	if (end === "finished" && (game.phase !== "finished" || !game.winnerId)) {
 		throw new Error("buildReport needs a finished game");
 	}
 
 	const { out } = noteMove(match, game);
-	const placement = (id: string) => {
-		if (id === game.winnerId) return 1;
-		return out.length - out.indexOf(id) + 1;
-	};
+	const placement = end === "finished" ? finishedPlacements(game, out) : standings(game, out);
 
 	return {
 		matchId: match.id,
@@ -49,17 +52,41 @@ export function buildReport(
 		rulesVersion: RULES_VERSION,
 		startedAt: match.startedAt,
 		endedAt,
+		endReason: end,
 		players: game.players.map((p) => ({
 			seat: p.seat,
 			playerId: p.bot ? null : p.id,
 			bot: p.bot,
 			...(p.bot ? { botName: p.name } : {}),
-			placement: placement(p.id),
+			placement: placement.get(p.id)!,
 			// Bust 31 scores lives left.
 			score: Math.max(0, p.lives),
 		})),
 		log: { logVersion: LOG_VERSION, events },
 	};
+}
+
+/** The winner 1st, then the players out, the last one out first. */
+function finishedPlacements(game: Game, out: string[]): Map<string, number> {
+	const placeOf = (id: string) => {
+		if (id === game.winnerId) {
+			return 1;
+		}
+
+		return out.length - out.indexOf(id) + 1;
+	};
+
+	return new Map(game.players.map((p) => [p.id, placeOf(p.id)]));
+}
+
+/** Where everyone stands mid-game: players still in by lives (then seat), then the players out, last out first. */
+function standings(game: Game, out: string[]): Map<string, number> {
+	const stillIn = game.players
+		.filter((p) => !out.includes(p.id))
+		.sort((a, b) => b.lives - a.lives || a.seat - b.seat);
+	const lastOutFirst = [...out].reverse().map((id) => ({ id }));
+
+	return placementsInOrder([...stillIn, ...lastOutFirst]);
 }
 
 /**

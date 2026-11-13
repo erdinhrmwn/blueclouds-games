@@ -65,6 +65,26 @@ describe("match reports", () => {
 		expect(n).toBe(3);
 	});
 
+	test("a terminated match is stored as terminated; one without endReason as finished", async () => {
+		const terminated = report({ endReason: "terminated" });
+		expect((await post(terminated)).status).toBe(201);
+		expect((await post(terminated)).status).toBe(200);
+
+		const finished = report();
+		expect((await post(finished)).status).toBe(201);
+
+		const rows = await t.sql`
+			SELECT id, end_reason
+			FROM matches
+			WHERE id IN (${terminated.matchId}, ${finished.matchId})`;
+		const reasons = Object.fromEntries(
+			rows.map((row: { id: string; end_reason: string }) => [row.id, row.end_reason]),
+		);
+		expect(reasons).toEqual({ [terminated.matchId]: "terminated", [finished.matchId]: "finished" });
+
+		expect((await post(report({ endReason: "abandoned" }))).status).toBe(400);
+	});
+
 	test("a room code the platform never made → 422, a retry of a stored match still → 200", async () => {
 		const res = await post(report({ roomCode: "NOPE9" }));
 		expect(res.status).toBe(422);

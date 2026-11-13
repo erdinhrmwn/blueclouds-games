@@ -53,6 +53,8 @@ export const MatchReport = z
 		rulesVersion: z.number().int().min(1),
 		startedAt: z.iso.datetime({ offset: true }),
 		endedAt: z.iso.datetime({ offset: true }),
+		/** terminated: an admin stopped it; placed by the standings then, and it counts no win. */
+		endReason: z.enum(["finished", "terminated"]).default("finished"),
 		players: z.array(Seat).min(1).max(32),
 		log: MatchLog,
 	})
@@ -98,10 +100,14 @@ function humanPlayerIds(players: { playerId: string | null }[]): string[] {
 	return players.flatMap((player) => (player.playerId ? [player.playerId] : []));
 }
 
-/** Same report → same hash. Built from the parsed report, so key order and seat order are fixed. */
+/**
+ * Same report → same hash. Built from the parsed report, so key order and seat order are fixed. A finished match
+ * hashes without its endReason, as reports did before it existed, so their retries still match.
+ */
 function hashReport(match: MatchReport): Buffer {
 	const players = [...match.players].sort((a, b) => a.seat - b.seat);
-	const canonical = { ...match, players };
+	const { endReason, ...withoutEnd } = match;
+	const canonical = endReason === "finished" ? { ...withoutEnd, players } : { ...match, players };
 
 	return new Bun.CryptoHasher("sha256").update(JSON.stringify(canonical)).digest();
 }
@@ -158,7 +164,16 @@ export async function recordMatch(sql: SQL, match: MatchReport): Promise<boolean
 		}
 
 		const inserted = await tx`
-			INSERT INTO matches (id, game_slug, room_id, rules_version, started_at, ended_at, body_hash)
+			INSERT INTO matches (
+				id,
+				game_slug,
+				room_id,
+				rules_version,
+				started_at,
+				ended_at,
+				end_reason,
+				body_hash
+			)
 			VALUES (
 				${match.matchId},
 				${match.game},
@@ -166,6 +181,7 @@ export async function recordMatch(sql: SQL, match: MatchReport): Promise<boolean
 				${match.rulesVersion},
 				${match.startedAt},
 				${match.endedAt},
+				${match.endReason},
 				${hash}
 			)
 			ON CONFLICT (id) DO NOTHING
@@ -200,7 +216,7 @@ export async function recordMatch(sql: SQL, match: MatchReport): Promise<boolean
 
 		// A tournament room plays one match: its report closes the room (and the tournament, if it was the last).
 		if (room.tournament_id) {
-			await closeRoom(tx, room.id, "finished", match.startedAt);
+			await closeRoom(tx, room.id, match.endReason, match.startedAt);
 		}
 
 		const events = JSON.stringify(match.log.events);
@@ -228,6 +244,7 @@ export async function history(sql: SQL, playerId: string, cursor: string | undef
 			r.code AS room_code,
 			m.started_at,
 			m.ended_at,
+			m.end_reason,
 			mp.seat,
 			mp.placement,
 			mp.score,
@@ -249,6 +266,7 @@ export async function history(sql: SQL, playerId: string, cursor: string | undef
 			roomCode: row.room_code,
 			startedAt: row.started_at.toISOString(),
 			endedAt: row.ended_at.toISOString(),
+			endReason: row.end_reason,
 			players: row.players,
 			seat: row.seat,
 			placement: row.placement,

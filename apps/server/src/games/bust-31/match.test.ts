@@ -4,7 +4,7 @@ import { chooseBotCard } from "./bots";
 import { buildReport, logEvents, type MatchState, noteMove } from "./match";
 import { type LogEntry, stamp, uuidv7 } from "../shared/match";
 import { addPlayer, type Card, createGame, type Game, playCard, startGame } from "./rules";
-import { markAway, markBack } from "../shared/table";
+import { kickPlayer, markAway, markBack } from "../shared/table";
 
 function table(lives: Record<string, number>, winnerId: string | null): Game {
 	let g = createGame();
@@ -36,6 +36,43 @@ test("placements follow the elimination order, winner first", () => {
 	expect(byWho.a).toMatchObject({ placement: 1, score: 2, bot: false });
 	expect(byWho["Bot Rain"]).toMatchObject({ placement: 2, playerId: null, bot: true });
 	expect(byWho.c).toMatchObject({ placement: 3, score: 0 });
+});
+
+test("a terminated match places by lives, then the players out, last out first, with one winner", () => {
+	// Cy is out; Ann and the bot both have 2 lives, so the lower seat (Ann) places first.
+	const match = noteMove(start, table({ a: 2, "bot-1": 2, c: 0 }, null));
+	const report = buildReport(
+		match,
+		table({ a: 2, "bot-1": 2, c: 0 }, null),
+		"ABCD",
+		"2026-11-11T10:05:00.000Z",
+		[],
+		"terminated",
+	);
+	const byWho = Object.fromEntries(report.players.map((p) => [p.playerId ?? p.botName, p]));
+
+	expect(report.endReason).toBe("terminated");
+	expect(byWho.a!.placement).toBe(1);
+	expect(byWho["Bot Rain"]!.placement).toBe(2);
+	expect(byWho.c!.placement).toBe(3);
+});
+
+test("a finished report still needs a winner", () => {
+	const playing = table({ a: 2, "bot-1": 2, c: 1 }, null);
+	expect(() => buildReport(start, playing, "ABCD", "2026-11-11T10:05:00.000Z", [])).toThrow();
+});
+
+test("a kick in the lobby empties the chair; mid-game it is played for them and the host moves on", () => {
+	let lobby = createGame();
+	lobby = addPlayer(lobby, "a", "Ann");
+	lobby = addPlayer(lobby, "c", "Cy");
+	expect(kickPlayer(lobby, "c").players.map((p) => p.id)).toEqual(["a"]);
+
+	const playing = startGame(lobby, "a", rng);
+	const kicked = kickPlayer(playing, "a");
+	expect(kicked.players.find((p) => p.id === "a")).toMatchObject({ away: true });
+	expect(kicked.hostId).toBe("c");
+	expect(kicked.players).toHaveLength(2);
 });
 
 test("noteMove does not count a player twice", () => {

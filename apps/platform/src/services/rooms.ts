@@ -296,11 +296,11 @@ export async function startRoom(sql: SQL, code: string) {
 	return { code, startedAt: row.started_at.toISOString() as string };
 }
 
-/** The tournament room gave up: not enough players showed up. Idempotent. */
+/** The tournament room closed without a match: not enough players showed up, or an admin terminated it. Idempotent. */
 export async function closeTournamentRoom(
 	sql: SQL,
 	code: string,
-	reason: "not_enough_players",
+	reason: "not_enough_players" | "terminated",
 ): Promise<void> {
 	await sql.begin(async (tx) => {
 		const [room] = await tx`
