@@ -1,4 +1,5 @@
 import {
+	fetchCoins,
 	fetchPlayToken,
 	PlatformError,
 	registerAccount,
@@ -14,7 +15,7 @@ const FALLBACK_ERROR = 'Something went wrong. Try again.';
 
 const messageOf = (err: unknown) => (err instanceof Error ? err.message : FALLBACK_ERROR);
 
-type Me = { name: string; username: string | null; guest: boolean };
+type Me = { name: string; username: string | null; guest: boolean; coins?: number };
 
 /**
  * Who this browser plays as, shared by every page: `name` is empty for a new visitor. A guest has a generated
@@ -26,6 +27,8 @@ export const player = $state({
 	name: '',
 	username: '',
 	guest: false,
+	/** Coin balance (virtual coins for tournament fees and prizes). */
+	coins: 0,
 	ready: false,
 	editing: false,
 	playing: false
@@ -36,7 +39,17 @@ export function loadPlayer(me: Me | null): void {
 	player.name = me?.name ?? '';
 	player.username = me?.username ?? '';
 	player.guest = me?.guest ?? false;
+	player.coins = me?.coins ?? player.coins;
 	player.ready = true;
+}
+
+/** Asks for the balance again, after anything that may have changed it (joining, leaving, a new account). */
+export async function refreshCoins(): Promise<void> {
+	try {
+		player.coins = (await fetchCoins()).balance;
+	} catch {
+		// The balance shown stays as it was; the next page load corrects it.
+	}
 }
 
 /** What a failed account form shows: one message per field, or one for the whole form. */
@@ -45,6 +58,8 @@ export type FormErrors = { form?: string; fields: Record<string, string> };
 function signedIn(me: Me): void {
 	loadPlayer(me);
 	player.editing = false;
+	// Sign-in and register answers carry no balance; a new account's bonus shows right away this way.
+	void refreshCoins();
 }
 
 async function attempt(run: () => Promise<{ player: Me }>): Promise<FormErrors | null> {

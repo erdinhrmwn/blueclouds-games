@@ -136,6 +136,19 @@ CREATE TABLE tournament_results (
   PRIMARY KEY (tournament_id, player_id)
 );
 
+-- Coin wallet (migration 024, docs/plans/coin-wallet.md): virtual coins only, never bought or cashed out. Every
+-- balance change is one coin_ledger row written with the wallets row in the same transaction (services/coins.ts,
+-- moveCoins); a balance can't go below zero. Account sign-up bonus (1,000, once), admin grants and takes (with a
+-- note, audited player.coins_adjust), tournament fees (tournament_players.fee_paid), refunds while the player
+-- hasn't played (leave, withdraw before the table starts, any cancel), and prizes an admin pays out once
+-- (tournaments.prizes_paid_at, audited tournament.payout).
+CREATE TABLE wallets (player_id uuid PRIMARY KEY, balance bigint NOT NULL CHECK (balance >= 0), ...);
+CREATE TABLE coin_ledger (
+  id, player_id, amount (+ in, − out), balance_after, reason,  -- signup_bonus | admin_grant | admin_take |
+                                                               -- tournament_fee | tournament_refund | tournament_prize
+  tournament_id, admin_id, note, created_at                    -- append-only; one bonus per player, one prize per
+);                                                             -- player per tournament (unique indexes)
+
 -- Prizes by finishing place (migration 020): shown as a podium, their sum as the prize pool. Nothing is paid out.
 CREATE TABLE tournament_prizes (
   tournament_id  uuid NOT NULL REFERENCES tournaments(id),

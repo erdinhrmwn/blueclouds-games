@@ -7,7 +7,7 @@ export const GUEST_UNUSED_DAYS = 30;
 const SWEEP_BATCH = 5_000;
 
 /**
- * A guest nobody else's history points at: no match, no tournament sign-up or seat, no admin audit entry.
+ * A guest nobody else's history points at: no match, no tournament sign-up or seat, no admin audit entry, no coins.
  * The foreign keys refuse the delete anyway if one slips through; this keeps the sweep from tripping on them.
  */
 const unused = (sql: SQL) => sql`
@@ -15,7 +15,9 @@ const unused = (sql: SQL) => sql`
 	AND NOT EXISTS (SELECT 1 FROM match_players mp WHERE mp.player_id = p.id)
 	AND NOT EXISTS (SELECT 1 FROM tournament_players tp WHERE tp.player_id = p.id)
 	AND NOT EXISTS (SELECT 1 FROM room_assignments ra WHERE ra.player_id = p.id)
-	AND NOT EXISTS (SELECT 1 FROM admin_audit_events ae WHERE ae.player_id = p.id)`;
+	AND NOT EXISTS (SELECT 1 FROM admin_audit_events ae WHERE ae.player_id = p.id)
+	AND NOT EXISTS (SELECT 1 FROM coin_ledger cl WHERE cl.player_id = p.id)
+	AND NOT EXISTS (SELECT 1 FROM wallets w WHERE w.player_id = p.id)`;
 
 /** On logout: a guest can never come back once its secret is gone, so an unused one is deleted right away. */
 export async function deleteGuestIfUnused(sql: SQL, playerId: string): Promise<boolean> {

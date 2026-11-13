@@ -1,5 +1,10 @@
 import type { SQL } from 'bun';
 import { z } from 'zod';
+import {
+	moveCoins,
+	refundEveryone,
+	refundSignUp
+} from '../../../../platform/src/services/coins.ts';
 import { DistributeError, distributeIn } from '../../../../platform/src/services/tournaments.ts';
 import {
 	FEE_MAX,
@@ -54,6 +59,10 @@ export type TournamentRow = {
 	distributedAt: Date | null;
 	distributeError: string | null;
 	cancelledAt: Date | null;
+	/** When an admin paid the prizes out; null before. */
+	prizesPaidAt: Date | null;
+	/** Coins the players paid in fees and haven't had back. */
+	feesHeld: bigint | number;
 	/** Why the platform cancelled it by itself; null when an admin did. */
 	cancelReason: string | null;
 	endedAt: Date | null;
@@ -133,6 +142,11 @@ const COLUMNS = (sql: SQL) => sql`
 	t.cancelled_at AS "cancelledAt",
 	t.cancel_reason AS "cancelReason",
 	t.ended_at AS "endedAt",
+	t.prizes_paid_at AS "prizesPaidAt",
+	(
+		SELECT coalesce(sum(tp.fee_paid), 0)::bigint FROM tournament_players tp
+		WHERE tp.tournament_id = t.id
+	) AS "feesHeld",
 	(
 		SELECT count(*)::int FROM tournament_players tp
 		WHERE tp.tournament_id = t.id AND tp.status = 'registered'
@@ -410,13 +424,19 @@ export async function tournamentDetail(sql: SQL, id: string) {
 		WHERE tr.tournament_id = ${id}
 		ORDER BY tr.place`;
 
-	const [players, rooms, results] = await Promise.all([playersQuery, roomsQuery, resultsQuery]);
+	const [players, rooms, results, payouts] = await Promise.all([
+		playersQuery,
+		roomsQuery,
+		resultsQuery,
+		plannedPayouts(sql, id)
+	]);
 
 	return {
-		tournament,
+		tournament: { ...tournament, feesHeld: Number(tournament.feesHeld) },
 		players: [...players] as Registered[],
 		rooms: [...rooms] as TournamentRoom[],
-		results: [...results] as TournamentResult[]
+		results: [...results] as TournamentResult[],
+		payouts
 	};
 }
 
@@ -566,6 +586,8 @@ export async function unregisterPlayer(
 			DELETE FROM room_assignments
 			WHERE tournament_id = ${id} AND player_id = ${playerId}`;
 
+		// They never played, so any fee they paid goes back with the sign-up.
+		await refundSignUp(tx, id, playerId);
 		const [gone] = await tx`
 			DELETE FROM tournament_players
 			WHERE tournament_id = ${id} AND player_id = ${playerId}
@@ -629,7 +651,14 @@ export async function cancelTournament(
 			throw new TournamentError('This tournament already ended or was cancelled.');
 		}
 
-		await audit(tx, { adminId: admin.id, action: 'tournament.cancel', tournamentId: id, ip });
+		const refunded = await refundEveryone(tx, id);
+		await audit(tx, {
+			adminId: admin.id,
+			action: 'tournament.cancel',
+			tournamentId: id,
+			detail: { refunded },
+			ip
+		});
 	});
 }
 
@@ -908,4 +937,89 @@ export async function tournamentTables(sql: SQL): Promise<TournamentTable[]> {
 		ORDER BY t.starts_at, r.code`;
 
 	return rows as TournamentTable[];
+}
+
+export type Payout = {
+	place: number;
+	playerId: string;
+	name: string;
+	coins: number;
+	extra: string | null;
+};
+
+/** Who gets which prize: each prize place matched with whoever finished there. Empty until it finished. */
+export async function plannedPayouts(sql: SQL, id: string): Promise<Payout[]> {
+	const rows = await sql`
+		SELECT
+			prize.place,
+			tr.player_id AS "playerId",
+			p.display_name AS name,
+			prize.coins,
+			prize.extra
+		FROM tournament_prizes prize
+		JOIN tournament_results tr ON tr.tournament_id = prize.tournament_id AND tr.place = prize.place
+		JOIN players p ON p.id = tr.player_id
+		WHERE prize.tournament_id = ${id}
+		ORDER BY prize.place`;
+
+	return [...rows] as Payout[];
+}
+
+/**
+ * Pays every prize of a finished tournament into its winners' wallets, once (Erdin, 2026-11-13: an admin
+ * approves the payout). Places with only an extra (a badge) pay no coins.
+ */
+export async function payPrizes(
+	sql: SQL,
+	admin: Admin,
+	id: string,
+	ip: string | null
+): Promise<{ players: number; coins: number }> {
+	return sql.begin(async (tx) => {
+		const [tournament] = await tx`
+			SELECT ended_at, cancelled_at, prizes_paid_at
+			FROM tournaments
+			WHERE id = ${id}
+			FOR UPDATE`;
+
+		if (!tournament) {
+			throw new TournamentError('This tournament no longer exists.');
+		}
+		if (tournament.cancelled_at) {
+			throw new TournamentError('This tournament was cancelled.');
+		}
+		if (!tournament.ended_at) {
+			throw new TournamentError('Prizes are paid once the tournament has finished.');
+		}
+		if (tournament.prizes_paid_at) {
+			throw new TournamentError('The prizes were already paid.');
+		}
+
+		const payouts = (await plannedPayouts(tx, id)).filter((payout) => payout.coins > 0);
+		for (const payout of payouts) {
+			await moveCoins(tx, {
+				playerId: payout.playerId,
+				amount: payout.coins,
+				reason: 'tournament_prize',
+				tournamentId: id,
+				adminId: admin.id
+			});
+		}
+
+		await tx`
+			UPDATE tournaments
+			SET prizes_paid_at = now(), prizes_paid_by_admin_id = ${admin.id}
+			WHERE id = ${id}`;
+
+		const total = payouts.reduce((sum, payout) => sum + payout.coins, 0);
+		await audit(tx, {
+			adminId: admin.id,
+			action: 'tournament.payout',
+			tournamentId: id,
+			detail: { players: payouts.length, coins: total },
+			ip
+		});
+
+		return { players: payouts.length, coins: total };
+	});
 }

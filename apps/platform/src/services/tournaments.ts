@@ -1,6 +1,7 @@
 import type { SQL, TransactionSQL } from "bun";
 import { ApiError } from "../lib/http";
 import { log } from "../lib/log";
+import { moveCoins, refundEveryone, refundSignUp } from "./coins";
 import { insertRoom } from "./rooms";
 import {
 	type FinalPlace,
@@ -283,6 +284,7 @@ export async function cancelIfShort(
 		UPDATE tournaments
 		SET cancelled_at = now(), cancel_reason = ${reason}
 		WHERE id = ${tournamentId}`;
+	await refundEveryone(tx, tournamentId);
 
 	const detail = JSON.stringify({ ...counts, auto: true });
 
@@ -747,10 +749,17 @@ export async function joinTournament(sql: SQL, tournamentId: string, playerId: s
 
 		await requireFreePlace(tx, tournamentId, tournament.max_players);
 
-		await tx`
-			INSERT INTO tournament_players (tournament_id, player_id)
-			VALUES (${tournamentId}, ${playerId})
-			ON CONFLICT DO NOTHING`;
+		const fee = Number(tournament.fee);
+		const [added] = await tx`
+			INSERT INTO tournament_players (tournament_id, player_id, fee_paid)
+			VALUES (${tournamentId}, ${playerId}, ${fee})
+			ON CONFLICT DO NOTHING
+			RETURNING player_id`;
+
+		// The fee is taken with the sign-up, in the same transaction: no seat without paying, no charge without a seat.
+		if (added && fee > 0) {
+			await moveCoins(tx, { playerId, amount: -fee, reason: "tournament_fee", tournamentId });
+		}
 	});
 }
 
@@ -766,6 +775,7 @@ export async function leaveTournament(sql: SQL, tournamentId: string, playerId: 
 		if (!tournament.distributed_at) {
 			requireOpenRegistration(tournament);
 
+			await refundSignUp(tx, tournamentId, playerId);
 			await tx`
 				DELETE FROM tournament_players
 				WHERE tournament_id = ${tournamentId}
@@ -803,6 +813,12 @@ export async function leaveTournament(sql: SQL, tournamentId: string, playerId: 
 				WHERE room_id = ${seat.room_id} AND player_id = ${playerId}`;
 		}
 
+		// Nothing played yet: the fee comes back (Erdin, 2026-11-13).
+		const played = await hasPlayed(tx, tournamentId, playerId);
+		if (!played) {
+			await refundSignUp(tx, tournamentId, playerId);
+		}
+
 		await tx`
 			UPDATE tournament_players
 			SET status = 'withdrawn', status_changed_at = now()
@@ -822,6 +838,7 @@ async function lockTournament(tx: SQL, tournamentId: string) {
 			cancelled_at,
 			distributed_at,
 			max_players,
+			fee,
 			registration_opens_at <= now() AND registration_closes_at > now() AS open
 		FROM tournaments
 		WHERE id = ${tournamentId}
@@ -838,8 +855,24 @@ async function lockTournament(tx: SQL, tournamentId: string) {
 	return tournament as {
 		distributed_at: Date | null;
 		max_players: number | null;
+		fee: number;
 		open: boolean;
 	};
+}
+
+/** Whether the player ever sat at a table of this tournament that started. */
+async function hasPlayed(tx: SQL, tournamentId: string, playerId: string): Promise<boolean> {
+	const [row] = await tx`
+		SELECT EXISTS (
+			SELECT 1
+			FROM room_assignments ra
+			JOIN rooms r ON r.id = ra.room_id
+			WHERE ra.tournament_id = ${tournamentId}
+				AND ra.player_id = ${playerId}
+				AND r.started_at IS NOT NULL
+		) AS played`;
+
+	return row.played;
 }
 
 /**

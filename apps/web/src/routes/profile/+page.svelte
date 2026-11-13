@@ -3,6 +3,7 @@
 	import { GAMES, gameBySlug } from '#lib/games/catalog.ts';
 	import { WELCOME } from '#lib/guest.ts';
 	import { createAccount, type FormErrors, logOut, NAME_MAX, player } from '#lib/player.svelte.ts';
+	import CoinsPanel from '#lib/components/CoinsPanel.svelte';
 	import PasswordDialog from '#lib/components/PasswordDialog.svelte';
 	import { when } from '#lib/when.ts';
 	import { onMount } from 'svelte';
@@ -104,7 +105,8 @@
 			<div class="mt-8 rounded-2xl border-[1.5px] border-brass bg-panel p-6">
 				<h2 class="font-display text-xl font-bold">Keep your name and history</h2>
 				<p class="mt-1 text-sm text-paper/65">
-					Guest progress stays in this browser. Make an account to keep it and play from anywhere.
+					Guest progress stays in this browser. Make an account to keep it, play from anywhere, and
+					get 1,000 coins for tournaments.
 				</p>
 				{#if !linking}
 					<button class="btn-brass mt-4" onclick={() => (linking = true)}>Create account</button>
@@ -179,6 +181,10 @@
 				</div>
 			{/each}
 		</dl>
+
+		{#if !player.guest}
+			<CoinsPanel />
+		{/if}
 
 		<h2 class="mt-12 font-display text-xl font-bold">By game</h2>
 		<ul class="mt-4 space-y-2.5">

@@ -6,6 +6,7 @@ import { ApiError, ok, validate } from "../lib/http";
 import type { Signer } from "../lib/play-tokens";
 import { bearer, playerAuth, serverAuth } from "../middleware/auth";
 import { rateLimit } from "../middleware/rate-limit";
+import { balanceOf, coinHistory } from "../services/coins";
 import * as players from "../services/players";
 
 /** Same rule as the room's display name: trimmed, 1–20 characters. */
@@ -18,6 +19,7 @@ const Name = z
 	.refine((name) => !/\p{Cc}/u.test(name), "Must not contain control characters.");
 
 const NameBody = z.object({ name: Name });
+const CoinPage = z.object({ before: z.uuid("Not a history id.").optional() });
 
 /** A room asks about its seated humans only: at most a few ids. */
 const MAX_VIP_LOOKUP = 12;
@@ -114,9 +116,24 @@ export function playerRoutes(sql: SQL, signer: Signer, serverKey: string) {
 	/** The game asks on every page load; that counts as being seen. */
 	app.get("/players/me", auth, async (c) => {
 		const player = c.get("player");
-		await players.noteSeen(sql, player.id);
+		const [, coins] = await Promise.all([
+			players.noteSeen(sql, player.id),
+			balanceOf(sql, player.id),
+		]);
 
-		return ok(c, { player });
+		return ok(c, { player, coins });
+	});
+
+	/** The player's coins and what changed them, newest first, a page at a time. */
+	app.get("/players/me/coins", auth, validate("query", CoinPage), async (c) => {
+		const player = c.get("player");
+		const { before } = c.req.valid("query");
+		const [balance, history] = await Promise.all([
+			balanceOf(sql, player.id),
+			coinHistory(sql, player.id, before),
+		]);
+
+		return ok(c, { balance, history });
 	});
 
 	/** Accounts only. Signs out every other device; this one stays signed in. */

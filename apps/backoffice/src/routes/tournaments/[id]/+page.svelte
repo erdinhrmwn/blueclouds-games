@@ -94,6 +94,8 @@
 		</dd>
 		<dt>Fee</dt>
 		<dd>{tournament.fee === 0 ? 'Free' : `${tournament.fee.toLocaleString('en')} coins`}</dd>
+		{#if tournament.feesHeld > 0}<dt>Fees held</dt>
+			<dd>{tournament.feesHeld.toLocaleString('en')} coins</dd>{/if}
 		{#if tournament.description}<dt>Description</dt>
 			<dd class="whitespace-pre-line">{tournament.description}</dd>{/if}
 		<dt>Starts</dt>
@@ -167,6 +169,46 @@
 				>Hand out tables now</button
 			>
 		</form>
+	</section>
+{/if}
+
+{#if tournament.endedAt && !tournament.cancelledAt && data.payouts.length}
+	<section class="mt-6 max-w-3xl panel" aria-labelledby="payout">
+		<div class="panel-head">
+			<div>
+				<h2 id="payout" class="font-semibold">Prizes</h2>
+				<p class="text-sm text-muted">
+					{tournament.prizesPaidAt
+						? `Paid ${utc(tournament.prizesPaidAt)}.`
+						: 'Check who gets what, then pay it out. It can only be done once.'}
+				</p>
+			</div>
+			{#if tournament.prizesPaidAt}<span class="tag-good">Paid</span>{/if}
+		</div>
+		<ol class="divide-y divide-line text-sm">
+			{#each data.payouts as payout (payout.place)}
+				<li class="flex items-center justify-between gap-3 px-5 py-2.5">
+					<span>
+						<span class="font-semibold tabular-nums">{payout.place}.</span>
+						<a class="link" href="/players/{payout.playerId}">{payout.name}</a>
+					</span>
+					<span class="tabular-nums">
+						{payout.coins.toLocaleString('en')} coins{#if payout.extra}
+							<span class="text-muted">+ {payout.extra}</span>{/if}
+					</span>
+				</li>
+			{/each}
+		</ol>
+		{#if !tournament.prizesPaidAt && data.admin?.role !== 'viewer'}
+			<form
+				method="POST"
+				action="?/payout"
+				class="border-t border-line px-5 py-4"
+				use:enhance={submit}
+			>
+				<button class="btn-primary" disabled={busy}>Pay out prizes</button>
+			</form>
+		{/if}
 	</section>
 {/if}
 
