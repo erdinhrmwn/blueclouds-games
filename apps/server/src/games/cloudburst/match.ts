@@ -1,4 +1,5 @@
 import {
+	reportedSeat,
 	type LogEntry,
 	type LogEvent,
 	type MatchEnd,
@@ -44,9 +45,7 @@ export function buildReport(
 		endReason: end,
 		players: game.players.map((p) => ({
 			seat: p.seat,
-			playerId: p.bot ? null : p.id,
-			bot: p.bot,
-			...(p.bot ? { botName: p.name } : {}),
+			...reportedSeat(p),
 			placement: place.get(p.id)!,
 			score: p.points,
 		})),

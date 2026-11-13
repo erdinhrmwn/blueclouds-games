@@ -296,9 +296,10 @@ export async function roomSeats(sql: SQL, code: string) {
 
 	const seats = row.tournament_id
 		? await sql`
-				SELECT ra.player_id AS "playerId", ra.seat
+				SELECT ra.player_id AS "playerId", ra.seat, pl.is_bot AS bot, pl.display_name AS name
 				FROM room_assignments ra
 				JOIN rooms r ON r.id = ra.room_id
+				JOIN players pl ON pl.id = ra.player_id
 				JOIN tournament_players tp
 					ON tp.tournament_id = ra.tournament_id AND tp.player_id = ra.player_id
 				WHERE r.code = ${code}

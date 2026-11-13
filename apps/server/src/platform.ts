@@ -129,7 +129,15 @@ const TournamentRoom = z.object({
 			cancelled: z.boolean(),
 		})
 		.nullable(),
-	seats: z.array(z.object({ playerId: z.uuid(), seat: z.number().int().min(0).nullable() })),
+	seats: z.array(
+		z.object({
+			playerId: z.uuid(),
+			seat: z.number().int().min(0).nullable(),
+			/** A bot account the platform signed up to fill the tables; the room plays its seat. */
+			bot: z.boolean().default(false),
+			name: z.string().default(""),
+		}),
+	),
 });
 export type RoomSeats = z.output<typeof TournamentRoom>;
 

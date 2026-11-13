@@ -43,7 +43,14 @@ export function startJobs(sql: SQL): { stop: () => Promise<void> } {
 	const jobs = [
 		schedule("tournament job", SCHEDULES.tournaments, async () => {
 			const r = await runTournamentJob(sql);
-			const changed = r.distributed + r.cancelled + r.failed + r.closed + r.nextRounds + r.finished;
+			const changed =
+				r.distributed +
+				r.cancelled +
+				r.failed +
+				r.closed +
+				r.nextRounds +
+				r.finished +
+				r.botsFilled;
 			return changed > 0 ? r : null;
 		}),
 		schedule("guest sweep", SCHEDULES.guestSweep, async () => {

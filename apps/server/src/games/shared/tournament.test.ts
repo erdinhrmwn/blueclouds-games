@@ -44,6 +44,9 @@ function runner(c: Room) {
 				c.vars.game = { ...c.vars.game, phase: "playing" };
 			},
 			commit: async () => void calls.commits++,
+			seatBot: (id: string, name: string, seat: number | null) => {
+				c.vars.game = addPlayer(c.vars.game, id, name, true, seat ?? undefined);
+			},
 		},
 	};
 }
@@ -169,4 +172,42 @@ test("a player who lost their seat since sitting down (withdrew, disqualified) l
 	expect(seatFor(c, { id: BEN, name: "Ben", vip: false })).rejects.toThrow(
 		"This table is for players of Friday Cup.",
 	);
+});
+
+test("a bot account the platform signed up sits by itself, and the table starts once the people are in", async () => {
+	seats = {
+		...(seats as object),
+		seats: [
+			{ playerId: ANN, seat: 0 },
+			{ playerId: BEN, seat: 1, bot: true, name: "Bot Ash" },
+		],
+	};
+	const c = room();
+	await loadTournament(c);
+	sit(c, ANN);
+	setSystemTime(START + 1000);
+	const { calls, game } = runner(c);
+	await tournamentTick(c, game);
+
+	expect(calls.started).toBe(1);
+	const bot = c.vars.game.players.find((p) => p.id === BEN);
+	expect(bot).toMatchObject({ name: "Bot Ash", bot: true, seat: 1 });
+});
+
+test("a table whose people never came still plays with its bots", async () => {
+	seats = {
+		...(seats as object),
+		seats: [
+			{ playerId: ANN, seat: 0, bot: true, name: "Bot Ash" },
+			{ playerId: BEN, seat: 1, bot: true, name: "Bot Bree" },
+		],
+	};
+	const c = room();
+	await loadTournament(c);
+	setSystemTime(START + LATE_GRACE_MS);
+	const { calls, game } = runner(c);
+	await tournamentTick(c, game);
+
+	expect(calls.started).toBe(1);
+	expect(c.vars.game.players.every((p) => p.bot)).toBe(true);
 });

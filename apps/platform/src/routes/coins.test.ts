@@ -41,8 +41,8 @@ async function ledgerMatches(playerId: string) {
 async function tournament(fee: number, opts: { closes?: number; min?: number } = {}) {
 	const at = (min: number) => new Date(Date.now() + min * 60_000);
 	const [row] = await t.sql`
-		INSERT INTO tournaments (game_slug, name, players_per_room, min_players, fee, starts_at, registration_opens_at, registration_closes_at, created_by_admin_id)
-		VALUES ('bust-31', 'Fee Cup', 2, ${opts.min ?? null}, ${fee}, ${at(30)}, ${at(-60)}, ${at(opts.closes ?? 20)}, ${admin})
+		INSERT INTO tournaments (game_slug, name, players_per_room, min_players, fee, bots_added_at, starts_at, registration_opens_at, registration_closes_at, created_by_admin_id)
+		VALUES ('bust-31', 'Fee Cup', 2, ${opts.min ?? null}, ${fee}, now(), ${at(30)}, ${at(-60)}, ${at(opts.closes ?? 20)}, ${admin})
 		RETURNING id`;
 	return row.id as string;
 }

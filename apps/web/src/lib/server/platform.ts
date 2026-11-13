@@ -348,6 +348,8 @@ export type Standing = {
 	wins: number;
 	/** The furthest round they were seated in; in a knockout, below the current round means out. */
 	lastRound: number;
+	/** A bot account the platform signed up to fill the tables. */
+	bot: boolean;
 };
 
 /** A tournament that is playing, or finished within the last day, as the lobby shows it. */
@@ -547,7 +549,13 @@ export type BoardTable = {
 	startedAt: string | null;
 	closedAt: string | null;
 	closeReason: string | null;
-	players: { playerId: string; name: string; seat: number | null; placement: number | null }[];
+	players: {
+		playerId: string;
+		name: string;
+		bot: boolean;
+		seat: number | null;
+		placement: number | null;
+	}[];
 };
 
 /** A tournament's own page: what it is, every round's tables (the bracket), and the standings. */

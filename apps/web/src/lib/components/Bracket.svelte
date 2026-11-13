@@ -179,7 +179,10 @@
 						aria-hidden="true">{seat.name.charAt(0).toUpperCase()}</span
 					>
 					<span class="min-w-0 flex-1 truncate {won ? 'font-bold' : 'text-paper/75'}">
-						{seat.name}{#if mine}<span class="text-brass">&nbsp;· you</span>{/if}
+						{seat.name}{#if mine}<span class="text-brass">&nbsp;· you</span>{/if}{#if seat.bot}<span
+								class="ml-1.5 rounded bg-paper/10 px-1.5 text-[10px] font-semibold text-paper/70"
+								>bot</span
+							>{/if}
 					</span>
 					<span class="text-xs {won ? 'font-bold text-brass' : 'text-paper/50'}"
 						>{placeNote(seat.placement, !!table.closedAt)}</span
