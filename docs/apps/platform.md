@@ -26,6 +26,7 @@ Platform tests use the same `DATABASE_*` server with `DATABASE_TEST_NAME` as the
 | `PLATFORM_SERVER_KEY` | Bearer key the actor server sends with match reports (32+ chars) |
 | `PLATFORM_HOST` | Listen interface (default `127.0.0.1`; `0.0.0.0` inside a container) |
 | `PLATFORM_PORT` | Listen port (default `3000`) |
+| `LOG_LEVEL` | pino level for `lib/log.ts` (default `info`) |
 
 All keys live in the root `.env` (template: `.env.example`); the package scripts load it with `--env-file`. The app refuses to start if one is missing or invalid.
 

@@ -256,7 +256,7 @@ export async function runTournamentJob(
 async function saveDistributeError(tx: SQL, tournamentId: string, err: unknown): Promise<void> {
 	const known = err instanceof DistributeError;
 	if (!known) {
-		log.error({ msg: "tournament distribute failed", tournamentId, err: String(err) });
+		log.error({ msg: "tournament distribute failed", tournamentId, err });
 	}
 
 	const reason = known

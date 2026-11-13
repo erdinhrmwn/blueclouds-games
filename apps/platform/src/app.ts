@@ -74,8 +74,7 @@ export function createApp(deps: Deps) {
 			msg: "unhandled error",
 			requestId: c.get("requestId"),
 			path: c.req.path,
-			err: String(err),
-			stack: err.stack,
+			err,
 		});
 
 		return fail(c, new ApiError("internal", 500, "Something went wrong. Try again later."));

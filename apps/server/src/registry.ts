@@ -2,6 +2,7 @@ import { setup } from "rivetkit";
 import { bust31Room } from "./games/bust-31/actor";
 import { cloudburstRoom } from "./games/cloudburst/actor";
 import { roomList } from "./games/shared/directory";
+import { log } from "./log";
 
 // Per game: a room actor (one instance per room code). One room list per game (key = slug).
 // Services (agentOS, durable streams) are unused here; skipping them avoids
@@ -11,4 +12,5 @@ export const registry = setup({
 	startServices: false,
 	endpoint: process.env.RIVET_ENDPOINT,
 	token: process.env.RIVET_TOKEN,
+	logging: { baseLogger: log },
 });

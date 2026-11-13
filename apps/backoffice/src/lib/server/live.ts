@@ -5,6 +5,7 @@ import type { registry } from 'server';
 import type { KickResult, TerminateResult } from 'server/games/shared/room';
 import { type RoomSummary, tournamentListKey } from 'server/games/shared/schema';
 import { type Admin, audit } from './auth.ts';
+import { log } from './log.ts';
 import { isUuid } from './players.ts';
 
 /** The engine is on the same network; a list that takes longer than this is reported as unreachable. */
@@ -43,7 +44,7 @@ async function readList(key: string): Promise<RoomSummary[] | null> {
 	try {
 		return await withTimeout(engine.roomList.getOrCreate([key]).list());
 	} catch (err) {
-		console.warn('live tables: room list unreachable', key, String(err));
+		log.warn({ msg: 'live tables: room list unreachable', key, err });
 		return null;
 	}
 }
@@ -128,7 +129,7 @@ async function askRoom<T>(
 	try {
 		return await withTimeout(ask(room(code)));
 	} catch (err) {
-		console.warn('live tables: admin action failed', game, code, String(err));
+		log.warn({ msg: 'live tables: admin action failed', game, code, err });
 		// A rule the room enforces (a UserError, group "user") is worded for people; anything else is not shown.
 		const fromRoom = err instanceof ActorError && err.group === 'user' ? err.message : null;
 		throw new TableActionError(fromRoom ?? 'The table did not answer. Refresh and try again.');

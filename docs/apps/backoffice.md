@@ -25,6 +25,7 @@ bun run dev:backoffice                          # http://localhost:5174
 | Variable | Purpose |
 |---|---|
 | `DATABASE_HOST`, `DATABASE_PORT`, `DATABASE_USER`, `DATABASE_PASSWORD`, `DATABASE_NAME` | The platform's Postgres connection, shared |
+| `LOG_LEVEL` | pino level for server-side logs, `lib/server/log.ts` (default `info`) |
 
 Behind a proxy, adapter-node also needs `ORIGIN` (e.g. `https://backoffice.nblueclouds.online`) and `ADDRESS_HEADER=X-Forwarded-For` so form actions and the audit log see the real origin and IP.
 

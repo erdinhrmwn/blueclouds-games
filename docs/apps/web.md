@@ -10,6 +10,7 @@ SvelteKit app the players use. Started with `bun run dev:web` on http://localhos
 | `PLATFORM_URL` | `http://127.0.0.1:3000` (server side only: the browser never calls the platform) |
 | `RIVET_TOKEN` | Engine admin token, 32+ chars. Server side only: `POST /api/:game/rooms/:code/token` gives the browser a 15-minute engine token for that one room |
 | `RIVET_ENDPOINT` | Engine as this server reaches it (defaults to `PUBLIC_RIVET_ENDPOINT`) |
+| `LOG_LEVEL` | `info` (pino level for server-side logs, `lib/server/log.ts`) |
 
 Set in the root `.env` (template: `.env.example`; `vite.config.ts` points SvelteKit at the repo root). Optional for local dev.
 

@@ -11,6 +11,7 @@ Rivet Actors: one actor type per game, one actor per room (keyed by the room cod
 | `PLATFORM_SERVER_KEY` | Bearer key for match reports, same as the platform's |
 | `RIVET_TOKEN` | Engine admin token. In dev, `bun run dev` also gives it to the local engine RivetKit starts, so dev checks tokens like production |
 | `RIVET_ENDPOINT` | Engine to connect to as a runner. Unset in dev: RivetKit starts a local engine |
+| `LOG_LEVEL` | pino level for `src/log.ts` (default `info`). RivetKit logs through the same logger (`logging.baseLogger`), so this also sets `c.log` and RivetKit's own logs, which otherwise default to `warn` |
 
 Set in the root `.env`; checked at startup.
 

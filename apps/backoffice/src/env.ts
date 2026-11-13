@@ -35,5 +35,9 @@ export const variables = defineEnvVars({
 
 			return url;
 		}
+	},
+	LOG_LEVEL: {
+		description: 'Least severe server log level written. Defaults to info.',
+		schema: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal', 'silent']).default('info')
 	}
 });
