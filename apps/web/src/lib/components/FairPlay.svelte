@@ -93,11 +93,11 @@
 	<dialog
 		bind:this={dialog}
 		aria-labelledby="rounds-title"
-		class="m-auto max-h-[calc(100dvh-2rem)] w-[min(34rem,calc(100%-2rem))] overflow-y-auto rounded-xl border border-paper/15 bg-panel p-5 text-sm text-paper/75 backdrop:bg-black/70 sm:p-6"
+		class="modal max-h-[calc(100dvh-2rem)] overflow-y-auto text-sm text-paper/75 sm:w-[min(34rem,calc(100%-2rem))]"
 	>
 		<div class="flex items-start justify-between gap-4">
 			<div>
-				<h2 id="rounds-title" class="font-display text-2xl font-bold text-paper">Rounds</h2>
+				<h2 id="rounds-title" class="modal-title text-paper">Rounds</h2>
 				<p class="mt-1 text-xs text-paper/55">
 					Each round is shuffled with its own server seed, locked in before the deal and revealed
 					when the round ends.

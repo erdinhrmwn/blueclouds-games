@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { tick } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { nextPath } from '#lib/guest.ts';
@@ -14,24 +13,22 @@
 
 	let { data } = $props();
 
-	/** First stop for anyone without a player: log in, sign up, or play as a guest. */
-	let tab = $state<'login' | 'signup'>('login');
+	/**
+	 * First stop for anyone without a player. Playing as a guest is the page; an account is one link away.
+	 * One column, the same field and button sizes in every mode.
+	 */
+	let mode = $state<'guest' | 'login' | 'signup'>('guest');
 	let busy = $state(false);
+
+	// Only the starting name is wanted: the visitor edits it here.
+	// svelte-ignore state_referenced_locally
+	let guestName = $state(data.guestName);
+	let guestError = $state<string | null>(null);
 
 	let username = $state('');
 	let password = $state('');
 	let name = $state('');
 	let errors = $state<FormErrors | null>(null);
-
-	// Only the starting name is wanted: the visitor edits it here.
-	// svelte-ignore state_referenced_locally
-	let guestName = $state(data.guestName);
-	let guestDraft = $state('');
-	let editingGuestName = $state(false);
-	let guestError = $state<string | null>(null);
-
-	let guestNameInput = $state<HTMLInputElement>();
-	let changeButton = $state<HTMLButtonElement>();
 
 	const enter = () => goto(nextPath(page.url), { invalidateAll: true });
 
@@ -45,16 +42,31 @@
 		if (ok) await enter();
 	}
 
-	function pick(next: 'login' | 'signup') {
-		tab = next;
+	function switchTo(next: typeof mode) {
+		mode = next;
 		errors = null;
+		guestError = null;
+	}
+
+	function guest(event: SubmitEvent) {
+		event.preventDefault();
+
+		guestError = nameError(guestName);
+		if (guestError) return;
+
+		return run(async () => {
+			const failed = await playAsGuest(guestName.trim());
+			// Show the form message, or else the first field message.
+			guestError = failed && (failed.form ?? Object.values(failed.fields)[0]);
+			return !failed;
+		});
 	}
 
 	function account(event: SubmitEvent) {
 		event.preventDefault();
 
 		return run(async () => {
-			if (tab === 'login') {
+			if (mode === 'login') {
 				errors = await logIn({ username, password });
 			} else {
 				errors = await createAccount({ name, username, password });
@@ -64,103 +76,59 @@
 		});
 	}
 
-	async function editGuestName() {
-		guestDraft = guestName;
-		guestError = null;
-		editingGuestName = true;
-
-		await tick();
-		guestNameInput?.select();
-	}
-
-	async function closeGuestName() {
-		editingGuestName = false;
-
-		await tick();
-		changeButton?.focus();
-	}
-
-	/** Keeps the typed name; returns false (and shows why) when it isn't a valid one. */
-	function keepGuestName(): boolean {
-		guestError = nameError(guestDraft);
-		if (guestError) {
-			guestNameInput?.focus();
-			return false;
-		}
-
-		guestName = guestDraft.trim();
-		return true;
-	}
-
-	function saveGuestName(event: SubmitEvent) {
-		event.preventDefault();
-
-		if (keepGuestName()) {
-			closeGuestName();
-		}
-	}
-
-	function cancelOnEscape(event: KeyboardEvent) {
-		if (event.key !== 'Escape') {
-			return;
-		}
-
-		event.preventDefault();
-		guestError = null;
-		closeGuestName();
-	}
-
-	function guest() {
-		// Playing while still editing uses the typed name.
-		if (editingGuestName && !keepGuestName()) {
-			return;
-		}
-
-		editingGuestName = false;
-
-		return run(async () => {
-			const failed = await playAsGuest(guestName);
-			// Show the form message, or else the first field message.
-			guestError = failed && (failed.form ?? Object.values(failed.fields)[0]);
-			return !failed;
-		});
-	}
+	const TITLE = { guest: 'Take a seat', login: 'Log in', signup: 'Sign up' } as const;
+	const LEAD = {
+		guest: 'Pick a name and play. No sign-up needed.',
+		login: 'Welcome back. Your name and history are waiting.',
+		signup: 'Keep your name and history on every device.'
+	} as const;
 </script>
 
-<svelte:head><title>Welcome · BlueClouds Games</title></svelte:head>
+<svelte:head><title>{TITLE[mode]} · BlueClouds Games</title></svelte:head>
 
-<section class="mx-auto max-w-md pt-8 md:pt-14">
-	<h1 class="font-display text-4xl leading-tight font-black sm:text-5xl">Welcome</h1>
-	<p class="mt-2 text-paper/80">Card games for friends and bots, right in the browser.</p>
+<section class="mx-auto max-w-sm pt-12 text-center md:pt-20">
+	<h1 class="font-display text-4xl leading-tight font-black sm:text-[2.75rem]">{TITLE[mode]}</h1>
+	<p class="mt-2 text-sm text-paper/60">{LEAD[mode]}</p>
 
-	<div class="mt-6 rounded-xl border border-paper/15 bg-[#1b1611] p-6">
-		<div
-			class="grid grid-cols-2 gap-1 rounded-md bg-black/30 p-1"
-			role="group"
-			aria-label="Log in or sign up"
-		>
-			{#each [['login', 'Log in'], ['signup', 'Sign up']] as const as [key, label] (key)}
-				<button
-					type="button"
-					aria-pressed={tab === key}
-					class="min-h-11 rounded-[0.3rem] text-sm font-semibold transition-colors {tab === key
-						? 'bg-paper text-ink'
-						: 'text-paper/75 hover:text-paper'}"
-					onclick={() => pick(key)}>{label}</button
-				>
-			{/each}
-		</div>
-
+	{#if mode === 'guest'}
+		<form class="mt-8 space-y-5 text-left" onsubmit={guest} aria-label="Play as a guest">
+			<label class="block">
+				<span class="label mb-1.5 block">Your name at the table</span>
+				<input
+					class="field h-12 rounded-xl"
+					bind:value={guestName}
+					maxlength={NAME_MAX}
+					autocomplete="nickname"
+					required
+					aria-invalid={!!guestError}
+				/>
+			</label>
+			{#if guestError}<p class="text-sm text-ember" role="alert">{guestError}</p>{/if}
+			<button class="btn-brass h-12 w-full rounded-xl text-base" type="submit" disabled={busy}
+				>{busy ? 'Please wait…' : 'Play'}</button
+			>
+		</form>
+		<p class="mt-6 text-sm text-paper/60">
+			Have an account?
+			<button class="font-semibold text-brass hover:underline" onclick={() => switchTo('login')}
+				>Log in</button
+			>
+			or
+			<button class="font-semibold text-brass hover:underline" onclick={() => switchTo('signup')}
+				>Sign up</button
+			>
+		</p>
+	{:else}
 		<form
-			class="mt-5 space-y-3"
+			class="mt-8 space-y-5 text-left"
 			onsubmit={account}
-			aria-label={tab === 'login' ? 'Log in' : 'Sign up'}
+			aria-label={mode === 'login' ? 'Log in' : 'Sign up'}
 		>
-			{#if tab === 'signup'}
+			{#if mode === 'signup'}
 				<label class="block">
 					<span class="label mb-1.5 block">Display name</span>
 					<input
-						class="field"
+						class="field h-12 rounded-xl"
 						bind:value={name}
 						maxlength={NAME_MAX}
 						autocomplete="nickname"
@@ -175,109 +143,67 @@
 			<label class="block">
 				<span class="label mb-1.5 block">Username</span>
 				<input
-					class="field"
+					class="field h-12 rounded-xl"
 					bind:value={username}
-					maxlength={tab === 'signup' ? 32 : 64}
+					maxlength={mode === 'signup' ? 32 : 64}
 					autocomplete="username"
 					autocapitalize="none"
 					required
 					aria-invalid={!!errors?.fields.username}
 				/>
-				{#if tab === 'signup'}
+				{#if mode === 'signup'}
 					<span
-						class="mt-1 block text-sm {errors?.fields.username ? 'text-ember' : 'text-paper/75'}"
+						class="mt-1 block text-xs {errors?.fields.username ? 'text-ember' : 'text-paper/55'}"
 						>{errors?.fields.username ?? '3–32 characters: a–z, 0–9, _ . -'}</span
 					>
 				{/if}
 			</label>
 			<label class="block">
 				<span class="label mb-1.5 block">Password</span>
-				{#if tab === 'signup'}
-					<input
-						class="field"
-						type="password"
-						bind:value={password}
-						minlength="8"
-						maxlength="200"
-						autocomplete="new-password"
-						required
-						aria-invalid={!!errors?.fields.password}
-					/>
+				<input
+					class="field h-12 rounded-xl"
+					type="password"
+					bind:value={password}
+					minlength={mode === 'signup' ? 8 : undefined}
+					maxlength="200"
+					autocomplete={mode === 'signup' ? 'new-password' : 'current-password'}
+					required
+					aria-invalid={!!errors?.fields.password}
+				/>
+				{#if mode === 'signup'}
 					<span
-						class="mt-1 block text-sm {errors?.fields.password ? 'text-ember' : 'text-paper/75'}"
+						class="mt-1 block text-xs {errors?.fields.password ? 'text-ember' : 'text-paper/55'}"
 						>{errors?.fields.password ?? 'At least 8 characters.'}</span
 					>
-				{:else}
-					<input
-						class="field"
-						type="password"
-						bind:value={password}
-						maxlength="200"
-						autocomplete="current-password"
-						required
-					/>
 				{/if}
 			</label>
-			{#if tab === 'login' && errors}
+			{#if mode === 'login' && errors}
 				<p class="text-sm text-ember" role="alert">
 					{errors.form ?? Object.values(errors.fields)[0]}
 				</p>
 			{:else if errors?.form}
 				<p class="text-sm text-ember" role="alert">{errors.form}</p>
 			{/if}
-			<button class="btn-brass w-full" type="submit" disabled={busy}
-				>{tab === 'login' ? 'Log in' : 'Create account'}</button
+			<button class="btn-brass h-12 w-full rounded-xl text-base" type="submit" disabled={busy}
+				>{busy ? 'Please wait…' : mode === 'login' ? 'Log in' : 'Create account'}</button
 			>
 		</form>
-
-		<div class="my-6 flex items-center gap-3 text-sm text-paper/75" aria-hidden="true">
-			<span class="h-px flex-1 bg-paper/15"></span>or<span class="h-px flex-1 bg-paper/15"></span>
-		</div>
-
-		<div class="space-y-3">
-			<div class="rounded-md border border-paper/20 bg-black/30 py-2 pr-2 pl-4">
-				{#if editingGuestName}
-					<form class="flex items-center gap-2" onsubmit={saveGuestName}>
-						<label class="min-w-0 flex-1 py-1">
-							<span class="label block">Display name</span>
-							<input
-								class="field mt-1 py-1.5"
-								bind:this={guestNameInput}
-								bind:value={guestDraft}
-								maxlength={NAME_MAX}
-								autocomplete="nickname"
-								required
-								aria-invalid={!!guestError}
-								onkeydown={cancelOnEscape}
-							/>
-						</label>
-						<button
-							type="submit"
-							class="inline-flex min-h-11 items-center self-end rounded-md px-3 text-sm font-semibold text-brass hover:brightness-110"
-							>Save</button
-						>
-					</form>
-				{:else}
-					<div class="flex items-end gap-2">
-						<div class="min-w-0 flex-1 py-1">
-							<span class="label block">Display name</span>
-							<p class="truncate font-display text-xl font-bold">
-								{guestName}
-							</p>
-						</div>
-						<button
-							type="button"
-							class="inline-flex min-h-11 items-center rounded-md px-3 text-sm font-semibold text-brass hover:brightness-110 disabled:opacity-40"
-							bind:this={changeButton}
-							onclick={editGuestName}
-							disabled={busy}
-							aria-label="Change display name">Change</button
-						>
-					</div>
-				{/if}
-			</div>
-			<button class="btn-brass w-full" onclick={guest} disabled={busy}>Play as guest</button>
-			{#if guestError}<p class="text-sm text-ember" role="alert">{guestError}</p>{/if}
-		</div>
-	</div>
+		<p class="mt-6 text-sm text-paper/60">
+			{#if mode === 'login'}
+				New here?
+				<button class="font-semibold text-brass hover:underline" onclick={() => switchTo('signup')}
+					>Sign up</button
+				>
+			{:else}
+				Have an account?
+				<button class="font-semibold text-brass hover:underline" onclick={() => switchTo('login')}
+					>Log in</button
+				>
+			{/if}
+			or
+			<button class="font-semibold text-brass hover:underline" onclick={() => switchTo('guest')}
+				>play as guest</button
+			>
+		</p>
+	{/if}
 </section>

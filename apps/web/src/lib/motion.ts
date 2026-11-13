@@ -126,6 +126,17 @@ export function dealCards(
 
 	const { width, height } = DEAL_CARD;
 	const start = centerOf(from);
+	// The flight layer sits on <body>, outside the table, so it takes the deck's card back along.
+	const deck = document.querySelector('[data-deck]');
+	if (deck) {
+		const deckStyle = getComputedStyle(deck);
+		for (const property of ['--card-back', '--card-back-size', '--card-back-border']) {
+			const value = deckStyle.getPropertyValue(property);
+			if (value) {
+				layer.style.setProperty(property, value);
+			}
+		}
+	}
 	let last: Animation | undefined;
 
 	for (let pass = 0; pass < passes; pass++) {

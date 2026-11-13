@@ -16,6 +16,8 @@ export type GameEntry = {
 	kind: string;
 	minPlayers: number;
 	maxPlayers: number;
+	/** The utility that gives an element this game's card back (see layout.css). */
+	back: string;
 	/** A few sample cards: the game's picture. */
 	Fan: Component<{ size?: 'sm' | 'md' }>;
 	/** The game's own page: rules plus the create/join forms. `maintenance`: no new tables for now. */
@@ -34,6 +36,7 @@ export const GAMES: GameEntry[] = [
 		kind: 'turn-based',
 		minPlayers: bust31.MIN_PLAYERS,
 		maxPlayers: bust31.MAX_PLAYERS,
+		back: 'table-back-bust-31',
 		Fan: Bust31Fan,
 		Home: Bust31Home,
 		Room: Bust31Room
@@ -45,6 +48,7 @@ export const GAMES: GameEntry[] = [
 		kind: 'shedding',
 		minPlayers: cloudburst.MIN_PLAYERS,
 		maxPlayers: cloudburst.MAX_PLAYERS,
+		back: 'table-back-cloudburst',
 		Fan: CloudburstFan,
 		Home: CloudburstHome,
 		Room: CloudburstRoom

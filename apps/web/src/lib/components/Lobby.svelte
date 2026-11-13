@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { ask } from '#lib/confirm.svelte.ts';
 	import { untrack } from 'svelte';
 	import { createInvite, resetInviteLink } from '#lib/platform.ts';
 	import type { BaseView, RoomConnection } from '#lib/rivet/room.svelte.ts';
@@ -56,8 +57,12 @@
 			return { label: 'Remove', run: () => room.removeBot(player.id) };
 		}
 
-		const kick = () => {
-			const sure = confirm(`Kick ${player.name}? They can't come back to this table.`);
+		const kick = async () => {
+			const sure = await ask({
+				title: `Kick ${player.name}?`,
+				body: 'They leave the table and can’t come back to it.',
+				action: 'Kick'
+			});
 			if (sure) {
 				void room.kick(player.seat);
 			}

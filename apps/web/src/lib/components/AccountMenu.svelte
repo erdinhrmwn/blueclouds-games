@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { ask } from '#lib/confirm.svelte.ts';
 	import { goto } from '$app/navigation';
 	import { WELCOME } from '#lib/guest.ts';
 	import { logOut, player } from '#lib/player.svelte.ts';
@@ -7,7 +8,7 @@
 	let { onError }: { onError: (message: string | null) => void } = $props();
 
 	const GUEST_LOGOUT_WARNING =
-		'You are playing as a guest. Logging out ends this guest for good, including its game history. Link an account on your profile to keep it. Log out anyway?';
+		'Logging out ends this guest for good, including its game history. Make an account on your profile to keep it.';
 
 	let open = $state(false);
 	let root = $state<HTMLDivElement>();
@@ -59,7 +60,15 @@
 	async function signOut() {
 		close(false);
 		// A guest only exists in this browser: logging out loses it for good.
-		if (player.guest && !confirm(GUEST_LOGOUT_WARNING)) return;
+		if (player.guest) {
+			const sure = await ask({
+				title: 'Log out as a guest?',
+				body: GUEST_LOGOUT_WARNING,
+				action: 'Log out',
+				keep: 'Keep playing'
+			});
+			if (!sure) return;
+		}
 
 		const error = await logOut();
 		onError(error);
@@ -70,10 +79,11 @@
 <div class="relative min-w-0" bind:this={root}>
 	<button
 		bind:this={trigger}
-		class="inline-flex min-h-11 max-w-full min-w-0 items-center gap-2 rounded-md px-2 text-left text-sm leading-tight hover:bg-paper/5"
+		class="pill inline-flex h-10 max-w-full min-w-0 items-center gap-2 rounded-full p-1 text-left text-sm leading-tight hover:bg-paper/5 sm:pr-3"
 		aria-haspopup="menu"
 		aria-expanded={open}
 		aria-controls="account-menu"
+		aria-label="Account: {player.name}{player.guest ? ', guest' : ''}"
 		onclick={toggle}
 		onkeydown={(event) => {
 			if (event.key === 'ArrowDown' && !open) {
@@ -82,20 +92,18 @@
 			}
 		}}
 	>
-		<span class="flex min-w-0 flex-col">
-			<span class="max-w-full truncate font-semibold">{player.name}</span>
-			<!-- A guest is marked as one, so it's clear nothing is saved to an account yet. -->
-			{#if player.guest}
-				<span class="text-[11px] text-paper/75">Guest</span>
-			{:else}
-				<span class="hidden max-w-full truncate text-[11px] text-paper/75 sm:block"
-					>@{player.username}</span
-				>
-			{/if}
+		<!-- The pill hugs its content: the avatar always, the name and a Guest mark from tablet width up. -->
+		<span
+			class="grid size-8 shrink-0 place-items-center rounded-full bg-brass font-display text-sm font-bold text-ink"
+			aria-hidden="true">{player.name.trim().charAt(0).toUpperCase()}</span
+		>
+		<span class="hidden min-w-0 items-baseline gap-1.5 sm:flex" aria-hidden="true">
+			<span class="max-w-32 truncate font-semibold">{player.name}</span>
+			{#if player.guest}<span class="text-[11px] text-paper/60">Guest</span>{/if}
 		</span>
 		<svg
 			viewBox="0 0 20 20"
-			class="size-4 shrink-0 text-paper/70 transition-transform motion-reduce:transition-none {open
+			class="size-4 shrink-0 text-paper/70 transition-transform max-sm:hidden motion-reduce:transition-none {open
 				? 'rotate-180'
 				: ''}"
 			fill="none"
@@ -184,3 +192,10 @@
 		</div>
 	{/if}
 </div>
+
+<style>
+	.pill {
+		background: rgb(0 0 0 / 0.3);
+		box-shadow: inset 0 0 0 1px rgb(243 234 214 / 0.16);
+	}
+</style>

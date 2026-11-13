@@ -20,15 +20,15 @@
 	import { fly } from 'svelte/transition';
 	import CloudCard from './CloudCard.svelte';
 	import type { CloudburstConnection } from './connection.svelte.ts';
-	import SuitGlyph from './SuitGlyph.svelte';
+	import WeatherVane from './WeatherVane.svelte';
 	import SuitPicker from './SuitPicker.svelte';
-	import { SUIT_NAME, SUIT_TEXT } from './suits.ts';
+	import { SUIT_NAME } from './suits.ts';
 
 	let { room }: { room: CloudburstConnection } = $props();
 
 	/** Phones get a smaller pile so the middle of the table stays clear of the seats. */
 	const wide = new MediaQuery('min-width: 640px');
-	const pileSize = $derived(wide.current ? 'md' : 'sm');
+	const pileSize = 'pile';
 
 	const view = $derived(room.view!);
 	const inSeat = (seat: number) => view.players.find((p) => p.seat === seat) ?? null;
@@ -420,7 +420,7 @@
 		const typing = event.target instanceof HTMLInputElement;
 		if (typing || event.metaKey || event.ctrlKey || event.altKey) return;
 
-		if (event.key === 'Escape' && pending) pending = null;
+		if (event.key === 'Escape' && pending?.needs === 'give') pending = null;
 		if (!canMove || pending) return;
 
 		if (event.key === 'd' && !view.drew) room.draw();
@@ -444,8 +444,8 @@
 <svelte:window onkeydown={onKey} />
 
 <!-- clip sideways only, so cards flying in mid-animation never add a horizontal scrollbar on phones -->
-<div class="overflow-x-clip">
-	<Felt count={MAX_PLAYERS + 1}>
+<div class="table-back-cloudburst overflow-x-clip">
+	<Felt count={MAX_PLAYERS + 1} name="Cloudburst" rule="Match the suit or the next number">
 		{#snippet seat(k)}
 			{#if k === 0}
 				<Dealer deckCount={view.deckCount} direction={view.direction} />
@@ -505,6 +505,8 @@
 				<Seat
 					player={p}
 					number={k}
+					cards={p ? (reveal ? 0 : p.cards) : 0}
+					cardSide={k <= MAX_PLAYERS / 2 ? 'left' : 'right'}
 					isTurn={!!p && (p.id === view.turnPlayerId || p.id === view.winnerId)}
 					isHost={!!p && p.id === view.hostId}
 					isMe={!!p && p.id === room.playerId}
@@ -574,41 +576,33 @@
 					</p>{/if}
 			</div>
 		{:else}
-			<!-- The pile sits dead centre; the suit badge hangs below it, clear of a tilted card's corners. -->
-			<div class="relative">
-				<div class="grid h-[4.6rem] w-[3.25rem] place-items-center sm:h-[6.75rem] sm:w-[4.75rem]">
-					{#each view.pileUnder as u (u.id)}
-						<div
-							class="col-start-1 row-start-1"
-							style="rotate: {tiltOf(u.id)}deg"
-							aria-hidden="true"
-						>
-							<CloudCard card={u} size={pileSize} />
-						</div>
-					{/each}
-					{#key view.topCard?.id}
-						{#if view.topCard}
+			<!-- The pile sits dead centre inside the weather vane, which lights the suit to follow. -->
+			<div class="-translate-y-2">
+				<WeatherVane suit={view.suit} top={view.topCard}>
+					<div class="grid h-[3.55rem] w-10 place-items-center sm:h-[4.6rem] sm:w-[3.25rem]">
+						{#each view.pileUnder as u (u.id)}
 							<div
 								class="col-start-1 row-start-1"
-								in:placeCard|global={{ from: flightFrom(view.topCard.id), tilt: -20 }}
+								style="rotate: {tiltOf(u.id)}deg"
+								aria-hidden="true"
 							>
-								<div style="rotate: {tiltOf(view.topCard.id)}deg">
-									<CloudCard card={view.topCard} size={pileSize} />
-								</div>
+								<CloudCard card={u} size={pileSize} />
 							</div>
-						{/if}
-					{/key}
-				</div>
-				<div class="absolute top-full left-1/2 mt-4 -translate-x-1/2 sm:mt-5">
-					<p
-						class="suit-ring flex items-center gap-1.5 rounded-full bg-paper px-2.5 py-1 text-xs font-semibold whitespace-nowrap sm:px-3 sm:text-sm {SUIT_TEXT[
-							view.suit
-						]}"
-						aria-live="polite"
-					>
-						<SuitGlyph suit={view.suit} class="size-4" />{SUIT_NAME[view.suit]} to follow
-					</p>
-				</div>
+						{/each}
+						{#key view.topCard?.id}
+							{#if view.topCard}
+								<div
+									class="col-start-1 row-start-1"
+									in:placeCard|global={{ from: flightFrom(view.topCard.id), tilt: -20 }}
+								>
+									<div style="rotate: {tiltOf(view.topCard.id)}deg">
+										<CloudCard card={view.topCard} size={pileSize} />
+									</div>
+								</div>
+							{/if}
+						{/key}
+					</div>
+				</WeatherVane>
 			</div>
 		{/if}
 	</Felt>
@@ -620,8 +614,10 @@
 	<section aria-label="Your hand" class="flex flex-col items-center gap-3">
 		<HandBar active={room.myTurn} label={barLabel} {secondsLeft}>
 			{#snippet actions()}
-				{#if pending}
+				{#if pending?.needs === 'give'}
 					<button class="link-btn" onclick={() => (pending = null)}>Cancel</button>
+				{:else if pending}
+					<!-- A Rainbow can't be taken back: no Cancel while its suit is picked. -->
 				{:else if view.drew}
 					<button class="btn-chip" onclick={room.pass} disabled={!canMove}>
 						Pass <kbd class="key-hint">P</kbd>
@@ -639,7 +635,6 @@
 			nextName={next?.name ?? ''}
 			{secondsLeft}
 			onpick={(suit) => send(pending!.card, { suit })}
-			oncancel={() => (pending = null)}
 		/>
 
 		<!-- svelte-ignore a11y_no_static_element_interactions -->

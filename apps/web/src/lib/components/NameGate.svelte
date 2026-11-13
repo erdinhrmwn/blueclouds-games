@@ -33,13 +33,13 @@
 	bind:this={dialog}
 	onclose={() => (player.editing = false)}
 	aria-labelledby="name-title"
-	class="m-auto w-[min(26rem,calc(100%-2rem))] rounded-xl border border-paper/15 bg-[#1b1611] p-6 text-paper backdrop:bg-black/70"
+	class="modal"
 >
 	<form onsubmit={submit} class="space-y-4">
-		<h2 id="name-title" class="font-display text-2xl font-bold">Change your name</h2>
-		<p class="text-sm text-paper/75">
-			Other players see this name at the table. A new name shows from the next table you join.
-		</p>
+		<div>
+			<h2 id="name-title" class="modal-title">Change your name</h2>
+			<p class="mt-1 text-sm text-paper/65">Other players see this name at the table.</p>
+		</div>
 		<label class="block">
 			<span class="label mb-1.5 block">Your name</span>
 			<!-- svelte-ignore a11y_autofocus -->
@@ -51,6 +51,10 @@
 				autofocus
 				required
 			/>
+			<span class="mt-1.5 flex justify-between text-xs text-paper/50">
+				<span>A new name shows from the next table you join.</span>
+				<span class="tabular-nums">{draft.length}/{NAME_MAX}</span>
+			</span>
 		</label>
 		{#if error}<p class="text-sm text-ember" role="alert">{error}</p>{/if}
 		<div class="flex justify-end gap-3">

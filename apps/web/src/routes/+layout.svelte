@@ -2,6 +2,7 @@
 	import './layout.css';
 	import favicon from '#lib/assets/favicon.svg';
 	import AccountMenu from '#lib/components/AccountMenu.svelte';
+	import ConfirmDialog from '#lib/components/ConfirmDialog.svelte';
 	import NameGate from '#lib/components/NameGate.svelte';
 	import { loadPlayer, player } from '#lib/player.svelte.ts';
 	import type { LayoutProps } from './$types';
@@ -33,6 +34,7 @@
 {/if}
 
 <NameGate />
+<ConfirmDialog />
 
 {#if outError}<p class="mx-auto max-w-4xl px-4 pt-2 text-right text-sm text-ember" role="alert">
 		{outError}

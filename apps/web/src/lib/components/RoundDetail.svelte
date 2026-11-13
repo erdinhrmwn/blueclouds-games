@@ -87,7 +87,7 @@
 	bind:this={dialog}
 	aria-labelledby="round-title"
 	onclose={onback}
-	class="m-auto max-h-[calc(100dvh-2rem)] w-[min(34rem,calc(100%-2rem))] overflow-y-auto rounded-xl border border-paper/15 bg-panel p-5 text-sm text-paper/75 backdrop:bg-transparent sm:p-6"
+	class="modal max-h-[calc(100dvh-2rem)] overflow-y-auto text-sm text-paper/75 backdrop:bg-transparent sm:w-[min(34rem,calc(100%-2rem))]"
 >
 	{#if round}
 		<div class="flex items-start justify-between gap-4">
@@ -98,7 +98,7 @@
 				>
 					‹ Rounds
 				</button>
-				<h2 id="round-title" class="mt-1 font-display text-2xl font-bold text-paper">
+				<h2 id="round-title" class="mt-1 modal-title text-paper">
 					Round {round.round}
 				</h2>
 				<p class="mt-1 text-xs text-paper/55">

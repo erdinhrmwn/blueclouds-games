@@ -1,7 +1,9 @@
 <script lang="ts">
+	import Nimbus from './Nimbus.svelte';
+
 	/**
-	 * The dealer's spot at the head of the table: the deck sits here and every deal starts from it.
-	 * Games with a turn order pass `direction`, shown as a badge above the deck.
+	 * The dealer's spot at the head of the table: Nimbus in a brass-ringed pit cut into the rail,
+	 * the shoe with the deck on its right, and (for games with a turn order) the direction on its left.
 	 */
 	let {
 		deckCount = null,
@@ -13,32 +15,71 @@
 </script>
 
 <div
-	class="relative flex w-24 flex-col items-center gap-1 text-center sm:w-28"
-	aria-label={deckCount === null ? 'Dealer' : `Dealer, ${deckCount} cards in the deck`}
+	class="relative flex flex-col items-center"
+	aria-label={deckCount === null
+		? 'Dealer Nimbus'
+		: `Dealer Nimbus, ${deckCount} cards in the deck`}
 >
+	<div
+		class="pit grid size-[4.25rem] place-items-center rounded-full sm:size-[5.75rem]"
+		aria-hidden="true"
+	>
+		<Nimbus class="size-12 sm:size-16" />
+	</div>
+	<p
+		class="-mt-2 rounded-[4px] bg-brass px-2 py-px font-display text-[10px] font-bold text-ink sm:text-[11px]"
+		aria-hidden="true"
+	>
+		Nimbus
+	</p>
+
+	{#if deckCount !== null}
+		<div class="absolute top-1/2 left-full ml-3 flex flex-col items-center gap-1 sm:ml-5">
+			<div class="shoe relative h-11 w-8 sm:h-14 sm:w-10" data-deck aria-hidden="true">
+				<span class="card-back absolute inset-0 translate-x-1 translate-y-1"></span>
+				<span class="card-back absolute inset-0 translate-x-0.5 translate-y-0.5"></span>
+				<span class="card-back absolute inset-0"></span>
+			</div>
+			<span class="text-[11px] whitespace-nowrap text-paper/70 tabular-nums">Deck {deckCount}</span>
+		</div>
+	{/if}
+
 	{#if direction !== null}
 		<p
-			class="absolute bottom-full left-1/2 mb-1.5 flex -translate-x-1/2 items-center gap-1 rounded-full bg-black/50 px-2 py-0.5 text-[11px] whitespace-nowrap text-paper/85"
+			class="absolute top-1/2 right-full mr-3 flex items-center gap-1.5 rounded-full bg-black/40 px-2.5 py-1 text-[11px] whitespace-nowrap text-paper/85 sm:mr-5"
 			aria-live="polite"
 		>
-			<span class="direction" class:ccw={direction === -1} aria-hidden="true">↻</span>
+			<span class="direction inline-flex" class:ccw={direction === -1} aria-hidden="true">
+				<svg
+					viewBox="0 0 20 20"
+					class="size-3.5 text-brass"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="1.8"
+					stroke-linecap="round"
+					stroke-linejoin="round"
+					aria-hidden="true"
+				>
+					<path d="M4 12a6 6 0 1 0 2-6m0 0H2.5m3.5 0V2.5" />
+				</svg>
+			</span>
 			{direction === 1 ? 'Clockwise' : 'Counter-clockwise'}
 		</p>
 	{/if}
-	<div class="relative h-12 w-9 sm:h-14 sm:w-10" data-deck aria-hidden="true">
-		<span class="card-back absolute inset-0 translate-x-1 translate-y-1"></span>
-		<span class="card-back absolute inset-0 translate-x-0.5 translate-y-0.5"></span>
-		<span class="card-back absolute inset-0"></span>
-	</div>
-	<div class="rounded-sm bg-brass px-2 py-0.5 text-xs font-semibold text-ink">Dealer</div>
-	{#if deckCount !== null}<div class="text-[11px] text-paper/75 tabular-nums">
-			Deck {deckCount}
-		</div>{/if}
 </div>
 
 <style>
+	.pit {
+		background: radial-gradient(circle at 50% 40%, #241b14, #14110e 70%);
+		box-shadow:
+			0 0 0 2px var(--color-brass),
+			0 0 0 6px var(--color-room),
+			0 8px 18px rgb(0 0 0 / 0.5);
+	}
+	.shoe {
+		filter: drop-shadow(0 2px 3px rgb(0 0 0 / 0.5));
+	}
 	.direction {
-		display: inline-block;
 		transition: transform 500ms cubic-bezier(0.3, 0.7, 0.3, 1.2);
 	}
 	.direction.ccw {

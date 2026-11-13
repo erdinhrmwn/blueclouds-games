@@ -69,15 +69,55 @@
 	@apply inline-flex min-h-11 cursor-pointer items-center px-2 text-sm text-paper/75 underline underline-offset-4 hover:text-paper;
 }
 
-/* Back of a card: oxblood with a diamond lattice. */
+/*
+ * Every dialog: a brass-framed placard like the room's sign, over a dimmed room.
+ * Phones get it as a sheet from the bottom edge.
+ */
+@utility modal {
+	@apply m-auto w-[min(28rem,calc(100%-2rem))] rounded-2xl bg-panel p-6 text-paper backdrop:bg-black/70 max-sm:mb-0 max-sm:w-full max-sm:max-w-none max-sm:rounded-b-none;
+	box-shadow:
+		inset 0 0 0 1.5px var(--color-brass),
+		inset 0 0 0 5px var(--color-panel),
+		inset 0 0 0 6px rgb(210 165 76 / 0.22),
+		0 20px 40px rgb(0 0 0 / 0.5);
+}
+/* A modal's title, in the display face. */
+@utility modal-title {
+	@apply font-display text-[22px] leading-tight font-bold;
+}
+/* The danger action in a confirm dialog (kick, withdraw, log out). */
+@utility btn-danger {
+	@apply btn bg-ember text-paper hover:brightness-110 active:translate-y-px;
+}
+
+/*
+ * Back of a card. Each game's table sets --card-back to its own back (static/cards/<game>/back.svg,
+ * which draws its own paper border); anywhere else it is oxblood with a diamond lattice.
+ */
 @utility card-back {
 	border-radius: 0.35rem;
-	border: 2px solid var(--color-paper);
+	border: var(--card-back-border, 2px solid var(--color-paper));
 	background-color: #6e1f24;
-	background-image:
+	background-image: var(
+		--card-back,
 		repeating-linear-gradient(45deg, rgb(255 255 255 / 0.09) 0 2px, transparent 2px 7px),
-		repeating-linear-gradient(-45deg, rgb(255 255 255 / 0.09) 0 2px, transparent 2px 7px);
+		repeating-linear-gradient(-45deg, rgb(255 255 255 / 0.09) 0 2px, transparent 2px 7px)
+	);
+	background-size: var(--card-back-size, auto);
 	box-shadow: 0 1px 3px rgb(0 0 0 / 0.5);
+}
+
+/* A game table's own card back, for its deck, dealt cards and win cascade. */
+@utility table-back-bust-31 {
+	--card-back: url('/cards/bust-31/back.svg');
+	--card-back-size: 100% 100%;
+	--card-back-border: 0;
+}
+
+@utility table-back-cloudburst {
+	--card-back: url('/cards/cloudburst/back.svg');
+	--card-back-size: 100% 100%;
+	--card-back-border: 0;
 }
 
 /* A dealt card drops into your hand from the table above. */

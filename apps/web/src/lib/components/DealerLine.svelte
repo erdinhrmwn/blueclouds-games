@@ -3,6 +3,7 @@
 	import { flip } from 'svelte/animate';
 	import { prefersReducedMotion } from 'svelte/motion';
 	import { fly } from 'svelte/transition';
+	import Nimbus from './Nimbus.svelte';
 
 	/**
 	 * The table's recent moves, as the dealer would say them: the newest in a pill, the ones before
@@ -54,7 +55,7 @@
 				<p
 					class="flex items-center gap-2 rounded-xl border border-paper/10 bg-black/35 px-3 py-1 text-center text-xs text-paper/90 sm:px-3.5 sm:py-1.5 sm:text-sm"
 				>
-					<span class="size-1.5 shrink-0 rounded-full bg-brass" aria-hidden="true"></span>
+					<Nimbus head class="size-5 shrink-0 sm:size-6" />
 					<span class="line-clamp-2">{entry.text}</span>
 				</p>
 			{:else}

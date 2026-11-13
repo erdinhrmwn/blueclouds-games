@@ -4,7 +4,6 @@
 	import type { Card } from 'server/games/bust-31/rules';
 	import { untrack } from 'svelte';
 	import { prefersReducedMotion } from 'svelte/motion';
-	import { MediaQuery } from 'svelte/reactivity';
 	import { fly } from 'svelte/transition';
 	import BustStamp from './BustStamp.svelte';
 	import Felt from '#lib/components/Felt.svelte';
@@ -15,7 +14,7 @@
 	import { DEAL, HAND_SIZE, MAX_PLAYERS, START_LIVES } from 'server/games/bust-31/rules';
 	import Dealer from '#lib/components/Dealer.svelte';
 	import DealerLine from '#lib/components/DealerLine.svelte';
-	import TotalGauge from './TotalGauge.svelte';
+	import TotalTrack from './TotalTrack.svelte';
 
 	let { room }: { room: Bust31Connection } = $props();
 
@@ -25,8 +24,7 @@
 	const OTHER_PLAYER_TILT = -25;
 
 	/** Phones get a smaller pile so the middle of the table stays clear of the seats. */
-	const wide = new MediaQuery('min-width: 640px');
-	const pileSize = $derived(wide.current ? 'md' : 'sm');
+	const pileSize = 'pile';
 	const view = $derived(room.view!);
 
 	// Fixed chairs: everyone sees the same table, dealer at the head.
@@ -169,12 +167,48 @@
 
 	const nameOf = (id: string | null) => view.players.find((p) => p.id === id)?.name ?? '?';
 
-	/** "+7", "−5", "a reverse" or "0", as the dealer says it. */
+	/** After a Double the player on turn plays 2 cards; older servers send no playsLeft. */
+	const playsLeft = $derived(view.playsLeft ?? 1);
+	const turnLabel = $derived.by(() => {
+		const owner = room.myTurn ? 'Your turn' : `${nameOf(view.turnPlayerId)}’s turn`;
+		if (playsLeft > 1) {
+			return `${owner}, ${playsLeft} cards`;
+		}
+
+		return owner;
+	});
+
+	/** "+7", "−5", "a reverse", "a Ten" or "0", as the dealer says it. */
+	const SPOKEN_SPECIAL: Record<Exclude<Card['kind'], 'number'>, string> = {
+		zero: '0',
+		minus: '−5',
+		reverse: 'a reverse',
+		swap: 'a Swap',
+		ten: 'a Ten',
+		double: 'a Double'
+	};
+
 	function spokenCard(card: Card): string {
-		if (card.kind === 'number') return `+${card.value}`;
-		if (card.kind === 'minus') return '−5';
-		if (card.kind === 'reverse') return 'a reverse';
-		return '0';
+		if (card.kind === 'number') {
+			return `+${card.value}`;
+		}
+
+		return SPOKEN_SPECIAL[card.kind];
+	}
+
+	/** What a special card did, after "played …": who swapped, the new total, who plays twice. */
+	function cardOutcome(event: { card: Card; total: number; swappedWith?: string }): string {
+		if (event.card.kind === 'swap' && event.swappedWith) {
+			return ` and swapped hands with ${nameOf(event.swappedWith)}`;
+		}
+		if (event.card.kind === 'ten') {
+			return '. The total is 10';
+		}
+		if (event.card.kind === 'double') {
+			return `. ${nameOf(view.turnPlayerId)} plays 2 cards`;
+		}
+
+		return '';
 	}
 
 	const dealerLine = $derived.by(() => {
@@ -188,7 +222,7 @@
 				return `${nameOf(event.playerId)} sat down.`;
 			case 'played': {
 				const auto = event.auto ? ' (auto, time ran out)' : '';
-				return `${nameOf(event.playerId)} played ${spokenCard(event.card)}${auto}.`;
+				return `${nameOf(event.playerId)} played ${spokenCard(event.card)}${cardOutcome(event)}${auto}.`;
 			}
 			case 'bust': {
 				const auto = event.auto ? ' (auto, time ran out)' : '';
@@ -211,8 +245,8 @@
 </script>
 
 <!-- clip sideways only, so cards flying in mid-animation never add a horizontal scrollbar on phones -->
-<div bind:this={tableEl} class="overflow-x-clip">
-	<Felt count={MAX_PLAYERS + 1}>
+<div bind:this={tableEl} class="table-back-bust-31 overflow-x-clip">
+	<Felt count={MAX_PLAYERS + 1} name="Bust 31" rule="Don’t go over 31">
 		{#snippet seat(k)}
 			{#if k === 0}
 				<Dealer deckCount={view.deckCount} direction={view.direction} />
@@ -220,22 +254,33 @@
 				{@const p = inSeat(k - 1)}
 				{#snippet lives()}
 					<span
-						class="flex items-center gap-1"
+						class="flex items-center gap-0.5"
 						role="img"
 						aria-label="{p?.lives} of {START_LIVES} lives"
 					>
 						{#each Array(START_LIVES) as _, i (i)}
-							<span
-								class="size-2 rounded-full {i < (p?.lives ?? 0)
-									? 'bg-ember'
-									: 'border border-paper/60'}"
-							></span>
+							{@const kept = i < (p?.lives ?? 0)}
+							<svg
+								viewBox="0 0 24 24"
+								class="size-3 {kept ? 'text-ember' : 'text-paper/60'}"
+								fill={kept ? 'currentColor' : 'none'}
+								stroke="currentColor"
+								stroke-width="2"
+								stroke-linejoin="round"
+								aria-hidden="true"
+							>
+								<path
+									d="M12 20.5s-7.5-4.6-9.2-9.3C1.6 7.8 3.9 4.5 7.3 4.5c2 0 3.6 1.1 4.7 2.8 1.1-1.7 2.7-2.8 4.7-2.8 3.4 0 5.7 3.3 4.5 6.7-1.7 4.7-9.2 9.3-9.2 9.3Z"
+								/>
+							</svg>
 						{/each}
 					</span>
 				{/snippet}
 				<Seat
 					player={p}
 					number={k}
+					cards={p && p.lives > 0 ? HAND_SIZE : 0}
+					cardSide={k <= MAX_PLAYERS / 2 ? 'left' : 'right'}
 					isTurn={!!p && (p.id === view.turnPlayerId || p.id === view.winnerId)}
 					isHost={!!p && p.id === view.hostId}
 					isMe={!!p && p.id === room.playerId}
@@ -275,13 +320,10 @@
 				{/if}
 			</div>
 		{:else}
-			<!-- From tablet width the pile sits dead centre with the gauge beside it; phones stack them. -->
-			<div class="flex flex-col items-center gap-4 sm:relative sm:block">
-				<div class="sm:absolute sm:top-1/2 sm:right-full sm:mr-8 sm:-translate-y-1/2">
-					<TotalGauge total={view.total} limit={view.limit} />
-				</div>
+			<!-- The pile on top, the total's track under it. -->
+			<div class="flex -translate-y-4 flex-col items-center gap-6 sm:-translate-y-6 sm:gap-8">
 				<div
-					class="grid h-20 w-14 place-items-center rounded-lg sm:h-[6.75rem] sm:w-[4.75rem] border border-dashed border-paper/40"
+					class="grid h-[3.55rem] w-10 place-items-center rounded-lg border border-dashed border-paper/40 sm:h-[4.6rem] sm:w-[3.25rem]"
 				>
 					{#each under as u (u.id)}
 						<div
@@ -309,6 +351,7 @@
 						{/if}
 					{/key}
 				</div>
+				<TotalTrack total={view.total} limit={view.limit} />
 			</div>
 		{/if}
 		{#if bust}
@@ -329,11 +372,7 @@
 {#if view.phase === 'playing'}
 	{#if room.me && room.me.lives > 0}
 		<section aria-label="Your hand" class="flex flex-col items-center gap-4">
-			<HandBar
-				active={room.myTurn}
-				label={room.myTurn ? 'Your turn' : `${nameOf(view.turnPlayerId)}’s turn`}
-				{secondsLeft}
-			/>
+			<HandBar active={room.myTurn} label={turnLabel} {secondsLeft} />
 			<div class="flex justify-center px-4 pt-2" class:pointer-events-none={dealing}>
 				{#each room.hand as card, i (card.id)}
 					{@const landed = !dealing || i < dealtCount}

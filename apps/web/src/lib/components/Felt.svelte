@@ -5,8 +5,20 @@
 	 * U-shaped card table: spot 0 (the dealer) sits at the middle of the flat top edge,
 	 * the other `count - 1` spots follow the U clockwise, from the top of the right arm round to the left one.
 	 */
-	let { count, seat, children }: { count: number; seat: Snippet<[number]>; children: Snippet } =
-		$props();
+	let {
+		count,
+		seat,
+		children,
+		name = '',
+		rule = ''
+	}: {
+		count: number;
+		seat: Snippet<[number]>;
+		children: Snippet;
+		/** Printed faintly on the felt, like a casino table: the game's name and its one rule. */
+		name?: string;
+		rule?: string;
+	} = $props();
 
 	/** Where the arms of the U start, and where its bottom curve starts, as % of the table's height. */
 	const ARM_TOP = 14;
@@ -81,6 +93,20 @@
 >
 	<div class="table-rim u relative h-full w-full p-3 sm:p-4">
 		<div class="felt u relative grid h-full w-full place-items-center">
+			<div class="inlay u pointer-events-none absolute inset-2 sm:inset-3" aria-hidden="true"></div>
+			{#if name}
+				<div
+					class="pointer-events-none absolute inset-x-0 bottom-[14%] flex flex-col items-center gap-1 text-center"
+					aria-hidden="true"
+				>
+					<span class="font-display text-2xl font-bold text-paper/[0.09] italic sm:text-5xl"
+						>{name}</span
+					>
+					{#if rule}
+						<span class="hidden text-xs font-medium text-paper/[0.18] sm:block">{rule}</span>
+					{/if}
+				</div>
+			{/if}
 			{@render children()}
 		</div>
 	</div>
@@ -108,6 +134,9 @@
 			0 30px 60px rgb(0 0 0 / 0.6),
 			inset 0 2px 0 rgb(255 255 255 / 0.12),
 			inset 0 -3px 6px rgb(0 0 0 / 0.4);
+	}
+	.inlay {
+		box-shadow: inset 0 0 0 1px rgb(210 165 76 / 0.3);
 	}
 	.felt {
 		background:

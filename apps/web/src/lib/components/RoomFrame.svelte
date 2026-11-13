@@ -6,6 +6,7 @@
 	import type { Snippet } from 'svelte';
 	import FairPlay from './FairPlay.svelte';
 	import Lobby from './Lobby.svelte';
+	import Marquee from './Marquee.svelte';
 
 	/** Everything around a game's table: connecting, the lobby, reconnect and error lines, leaving. */
 	let {
@@ -45,10 +46,29 @@
 		const view = room?.view;
 		if (!view) return 'Table';
 		if (view.tournament) return view.tournament.name;
+		if (view.roomName) return view.roomName;
 
 		const host = view.players.find((p) => p.id === view.hostId);
 		return host ? `${host.name}’s table` : 'Table';
 	});
+
+	/** Shows a tick on the copy button for a moment after the code is copied. */
+	const COPIED_MS = 1500;
+	let copied = $state(false);
+
+	async function copyCode() {
+		try {
+			await navigator.clipboard.writeText(code);
+		} catch {
+			// The browser blocked the clipboard: the code is on screen to copy by hand.
+			return;
+		}
+
+		copied = true;
+		setTimeout(() => {
+			copied = false;
+		}, COPIED_MS);
+	}
 
 	async function leave() {
 		await room?.leave();
@@ -56,40 +76,16 @@
 	}
 </script>
 
-<!-- Game as a small brass eyebrow, the room's name as the title, then its code and round. -->
+<!-- The room's sign: its name on top, its code, round and seats below, framed in brass like the table.
+	 Phones put the buttons on their own row so the sign keeps the full width. -->
 <header
-	class="mb-4 flex items-center justify-between gap-4 border-b border-paper/10 pb-4 sm:mb-6 {player.playing
+	class="mb-4 flex flex-col gap-2 sm:mb-6 sm:flex-row sm:items-center {player.playing
 		? 'pt-4'
 		: 'pt-3'}"
 >
-	<div class="min-w-0">
-		<p
-			class="flex items-center gap-2 text-[11px] font-semibold tracking-[0.18em] text-brass uppercase"
-		>
-			{game.name}
-			{#if room?.view?.tournament}
-				<span
-					class="rounded-full px-2 py-0.5 tracking-normal normal-case ring-1 ring-brass/40 ring-inset"
-					>Tournament</span
-				>
-			{/if}
-		</p>
-		<h1 class="mt-1 truncate font-display text-lg leading-tight font-bold text-paper sm:text-2xl">
-			{roomName}
-		</h1>
-		<p class="mt-1.5 flex items-center gap-2 text-xs text-paper/60">
-			<span>Room <span class="font-mono tracking-[0.15em] text-paper/90">{code}</span></span>
-			{#if room?.view && room.view.phase !== 'lobby'}
-				<span class="size-1 rounded-full bg-paper/30" aria-hidden="true"></span>
-				<span
-					>Round <span class="font-semibold text-paper/90 tabular-nums">#{room.view.round}</span
-					></span
-				>
-			{/if}
-		</p>
-	</div>
+	<div class="hidden w-24 shrink-0 sm:block" aria-hidden="true"></div>
 	{#if room?.view}
-		<div class="flex shrink-0 items-center gap-2">
+		<div class="order-first flex items-center justify-end gap-2 sm:order-last sm:w-24 sm:shrink-0">
 			{#if room.status !== 'refused'}
 				<FairPlay {room} game={game.slug} />
 			{/if}
@@ -114,6 +110,59 @@
 			</button>
 		</div>
 	{/if}
+	<div
+		class="placard mx-auto w-full max-w-md min-w-0 flex-1 rounded-2xl px-4 py-3 text-center sm:px-6"
+	>
+		<h1 class="font-display text-lg leading-tight font-bold text-paper sm:text-xl">
+			<span class="sr-only">{game.name}: </span><Marquee text={roomName} />
+		</h1>
+		<p class="mt-2 flex flex-wrap items-center justify-center gap-1.5 text-xs">
+			<span class="chip">
+				<span class="text-paper/55">Room</span>
+				<span class="font-semibold text-paper/90">{code}</span>
+				<button
+					class="-my-1 -mr-1.5 grid size-6 place-items-center rounded-full text-brass hover:bg-paper/10"
+					onclick={copyCode}
+					aria-label={copied ? 'Room code copied' : 'Copy room code'}
+					title={copied ? 'Copied' : 'Copy room code'}
+				>
+					<svg
+						viewBox="0 0 20 20"
+						class="size-3.5"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="1.6"
+						stroke-linejoin="round"
+						aria-hidden="true"
+					>
+						{#if copied}
+							<path d="M4.5 10.5l3.5 3.5 7.5-8" stroke-linecap="round" />
+						{:else}
+							<rect x="7" y="7" width="9" height="10" rx="2" />
+							<path d="M4 13V5a2 2 0 0 1 2-2h7" />
+						{/if}
+					</svg>
+				</button>
+			</span>
+			{#if room?.view && room.view.phase !== 'lobby'}
+				<span class="chip"
+					><span class="text-paper/55">Round</span>
+					<span class="font-semibold text-paper/90 tabular-nums">#{room.view.round}</span></span
+				>
+			{/if}
+			{#if room?.view}
+				<span class="chip"
+					><span class="text-paper/55">Players</span>
+					<span class="font-semibold text-paper/90 tabular-nums"
+						>{room.view.players.length}/{game.maxPlayers}</span
+					></span
+				>
+			{/if}
+			{#if room?.view?.tournament}
+				<span class="chip text-brass">Tournament</span>
+			{/if}
+		</p>
+	</div>
 </header>
 
 {#if room?.status === 'reconnecting'}
@@ -148,3 +197,23 @@
 {#if room?.error}
 	<p class="mt-4 text-center text-sm text-ember" role="alert">{room.error}</p>
 {/if}
+
+<style>
+	.placard {
+		background: #1c1510;
+		box-shadow:
+			inset 0 0 0 1.5px var(--color-brass),
+			inset 0 0 0 5px #1c1510,
+			inset 0 0 0 6px rgb(210 165 76 / 0.22),
+			0 8px 18px rgb(0 0 0 / 0.4);
+	}
+	.chip {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.375rem;
+		border-radius: 9999px;
+		background: rgb(0 0 0 / 0.4);
+		padding: 0.25rem 0.625rem;
+		white-space: nowrap;
+	}
+</style>
