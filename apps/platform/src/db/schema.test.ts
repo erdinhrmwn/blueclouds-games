@@ -106,22 +106,23 @@ describe("tournament rooms", () => {
 		[{ id: cup }] = await sql`
 			INSERT INTO tournaments (game_slug, name, players_per_room, starts_at, registration_closes_at, created_by_admin_id)
 			VALUES ('bust-31', 'Cup', 6, now() + interval '1 hour', now() + interval '50 min', ${admin}) RETURNING id`;
+		await sql`INSERT INTO tournament_rounds (tournament_id, round, starts_at) VALUES (${cup}, 1, now()), (${cup}, 2, now())`;
 		[{ id: cupRoom }] =
-			await sql`INSERT INTO rooms (game_slug, code, tournament_id) VALUES ('bust-31', 'CUP01', ${cup}) RETURNING id`;
+			await sql`INSERT INTO rooms (game_slug, code, tournament_id, tournament_round) VALUES ('bust-31', 'CUP01', ${cup}, 1) RETURNING id`;
 		[{ id: other }] = await sql`INSERT INTO players (display_name) VALUES ('Ben') RETURNING id`;
 		await sql`INSERT INTO tournament_players (tournament_id, player_id) VALUES (${cup}, ${player}), (${cup}, ${other})`;
-		await sql`INSERT INTO room_assignments (room_id, tournament_id, player_id, seat) VALUES (${cupRoom}, ${cup}, ${player}, 0)`;
+		await sql`INSERT INTO room_assignments (room_id, tournament_id, tournament_round, player_id, seat) VALUES (${cupRoom}, ${cup}, 1, ${player}, 0)`;
 	});
-	const assign = (roomId: string, playerId: string, seat: number) =>
-		sql`INSERT INTO room_assignments (room_id, tournament_id, player_id, seat) VALUES (${roomId}, ${cup}, ${playerId}, ${seat})`;
+	const assign = (roomId: string, playerId: string, seat: number, round = 1) =>
+		sql`INSERT INTO room_assignments (room_id, tournament_id, tournament_round, player_id, seat) VALUES (${roomId}, ${cup}, ${round}, ${playerId}, ${seat})`;
 
 	test("a player can't make one, and it plays its tournament's game", async () => {
 		await refused(
-			sql`INSERT INTO rooms (game_slug, code, tournament_id, created_by_player_id) VALUES ('bust-31', 'CUP02', ${cup}, ${player})`,
+			sql`INSERT INTO rooms (game_slug, code, tournament_id, tournament_round, created_by_player_id) VALUES ('bust-31', 'CUP02', ${cup}, 1, ${player})`,
 			/tournament_creator_check/,
 		);
 		await refused(
-			sql`INSERT INTO rooms (game_slug, code, tournament_id) VALUES ('cloudburst', 'CUP03', ${cup})`,
+			sql`INSERT INTO rooms (game_slug, code, tournament_id, tournament_round) VALUES ('cloudburst', 'CUP03', ${cup}, 1)`,
 			/tournament_id_game_slug_fkey/,
 		);
 	});
@@ -138,18 +139,35 @@ describe("tournament rooms", () => {
 		await refused(setStatus("gone", null, true), /status_check/);
 	});
 
-	test("one player per seat, only registered players, one room per player per tournament", async () => {
+	test("one player per seat, only registered players, one room per player per round", async () => {
 		await refused(assign(cupRoom, other, 0), /room_id_seat_key/);
 		const [{ id: stranger }] =
 			await sql`INSERT INTO players (display_name) VALUES ('Cy') RETURNING id`;
 		await refused(assign(cupRoom, stranger, 1), /tournament_id_player_id_fkey/);
 		const [{ id: second }] =
-			await sql`INSERT INTO rooms (game_slug, code, tournament_id) VALUES ('bust-31', 'CUP04', ${cup}) RETURNING id`;
-		await refused(assign(second, player, 0), /tournament_id_player_id_key/);
+			await sql`INSERT INTO rooms (game_slug, code, tournament_id, tournament_round) VALUES ('bust-31', 'CUP04', ${cup}, 1) RETURNING id`;
+		await refused(assign(second, player, 0), /round_player_key/);
+
+		// The next round seats them again, at a table of that round only.
+		const [{ id: nextRound }] =
+			await sql`INSERT INTO rooms (game_slug, code, tournament_id, tournament_round) VALUES ('bust-31', 'CUP05', ${cup}, 2) RETURNING id`;
+		await assign(nextRound, player, 0, 2);
+		await refused(assign(nextRound, other, 1, 1), /room_round_fkey/);
+	});
+
+	test("a tournament table has a round, and an open one has none", async () => {
+		await refused(
+			sql`INSERT INTO rooms (game_slug, code, tournament_id) VALUES ('bust-31', 'CUP06', ${cup})`,
+			/tournament_round_check/,
+		);
+		await refused(
+			sql`INSERT INTO rooms (game_slug, code, tournament_id, tournament_round) VALUES ('bust-31', 'CUP07', ${cup}, 9)`,
+			/tournament_round_fkey/,
+		);
 	});
 
 	test("an open room takes no assignments", async () => {
-		await refused(assign(roomId, other, 1), /room_id_tournament_id_fkey/);
+		await refused(assign(roomId, other, 1), /room_round_fkey/);
 	});
 });
 

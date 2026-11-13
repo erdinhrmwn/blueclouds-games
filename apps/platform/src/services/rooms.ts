@@ -53,6 +53,8 @@ export async function insertRoom(
 		/** The table's own name, set by whoever opened it. */
 		name?: string | null;
 		tournamentId?: string;
+		/** The tournament round this table plays in; set with `tournamentId`. */
+		tournamentRound?: number;
 		playerId?: string;
 		adminId?: string | null;
 	},
@@ -60,6 +62,7 @@ export async function insertRoom(
 	const visibility = room.visibility ?? "private";
 	const name = room.name ?? null;
 	const tournamentId = room.tournamentId ?? null;
+	const tournamentRound = room.tournamentRound ?? null;
 	const playerId = room.playerId ?? null;
 	const adminId = room.adminId ?? null;
 
@@ -71,6 +74,7 @@ export async function insertRoom(
 				visibility,
 				name,
 				tournament_id,
+				tournament_round,
 				created_by_player_id,
 				created_by_admin_id
 			)
@@ -80,6 +84,7 @@ export async function insertRoom(
 				${visibility},
 				${name},
 				${tournamentId},
+				${tournamentRound},
 				${playerId},
 				${adminId}
 			)
@@ -106,7 +111,7 @@ export async function enterable(sql: SQL, code: string, playerId: string): Promi
 			r.visibility,
 			r.created_by_player_id = ${playerId} AS opener,
 			t.name,
-			t.starts_at,
+			coalesce(tr.starts_at, t.starts_at) AS starts_at,
 			t.cancelled_at,
 			EXISTS (
 				SELECT 1 FROM room_assignments ra
@@ -122,6 +127,8 @@ export async function enterable(sql: SQL, code: string, playerId: string): Promi
 			) AS member
 		FROM rooms r
 		LEFT JOIN tournaments t ON t.id = r.tournament_id
+		LEFT JOIN tournament_rounds tr
+			ON tr.tournament_id = r.tournament_id AND tr.round = r.tournament_round
 		WHERE r.code = ${code}`;
 
 	if (!row) {
@@ -271,12 +278,15 @@ export async function roomSeats(sql: SQL, code: string) {
 			r.closed_at,
 			t.id AS tournament_id,
 			t.name,
-			t.starts_at,
+			coalesce(tr.starts_at, t.starts_at) AS starts_at,
 			t.cancelled_at,
 			g.min_players
 		FROM rooms r
 		JOIN games g ON g.slug = r.game_slug
 		LEFT JOIN tournaments t ON t.id = r.tournament_id
+		-- A table starts with its round, which for round 1 is the tournament's start.
+		LEFT JOIN tournament_rounds tr
+			ON tr.tournament_id = r.tournament_id AND tr.round = r.tournament_round
 		WHERE r.code = ${code}`;
 
 	if (!row) {

@@ -585,7 +585,7 @@ export async function assignPlayer(
 		const tournament = await lockOpen(tx, id);
 
 		const [room] = await tx`
-			SELECT id, started_at, closed_at
+			SELECT id, tournament_round, started_at, closed_at
 			FROM rooms
 			WHERE code = ${roomCode} AND tournament_id = ${id}`;
 
@@ -614,7 +614,9 @@ export async function assignPlayer(
 			SELECT r.code
 			FROM room_assignments ra
 			JOIN rooms r ON r.id = ra.room_id
-			WHERE ra.tournament_id = ${id} AND ra.player_id = ${playerId}`;
+			WHERE ra.tournament_id = ${id}
+				AND ra.tournament_round = ${room.tournament_round}
+				AND ra.player_id = ${playerId}`;
 
 		if (otherTable) {
 			throw new TournamentError(
@@ -633,8 +635,22 @@ export async function assignPlayer(
 			ON CONFLICT DO NOTHING`;
 
 		await tx`
-			INSERT INTO room_assignments (room_id, tournament_id, player_id, seat, assigned_by_admin_id)
-			VALUES (${room.id}, ${id}, ${playerId}, ${seat}, ${admin.id})`;
+			INSERT INTO room_assignments (
+				room_id,
+				tournament_id,
+				tournament_round,
+				player_id,
+				seat,
+				assigned_by_admin_id
+			)
+			VALUES (
+				${room.id},
+				${id},
+				${room.tournament_round},
+				${playerId},
+				${seat},
+				${admin.id}
+			)`;
 
 		await audit(tx, {
 			adminId: admin.id,

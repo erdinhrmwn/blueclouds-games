@@ -73,8 +73,9 @@ describe('matches', () => {
 		const [{ id: cup }] = await sql`
 			INSERT INTO tournaments (game_slug, name, players_per_room, starts_at, registration_opens_at, registration_closes_at, created_by_admin_id)
 			VALUES ('bust-31', 'Friday Cup', 2, now(), now() - interval '1 hour', now(), ${admin}) RETURNING id`;
+		await sql`INSERT INTO tournament_rounds (tournament_id, round, starts_at) VALUES (${cup}, 1, now())`;
 		const [{ id: cupRoom }] =
-			await sql`INSERT INTO rooms (game_slug, code, tournament_id) VALUES ('bust-31', 'CUP01', ${cup}) RETURNING id`;
+			await sql`INSERT INTO rooms (game_slug, code, tournament_id, tournament_round) VALUES ('bust-31', 'CUP01', ${cup}, 1) RETURNING id`;
 		const [{ id: openRoom }] =
 			await sql`INSERT INTO rooms (game_slug, code, created_by_player_id) VALUES ('bust-31', 'OPEN1', ${rina}) RETURNING id`;
 		const played = async (id: string, roomId: string) => {

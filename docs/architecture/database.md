@@ -108,6 +108,19 @@ CREATE INDEX tournaments_starts_at_idx ON tournaments (starts_at DESC);
 CREATE INDEX tournaments_due_idx ON tournaments (registration_closes_at) WHERE distributed_at IS NULL AND cancelled_at IS NULL;  -- the distribute job
 
 -- Players registered for a tournament, before and after they get a room.
+-- Rounds (migration 021, docs/plans/tournament-rounds.md): a round is a set of tables that start together and each
+-- play one match. Every tournament has round 1 today; later rounds come with the job that opens them.
+CREATE TABLE tournament_rounds (
+  tournament_id   uuid NOT NULL REFERENCES tournaments(id),
+  round           smallint NOT NULL CHECK (round BETWEEN 1 AND 20),
+  starts_at       timestamptz NOT NULL,  -- its tables start by themselves then (round 1: the tournament's start)
+  distributed_at  timestamptz NOT NULL DEFAULT now(),
+  ended_at        timestamptz,
+  PRIMARY KEY (tournament_id, round)
+);
+-- rooms.tournament_round: the round a tournament table plays in (set exactly when tournament_id is).
+-- room_assignments.tournament_round: a player sits at one table per round, UNIQUE (tournament_id, tournament_round, player_id).
+
 -- Prizes by finishing place (migration 020): shown as a podium, their sum as the prize pool. Nothing is paid out.
 CREATE TABLE tournament_prizes (
   tournament_id  uuid NOT NULL REFERENCES tournaments(id),
