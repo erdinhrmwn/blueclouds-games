@@ -4,6 +4,7 @@
 	import { player } from '#lib/player.svelte.ts';
 	import type { BaseView, RoomConnection } from '#lib/rivet/room.svelte.ts';
 	import type { Snippet } from 'svelte';
+	import FairPlay from './FairPlay.svelte';
 	import Lobby from './Lobby.svelte';
 
 	/** Everything around a game's table: connecting, the lobby, reconnect and error lines, leaving. */
@@ -121,6 +122,10 @@
 	<Lobby {room} {code} minPlayers={game.minPlayers} seats={game.maxPlayers} />
 {:else}
 	{@render table(room)}
+{/if}
+
+{#if room?.view && room.status !== 'refused'}
+	<FairPlay {room} />
 {/if}
 
 {#if room?.error}

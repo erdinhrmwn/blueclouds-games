@@ -35,6 +35,22 @@ const RENDERERS: Record<string, (log: MatchLog, seats: ReplaySeat[]) => Step[]> 
 	'bust-31': replayBust31
 };
 
+/** The timeline text of a provably fair event (docs/architecture/fairness.md), the same for every game. */
+export function fairnessText(event: LogEvent): string | null {
+	const data = event.data ?? {};
+
+	switch (event.type) {
+		case 'fairness':
+			return `Seeds committed. Server seed hash ${String(data.serverSeedHash)}, client seed ${String(data.clientSeed)}.`;
+		case 'shuffle':
+			return `Shuffle ${String(data.nonce)}: ${(data.deck as unknown[] | undefined)?.length ?? 0} cards.`;
+		case 'reveal':
+			return `Server seed revealed: ${String(data.serverSeed)}.`;
+		default:
+			return null;
+	}
+}
+
 export function replay(game: string, log: MatchLog, seats: ReplaySeat[]): Step[] {
 	const render = Object.hasOwn(RENDERERS, game) ? RENDERERS[game] : undefined;
 	if (render && log.logVersion === 1) return render(log, seats);
@@ -49,7 +65,9 @@ export function replay(game: string, log: MatchLog, seats: ReplaySeat[]): Step[]
 
 	return log.events.map((event) => ({
 		event,
-		text: `${prefix(event.seat)}${event.type} ${JSON.stringify(event.data ?? {})}`,
+		text:
+			fairnessText(event) ??
+			`${prefix(event.seat)}${event.type} ${JSON.stringify(event.data ?? {})}`,
 		state: null
 	}));
 }

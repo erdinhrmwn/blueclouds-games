@@ -10,6 +10,8 @@ import {
 	reportMatch,
 	verifyPlayToken,
 } from "../../platform";
+import { fairRng, newCommitment, type NextMatch } from "./fair-rng";
+import { clientSeedOf, type Revealed, type ShuffleRecord } from "./fairness";
 import {
 	type LogEntry,
 	type LogEvent,
@@ -23,6 +25,8 @@ import {
 	kickPlayer,
 	markAway,
 	removePlayer,
+	randomRng,
+	type Rng,
 	RuleError,
 	SEATS,
 	showVips,
@@ -64,7 +68,8 @@ export type Termination = { at: number; reason: string };
 /**
  * What a room saves: the game, its turn timer, the match being played (null in the lobby), its
  * tournament (null = an open room, undefined = not asked yet), whether it is in the room list (public),
- * the players kicked off it (they can't come back), and whether an admin terminated it.
+ * the players kicked off it (they can't come back), whether an admin terminated it, the seeds the
+ * next match is committed to, and the seeds of the last match (revealed).
  */
 export type Saved<G extends Table, M extends MatchState = MatchState> = {
 	game: G;
@@ -74,17 +79,21 @@ export type Saved<G extends Table, M extends MatchState = MatchState> = {
 	listed?: boolean;
 	kicked?: string[];
 	terminated?: Termination | null;
+	next?: NextMatch;
+	revealed?: Revealed | null;
 };
 
 /**
  * What every room keeps in `c.vars`. Not saved: who each open connection is (connections close when
  * the actor sleeps), the game as last committed, to see what each commit changed for the move log,
- * and when the running VIP check is due (null = none running).
+ * when the running VIP check is due (null = none running), and the fairness entries (start, shuffles)
+ * waiting for the next commit to log them.
  */
 export type RoomVars<G extends Table, M extends MatchState = MatchState> = Saved<G, M> & {
 	who: Record<string, Identity>;
 	logged: G;
 	vipCheckAt: number | null;
+	fairLog: LogEntry[];
 };
 
 export const roomVars = <G extends Table, M extends MatchState>(game: G): RoomVars<G, M> => ({
@@ -94,6 +103,9 @@ export const roomVars = <G extends Table, M extends MatchState>(game: G): RoomVa
 	vipCheckAt: null,
 	timer: null,
 	match: null,
+	next: newCommitment(),
+	revealed: null,
+	fairLog: [],
 });
 
 /** The room's tables: one JSON row for the whole room (a few KB), the result outbox, and the move log. */
@@ -133,6 +145,9 @@ export async function loadRoom(c: Ctx): Promise<void> {
 	c.vars.match ??= null;
 	c.vars.kicked ??= [];
 	c.vars.terminated ??= null;
+	c.vars.next ??= newCommitment();
+	c.vars.revealed ??= null;
+	c.vars.fairLog = [];
 
 	// Matches started before the move log have no seq yet.
 	if (c.vars.match) c.vars.match.seq ??= 0;
@@ -179,10 +194,28 @@ export async function commitRoom<G extends Table, M extends MatchState>(
 		await game.scheduleTurn();
 	}
 
+	let end: MatchEnd | null = null;
+	if (vars.match && vars.terminated) {
+		end = "terminated";
+	} else if (vars.match && vars.game.phase === "finished") {
+		end = "finished";
+	}
+
+	const finished = end !== null;
+	const seeds = vars.match?.seeds;
+	const reveal: LogEntry[] =
+		finished && seeds ? [{ type: "reveal", data: { serverSeed: seeds.serverSeed } }] : [];
+
 	const entries = vars.match
-		? [...extra, ...withoutKickedAway(extra, game.logEvents(vars.logged, vars.game, auto))]
+		? [
+				...extra,
+				...vars.fairLog,
+				...withoutKickedAway(extra, game.logEvents(vars.logged, vars.game, auto)),
+				...reveal,
+			]
 		: [];
 	vars.logged = vars.game;
+	vars.fairLog = [];
 
 	let match = vars.match;
 	let events: LogEvent[] = [];
@@ -191,15 +224,17 @@ export async function commitRoom<G extends Table, M extends MatchState>(
 		({ match, events } = stamp(noted, entries, Date.now()));
 	}
 
-	let end: MatchEnd | null = null;
-	if (match && vars.terminated) {
-		end = "terminated";
-	} else if (match && vars.game.phase === "finished") {
-		end = "finished";
-	}
-
-	const finished = end !== null;
 	vars.match = finished ? null : match;
+	// Its shuffles are filled in from the log below, before the room is saved.
+	if (finished && seeds) {
+		vars.revealed = {
+			matchId: seeds.matchId,
+			serverSeedHash: seeds.serverSeedHash,
+			serverSeed: seeds.serverSeed,
+			clientSeed: seeds.clientSeed,
+			shuffles: [],
+		};
+	}
 
 	const saved: Saved<G, M> = {
 		game: vars.game,
@@ -209,6 +244,8 @@ export async function commitRoom<G extends Table, M extends MatchState>(
 		listed: vars.listed,
 		kicked: vars.kicked,
 		terminated: vars.terminated,
+		next: vars.next,
+		revealed: vars.revealed,
 	};
 	await c.db.transaction(
 		async (tx: Ctx) => {
@@ -226,10 +263,27 @@ export async function commitRoom<G extends Table, M extends MatchState>(
 					"SELECT body FROM match_events WHERE match_id = ? ORDER BY seq",
 					match!.id,
 				);
-				const log = rows.map((row: { body: string }) => JSON.parse(row.body) as LogEvent);
+				const log: LogEvent[] = rows.map(
+					(row: { body: string }) => JSON.parse(row.body) as LogEvent,
+				);
+				if (seeds && vars.revealed) {
+					vars.revealed.shuffles = log
+						.filter((event) => event.type === "shuffle")
+						.map((event) => event.data as ShuffleRecord);
+				}
 				const roomCode = c.key[0] as string;
 				const endedAt = new Date().toISOString();
-				const report = game.buildReport(match!, vars.game, roomCode, endedAt, log, end!);
+				const built = game.buildReport(match!, vars.game, roomCode, endedAt, log, end!);
+				const report: MatchReport = seeds
+					? {
+							...built,
+							fairness: {
+								serverSeed: seeds.serverSeed,
+								serverSeedHash: seeds.serverSeedHash,
+								clientSeed: seeds.clientSeed,
+							},
+						}
+					: built;
 
 				await tx.execute(
 					"INSERT OR IGNORE INTO match_reports (match_id, body) VALUES (?, ?)",
@@ -258,6 +312,110 @@ export async function commitRoom<G extends Table, M extends MatchState>(
 	await reportToDirectory(c, game.slug);
 
 	if (finished) await c.schedule.after(0, "sendReports");
+}
+
+/**
+ * Starts a match on the seeds the room committed to before it: the committed match id and server seed, with
+ * the seating as part of the client seed. `start` deals with the room's fair rng; `extra` fills the game's own
+ * match fields. If `start` refuses (a rule), nothing changed. The next match gets a new commitment.
+ */
+export function beginMatch<G extends Table, M extends MatchState>(
+	c: Ctx,
+	extra: Omit<M, keyof MatchState>,
+	start: (rng: Rng) => G,
+): void {
+	const vars = c.vars as RoomVars<G, M>;
+	const next = vars.next!;
+	const seats = vars.game.players.map((player) => ({
+		seat: player.seat,
+		playerId: player.bot ? null : player.id,
+		botName: player.name,
+	}));
+	const clientSeed = clientSeedOf(next.matchId, seats);
+
+	const match = {
+		...extra,
+		id: next.matchId,
+		startedAt: new Date().toISOString(),
+		seq: 0,
+		seeds: { ...next, clientSeed, nonce: 0 },
+	} as M;
+
+	vars.match = match;
+	vars.fairLog = [{ type: "fairness", data: { serverSeedHash: next.serverSeedHash, clientSeed } }];
+
+	try {
+		vars.game = withRng(c, start);
+	} catch (err) {
+		vars.match = null;
+		vars.fairLog = [];
+		throw err;
+	}
+
+	vars.next = newCommitment();
+}
+
+/**
+ * Runs a move with the room's rng, as `apply` does. A move the rules refuse may have shuffled first: its nonce
+ * and log entries are taken back, so the log only ever holds shuffles the game kept.
+ */
+export function withRng<G>(c: Ctx, move: (rng: Rng) => G): G {
+	const vars = c.vars as RoomVars<Table>;
+	const match = vars.match;
+	const pending = vars.fairLog.length;
+
+	try {
+		return apply(() => move(roomRng(c)));
+	} catch (err) {
+		vars.match = match;
+		vars.fairLog = vars.fairLog.slice(0, pending);
+		throw err;
+	}
+}
+
+/**
+ * The rng a room deals with: the running match's seeds, counting the nonce up and logging each shuffle. A match
+ * started before provably fair shuffles keeps a plain random one.
+ */
+function roomRng(c: Ctx): Rng {
+	const vars = c.vars as RoomVars<Table>;
+	if (!vars.match?.seeds) {
+		return randomRng();
+	}
+
+	return fairRng(
+		() => vars.match!.seeds!,
+		(record) => {
+			const seeds = vars.match!.seeds!;
+			vars.match = { ...vars.match!, seeds: { ...seeds, nonce: seeds.nonce + 1 } };
+			vars.fairLog.push({ type: "shuffle", data: record });
+		},
+	);
+}
+
+/**
+ * What the table shows about fairness: the commitment of the match being played (or of the next one, in the
+ * lobby) and the seeds of the last match, revealed.
+ */
+export function fairnessView(c: Ctx) {
+	const vars = c.vars as RoomVars<Table>;
+	const seeds = vars.match?.seeds;
+	const current = seeds
+		? { matchId: seeds.matchId, serverSeedHash: seeds.serverSeedHash, clientSeed: seeds.clientSeed }
+		: { matchId: vars.next!.matchId, serverSeedHash: vars.next!.serverSeedHash, clientSeed: null };
+
+	let revealed: Omit<Revealed, "shuffles"> | null = null;
+	if (vars.revealed) {
+		const { shuffles: _, ...seedsOnly } = vars.revealed;
+		revealed = seedsOnly;
+	}
+
+	return { ...current, revealed };
+}
+
+/** The last match's seeds and every shuffle in it, for anyone at the table to check (null before any). */
+export function lastProof(c: Ctx): Revealed | null {
+	return (c.vars as RoomVars<Table>).revealed ?? null;
 }
 
 /** A kicked player's chair turns "away" in the game's diff; the "kicked" entry already says so. */

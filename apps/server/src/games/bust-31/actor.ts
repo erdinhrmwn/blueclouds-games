@@ -24,12 +24,15 @@ import {
 	checkConnect,
 	closeKicked,
 	closeTerminated,
+	beginMatch,
 	commitRoom,
 	type Ctx,
 	dropIfGone,
+	fairnessView,
 	GONE_AFTER_MS,
 	identify,
 	kickFromTable,
+	lastProof,
 	loadRoom,
 	migrateRoom,
 	parseSeat,
@@ -51,13 +54,13 @@ import {
 	tournamentView,
 	turnClock,
 	wakeTournament,
+	withRng,
 } from "../shared/room";
-import { type LogEntry, newMatch } from "../shared/match";
+import type { LogEntry } from "../shared/match";
 import { AdminKickInput, AdminTerminateInput, BotIdInput } from "../shared/schema";
 import { markBack, markVip, removePlayer, takeSeat } from "../shared/table";
 
 const SLUG = "bust-31";
-const rng = () => Math.random();
 
 export const bust31Room = actor({
 	// Shown in the Rivet dashboard.
@@ -202,8 +205,14 @@ export const bust31Room = actor({
 			const parsed = PlayInput.safeParse(input);
 			if (!parsed.success) throw new UserError("Invalid card.", { code: "bad_input" });
 
-			c.vars.game = apply(() => playCard(c.vars.game, me, parsed.data.cardId, rng));
+			c.vars.game = withRng(c, (rng) => playCard(c.vars.game, me, parsed.data.cardId, rng));
 			await commit(c);
+		},
+		/** The last match's seeds and shuffles, so a player can check it was dealt fairly. */
+		fairnessProof: async (c) => {
+			caller(c);
+
+			return lastProof(c);
 		},
 		reset: async (c) => {
 			requireOpenTable(c);
@@ -258,7 +267,7 @@ export const bust31Room = actor({
 			const card = chooseBotCard(player.hand, game.total);
 			if (!card) return;
 
-			const next = playCard(game, player.id, card.id, rng);
+			const next = withRng(c, (rng) => playCard(game, player.id, card.id, rng));
 			const event = next.lastEvent;
 
 			// A move made for a human (timeout or away) is marked so the table can say so.
@@ -298,12 +307,12 @@ function currentTurn(c: Ctx): { playerId: string | null; key: number } {
 const viewOf = (c: Ctx) => ({
 	...publicView(c.vars.game, turnClock(c.vars.timer)),
 	tournament: tournamentView(c),
+	fairness: fairnessView(c),
 });
 
 /** Starts the match; `by` must be the host. */
 function begin(c: Ctx, by: string): void {
-	c.vars.game = apply(() => startGame(c.vars.game, by, rng));
-	c.vars.match = { ...newMatch(), out: [] };
+	beginMatch<Game, MatchState>(c, { out: [] }, (rng) => startGame(c.vars.game, by, rng));
 }
 
 /** How a tournament table starts itself: as its host would. */
@@ -327,6 +336,6 @@ function armTurnClock(c: Ctx, { resume }: { resume: boolean }): Promise<void> {
 		turnMs: TURN_MS,
 		pause: dealPauseMs(game),
 		resume,
-		rng,
+		rng: Math.random,
 	});
 }

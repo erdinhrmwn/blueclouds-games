@@ -15,9 +15,17 @@ import {
 	START_LIVES,
 	startGame,
 } from "./rules";
-import { markAway, markBack, markVip, removePlayer, RuleError, takeSeat } from "../shared/table";
+import {
+	markAway,
+	markBack,
+	markVip,
+	randomRng,
+	removePlayer,
+	RuleError,
+	takeSeat,
+} from "../shared/table";
 
-const rng = () => 0.42;
+const rng = randomRng(() => 0.42);
 const card = (kind: Card["kind"], value: number, id = `${kind}${value}`): Card => ({
 	id,
 	kind,

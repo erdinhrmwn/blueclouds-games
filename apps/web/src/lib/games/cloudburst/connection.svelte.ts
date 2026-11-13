@@ -5,7 +5,7 @@ export type Hand = { cards: Card[]; drawnId: string | null };
 
 /** A Cloudburst room: the shared actions plus play, draw and pass. */
 export class CloudburstConnection extends RoomConnection<
-	PublicView & Pick<BaseView, 'tournament'>,
+	PublicView & Pick<BaseView, 'tournament' | 'fairness'>,
 	Hand
 > {
 	constructor(code: string) {

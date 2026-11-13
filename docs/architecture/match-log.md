@@ -62,6 +62,7 @@ Envelope (the same for every game, checked by the platform):
 | `kicked` | player | `by` (`admin` or `host`), `reason` (admin only); their turns are played for them from here |
 | `finished` | — | `winner` (seat) |
 | `terminated` | — | `by` (`admin`), `reason`; always the last event of a match an admin stopped (no `finished`) |
+| `fairness` / `shuffle` / `reveal` | — | The seeds and every shuffle, for provably fair checks: see [fairness.md](fairness.md). `reveal` comes after `finished` or `terminated`. |
 
 `by` is `player` (they chose), `timeout` (their 20 s ran out), `away` (played for an absent player) or `bot`.
 
