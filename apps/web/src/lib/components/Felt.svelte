@@ -67,11 +67,11 @@
 	}
 
 	/**
-	 * The dealer is centred on its spot. A chair is pinned by its avatar's centre (Seat's 56px `size-14` avatar, so
-	 * 28px down), with the name and any status or button hanging below, so every avatar sits on the U at the same
+	 * The dealer is centred on its spot. A chair is pinned by its avatar's centre (Seat's avatar is 48px on a phone and
+	 * 56px wider up, so 24px or 28px down), with the name and any status or button hanging below, so every avatar sits on the U at the same
 	 * height whatever is under it.
 	 */
-	const anchor = (k: number) => (k === 0 ? '-translate-y-1/2' : '-translate-y-7');
+	const anchor = (k: number) => (k === 0 ? '-translate-y-1/2' : '-translate-y-6 sm:-translate-y-7');
 </script>
 
 <!-- Phones get a taller top gutter so the badge above the dealer clears the room header. The bottom gutter holds

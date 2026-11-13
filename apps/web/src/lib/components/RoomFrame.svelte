@@ -74,7 +74,7 @@
 				>
 			{/if}
 		</p>
-		<h1 class="mt-1 truncate font-display text-xl leading-tight font-bold text-paper sm:text-2xl">
+		<h1 class="mt-1 truncate font-display text-lg leading-tight font-bold text-paper sm:text-2xl">
 			{roomName}
 		</h1>
 		<p class="mt-1.5 flex items-center gap-2 text-xs text-paper/60">
@@ -94,7 +94,7 @@
 				<FairPlay {room} />
 			{/if}
 			<button
-				class="btn-ghost size-11 shrink-0 p-0"
+				class="btn-ghost size-10 shrink-0 p-0 sm:size-11"
 				onclick={leave}
 				aria-label="Leave table"
 				title="Leave table"

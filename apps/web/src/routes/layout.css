@@ -54,6 +54,14 @@
 @utility label {
 	@apply text-[13px] font-medium text-paper/75;
 }
+/* Compact pill for an in-game move, so it never outweighs the cards. */
+@utility btn-chip {
+	@apply inline-flex min-h-8 items-center gap-1.5 rounded-full border border-brass/50 px-3.5 text-[13px] font-semibold text-brass transition hover:bg-brass/10 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40;
+}
+/* Keyboard shortcut on a button; hidden on touch screens, which have no keys. */
+@utility key-hint {
+	@apply rounded border border-current/30 px-1.5 font-mono text-[11px] leading-4 opacity-70 pointer-coarse:hidden;
+}
 /* Low-emphasis text button; min height keeps it a 44px tap target. */
 @utility link-btn {
 	@apply inline-flex min-h-11 cursor-pointer items-center px-2 text-sm text-paper/75 underline underline-offset-4 hover:text-paper;

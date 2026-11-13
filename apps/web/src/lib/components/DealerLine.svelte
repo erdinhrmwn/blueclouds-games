@@ -45,20 +45,20 @@
 
 <!-- Fixed height, so the log never pushes the hand down as lines come and go. -->
 <ol
-	class="mx-auto my-3 flex h-24 max-w-md flex-col items-center gap-1 px-4"
+	class="mx-auto my-2 flex h-20 max-w-md flex-col items-center gap-1 px-4 sm:my-3 sm:h-24"
 	aria-label="Recent moves"
 >
 	{#each entries as entry, index (entry.id)}
 		<li class="max-w-full" animate:flip={{ duration }} in:fly={{ y: -6, duration }}>
 			{#if index === 0}
 				<p
-					class="flex items-center gap-2 rounded-xl border border-paper/10 bg-black/35 px-3.5 py-1.5 text-center text-sm text-paper/90"
+					class="flex items-center gap-2 rounded-xl border border-paper/10 bg-black/35 px-3 py-1 text-center text-xs text-paper/90 sm:px-3.5 sm:py-1.5 sm:text-sm"
 				>
 					<span class="size-1.5 shrink-0 rounded-full bg-brass" aria-hidden="true"></span>
 					<span class="line-clamp-2">{entry.text}</span>
 				</p>
 			{:else}
-				<p class="truncate px-3 text-xs {OLDER_TONE[index - 1]}">{entry.text}</p>
+				<p class="truncate px-3 text-[11px] sm:text-xs {OLDER_TONE[index - 1]}">{entry.text}</p>
 			{/if}
 		</li>
 	{/each}

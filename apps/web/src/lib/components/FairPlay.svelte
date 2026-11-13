@@ -43,7 +43,7 @@
 
 {#if fairness}
 	<button
-		class="btn-ghost size-11 shrink-0 p-0"
+		class="btn-ghost size-10 shrink-0 p-0 sm:size-11"
 		onclick={() => dialog?.showModal()}
 		aria-haspopup="dialog"
 		aria-label="Fair play"

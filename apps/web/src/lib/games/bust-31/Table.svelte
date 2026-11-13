@@ -11,6 +11,7 @@
 	import WinCascade from '#lib/components/WinCascade.svelte';
 	import PlayingCard from './PlayingCard.svelte';
 	import Seat from '#lib/components/Seat.svelte';
+	import HandBar from '#lib/components/HandBar.svelte';
 	import { DEAL, HAND_SIZE, MAX_PLAYERS, START_LIVES } from 'server/games/bust-31/rules';
 	import Dealer from '#lib/components/Dealer.svelte';
 	import DealerLine from '#lib/components/DealerLine.svelte';
@@ -328,16 +329,11 @@
 {#if view.phase === 'playing'}
 	{#if room.me && room.me.lives > 0}
 		<section aria-label="Your hand" class="flex flex-col items-center gap-4">
-			<p
-				class="text-sm font-semibold {room.myTurn ? 'text-brass' : 'text-paper/75'}"
-				aria-live="polite"
-			>
-				{room.myTurn ? 'Your turn. Pick a card.' : `Waiting for ${nameOf(view.turnPlayerId)}`}
-			</p>
-			<!-- The countdown itself is the ring on the seat; screen readers get one warning instead. -->
-			{#if room.myTurn && secondsLeft !== null && secondsLeft <= 5}
-				<p class="sr-only" role="alert">Time is almost up.</p>
-			{/if}
+			<HandBar
+				active={room.myTurn}
+				label={room.myTurn ? 'Your turn' : `${nameOf(view.turnPlayerId)}’s turn`}
+				{secondsLeft}
+			/>
 			<div class="flex justify-center px-4 pt-2" class:pointer-events-none={dealing}>
 				{#each room.hand as card, i (card.id)}
 					{@const landed = !dealing || i < dealtCount}
@@ -351,9 +347,6 @@
 					</div>
 				{/each}
 			</div>
-			{#if room.myTurn && secondsLeft !== null}
-				<p class="text-xs text-paper/75">If time runs out, a card is played for you.</p>
-			{/if}
 		</section>
 	{:else}
 		<p class="text-center text-sm text-paper/75">You are out. Watch until the table finishes.</p>

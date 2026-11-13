@@ -25,7 +25,7 @@
 	const label = $derived(card.kind === 'number' ? String(card.value) : glyph);
 	const spoken = $derived(card.kind === 'number' ? `plus ${card.value}` : caption);
 
-	const LABEL_SIZE = { lg: 'text-6xl', md: 'text-5xl', sm: 'text-4xl' } as const;
+	const LABEL_SIZE = { lg: 'text-5xl sm:text-6xl', md: 'text-5xl', sm: 'text-4xl' } as const;
 	const labelSize = $derived(LABEL_SIZE[size]);
 </script>
 
@@ -77,8 +77,14 @@
 		height: 6.75rem;
 	}
 	.lg {
-		width: 5.75rem;
-		height: 8.25rem;
+		width: 4.5rem;
+		height: 6.5rem;
+	}
+	@media (min-width: 640px) {
+		.lg {
+			width: 5.75rem;
+			height: 8.25rem;
+		}
 	}
 	.corner {
 		position: absolute;

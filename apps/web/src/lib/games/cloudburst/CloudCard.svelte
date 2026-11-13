@@ -138,8 +138,8 @@
 		height: 6.75rem;
 	}
 	.lg {
-		width: 4.5rem;
-		height: 6.4rem;
+		width: 4rem;
+		height: 5.7rem;
 	}
 	@media (min-width: 640px) {
 		.lg {
@@ -159,6 +159,15 @@
 	.md .num,
 	.lg .num {
 		font-size: 2.75rem;
+	}
+	@media (max-width: 639px) {
+		.lg .num {
+			font-size: 2.25rem;
+		}
+		.lg :global(.glyph-lg) {
+			width: 1.5rem;
+			height: 1.5rem;
+		}
 	}
 	.card :global(.glyph) {
 		width: 1.1rem;

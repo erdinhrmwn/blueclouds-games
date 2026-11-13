@@ -82,14 +82,14 @@
 {#if player}
 	<div
 		data-seat={player.id}
-		class="flex w-24 flex-col items-center gap-1 text-center sm:w-28 {outClass}"
+		class="flex w-20 flex-col items-center gap-1 text-center sm:w-28 {outClass}"
 		role="group"
 		aria-label={seatLabel}
 	>
 		<!-- Room below for the Away tag, kept on every seat so all their lines stay level. -->
 		<div class="relative mb-1.5">
 			<div
-				class="relative grid size-14 place-items-center rounded-[14px] border-2 font-display text-xl font-bold
+				class="relative grid size-12 place-items-center rounded-xl border-2 font-display text-lg font-bold sm:size-14 sm:rounded-[14px] sm:text-xl
 					{avatarLook}"
 				aria-hidden="true"
 			>
@@ -97,7 +97,7 @@
 					<!-- robot head: bots get an icon instead of a monogram -->
 					<svg
 						viewBox="0 0 24 24"
-						class="size-7"
+						class="size-6 sm:size-7"
 						fill="none"
 						stroke="currentColor"
 						stroke-width="1.8"
@@ -119,7 +119,7 @@
 					<!-- The timer runs on the avatar's own edge, so the seat on turn is no bigger than the others.
 						 It follows the rounded square clockwise from the top middle: its 14px corners are 10 of the 40 units here. -->
 					<svg
-						class="pointer-events-none absolute -inset-0.5 size-14"
+						class="pointer-events-none absolute -inset-0.5 size-12 sm:size-14"
 						viewBox="0 0 40 40"
 						aria-hidden="true"
 					>
@@ -160,7 +160,7 @@
 			{/if}
 		</div>
 		<div
-			class="flex max-w-full items-center gap-1 rounded-sm bg-black/45 px-2 py-0.5 text-xs font-medium
+			class="flex max-w-full items-center gap-1 rounded-sm bg-black/45 px-1.5 py-0.5 text-[11px] font-medium sm:px-2 sm:text-xs
 				{player.away ? 'text-paper/70' : ''}"
 			aria-hidden="true"
 		>
@@ -182,7 +182,7 @@
 	</div>
 {:else}
 	<div
-		class="flex w-24 flex-col items-center gap-1 sm:w-28"
+		class="flex w-20 flex-col items-center gap-1 sm:w-28"
 		role="group"
 		aria-label="Seat {number ?? ''}, empty"
 	>
@@ -190,21 +190,23 @@
 		<div class="relative mb-1.5">
 			{#if onSit}
 				<button
-					class="grid size-14 place-items-center rounded-[14px] border-2 border-dashed border-paper/40 text-paper/60 transition hover:border-solid hover:border-brass/70 hover:bg-brass/10 hover:text-brass"
+					class="grid size-12 place-items-center rounded-xl border-2 border-dashed sm:size-14 sm:rounded-[14px] border-paper/40 text-paper/60 transition hover:border-solid hover:border-brass/70 hover:bg-brass/10 hover:text-brass"
 					onclick={onSit}
 					aria-label="Sit in seat {number ?? ''}"
 					title="Sit here"
 				>
-					{@render sitIcon('size-6')}
+					{@render sitIcon('size-5 sm:size-6')}
 				</button>
 			{:else}
-				<div class="size-14 rounded-[14px] border-2 border-dashed border-paper/40"></div>
+				<div
+					class="size-12 rounded-xl border-2 border-dashed border-paper/40 sm:size-14 sm:rounded-[14px]"
+				></div>
 			{/if}
 			{#if onAddBot}
 				{@render cornerButton(`Add a bot to seat ${number ?? ''}`, onAddBot, 'add')}
 			{/if}
 		</div>
-		<div class="text-xs text-paper/70">Seat {number ?? ''}</div>
+		<div class="text-[11px] text-paper/70 sm:text-xs">Seat {number ?? ''}</div>
 	</div>
 {/if}
 
@@ -286,7 +288,7 @@
 		white-space: nowrap;
 		box-shadow: 0 0 0 2px var(--color-felt-deep);
 	}
-	/* The turn pulse brightens the avatar inside its own edge, so the seat stays 64px. */
+	/* The turn pulse brightens the avatar inside its own edge, so the seat keeps its size. */
 	.turn {
 		animation: pulse 1.6s ease-in-out infinite;
 	}

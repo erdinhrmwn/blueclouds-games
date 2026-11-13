@@ -3,6 +3,7 @@
 	import DealerLine from '#lib/components/DealerLine.svelte';
 	import Felt from '#lib/components/Felt.svelte';
 	import Seat from '#lib/components/Seat.svelte';
+	import HandBar from '#lib/components/HandBar.svelte';
 	import WinCascade from '#lib/components/WinCascade.svelte';
 	import { dealCards, placeCard, seatRect, shake, whenDealt } from '#lib/motion.ts';
 	import {
@@ -20,6 +21,7 @@
 	import CloudCard from './CloudCard.svelte';
 	import type { CloudburstConnection } from './connection.svelte.ts';
 	import SuitGlyph from './SuitGlyph.svelte';
+	import SuitPicker from './SuitPicker.svelte';
 	import { SUIT_NAME, SUIT_TEXT } from './suits.ts';
 
 	let { room }: { room: CloudburstConnection } = $props();
@@ -69,6 +71,22 @@
 	let pending = $state<{ card: Card; needs: 'give' | 'suit' } | null>(null);
 	$effect(() => {
 		if (!room.myTurn) pending = null;
+	});
+
+	const barLabel = $derived.by(() => {
+		if (!room.myTurn) {
+			return `${nameOf(view.turnPlayerId)}’s turn`;
+		}
+
+		if (pending?.needs === 'give') {
+			return `Give a card to ${next?.name}`;
+		}
+
+		if (pending?.needs === 'suit') {
+			return `Pick a suit for ${next?.name}`;
+		}
+
+		return 'Your turn';
 	});
 
 	// Your own card flies from where it sat in your hand, so remember that spot on click.
@@ -150,7 +168,7 @@
 	 * than 44px to tap. A hand too long for that scrolls sideways. Card widths match CloudCard's `lg`.
 	 */
 	const HAND = {
-		phone: { cardPx: 72, mostShownPx: 46, paddingPx: 16 },
+		phone: { cardPx: 64, mostShownPx: 44, paddingPx: 16 },
 		wide: { cardPx: 88, mostShownPx: 60, paddingPx: 32 },
 		leastShownPx: 44
 	};
@@ -600,55 +618,29 @@
 
 {#if view.phase === 'playing' && room.me}
 	<section aria-label="Your hand" class="flex flex-col items-center gap-3">
-		<p
-			class="text-sm font-semibold {room.myTurn ? 'text-brass' : 'text-paper/75'}"
-			aria-live="polite"
-		>
-			{#if pending?.needs === 'give'}
-				Pick a card to give to {next?.name}
-			{:else if pending?.needs === 'suit'}
-				Pick the suit {next?.name} must follow
-			{:else if room.myTurn}
-				{view.drew
-					? 'Play the card you drew, or pass.'
-					: 'Your turn. Play a card that fits, or draw.'}
-			{:else}
-				Waiting for {nameOf(view.turnPlayerId)}
-			{/if}
-		</p>
-		{#if room.myTurn && secondsLeft !== null && secondsLeft <= 5}
-			<p class="sr-only" role="alert">Time is almost up.</p>
-		{/if}
-
-		<!-- Right under the prompt, so on a phone the move is on screen before the hand is. -->
-		{#if room.myTurn}
-			<div class="flex items-center gap-3">
+		<HandBar active={room.myTurn} label={barLabel} {secondsLeft}>
+			{#snippet actions()}
 				{#if pending}
-					<button class="btn-ghost" onclick={() => (pending = null)}>Cancel</button>
+					<button class="link-btn" onclick={() => (pending = null)}>Cancel</button>
 				{:else if view.drew}
-					<button class="btn-brass" onclick={room.pass} disabled={!canMove}
-						>Pass <span class="text-xs opacity-70">(P)</span></button
-					>
-				{:else}
-					<button class="btn-ghost" onclick={room.draw} disabled={!canMove}
-						>Draw a card <span class="text-xs opacity-70">(D)</span></button
-					>
-				{/if}
-			</div>
-		{/if}
-
-		{#if pending?.needs === 'suit'}
-			<div class="flex flex-wrap justify-center gap-2" role="group" aria-label="Pick a suit">
-				{#each SUITS as s (s)}
-					<button
-						class="btn flex-col gap-0.5 bg-paper px-4 {SUIT_TEXT[s]}"
-						onclick={() => send(pending!.card, { suit: s })}
-					>
-						<SuitGlyph suit={s} class="size-6" />{SUIT_NAME[s]}
+					<button class="btn-chip" onclick={room.pass} disabled={!canMove}>
+						Pass <kbd class="key-hint">P</kbd>
 					</button>
-				{/each}
-			</div>
-		{/if}
+				{:else}
+					<button class="btn-chip" onclick={room.draw} disabled={!canMove}>
+						Draw <kbd class="key-hint">D</kbd>
+					</button>
+				{/if}
+			{/snippet}
+		</HandBar>
+
+		<SuitPicker
+			open={pending?.needs === 'suit'}
+			nextName={next?.name ?? ''}
+			{secondsLeft}
+			onpick={(suit) => send(pending!.card, { suit })}
+			oncancel={() => (pending = null)}
+		/>
 
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<!-- On a phone the row runs edge to edge, past the page gutter, so a full hand of seven fits. -->
@@ -680,10 +672,6 @@
 				</div>
 			{/each}
 		</div>
-
-		{#if room.myTurn && secondsLeft !== null}<p class="text-xs text-paper/75">
-				If time runs out, a move is made for you.
-			</p>{/if}
 	</section>
 {/if}
 
