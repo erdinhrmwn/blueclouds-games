@@ -69,11 +69,15 @@ test("a match deals from the seed it committed to before it started, and reports
 	await room.migrateRoom(db);
 
 	const committed = { ...c.vars.next! };
-	expect(room.fairnessView(c).serverSeedHash).toBe(committed.serverSeedHash);
+	expect(room.fairnessView(c)).toBeNull();
 
 	room.beginMatch(c, { out: [] }, (rng) => rules.startGame(c.vars.game, "ann", rng));
 	await commit(c);
 	expect(c.vars.next!.matchId).not.toBe(committed.matchId);
+	expect(room.fairnessView(c)).toEqual({
+		serverSeedHash: committed.serverSeedHash,
+		clientSeed: `${committed.matchId}:1:0`,
+	});
 
 	while (c.vars.game.phase === "playing") {
 		const player = c.vars.game.players[c.vars.game.turn]!;
@@ -89,7 +93,6 @@ test("a match deals from the seed it committed to before it started, and reports
 	expect(report.fairness).toEqual({
 		serverSeed: committed.serverSeed,
 		serverSeedHash: committed.serverSeedHash,
-		clientSeed: `${committed.matchId}|0:ann,2:bot:Bot Rain,4:bot:Bot Wind`,
 	});
 
 	const types = report.log.events.map((event: { type: string }) => event.type);
@@ -97,25 +100,25 @@ test("a match deals from the seed it committed to before it started, and reports
 	expect(types[1]).toBe("shuffle");
 	expect(types.at(-1)).toBe("reveal");
 
-	const proof = proofFromLog(report.log.events)!;
+	const proof = proofFromLog(report.matchId, report.log.events)!;
+	expect(proof.shuffles[0]).toMatchObject({ round: 1, nonce: 0 });
 	expect(await checkFairness(proof)).toMatchObject({ ok: true });
-	expect(room.lastProof(c)!.shuffles).toEqual(proof.shuffles);
-	expect(room.fairnessView(c).revealed).not.toHaveProperty("shuffles");
+	expect(room.fairnessView(c)).toBeNull();
 });
 
 test("a move the rules refuse takes back its shuffle", () => {
 	const { c } = fakeRoom();
 	room.beginMatch(c, { out: [] }, (rng) => rules.startGame(c.vars.game, "ann", rng));
-	const before = { nonce: c.vars.match!.seeds!.nonce, pending: c.vars.fairLog.length };
+	const before = { last: c.vars.match!.seeds!.last, pending: c.vars.fairLog.length };
 
 	expect(() =>
 		room.withRng(c, (rng) => {
-			rng.shuffle([{ id: "a" }, { id: "b" }]);
+			rng.shuffle([{ id: "a" }, { id: "b" }], 1);
 			throw new RuleError("nope");
 		}),
 	).toThrow("nope");
 
-	expect(c.vars.match!.seeds!.nonce).toBe(before.nonce);
+	expect(c.vars.match!.seeds!.last).toEqual(before.last);
 	expect(c.vars.fairLog.length).toBe(before.pending);
 });
 

@@ -249,7 +249,7 @@ export function drawCard(game: Game, playerId: string, rng: Rng): Game {
 	let { deck, discard } = game;
 	if (deck.length === 0 && discard.length > 1) {
 		// Everything under the top card becomes the new deck.
-		deck = shuffle(discard.slice(0, -1), rng);
+		deck = shuffle(discard.slice(0, -1), rng, game.round);
 		discard = discard.slice(-1);
 	}
 
@@ -325,7 +325,8 @@ function endRound(game: Game, outId: string, card: Card, rng: Rng): Game {
 
 /** A fresh deal from the full deck. The first turn moves one seat clockwise each round. */
 function dealRound(game: Game, rng: Rng): Game {
-	let deck = shuffle(buildDeck(), rng);
+	const round = game.round + 1;
+	let deck = shuffle(buildDeck(), rng, round);
 	const players = game.players.map((player) => {
 		const hand = deck.slice(0, HAND_SIZE);
 		deck = deck.slice(HAND_SIZE);
@@ -336,8 +337,6 @@ function dealRound(game: Game, rng: Rng): Game {
 	const startAt = deck.findIndex((card) => card.kind !== "rainbow");
 	const start = deck[startAt]!;
 	deck = [...deck.slice(0, startAt), ...deck.slice(startAt + 1)];
-
-	const round = game.round + 1;
 
 	return {
 		...game,

@@ -34,7 +34,6 @@ import {
 	GONE_AFTER_MS,
 	identify,
 	kickFromTable,
-	lastProof,
 	loadRoom,
 	migrateRoom,
 	parseSeat,
@@ -214,12 +213,6 @@ export const cloudburstRoom = actor({
 			const me = requirePlayer(c);
 			c.vars.game = apply(() => pass(c.vars.game, me));
 			await commit(c);
-		},
-		/** The last match's seeds and shuffles, so a player can check it was dealt fairly. */
-		fairnessProof: async (c) => {
-			caller(c);
-
-			return lastProof(c);
 		},
 		reset: async (c) => {
 			requireOpenTable(c);

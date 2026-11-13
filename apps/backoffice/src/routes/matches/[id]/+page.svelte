@@ -97,7 +97,7 @@
 				{:else if data.fairness.failed.length}
 					<span class="tag-bad">
 						{data.fairness.failed.length === 1 ? 'Shuffle' : 'Shuffles'}
-						{data.fairness.failed.join(', ')} do not match the seeds
+						{data.fairness.failed.join('; ')} do not match the seeds
 					</span>
 				{:else}
 					<span class="tag-bad">The log's seeds do not match the stored ones</span>
@@ -109,7 +109,9 @@
 				<dt>Server seed</dt>
 				<dd class="font-mono text-xs leading-5 break-all">{match.serverSeed}</dd>
 				<dt>Client seed</dt>
-				<dd class="font-mono text-xs leading-5 break-all">{match.clientSeed}</dd>
+				<dd class="font-mono text-xs leading-5 break-all">
+					{match.id}:round:nonce, one per shuffle
+				</dd>
 			{/if}
 		</dl>
 	</section>

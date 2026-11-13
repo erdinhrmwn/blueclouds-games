@@ -45,7 +45,6 @@ const Hex64 = z.string().regex(/^[0-9a-f]{64}$/);
 const Fairness = z.object({
 	serverSeed: Hex64,
 	serverSeedHash: Hex64,
-	clientSeed: z.string().min(1).max(1000),
 });
 
 const MatchLog = z.object({
@@ -112,13 +111,11 @@ export type MatchReport = z.output<typeof MatchReport>;
 const HISTORY_PAGE = 20;
 
 /**
- * What is wrong with a match's seeds, or null. The seed must match the hash the room committed to, the client seed
- * must be the match id and the seating (fairness.ts in the game server), and the log must open with that
- * commitment and end with the same seed revealed. The shuffles themselves are checked by the backoffice and players.
+ * What is wrong with a match's seeds, or null. The seed must match the hash the room committed to, and the log
+ * must open with that commitment and end with the same seed revealed. The shuffles themselves, each with its own
+ * client seed (fairness.ts in the game server), are checked by the backoffice and players.
  */
 function checkFairness(match: {
-	matchId: string;
-	players: { seat: number; playerId: string | null; botName?: string }[];
 	log: { events: { type: string; data?: Record<string, unknown> }[] };
 	fairness?: z.output<typeof Fairness>;
 }): string | null {
@@ -135,16 +132,7 @@ function checkFairness(match: {
 		return "The server seed does not match its hash.";
 	}
 
-	const seating = [...match.players]
-		.sort((left, right) => left.seat - right.seat)
-		.map((player) => `${player.seat}:${player.playerId ?? `bot:${player.botName}`}`)
-		.join(",");
-	if (fairness.clientSeed !== `${match.matchId}|${seating}`) {
-		return "The client seed must be the match id and the seating.";
-	}
-
-	const committed =
-		start?.serverSeedHash === fairness.serverSeedHash && start?.clientSeed === fairness.clientSeed;
+	const committed = start?.serverSeedHash === fairness.serverSeedHash;
 	if (!committed || reveal?.serverSeed !== fairness.serverSeed) {
 		return "The log must hold the same commitment and reveal as the seeds.";
 	}
@@ -231,8 +219,7 @@ export async function recordMatch(sql: SQL, match: MatchReport): Promise<boolean
 				end_reason,
 				body_hash,
 				server_seed_hash,
-				server_seed,
-				client_seed
+				server_seed
 			)
 			VALUES (
 				${match.matchId},
@@ -244,8 +231,7 @@ export async function recordMatch(sql: SQL, match: MatchReport): Promise<boolean
 				${match.endReason},
 				${hash},
 				${match.fairness?.serverSeedHash ?? null},
-				${match.fairness?.serverSeed ?? null},
-				${match.fairness?.clientSeed ?? null}
+				${match.fairness?.serverSeed ?? null}
 			)
 			ON CONFLICT (id) DO NOTHING
 			RETURNING id`;

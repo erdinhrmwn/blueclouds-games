@@ -4,9 +4,10 @@
 export const SEATS = 6;
 
 /**
- * Shuffles a deck. Injected: a room shuffles provably fair (fair-rng.ts), tests pass `randomRng` with a fixed number.
+ * Shuffles a deck for a round (being dealt or played), which is part of its client seed. Injected: a room
+ * shuffles provably fair (fair-rng.ts), tests pass `randomRng` with a fixed number.
  */
-export type Rng = { shuffle: <T extends { id: string }>(items: T[]) => T[] };
+export type Rng = { shuffle: <T extends { id: string }>(items: T[], round: number) => T[] };
 
 /** A rule was broken; the actor forwards the message to the player. */
 export class RuleError extends Error {}
@@ -30,8 +31,8 @@ export type Table<P extends Seated = Seated> = {
 	moves: number;
 };
 
-export function shuffle<T extends { id: string }>(items: T[], rng: Rng): T[] {
-	return rng.shuffle(items);
+export function shuffle<T extends { id: string }>(items: T[], rng: Rng, round: number): T[] {
+	return rng.shuffle(items, round);
 }
 
 /** A plain Fisher-Yates shuffle from `next` (a float in [0, 1)): for tests, and matches started before fairness. */

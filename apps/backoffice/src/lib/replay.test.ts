@@ -24,15 +24,13 @@ function playedGame() {
 	for (let i = 0; i < 4; i++) g = addPlayer(g, `bot-${i}`, `Bot ${i}`, true);
 	let match: MatchState = { id: 'm', startedAt: new Date(0).toISOString(), out: [], seq: 0 };
 	const next = newCommitment();
-	let seeds: MatchSeeds = { ...next, clientSeed: 'm|', nonce: 0 };
-	let pending: LogEntry[] = [
-		{ type: 'fairness', data: { serverSeedHash: next.serverSeedHash, clientSeed: 'm|' } }
-	];
+	let seeds: MatchSeeds = { ...next, matchId: 'm', last: null };
+	let pending: LogEntry[] = [{ type: 'fairness', data: { serverSeedHash: next.serverSeedHash } }];
 	const rng = fairRng(
 		() => seeds,
 		(record) => {
 			pending.push({ type: 'shuffle', data: record });
-			seeds = { ...seeds, nonce: seeds.nonce + 1 };
+			seeds = { ...seeds, last: record };
 		}
 	);
 	const events: LogEvent[] = [];
@@ -73,7 +71,7 @@ describe('Bust 31 replay', () => {
 
 	test('the shuffles of a played game check out with its revealed seed', async () => {
 		const { log } = playedGame();
-		const proof = proofFromLog(log.events)!;
+		const proof = proofFromLog('m', log.events)!;
 
 		expect(proof.shuffles.length).toBeGreaterThan(0);
 		expect((await checkFairness(proof)).ok).toBe(true);

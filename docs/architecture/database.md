@@ -534,6 +534,7 @@ references. Later files change that schema in place (widen a CHECK, add a column
 | `011` | Not used: invite link expiry was dropped before it was merged (Erdin, 2026-11-13). |
 | `012_game_maintenance.sql` | `games.maintenance_at`, audit actions `game.maintenance_start`, `game.maintenance_end`. |
 | `013_tournament_player_status.sql` | `tournament_players.status` (registered, withdrawn, disqualified), `status_reason`, `status_changed_at`, audit action `tournament.disqualify`. |
+| `014_shuffle_client_seeds.sql` | Drops `matches.client_seed`: every shuffle has its own client seed, from its log event ([fairness.md](fairness.md)). |
 
 The files were squashed on 2026-11-12, before any production database existed (Erdin): a database made from the old
 files (`001_init.sql` … `016_admin_management.sql`) is dropped and rebuilt from these. A later change gets its own

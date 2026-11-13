@@ -4,6 +4,7 @@ import {
 	checkFairness,
 	clientSeedOf,
 	type MatchSeeds,
+	nextNonce,
 	proofFromLog,
 	type ShuffleRecord,
 	sha256Hex,
@@ -11,35 +12,41 @@ import {
 
 const deck = (size: number) => Array.from({ length: size }, (_, index) => ({ id: `c${index}` }));
 
-/** Shuffles `sizes` decks the way a room does and returns the proof a finished match reveals. */
-function playShuffles(sizes: number[]) {
+/** Shuffles a deck of each size in its round, as a room does, and returns the proof a finished match reveals. */
+function playShuffles(shuffles: { round: number; size: number }[]) {
 	const next = newCommitment();
-	let seeds: MatchSeeds = { ...next, clientSeed: clientSeedOf(next.matchId, []), nonce: 0 };
+	let seeds: MatchSeeds = { ...next, last: null };
 	const records: ShuffleRecord[] = [];
 	const rng = fairRng(
 		() => seeds,
 		(record) => {
 			records.push(record);
-			seeds = { ...seeds, nonce: seeds.nonce + 1 };
+			seeds = { ...seeds, last: record };
 		},
 	);
 
-	for (const size of sizes) {
-		rng.shuffle(deck(size));
+	for (const { round, size } of shuffles) {
+		rng.shuffle(deck(size), round);
 	}
 
 	return {
+		matchId: next.matchId,
 		serverSeed: next.serverSeed,
 		serverSeedHash: next.serverSeedHash,
-		clientSeed: seeds.clientSeed,
 		shuffles: records,
 	};
 }
 
 describe("provably fair shuffles", () => {
 	test("the room's shuffles check out with the revealed seed", async () => {
-		const proof = playShuffles([54, 54, 12, 1]);
+		const proof = playShuffles([
+			{ round: 1, size: 54 },
+			{ round: 1, size: 12 },
+			{ round: 1, size: 1 },
+			{ round: 2, size: 54 },
+		]);
 
+		expect(proof.shuffles.map((shuffle) => shuffle.nonce)).toEqual([0, 1, 2, 0]);
 		expect(await sha256Hex(proof.serverSeed)).toBe(proof.serverSeedHash);
 		expect((await checkFairness(proof)).ok).toBe(true);
 	});
@@ -49,34 +56,36 @@ describe("provably fair shuffles", () => {
 			matchId: "m",
 			serverSeedHash: "",
 			serverSeed: "0".repeat(64),
-			clientSeed: "m|0:p",
-			nonce: 0,
+			last: null,
 		};
 		const rng = fairRng(
 			() => seeds,
 			() => {},
 		);
-
-		const ordered = rng.shuffle(deck(10)).map((card) => card.id);
-		const reversed = rng.shuffle(deck(10).reverse()).map((card) => card.id);
+		const ordered = rng.shuffle(deck(10), 1).map((card) => card.id);
+		const reversed = rng.shuffle(deck(10).reverse(), 1).map((card) => card.id);
 
 		expect(reversed).toEqual(ordered);
 		// Pinned: a change here breaks the check of every match already played.
-		expect(ordered).toEqual(["c0", "c4", "c3", "c1", "c8", "c5", "c2", "c6", "c9", "c7"]);
+		expect(ordered).toEqual(["c9", "c1", "c4", "c3", "c8", "c6", "c7", "c2", "c5", "c0"]);
 	});
 
 	test("a changed card, a skipped nonce or another seed fails the check", async () => {
-		const proof = playShuffles([20, 20]);
+		const proof = playShuffles([
+			{ round: 1, size: 20 },
+			{ round: 1, size: 20 },
+		]);
+		const [first, second] = proof.shuffles as [ShuffleRecord, ShuffleRecord];
 
-		const swapped = [...proof.shuffles[1]!.deck];
+		const swapped = [...second.deck];
 		[swapped[0], swapped[1]] = [swapped[1]!, swapped[0]!];
-		const changed = { ...proof, shuffles: [proof.shuffles[0]!, { nonce: 1, deck: swapped }] };
+		const changed = { ...proof, shuffles: [first, { ...second, deck: swapped }] };
 		expect((await checkFairness(changed)).shuffles.map((shuffle) => shuffle.ok)).toEqual([
 			true,
 			false,
 		]);
 
-		const skipped = { ...proof, shuffles: [proof.shuffles[1]!] };
+		const skipped = { ...proof, shuffles: [second] };
 		expect((await checkFairness(skipped)).ok).toBe(false);
 
 		const otherSeed = { ...proof, serverSeed: "f".repeat(64) };
@@ -85,29 +94,42 @@ describe("provably fair shuffles", () => {
 		expect(check.ok).toBe(false);
 	});
 
-	test("the client seed is the match id and the seating, in seat order", () => {
-		const seats = [
-			{ seat: 2, playerId: null, botName: "Bot Rain" },
-			{ seat: 0, playerId: "p-1" },
-		];
+	test("a round never goes back", async () => {
+		const proof = playShuffles([
+			{ round: 2, size: 10 },
+			{ round: 1, size: 10 },
+		]);
 
-		expect(clientSeedOf("m-1", seats)).toBe("m-1|0:p-1,2:bot:Bot Rain");
+		expect((await checkFairness(proof)).shuffles.map((shuffle) => shuffle.ok)).toEqual([
+			true,
+			false,
+		]);
+	});
+
+	test("the client seed is the match id, round and nonce", () => {
+		expect(clientSeedOf("m-1", { round: 2, nonce: 1 })).toBe("m-1:2:1");
+	});
+
+	test("the nonce counts up within a round and starts again at 0 in the next", () => {
+		expect(nextNonce(null, 1)).toBe(0);
+		expect(nextNonce({ round: 1, nonce: 0 }, 1)).toBe(1);
+		expect(nextNonce({ round: 1, nonce: 4 }, 2)).toBe(0);
 	});
 
 	test("reads the proof back from a move log", () => {
 		const events = [
-			{ type: "fairness", data: { serverSeedHash: "h", clientSeed: "m|0:p" } },
-			{ type: "shuffle", data: { nonce: 0, deck: ["a", "b"] } },
+			{ type: "fairness", data: { serverSeedHash: "h" } },
+			{ type: "shuffle", data: { round: 1, nonce: 0, deck: ["a", "b"] } },
 			{ type: "deal", data: {} },
 			{ type: "reveal", data: { serverSeed: "s" } },
 		];
 
-		expect(proofFromLog(events)).toEqual({
-			serverSeed: "s",
+		expect(proofFromLog("m", events)).toEqual({
+			matchId: "m",
 			serverSeedHash: "h",
-			clientSeed: "m|0:p",
-			shuffles: [{ nonce: 0, deck: ["a", "b"] }],
+			serverSeed: "s",
+			shuffles: [{ round: 1, nonce: 0, deck: ["a", "b"] }],
 		});
-		expect(proofFromLog(events.slice(0, 3))).toBeNull();
+		expect(proofFromLog("m", events.slice(0, 3))).toBeNull();
 	});
 });

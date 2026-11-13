@@ -1,56 +1,52 @@
 // Provably fair shuffles (docs/architecture/fairness.md). Pure and Web Crypto only, so the room, the backoffice
 // and the player's browser all check a match the same way.
 //
-// Before a match the room commits to sha256(serverSeed) and to the match id. When it starts, the client seed is
-// fixed as the match id plus who sits in which seat, so the cards are bound to the seating. Shuffle number
-// `nonce` (0, 1, 2… in the match) draws its numbers from HMAC_SHA256(serverSeed, "clientSeed:nonce:block"),
-// 8 per 32-byte block (4 bytes each, big-endian, / 2^32). The cards are first put in id order, then shuffled
-// Fisher-Yates from the end. The server seed is revealed when the match ends.
+// Before a match the room commits to sha256(serverSeed) and to the match id. Every shuffle has its own client
+// seed, "matchId:round:nonce": the round it deals or reshuffles in and its count within that round (0, 1, 2…).
+// The shuffle draws its numbers from HMAC_SHA256(serverSeed, "clientSeed:block"), 8 per 32-byte block (4 bytes
+// each, big-endian, / 2^32); a deck needs more than one block, and `block` only counts them.
+// The cards are first put in id order, then shuffled Fisher-Yates from the end. The server seed is revealed
+// when the match ends.
 
 /** What the room commits to before a match: the match id (the client seed) and the hash of its server seed. */
 export type Commitment = { matchId: string; serverSeedHash: string };
 
-/** The seeds of the match being played and how many shuffles it had so far (the next shuffle's nonce). */
-export type MatchSeeds = Commitment & { serverSeed: string; clientSeed: string; nonce: number };
+/** A shuffle's place in the match: the round it deals or reshuffles in, and its count in that round, from 0. */
+export type ShuffleKey = { round: number; nonce: number };
+
+/** One logged shuffle: its place in the match and the cards it produced, top first. */
+export type ShuffleRecord = ShuffleKey & { deck: string[] };
+
+/** The seeds of the match being played, and the last shuffle's place (null before the first). */
+export type MatchSeeds = Commitment & { serverSeed: string; last: ShuffleKey | null };
 
 /** A finished match's seeds and shuffles, kept by the room after it ends so anyone at the table can check it. */
 export type Revealed = Commitment & {
 	serverSeed: string;
-	clientSeed: string;
 	shuffles: ShuffleRecord[];
 };
 
-/** Who sits in a seat, as the match report says: a player's id, or a bot's name. */
-export type SeatHolder = { seat: number; playerId: string | null; botName?: string };
-
-/**
- * The client seed: the match id, then each seat in order with its player id or "bot:<name>", e.g.
- * "0192…|0:0192…,2:bot:Bot Rain". The platform rebuilds it from the report's players.
- */
-export function clientSeedOf(matchId: string, seats: SeatHolder[]): string {
-	const seating = [...seats]
-		.sort((left, right) => left.seat - right.seat)
-		.map((holder) => `${holder.seat}:${holder.playerId ?? `bot:${holder.botName}`}`)
-		.join(",");
-
-	return `${matchId}|${seating}`;
+/** A shuffle's client seed, e.g. "0192…:2:1": match id, round, nonce. */
+export function clientSeedOf(matchId: string, key: ShuffleKey): string {
+	return `${matchId}:${key.round}:${key.nonce}`;
 }
 
-/** One logged shuffle: its place in the match and the cards it produced, top first. */
-export type ShuffleRecord = { nonce: number; deck: string[] };
+/** The nonce of a shuffle in `round`: one more than the last shuffle's in the same round, else 0. */
+export function nextNonce(last: ShuffleKey | null, round: number): number {
+	if (!last || last.round !== round) {
+		return 0;
+	}
+
+	return last.nonce + 1;
+}
 
 /** What a finished match reveals, enough to check every shuffle in it. */
-export type FairnessProof = {
-	serverSeed: string;
-	serverSeedHash: string;
-	clientSeed: string;
-	shuffles: ShuffleRecord[];
-};
+export type FairnessProof = Revealed;
 
 /** The result of checking a match: the seed against its hash, then each shuffle. */
 export type FairnessCheck = {
 	hashMatches: boolean;
-	shuffles: { nonce: number; ok: boolean }[];
+	shuffles: (ShuffleKey & { ok: boolean })[];
 	ok: boolean;
 };
 
@@ -61,8 +57,7 @@ const UINT32 = 2 ** 32;
 const encoder = new TextEncoder();
 
 /** The HMAC message for one block of numbers. */
-export const blockMessage = (clientSeed: string, nonce: number, block: number) =>
-	`${clientSeed}:${nonce}:${block}`;
+export const blockMessage = (clientSeed: string, block: number) => `${clientSeed}:${block}`;
 
 /** The 8 numbers in [0, 1) one HMAC digest gives. */
 export function floatsOf(digest: Uint8Array): number[] {
@@ -116,11 +111,10 @@ export async function sha256Hex(text: string): Promise<string> {
 	return hex(await crypto.subtle.digest("SHA-256", encoder.encode(text)));
 }
 
-/** The numbers for shuffle `nonce`, `count` of them. */
+/** The numbers for one shuffle, `count` of them. */
 async function shuffleFloats(
 	serverSeed: string,
 	clientSeed: string,
-	nonce: number,
 	count: number,
 ): Promise<number[]> {
 	const key = await crypto.subtle.importKey(
@@ -133,7 +127,7 @@ async function shuffleFloats(
 
 	const floats: number[] = [];
 	for (let block = 0; block < blocksFor(count); block += 1) {
-		const message = encoder.encode(blockMessage(clientSeed, nonce, block));
+		const message = encoder.encode(blockMessage(clientSeed, block));
 		const digest = await crypto.subtle.sign("HMAC", key, message);
 		floats.push(...floatsOf(new Uint8Array(digest)));
 	}
@@ -141,9 +135,19 @@ async function shuffleFloats(
 	return floats;
 }
 
+/** A shuffle comes after the last one: in the same round or a later one, its nonce counting up from 0. */
+function inOrder(last: ShuffleKey | null, record: ShuffleKey): boolean {
+	if (last && record.round < last.round) {
+		return false;
+	}
+
+	return record.nonce === nextNonce(last, record.round);
+}
+
 /**
- * Checks a finished match: the revealed seed matches the hash shown before it, the shuffles are numbered
- * 0, 1, 2… and each one is exactly what the seeds give for its cards.
+ * Checks a finished match: the revealed seed matches the hash shown before it, the shuffles come in order
+ * (rounds never go back, nonces count up from 0 in each round) and each one is exactly what the seeds give
+ * for its cards.
  */
 export async function checkFairness(proof: FairnessProof): Promise<FairnessCheck> {
 	const hashMatches =
@@ -151,18 +155,20 @@ export async function checkFairness(proof: FairnessProof): Promise<FairnessCheck
 		(await sha256Hex(proof.serverSeed)) === proof.serverSeedHash;
 
 	const shuffles: FairnessCheck["shuffles"] = [];
-	for (const [index, record] of proof.shuffles.entries()) {
+	let last: ShuffleKey | null = null;
+	for (const record of proof.shuffles) {
+		const key = { round: record.round, nonce: record.nonce };
 		const cards = canonical(record.deck.map((id) => ({ id })));
 		const floats = await shuffleFloats(
 			proof.serverSeed,
-			proof.clientSeed,
-			record.nonce,
+			clientSeedOf(proof.matchId, key),
 			floatsNeeded(cards.length),
 		);
 		const expected = fisherYates(cards, floats).map((card) => card.id);
-		const ok = record.nonce === index && expected.join(",") === record.deck.join(",");
+		const ok = inOrder(last, key) && expected.join(",") === record.deck.join(",");
 
-		shuffles.push({ nonce: record.nonce, ok });
+		shuffles.push({ ...key, ok });
+		last = key;
 	}
 
 	const ok = hashMatches && shuffles.every((shuffle) => shuffle.ok);
@@ -170,8 +176,12 @@ export async function checkFairness(proof: FairnessProof): Promise<FairnessCheck
 	return { hashMatches, shuffles, ok };
 }
 
-/** The fairness events of a move log: the commitment at the start, each shuffle and the reveal at the end. */
+/**
+ * The fairness events of a match's move log: the commitment at the start, each shuffle and the reveal at the
+ * end. Null when the log has no commitment or no reveal.
+ */
 export function proofFromLog(
+	matchId: string,
 	events: { type: string; data?: Record<string, unknown> }[],
 ): FairnessProof | null {
 	const start = events.find((event) => event.type === "fairness")?.data;
@@ -183,14 +193,15 @@ export function proofFromLog(
 	const shuffles = events
 		.filter((event) => event.type === "shuffle")
 		.map((event) => ({
+			round: Number(event.data?.round),
 			nonce: Number(event.data?.nonce),
 			deck: (event.data?.deck as string[] | undefined) ?? [],
 		}));
 
 	return {
-		serverSeed: String(reveal.serverSeed),
+		matchId,
 		serverSeedHash: String(start.serverSeedHash),
-		clientSeed: String(start.clientSeed),
+		serverSeed: String(reveal.serverSeed),
 		shuffles,
 	};
 }

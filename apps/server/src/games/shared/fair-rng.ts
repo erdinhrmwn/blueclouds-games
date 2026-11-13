@@ -5,11 +5,13 @@ import {
 	blockMessage,
 	blocksFor,
 	canonical,
+	clientSeedOf,
 	type Commitment,
 	fisherYates,
 	floatsNeeded,
 	floatsOf,
 	type MatchSeeds,
+	nextNonce,
 	type ShuffleRecord,
 } from "./fairness";
 import { uuidv7 } from "./match";
@@ -27,12 +29,12 @@ export function newCommitment(): NextMatch {
 	return { matchId: uuidv7(), serverSeed, serverSeedHash };
 }
 
-function floatsFor(seeds: MatchSeeds, count: number): number[] {
+function floatsFor(serverSeed: string, clientSeed: string, count: number): number[] {
 	const floats: number[] = [];
 
 	for (let block = 0; block < blocksFor(count); block += 1) {
-		const digest = createHmac("sha256", seeds.serverSeed)
-			.update(blockMessage(seeds.clientSeed, seeds.nonce, block))
+		const digest = createHmac("sha256", serverSeed)
+			.update(blockMessage(clientSeed, block))
 			.digest();
 		floats.push(...floatsOf(digest));
 	}
@@ -42,16 +44,19 @@ function floatsFor(seeds: MatchSeeds, count: number): number[] {
 
 /**
  * Shuffles with the match's seeds. `seeds()` reads the current ones; `done` is told each shuffle so the caller
- * can count the nonce up and log it.
+ * can keep it as the last one and log it.
  */
 export function fairRng(seeds: () => MatchSeeds, done: (record: ShuffleRecord) => void): Rng {
 	return {
-		shuffle: (items) => {
+		shuffle: (items, round) => {
 			const current = seeds();
+			const key = { round, nonce: nextNonce(current.last, round) };
+			const clientSeed = clientSeedOf(current.matchId, key);
 			const cards = canonical(items);
-			const out = fisherYates(cards, floatsFor(current, floatsNeeded(cards.length)));
+			const floats = floatsFor(current.serverSeed, clientSeed, floatsNeeded(cards.length));
+			const out = fisherYates(cards, floats);
 
-			done({ nonce: current.nonce, deck: out.map((card) => card.id) });
+			done({ ...key, deck: out.map((card) => card.id) });
 			return out;
 		},
 	};

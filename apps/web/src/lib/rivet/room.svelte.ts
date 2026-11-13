@@ -1,9 +1,3 @@
-import {
-	checkFairness,
-	type Commitment,
-	type FairnessCheck,
-	type Revealed
-} from 'server/games/shared/fairness';
 import { playToken } from '#lib/player.svelte.ts';
 import { roomClient, RoomRefused } from '#lib/rivet/client.ts';
 
@@ -26,7 +20,6 @@ type Conn = {
 	kick(seat: number): Promise<void>;
 	reset(): Promise<void>;
 	leave(): Promise<void>;
-	fairnessProof(): Promise<Revealed | null>;
 	on(event: string, fn: (data: never) => void): () => void;
 	onOpen(fn: () => void): () => void;
 	onClose(fn: () => void): () => void;
@@ -58,13 +51,10 @@ export type BaseView = {
 		closed: boolean;
 	} | null;
 	/**
-	 * Provably fair shuffles: what the match being played (or the next one) is locked to, and the last match's
-	 * seeds, revealed. `clientSeed` is set once the match starts.
+	 * Provably fair shuffles, while a match is played: the hash of its server seed (revealed when it ends) and the
+	 * client seed of its last shuffle. Null outside a match.
 	 */
-	fairness: Commitment & {
-		clientSeed: string | null;
-		revealed: Omit<Revealed, 'shuffles'> | null;
-	};
+	fairness: { serverSeedHash: string; clientSeed: string } | null;
 };
 
 /**
@@ -203,15 +193,6 @@ export class RoomConnection<View extends BaseView, Hand> {
 	kick = (seat: number) => this.#run(() => this.#c.kick(seat));
 	reset = () => this.#run(() => this.#c.reset());
 	leave = () => this.#run(() => this.#c.leave());
-
-	/** Checks the last match's shuffles in this browser against its revealed seed. Null if there is none yet. */
-	async checkLastMatch(): Promise<(FairnessCheck & { proof: Revealed }) | null> {
-		const proof = await this.#c.fairnessProof();
-		if (!proof) return null;
-
-		const check = await checkFairness(proof);
-		return { ...check, proof };
-	}
 
 	/** Calls a game-specific action, with the same busy and error handling as the shared ones. */
 	protected call(action: string, ...args: unknown[]): Promise<void> {

@@ -2,43 +2,48 @@
 	import type { BaseView, RoomConnection } from '#lib/rivet/room.svelte.ts';
 
 	/**
-	 * Provably fair shuffles: a button in the table's header opens a dialog with the seed hash the deal is locked to
-	 * before it starts, and a check of the last match's shuffles, run in this browser (docs/architecture/fairness.md).
+	 * Provably fair shuffles: a button in the table's header opens a dialog with the seeds of the match being
+	 * played, each with a copy button (docs/architecture/fairness.md).
 	 */
 	let { room }: { room: RoomConnection<BaseView, unknown> } = $props();
 
+	/** How long a field shows its "copied" tick. */
+	const COPIED_MS = 1500;
+
 	let dialog = $state<HTMLDialogElement>();
+	let copied = $state<string | null>(null);
 
 	const fairness = $derived(room.view?.fairness ?? null);
 
-	type Result =
-		{ matchId: string; ok: boolean; shuffles: number } | { matchId: string; error: string };
-	let result = $state<Result | null>(null);
-	let checking = $state(false);
+	const fields = $derived(
+		fairness
+			? [
+					{ id: 'server-seed', label: 'Server seed (hashed)', value: fairness.serverSeedHash },
+					{ id: 'client-seed', label: 'Client seed', value: fairness.clientSeed }
+				]
+			: []
+	);
 
-	async function check() {
-		checking = true;
+	async function copy(id: string, value: string) {
 		try {
-			const checked = await room.checkLastMatch();
-			if (checked) {
-				result = {
-					matchId: checked.proof.matchId,
-					ok: checked.ok,
-					shuffles: checked.shuffles.length
-				};
-			}
+			await navigator.clipboard.writeText(value);
 		} catch {
-			result = {
-				matchId: fairness?.revealed?.matchId ?? '',
-				error: 'Could not load the last match.'
-			};
-		} finally {
-			checking = false;
-		}
-	}
+			// The browser blocked the clipboard: select the text so it can be copied by hand.
+			const box = document.getElementById(id);
+			if (box) {
+				window.getSelection()?.selectAllChildren(box);
+			}
 
-	// A result belongs to one match: a newer reveal clears it.
-	const shown = $derived(result && result.matchId === fairness?.revealed?.matchId ? result : null);
+			return;
+		}
+
+		copied = id;
+		setTimeout(() => {
+			if (copied === id) {
+				copied = null;
+			}
+		}, COPIED_MS);
+	}
 </script>
 
 {#if fairness}
@@ -71,53 +76,69 @@
 		class="m-auto w-[min(34rem,calc(100%-2rem))] rounded-xl border border-paper/15 bg-[#1b1611] p-6 text-sm text-paper/75 backdrop:bg-black/70"
 	>
 		<h2 id="fair-play-title" class="font-display text-2xl font-bold text-paper">Fair play</h2>
-		<div class="mt-3 space-y-4">
-			<p>
-				Every deck is shuffled from a server seed that is locked in before the match starts. Its
-				hash is shown here first; the seed itself is revealed when the match ends, so anyone can
-				check every shuffle.
-			</p>
-			<dl class="grid gap-x-3 gap-y-1 text-xs sm:grid-cols-[auto_1fr]">
-				<dt class="text-paper/55">{fairness.clientSeed ? 'This match' : 'Next match'}</dt>
-				<dd class="font-mono break-all">{fairness.matchId}</dd>
-				<dt class="text-paper/55">Server seed hash</dt>
-				<dd class="font-mono break-all">{fairness.serverSeedHash}</dd>
-				{#if fairness.clientSeed}
-					<dt class="text-paper/55">Client seed</dt>
-					<dd class="font-mono break-all">{fairness.clientSeed}</dd>
-				{/if}
-			</dl>
+		<p class="mt-2 text-xs text-paper/55">
+			The deck is shuffled with HMAC-SHA256(server seed, client seed). The server seed is revealed
+			when the match ends.
+		</p>
 
-			{#if fairness.revealed}
-				<div class="border-t border-paper/10 pt-4">
-					<p class="font-semibold text-paper">Last match</p>
-					<dl class="mt-1 grid gap-x-3 gap-y-1 text-xs sm:grid-cols-[auto_1fr]">
-						<dt class="text-paper/55">Server seed</dt>
-						<dd class="font-mono break-all">{fairness.revealed.serverSeed}</dd>
-						<dt class="text-paper/55">Hash shown before</dt>
-						<dd class="font-mono break-all">{fairness.revealed.serverSeedHash}</dd>
-					</dl>
-					<div class="mt-3 flex flex-wrap items-center gap-3">
-						<button class="btn-ghost px-4 text-xs" onclick={check} disabled={checking}>
-							{checking ? 'Checking…' : 'Verify last match'}
+		<div class="mt-5 space-y-4">
+			{#each fields as field (field.id)}
+				<div>
+					<p class="label mb-1.5" id="{field.id}-label">{field.label}</p>
+					<div class="flex items-stretch gap-2">
+						<output
+							id={field.id}
+							aria-labelledby="{field.id}-label"
+							class="min-w-0 flex-1 rounded-lg border border-paper/10 bg-black/30 px-3 py-2 font-mono text-xs break-all text-paper"
+						>
+							{field.value}
+						</output>
+						<button
+							class="btn-ghost size-10 shrink-0 p-0"
+							onclick={() => copy(field.id, field.value)}
+							aria-label="Copy {field.label.toLowerCase()}"
+							title="Copy"
+						>
+							{#if copied === field.id}
+								<!-- A tick: copied. -->
+								<svg
+									viewBox="0 0 20 20"
+									class="size-4 text-brass"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="1.8"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									aria-hidden="true"
+								>
+									<path d="m4.5 10.5 3.5 3.5 7.5-8" />
+								</svg>
+							{:else}
+								<!-- Two sheets: copy. -->
+								<svg
+									viewBox="0 0 20 20"
+									class="size-4"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="1.6"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									aria-hidden="true"
+								>
+									<rect x="7" y="7" width="10" height="10" rx="2" />
+									<path
+										d="M13 4.5V4a1.5 1.5 0 0 0-1.5-1.5h-7A1.5 1.5 0 0 0 3 4v7a1.5 1.5 0 0 0 1.5 1.5H5"
+									/>
+								</svg>
+							{/if}
 						</button>
-						{#if shown && 'error' in shown}
-							<span class="text-ember" role="alert">{shown.error}</span>
-						{:else if shown}
-							<span class={shown.ok ? 'text-brass' : 'text-ember'} role="status">
-								{shown.ok
-									? `Verified: all ${shown.shuffles} shuffles match the seed.`
-									: 'These shuffles do not match the seed.'}
-							</span>
-						{/if}
 					</div>
 				</div>
-			{:else}
-				<p class="border-t border-paper/10 pt-4 text-xs text-paper/55">
-					Once a match ends here, its seed shows up and you can verify it.
-				</p>
-			{/if}
+			{/each}
 		</div>
+
+		<p class="sr-only" aria-live="polite">{copied ? 'Copied.' : ''}</p>
+
 		<div class="mt-6 flex justify-end">
 			<button class="btn-brass" onclick={() => dialog?.close()}>Close</button>
 		</div>

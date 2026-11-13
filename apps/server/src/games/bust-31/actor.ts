@@ -32,7 +32,6 @@ import {
 	GONE_AFTER_MS,
 	identify,
 	kickFromTable,
-	lastProof,
 	loadRoom,
 	migrateRoom,
 	parseSeat,
@@ -207,12 +206,6 @@ export const bust31Room = actor({
 
 			c.vars.game = withRng(c, (rng) => playCard(c.vars.game, me, parsed.data.cardId, rng));
 			await commit(c);
-		},
-		/** The last match's seeds and shuffles, so a player can check it was dealt fairly. */
-		fairnessProof: async (c) => {
-			caller(c);
-
-			return lastProof(c);
 		},
 		reset: async (c) => {
 			requireOpenTable(c);

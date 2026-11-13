@@ -115,11 +115,13 @@ export type MatchTable = {
 	openedByAdmin: string | null;
 };
 
-/** A match's revealed seeds (docs/architecture/fairness.md); all null for matches played before them. */
+/**
+ * A match's revealed seeds (docs/architecture/fairness.md); both null for matches played before them. Each
+ * shuffle's client seed is built from its log event.
+ */
 export type MatchSeeds = {
 	serverSeedHash: string | null;
 	serverSeed: string | null;
-	clientSeed: string | null;
 };
 
 export type MatchDetail = Omit<MatchRow, 'players' | 'winner'> &
@@ -142,7 +144,6 @@ export async function matchDetail(sql: SQL, id: string): Promise<MatchDetail | n
 			m.end_reason AS "endReason",
 			m.server_seed_hash AS "serverSeedHash",
 			m.server_seed AS "serverSeed",
-			m.client_seed AS "clientSeed",
 			r.tournament_id AS "tournamentId",
 			t.name AS "tournamentName",
 			r.created_by_player_id AS "openedByPlayerId",
@@ -186,32 +187,35 @@ export async function matchLog(sql: SQL, id: string): Promise<MatchLog | null> {
 	return (row as MatchLog | undefined) ?? null;
 }
 
-/** How a match's shuffles check against its seeds: null when it has none, else which shuffles failed. */
-export type FairnessResult = { ok: boolean; shuffles: number; failed: number[] } | null;
+/**
+ * How a match's shuffles check against its seeds: null when it has none, else which shuffles failed, each as
+ * "round 2 #1".
+ */
+export type FairnessResult = { ok: boolean; shuffles: number; failed: string[] } | null;
 
 /**
  * Checks every shuffle in the log against the stored seeds, the way a player can (fairness.ts). The log's
  * commitment must be the stored one too.
  */
 export async function checkMatchFairness(
-	seeds: MatchSeeds,
+	match: MatchSeeds & { id: string },
 	log: MatchLog | null
 ): Promise<FairnessResult> {
-	if (!seeds.serverSeed || !seeds.serverSeedHash || !seeds.clientSeed || !log) {
+	if (!match.serverSeed || !match.serverSeedHash || !log) {
 		return null;
 	}
 
-	const proof = proofFromLog(log.events);
+	const proof = proofFromLog(match.id, log.events);
 	const sameSeeds =
-		proof?.serverSeed === seeds.serverSeed &&
-		proof.serverSeedHash === seeds.serverSeedHash &&
-		proof.clientSeed === seeds.clientSeed;
+		proof?.serverSeed === match.serverSeed && proof.serverSeedHash === match.serverSeedHash;
 	if (!proof || !sameSeeds) {
 		return { ok: false, shuffles: 0, failed: [] };
 	}
 
 	const check = await checkFairness(proof);
-	const failed = check.shuffles.filter((shuffle) => !shuffle.ok).map((shuffle) => shuffle.nonce);
+	const failed = check.shuffles
+		.filter((shuffle) => !shuffle.ok)
+		.map((shuffle) => `round ${shuffle.round} #${shuffle.nonce}`);
 
 	return { ok: check.ok, shuffles: check.shuffles.length, failed };
 }

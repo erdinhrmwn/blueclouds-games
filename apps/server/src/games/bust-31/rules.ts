@@ -138,7 +138,7 @@ export function playCard(game: Game, playerId: string, cardId: string, rng: Rng)
 	discard = [...discard, card];
 	if (deck.length === 0) {
 		// The card just played stays on the pile; everything under it becomes the new deck.
-		deck = shuffle(discard.slice(0, -1), rng);
+		deck = shuffle(discard.slice(0, -1), rng, game.round);
 		discard = [card];
 	}
 
@@ -222,7 +222,8 @@ export function resetToLobby(game: Game, byId: string): Game {
 }
 
 function dealRound(game: Game, starter: number, rng: Rng): Game {
-	let deck = shuffle(buildDeck(), rng);
+	const round = game.round + 1;
+	let deck = shuffle(buildDeck(), rng, round);
 	const players = game.players.map((player) => {
 		if (player.lives <= 0) return { ...player, hand: [] };
 
@@ -239,7 +240,7 @@ function dealRound(game: Game, starter: number, rng: Rng): Game {
 		total: 0,
 		direction: 1,
 		turn: starter,
-		round: game.round + 1,
+		round,
 	};
 }
 
