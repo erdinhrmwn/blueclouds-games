@@ -44,6 +44,8 @@ export type SeatSummary = z.infer<typeof SeatSummary>;
 /** What the room list shows about one table. Sent by room actors to their game's list. */
 export const RoomSummary = z.object({
 	code: RoomCode,
+	/** The table's own name; rooms running older code send none. */
+	name: z.string().max(32).nullable().default(null),
 	host: z.string().max(20).nullable(),
 	players: z.number().int().min(0).max(SEATS),
 	maxPlayers: z.number().int().min(1).max(SEATS),

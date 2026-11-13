@@ -84,6 +84,8 @@ export type Saved<G extends Table, M extends MatchState = MatchState> = {
 	next?: NextMatch;
 	/** The last match played here, so the table can still show its rounds once it ended. */
 	lastMatchId?: string | null;
+	/** The table's own name, from the platform (null: none was picked). */
+	roomName?: string | null;
 };
 
 /**
@@ -258,6 +260,7 @@ export async function commitRoom<G extends Table, M extends MatchState>(
 		terminated: vars.terminated,
 		next: vars.next,
 		lastMatchId: vars.lastMatchId ?? null,
+		roomName: vars.roomName ?? null,
 	};
 	await c.db.transaction(
 		async (tx: Ctx) => {
@@ -912,6 +915,7 @@ export async function reportToDirectory(c: Ctx, slug: string, leaving?: string):
 		const host = game.players.find((p) => p.id === game.hostId)?.name ?? null;
 		await directory.report({
 			code,
+			name: c.vars.roomName ?? null,
 			host,
 			players: game.players.length,
 			maxPlayers: SEATS,
@@ -1079,6 +1083,7 @@ export async function refreshTournament(c: Ctx): Promise<TournamentRoom | null> 
 	}
 	const tournament = room?.tournament;
 	c.vars.listed = !tournament && room?.visibility === "public";
+	c.vars.roomName = room?.name ?? null;
 
 	if (!tournament) {
 		c.vars.tournament = null;

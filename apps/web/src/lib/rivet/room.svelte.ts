@@ -42,6 +42,8 @@ export type BaseView = {
 	turnPlayerId: string | null;
 	turn: { left: number; total: number } | null;
 	round: number;
+	/** The table's own name, picked when it was opened; null (or missing from older rooms) for none. */
+	roomName?: string | null;
 	/** Set at a tournament table: it starts by itself. Times are ms from when the view was sent. */
 	tournament: {
 		name: string;

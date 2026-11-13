@@ -301,6 +301,7 @@ function currentTurn(c: Ctx): { playerId: string | null; key: number } {
 const viewOf = (c: Ctx) => ({
 	...publicView(c.vars.game, turnClock(c.vars.timer)),
 	tournament: tournamentView(c),
+	roomName: c.vars.roomName ?? null,
 	fairness: fairnessView(c),
 });
 

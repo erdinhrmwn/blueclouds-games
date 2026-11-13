@@ -4,7 +4,7 @@ import type { AppEnv } from "../app";
 import { z } from "zod";
 import { ApiError, ok, validate } from "../lib/http";
 import { playerAuth, serverAuth } from "../middleware/auth";
-import { history, MatchReport, recordMatch } from "../services/matches";
+import { history, MatchReport, recordMatch, stats } from "../services/matches";
 import { matchRounds, recordRound, RoundReport } from "../services/rounds";
 
 const HistoryQuery = z.object({ cursor: z.uuid().optional() });
@@ -55,6 +55,13 @@ export function matchRoutes(sql: SQL, serverKey: string) {
 		const page = await history(sql, c.get("player").id, cursor);
 
 		return ok(c, page);
+	});
+
+	/** The signed-in player's record per game, for their profile. */
+	app.get("/players/me/stats", playerAuth(sql), async (c) => {
+		const record = await stats(sql, c.get("player").id);
+
+		return ok(c, record);
 	});
 
 	return app;

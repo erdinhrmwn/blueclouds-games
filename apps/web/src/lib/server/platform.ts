@@ -219,12 +219,13 @@ export type Visibility = 'public' | 'private';
 export async function createRoom(
 	event: RequestEvent,
 	game: string,
-	visibility: Visibility
+	visibility: Visibility,
+	name: string | null = null
 ): Promise<Room> {
 	const { room } = await call<{ room: Room }>(event, '/rooms', {
 		method: 'POST',
 		secret: secretOrEnded(event.cookies),
-		body: { game, visibility }
+		body: { game, visibility, name: name ?? undefined }
 	});
 
 	return room;
@@ -398,6 +399,14 @@ export async function myMatches(
 	const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : '';
 
 	return call(event, `/players/me/matches${query}`, { method: 'GET', secret: signedIn(event) });
+}
+
+/** The player's record in one game: finished matches played, and won. */
+export type GameStats = { game: string; played: number; wins: number };
+
+/** The signed-in player's record per game, for their profile. */
+export async function myStats(event: RequestEvent): Promise<{ games: GameStats[] }> {
+	return call(event, '/players/me/stats', { method: 'GET', secret: signedIn(event) });
 }
 
 /** A match's rounds, running or finished. Matches are public: any player may look. */

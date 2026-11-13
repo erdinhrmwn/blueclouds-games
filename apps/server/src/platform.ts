@@ -114,6 +114,8 @@ async function send(path: string, body: unknown): Promise<SendResult> {
 
 const TournamentRoom = z.object({
 	visibility: z.enum(["public", "private"]),
+	/** The table's own name; an older platform sends none. */
+	name: z.string().max(32).nullable().default(null),
 	minPlayers: z.number().int().min(1),
 	startedAt: z.string().nullable(),
 	closedAt: z.string().nullable(),

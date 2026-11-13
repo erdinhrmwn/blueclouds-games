@@ -271,6 +271,28 @@ describe("my match history", () => {
 		expect(second.json.data.nextCursor).toBeNull();
 	});
 
+	test("stats count finished matches and wins per game, not terminated ones", async () => {
+		const dana = await guest(t.app, "Dana");
+		const seats = (placement: number) => [
+			{ seat: 0, playerId: dana.player.id, bot: false, placement, score: 1 },
+			{
+				seat: 1,
+				playerId: null,
+				bot: true,
+				botName: "Bot Rain",
+				placement: 3 - placement,
+				score: 0,
+			},
+		];
+		expect((await post(report({ players: seats(1) }))).status).toBe(201);
+		expect((await post(report({ players: seats(2) }))).status).toBe(201);
+		expect((await post(report({ players: seats(1), endReason: "terminated" }))).status).toBe(201);
+
+		const res = await call(t.app, "GET", "/v1/players/me/stats", { token: dana.secret });
+		expect(res.status).toBe(200);
+		expect(res.json.data).toEqual({ games: [{ game: "bust-31", played: 2, wins: 1 }] });
+	});
+
 	test("bad cursor is bad_input", async () => {
 		const res = await call(t.app, "GET", "/v1/players/me/matches?cursor=nope", {
 			token: ann.secret,

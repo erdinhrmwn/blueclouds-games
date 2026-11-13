@@ -18,8 +18,9 @@ export const GET: RequestHandler = async ({ params }) => {
 	try {
 		const list = await listRooms(params.game);
 		// Seats are for the backoffice; the public list shows only counts and the host.
-		const rooms = list.map(({ code, host, players, maxPlayers, phase }) => ({
+		const rooms = list.map(({ code, name, host, players, maxPlayers, phase }) => ({
 			code,
+			name,
 			host,
 			players,
 			maxPlayers,
@@ -33,17 +34,31 @@ export const GET: RequestHandler = async ({ params }) => {
 	}
 };
 
-/** Opens a new table, private unless `{ visibility: 'public' }`. The platform picks the code; the browser never makes one up. */
+/** A table name: up to this many characters, blank means none. */
+const NAME_MAX = 32;
+
+/**
+ * Opens a new table, private unless `{ visibility: 'public' }`, with an optional `name`. The platform picks the
+ * code; the browser never makes one up.
+ */
 export const POST: RequestHandler = async (event) => {
 	if (!hasRooms(event.params.game)) {
 		return apiError(404, 'not_found', 'There is no such game.');
 	}
 
-	const body = (await event.request.json().catch(() => null)) as { visibility?: unknown } | null;
+	const body = (await event.request.json().catch(() => null)) as {
+		visibility?: unknown;
+		name?: unknown;
+	} | null;
 	const visibility: Visibility = body?.visibility === 'public' ? 'public' : 'private';
 
+	const name = typeof body?.name === 'string' ? body.name.trim() : '';
+	if (name.length > NAME_MAX) {
+		return apiError(400, 'invalid', `A table name is at most ${NAME_MAX} characters.`);
+	}
+
 	try {
-		const { code } = await createRoom(event, event.params.game, visibility);
+		const { code } = await createRoom(event, event.params.game, visibility, name || null);
 		return json({ code }, { status: 201 });
 	} catch (err) {
 		return failure(err);

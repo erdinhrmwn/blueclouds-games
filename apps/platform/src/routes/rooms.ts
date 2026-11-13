@@ -18,7 +18,17 @@ const Game = z.string().regex(/^[a-z0-9-]{2,32}$/, "Unknown game.");
 const Visibility = z.enum(["public", "private"]);
 const RoomParam = z.object({ code: z.string().regex(/^[A-Z0-9]{4,8}$/, "Not a room code.") });
 
-const NewRoom = z.object({ game: Game, visibility: Visibility.default("private") });
+const NewRoom = z.object({
+	game: Game,
+	visibility: Visibility.default("private"),
+	/** The table's own name; left out (or blank) shows "<host>'s table". */
+	name: z
+		.string()
+		.trim()
+		.max(32)
+		.transform((value) => value || null)
+		.optional(),
+});
 const Redeem = z.object({
 	invite: z
 		.string()
@@ -39,8 +49,8 @@ export function roomRoutes(sql: SQL, serverKey: string) {
 		auth,
 		validate("json", NewRoom),
 		async (c) => {
-			const { game, visibility } = c.req.valid("json");
-			const room = await rooms.openRoom(sql, game, visibility, c.get("player").id);
+			const { game, visibility, name } = c.req.valid("json");
+			const room = await rooms.openRoom(sql, game, visibility, c.get("player").id, name ?? null);
 
 			return ok(c, { room }, 201);
 		},

@@ -119,6 +119,7 @@ CREATE TABLE rooms (
   game_slug             text NOT NULL REFERENCES games(slug),
   code                  text NOT NULL UNIQUE CHECK (code ~ '^[A-Z0-9]{4,8}$'),
   visibility            text NOT NULL DEFAULT 'private' CHECK (visibility IN ('public', 'private')),  -- 014
+  name                  text CHECK (name IS NULL OR char_length(name) BETWEEN 1 AND 32),  -- 016: picked in "Open a table"; null shows "<host>'s table"
   tournament_id              uuid,                          -- null = an open room anyone with the code can join
   created_by_player_id  uuid REFERENCES players(id),   -- a player pressed "New table"
   created_by_admin_id   uuid REFERENCES admins(id),    -- an admin made it in the backoffice (null for tournament rooms the job made)

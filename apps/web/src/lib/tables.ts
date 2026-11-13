@@ -14,9 +14,13 @@ export function enterTable(game: string, code: string): string | null {
 }
 
 /** Opens a new table (the platform picks its code) and goes there. Returns an error to show, or null. */
-export async function newTable(game: string, visibility: Visibility): Promise<string | null> {
+export async function newTable(
+	game: string,
+	visibility: Visibility,
+	name = ''
+): Promise<string | null> {
 	try {
-		const { code } = await openRoom(game, visibility);
+		const { code } = await openRoom(game, visibility, name);
 		await goto(`/${game}/room/${code}`);
 		return null;
 	} catch (err) {

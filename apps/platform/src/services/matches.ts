@@ -233,6 +233,32 @@ export async function recordMatch(sql: SQL, match: MatchReport): Promise<boolean
 	});
 }
 
+/**
+ * The player's own record per game: finished matches played and won (placed first). Matches an admin
+ * terminated count for neither.
+ */
+export async function stats(sql: SQL, playerId: string) {
+	const rows = await sql`
+		SELECT
+			m.game_slug AS game,
+			count(*)::int AS played,
+			count(*) FILTER (WHERE mp.placement = 1)::int AS wins
+		FROM match_players mp
+		JOIN matches m ON m.id = mp.match_id
+		WHERE mp.player_id = ${playerId}
+			AND m.end_reason = 'finished'
+		GROUP BY m.game_slug
+		ORDER BY m.game_slug`;
+
+	return {
+		games: rows.map((row: { game: string; played: number; wins: number }) => ({
+			game: row.game,
+			played: row.played,
+			wins: row.wins,
+		})),
+	};
+}
+
 /** The player's own history, newest first. Cursor = last match id of the previous page. */
 export async function history(sql: SQL, playerId: string, cursor: string | undefined) {
 	const afterCursor = cursor ? sql`AND mp.match_id < ${cursor}` : sql``;

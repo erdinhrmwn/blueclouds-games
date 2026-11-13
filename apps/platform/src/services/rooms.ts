@@ -50,12 +50,15 @@ export async function insertRoom(
 	room: {
 		game: string;
 		visibility?: Visibility;
+		/** The table's own name, set by whoever opened it. */
+		name?: string | null;
 		tournamentId?: string;
 		playerId?: string;
 		adminId?: string | null;
 	},
 ): Promise<Room> {
 	const visibility = room.visibility ?? "private";
+	const name = room.name ?? null;
 	const tournamentId = room.tournamentId ?? null;
 	const playerId = room.playerId ?? null;
 	const adminId = room.adminId ?? null;
@@ -63,9 +66,23 @@ export async function insertRoom(
 	for (let i = 0; i < CODE_TRIES; i++) {
 		const [row] = await sql`
 			INSERT INTO rooms (
-				game_slug, code, visibility, tournament_id, created_by_player_id, created_by_admin_id
+				game_slug,
+				code,
+				visibility,
+				name,
+				tournament_id,
+				created_by_player_id,
+				created_by_admin_id
 			)
-			VALUES (${room.game}, ${newRoomCode()}, ${visibility}, ${tournamentId}, ${playerId}, ${adminId})
+			VALUES (
+				${room.game},
+				${newRoomCode()},
+				${visibility},
+				${name},
+				${tournamentId},
+				${playerId},
+				${adminId}
+			)
 			ON CONFLICT (code) DO NOTHING
 			RETURNING id, code, game_slug AS game`;
 
@@ -170,17 +187,23 @@ async function inviteLink(sql: SQL, roomId: string, playerId: string): Promise<s
 }
 
 /** A player opens a new table: the platform picks its code. The opener is its first member. */
-export async function openRoom(sql: SQL, game: string, visibility: Visibility, playerId: string) {
+export async function openRoom(
+	sql: SQL,
+	game: string,
+	visibility: Visibility,
+	playerId: string,
+	name: string | null = null,
+) {
 	await requirePlayable(sql, game);
 
 	const room = await sql.begin(async (tx) => {
-		const made = await insertRoom(tx, { game, visibility, playerId });
+		const made = await insertRoom(tx, { game, visibility, name, playerId });
 		await tx`INSERT INTO room_members (room_id, player_id) VALUES (${made.id}, ${playerId})`;
 
 		return made;
 	});
 
-	return { ...room, visibility };
+	return { ...room, visibility, name };
 }
 
 /**
@@ -243,6 +266,7 @@ export async function roomSeats(sql: SQL, code: string) {
 			r.code,
 			r.game_slug AS game,
 			r.visibility,
+			r.name AS room_name,
 			r.started_at,
 			r.closed_at,
 			t.id AS tournament_id,
@@ -284,6 +308,7 @@ export async function roomSeats(sql: SQL, code: string) {
 		code: row.code,
 		game: row.game,
 		visibility: row.visibility,
+		name: row.room_name ?? null,
 		minPlayers: row.min_players,
 		startedAt: toIso(row.started_at),
 		closedAt: toIso(row.closed_at),
