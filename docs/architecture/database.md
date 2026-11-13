@@ -535,7 +535,7 @@ new file after `008`.
 
 Erdin, 2026-11-12: a table must not be joinable by typing its code. A private table is entered only through an invite:
 
-- **Invite link** `/invite/<token>`: 16 random bytes as 32 hex characters (letters and digits only), one live link per room, valid until reset. Anyone who may enter the table can copy it; only the player who opened the table can reset it, which kills the old link.
+- **Invite link** `/invite/<token>`: 16 random bytes as 32 hex characters (letters and digits only), one live link per room, valid until reset or for 24 hours (`expires_at`, migration 011, Erdin 2026-11-13); asking for the link after that makes a new one. Anyone who may enter the table can copy it; only the player who opened the table can reset it, which kills the old link.
 - **No invite codes** (Erdin, 2026-11-12): short typed codes were tried and removed; the link is the only way in.
 - Redeeming a link (`POST /v1/invites/redeem`, limited to 10 tries a minute per IP) adds the player to `room_members`, so reloads and reconnects keep working. The opener is a member from the start.
 - `rooms.visibility` is `public` or `private`. New rooms (tournament rooms too) default to private. Room actors read it from `/v1/rooms/:code/seats` and only public, non-tournament tables report to the room list.

@@ -65,8 +65,10 @@
 		return { label: 'kick', run: kick };
 	};
 
-	// Invites: the table's link, the same one until the host resets it.
+	// Invites: the table's link, the same one until the host resets it or it runs out (24 hours).
 	let copied = $state(false);
+	/** When the copied link stops working, as the player's local time. */
+	let linkExpires = $state<string | null>(null);
 	/** Shown to copy by hand when the browser blocks the clipboard. */
 	let linkText = $state<string | null>(null);
 	let shareNote = $state<string | null>(null);
@@ -88,8 +90,13 @@
 
 	const copyLink = () =>
 		share(async () => {
-			const { token } = await createInvite(room.game, code);
+			const { token, expiresAt } = await createInvite(room.game, code);
 			const link = `${location.origin}/invite/${token}`;
+			linkExpires = new Date(expiresAt).toLocaleString(undefined, {
+				weekday: 'short',
+				hour: '2-digit',
+				minute: '2-digit'
+			});
 
 			try {
 				await navigator.clipboard.writeText(link);
@@ -108,6 +115,7 @@
 		share(async () => {
 			await resetInviteLink(room.game, code);
 			linkText = null;
+			linkExpires = null;
 			shareNote = 'The old link no longer works. Copy the new one to share it.';
 		});
 </script>
@@ -162,6 +170,9 @@
 						onfocus={(e) => e.currentTarget.select()}
 					/>
 				</label>
+			{/if}
+			{#if linkExpires}
+				<p class="text-xs text-paper/60">The link works for 24 hours, until {linkExpires}.</p>
 			{/if}
 			{#if shareNote}<p class="max-w-80 text-sm text-paper/80" role="status">{shareNote}</p>{/if}
 		</div>
