@@ -223,6 +223,54 @@ export async function login(
 	return { player: toPlayer(row), playerSecret: secret };
 }
 
+/**
+ * Changes an account's password after checking the current one (wrong tries count toward the same lockout as
+ * sign-in). Every other device is signed out; the one asking keeps its secret.
+ */
+export async function changePassword(
+	sql: SQL,
+	player: Player,
+	keepSecret: string,
+	input: { currentPassword: string; newPassword: string },
+): Promise<void> {
+	if (player.guest || !player.username) {
+		throw new ApiError("forbidden", 403, "Link an account to set a password.");
+	}
+
+	const username = player.username;
+	if (isLocked(username)) {
+		throw new ApiError("rate_limited", 429, "Too many wrong passwords. Try again in 15 minutes.");
+	}
+
+	const [row] = (await sql`
+		SELECT password_hash
+		FROM players
+		WHERE id = ${player.id}`) as { password_hash: string | null }[];
+
+	const valid =
+		!!row?.password_hash && (await Bun.password.verify(input.currentPassword, row.password_hash));
+	if (!valid) {
+		noteFailure(username);
+		throw new ApiError("unauthenticated", 401, "Your current password is wrong.");
+	}
+
+	failures.delete(username);
+	const passwordHash = await Bun.password.hash(input.newPassword); // argon2id
+
+	await sql.begin(async (tx) => {
+		await tx`
+			UPDATE players
+			SET password_hash = ${passwordHash}
+			WHERE id = ${player.id}`;
+		await tx`
+			UPDATE player_secrets
+			SET revoked_at = now()
+			WHERE player_id = ${player.id}
+				AND revoked_at IS NULL
+				AND secret_hash <> ${hashSecret(keepSecret)}`;
+	});
+}
+
 /** Signs this device out: its secret stops working. A guest that never played is deleted, since it can't come back. */
 export async function logout(sql: SQL, player: Player, secret: string): Promise<void> {
 	await sql`UPDATE player_secrets SET revoked_at = now() WHERE secret_hash = ${hashSecret(secret)}`;

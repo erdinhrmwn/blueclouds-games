@@ -271,7 +271,7 @@ describe("my match history", () => {
 		expect(second.json.data.nextCursor).toBeNull();
 	});
 
-	test("stats count finished matches and wins per game, not terminated ones", async () => {
+	test("stats count finished matches, wins and the best run of wins per game, not terminated ones", async () => {
 		const dana = await guest(t.app, "Dana");
 		const seats = (placement: number) => [
 			{ seat: 0, playerId: dana.player.id, bot: false, placement, score: 1 },
@@ -284,13 +284,21 @@ describe("my match history", () => {
 				score: 0,
 			},
 		];
-		expect((await post(report({ players: seats(1) }))).status).toBe(201);
-		expect((await post(report({ players: seats(2) }))).status).toBe(201);
-		expect((await post(report({ players: seats(1), endReason: "terminated" }))).status).toBe(201);
+		// Won, won, lost, won, then a terminated "win" that counts for nothing: best run is 2.
+		const at = (minute: number) => `2026-11-12T08:${String(minute).padStart(2, "0")}:00Z`;
+		const placements = [1, 1, 2, 1];
+		for (const [index, placement] of placements.entries()) {
+			const body = report({ players: seats(placement), endedAt: at(10 + index) });
+			expect((await post(body)).status).toBe(201);
+		}
+		const stopped = report({ players: seats(1), endReason: "terminated", endedAt: at(20) });
+		expect((await post(stopped)).status).toBe(201);
 
 		const res = await call(t.app, "GET", "/v1/players/me/stats", { token: dana.secret });
 		expect(res.status).toBe(200);
-		expect(res.json.data).toEqual({ games: [{ game: "bust-31", played: 2, wins: 1 }] });
+		expect(res.json.data).toEqual({
+			games: [{ game: "bust-31", played: 4, wins: 3, bestStreak: 2 }],
+		});
 	});
 
 	test("bad cursor is bad_input", async () => {

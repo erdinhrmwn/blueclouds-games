@@ -56,8 +56,13 @@ export const registerAccount = (body: { name: string; username: string; password
 export const signIn = (body: { username: string; password: string }) =>
 	post<AccountPlayer>('/api/account/login', body);
 export const signOut = () => post<{ signedOut: true }>('/api/account/logout', {});
+export const updatePassword = (body: { currentPassword: string; newPassword: string }) =>
+	request<{ changed: true }>('PUT', '/api/account/password', body);
 
 // Tables and invites
+
+export const findRoom = (code: string) =>
+	request<{ game: string }>('GET', `/api/rooms/${encodeURIComponent(code)}`);
 
 export const openRoom = (game: string, visibility: Visibility, name: string) =>
 	post<{ code: string }>(`/api/${encodeURIComponent(game)}/rooms`, { visibility, name });

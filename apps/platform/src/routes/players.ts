@@ -48,6 +48,10 @@ const Password = z
 	.max(200, "Use at most 200 characters.");
 
 const Register = z.object({ name: Name, username: Username, password: Password });
+const PasswordChange = z.object({
+	currentPassword: z.string().min(1).max(200),
+	newPassword: Password,
+});
 const Login = z.object({
 	username: z.string().trim().toLowerCase().max(64),
 	password: z.string().max(200),
@@ -113,6 +117,13 @@ export function playerRoutes(sql: SQL, signer: Signer, serverKey: string) {
 		await players.noteSeen(sql, player.id);
 
 		return ok(c, { player });
+	});
+
+	/** Accounts only. Signs out every other device; this one stays signed in. */
+	app.put("/players/me/password", auth, validate("json", PasswordChange), async (c) => {
+		await players.changePassword(sql, c.get("player"), c.get("playerSecret"), c.req.valid("json"));
+
+		return ok(c, { changed: true });
 	});
 
 	/** Accounts only: a guest keeps its generated name until it links an account. */

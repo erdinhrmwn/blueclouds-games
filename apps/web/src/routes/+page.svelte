@@ -3,6 +3,7 @@
 	import { prefersReducedMotion } from 'svelte/motion';
 	import { GAMES } from '#lib/games/catalog.ts';
 	import Nimbus from '#lib/components/Nimbus.svelte';
+	import TableCodeJoin from '#lib/components/TableCodeJoin.svelte';
 	import { playLanding } from '#lib/landing-motion.ts';
 
 	const fewestPlayers = Math.min(...GAMES.map((game) => game.minPlayers));
@@ -64,9 +65,12 @@
 				Quick card games for {fewestPlayers} to {mostPlayers} players. Open a table, send your friends
 				the link, and let bots take any seat that’s left.
 			</p>
-			<p class="mt-7" data-enter>
-				<a class="btn-brass h-12 rounded-xl px-7 text-base" href="#games-title">Pick a game</a>
-			</p>
+			<div class="mt-7 flex max-w-xl flex-col gap-3 sm:flex-row" data-enter>
+				<a class="btn-brass h-12 shrink-0 rounded-xl px-7 text-base" href="#games-title"
+					>Pick a game</a
+				>
+				<TableCodeJoin />
+			</div>
 		</div>
 
 		<!-- The far half of a table seen from your chair: Nimbus in the pit, a fan of backs on the felt. -->

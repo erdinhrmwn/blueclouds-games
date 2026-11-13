@@ -209,7 +209,11 @@ Bearer player secret. The player's own history, newest first, 20 per page: `data
 
 ### `GET /v1/players/me/stats`
 
-Bearer player secret. The player's record per game for their profile, counting finished matches only (an admin-terminated match counts for neither): `data: { "games": [{ "game": "bust-31", "played": 42, "wins": 13 }] }`. A game the player never finished a match in is left out.
+Bearer player secret. The player's record per game for their profile, counting finished matches only (an admin-terminated match counts for none of it): `data: { "games": [{ "game": "bust-31", "played": 42, "wins": 13, "bestStreak": 6 }] }`, where `bestStreak` is the longest run of wins in a row. A game the player never finished a match in is left out.
+
+### `PUT /v1/players/me/password`
+
+Bearer player secret, accounts only (a guest gets 403). Body `{ "currentPassword", "newPassword" }` (new: 8 to 200 characters). A wrong current password is 401 and counts toward the same 5-tries lockout as sign-in. On success every other device's secret is revoked; the one asking stays signed in: `data: { "changed": true }`.
 
 ### `GET /v1/matches/:matchId/rounds`
 

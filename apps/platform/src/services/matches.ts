@@ -234,27 +234,49 @@ export async function recordMatch(sql: SQL, match: MatchReport): Promise<boolean
 }
 
 /**
- * The player's own record per game: finished matches played and won (placed first). Matches an admin
- * terminated count for neither.
+ * The player's own record per game: finished matches played, won (placed first), and the longest run of wins in
+ * a row. Matches an admin terminated count for none of them.
  */
 export async function stats(sql: SQL, playerId: string) {
+	// A run of wins is a stretch where a game's match number and its win number move together
+	// (gaps and islands): within one run, match number minus win number stays the same.
 	const rows = await sql`
+		WITH finished AS (
+			SELECT
+				m.game_slug,
+				mp.placement = 1 AS won,
+				row_number() OVER (PARTITION BY m.game_slug ORDER BY m.ended_at, m.id) AS nth,
+				row_number() OVER (
+					PARTITION BY m.game_slug, mp.placement = 1
+					ORDER BY m.ended_at, m.id
+				) AS nth_same
+			FROM match_players mp
+			JOIN matches m ON m.id = mp.match_id
+			WHERE mp.player_id = ${playerId}
+				AND m.end_reason = 'finished'
+		),
+		streaks AS (
+			SELECT game_slug, count(*)::int AS length
+			FROM finished
+			WHERE won
+			GROUP BY game_slug, nth - nth_same
+		)
 		SELECT
-			m.game_slug AS game,
+			f.game_slug AS game,
 			count(*)::int AS played,
-			count(*) FILTER (WHERE mp.placement = 1)::int AS wins
-		FROM match_players mp
-		JOIN matches m ON m.id = mp.match_id
-		WHERE mp.player_id = ${playerId}
-			AND m.end_reason = 'finished'
-		GROUP BY m.game_slug
-		ORDER BY m.game_slug`;
+			count(*) FILTER (WHERE f.won)::int AS wins,
+			coalesce((SELECT max(s.length) FROM streaks s WHERE s.game_slug = f.game_slug), 0)::int
+				AS best_streak
+		FROM finished f
+		GROUP BY f.game_slug
+		ORDER BY f.game_slug`;
 
 	return {
-		games: rows.map((row: { game: string; played: number; wins: number }) => ({
+		games: rows.map((row: { game: string; played: number; wins: number; best_streak: number }) => ({
 			game: row.game,
 			played: row.played,
 			wins: row.wins,
+			bestStreak: row.best_streak,
 		})),
 	};
 }

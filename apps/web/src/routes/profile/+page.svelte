@@ -3,6 +3,7 @@
 	import { GAMES, gameBySlug } from '#lib/games/catalog.ts';
 	import { WELCOME } from '#lib/guest.ts';
 	import { createAccount, type FormErrors, logOut, NAME_MAX, player } from '#lib/player.svelte.ts';
+	import PasswordDialog from '#lib/components/PasswordDialog.svelte';
 	import { when } from '#lib/when.ts';
 	import { onMount } from 'svelte';
 
@@ -21,6 +22,7 @@
 	let linked = $state(false);
 	let linking = $state(false);
 	let logOutError = $state<string | null>(null);
+	let changingPassword = $state(false);
 
 	// Dates follow the visitor's own clock and language, so they are written in the browser only.
 	let mounted = $state(false);
@@ -48,7 +50,12 @@
 	const byGame = $derived(
 		GAMES.map((game) => {
 			const record = data.stats.find((s) => s.game === game.slug);
-			return { game, played: record?.played ?? 0, wins: record?.wins ?? 0 };
+			return {
+				game,
+				played: record?.played ?? 0,
+				wins: record?.wins ?? 0,
+				bestStreak: record?.bestStreak ?? 0
+			};
 		})
 	);
 	const played = $derived(byGame.reduce((sum, row) => sum + row.played, 0));
@@ -188,6 +195,9 @@
 							{row.played} played, {row.wins}
 							{row.wins === 1 ? 'win' : 'wins'}
 						</p>
+						{#if row.bestStreak > 1}
+							<p class="text-xs text-paper/50">Best: {row.bestStreak} wins in a row</p>
+						{/if}
 						<div
 							class="mt-2 h-1.5 rounded-full bg-paper/12"
 							role="img"
@@ -248,12 +258,20 @@
 
 		{#if !player.guest}
 			<h2 class="mt-12 font-display text-xl font-bold">Account</h2>
-			<div
-				class="mt-4 flex items-center justify-between rounded-xl border border-paper/10 bg-panel px-5 py-4"
-			>
-				<span class="text-sm text-paper/70">Username</span>
-				<span class="font-semibold">@{player.username}</span>
+			<div class="mt-4 divide-y divide-paper/10 rounded-xl border border-paper/10 bg-panel">
+				<div class="flex items-center justify-between px-5 py-4">
+					<span class="text-sm text-paper/70">Username</span>
+					<span class="font-semibold">@{player.username}</span>
+				</div>
+				<div class="flex items-center justify-between px-5 py-3">
+					<span class="text-sm text-paper/70">Password</span>
+					<button
+						class="min-h-10 px-1 text-sm font-semibold text-brass hover:underline"
+						onclick={() => (changingPassword = true)}>Change</button
+					>
+				</div>
 			</div>
+			<PasswordDialog bind:open={changingPassword} />
 			<button
 				class="mt-3 h-12 w-full rounded-xl border border-ember/60 font-semibold text-ember hover:bg-ember/10"
 				onclick={signOut}>Log out</button

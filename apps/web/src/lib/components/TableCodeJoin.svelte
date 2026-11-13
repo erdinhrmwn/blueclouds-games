@@ -1,15 +1,17 @@
 <script lang="ts">
-	import { enterTable } from '#lib/tables.ts';
+	import { enterTable, enterTableByCode } from '#lib/tables.ts';
 
-	/** Joining a friend's table by its code. */
-	let { game }: { game: string } = $props();
+	/** Joining a friend's table by its code. Without a game (the landing page) the code finds its own. */
+	let { game }: { game?: string } = $props();
 
 	let code = $state('');
 	let error = $state<string | null>(null);
 
-	function submit(event: SubmitEvent) {
+	async function submit(event: SubmitEvent) {
 		event.preventDefault();
-		error = enterTable(game, code.trim().toUpperCase());
+
+		const typed = code.trim().toUpperCase();
+		error = game ? enterTable(game, typed) : await enterTableByCode(typed);
 	}
 </script>
 
@@ -17,9 +19,9 @@
 	<div
 		class="flex h-12 items-center rounded-xl border border-paper/20 bg-black/30 pr-1.5 pl-4 focus-within:border-brass"
 	>
-		<label class="sr-only" for="table-code-{game}">Table code</label>
+		<label class="sr-only" for="table-code-{game ?? 'any'}">Table code</label>
 		<input
-			id="table-code-{game}"
+			id="table-code-{game ?? 'any'}"
 			class="min-w-0 flex-1 bg-transparent text-paper uppercase placeholder:text-paper/45 placeholder:normal-case focus:outline-none"
 			bind:value={code}
 			placeholder="Table code"

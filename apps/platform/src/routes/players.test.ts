@@ -263,6 +263,46 @@ describe("accounts", () => {
 		);
 	});
 
+	test("changing the password needs the current one and signs out every other device", async () => {
+		const made = (await register({ name: "Jo", username: "jo_pw", password: "first password" }))
+			.json.data;
+		const other = (await login("jo_pw", "first password")).json.data.playerSecret;
+		const change = (body: unknown, token: string) =>
+			call(t.app, "PUT", "/v1/players/me/password", { body, token });
+
+		const wrong = await change(
+			{ currentPassword: "not it", newPassword: "second password" },
+			made.playerSecret,
+		);
+		expect(wrong.status).toBe(401);
+		const short = await change(
+			{ currentPassword: "first password", newPassword: "short" },
+			made.playerSecret,
+		);
+		expect(Object.keys(short.json.error.fields)).toEqual(["newPassword"]);
+
+		const ok = await change(
+			{ currentPassword: "first password", newPassword: "second password" },
+			made.playerSecret,
+		);
+		expect(ok.status).toBe(200);
+		expect((await call(t.app, "GET", "/v1/players/me", { token: made.playerSecret })).status).toBe(
+			200,
+		);
+		expect((await call(t.app, "GET", "/v1/players/me", { token: other })).status).toBe(401);
+		expect((await login("jo_pw", "first password")).status).toBe(401);
+		expect((await login("jo_pw", "second password")).status).toBe(200);
+	});
+
+	test("a guest has no password to change", async () => {
+		const g = await guest(t.app, "Kai");
+		const res = await call(t.app, "PUT", "/v1/players/me/password", {
+			body: { currentPassword: "anything", newPassword: "long enough" },
+			token: g.secret,
+		});
+		expect(res.status).toBe(403);
+	});
+
 	test("an unknown username answers like a wrong password; 5 wrong ones lock the username", async () => {
 		expect((await login("nobody", "whatever1")).json.error.message).toBe(
 			"Wrong username or password.",

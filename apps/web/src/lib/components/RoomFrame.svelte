@@ -199,13 +199,25 @@
 {/if}
 
 <style>
+	/* The sign hangs from a short brass rod, like the one over a casino table. */
 	.placard {
+		position: relative;
 		background: #1c1510;
 		box-shadow:
 			inset 0 0 0 1.5px var(--color-brass),
 			inset 0 0 0 5px #1c1510,
 			inset 0 0 0 6px rgb(210 165 76 / 0.22),
 			0 8px 18px rgb(0 0 0 / 0.4);
+	}
+	.placard::after {
+		content: '';
+		position: absolute;
+		top: 100%;
+		left: 50%;
+		width: 2px;
+		height: 1rem;
+		translate: -50% 0;
+		background: rgb(210 165 76 / 0.7);
 	}
 	.chip {
 		display: inline-flex;

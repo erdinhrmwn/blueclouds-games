@@ -179,6 +179,14 @@ export async function login(
 	return res.player;
 }
 
+/** Changes an account's password; the platform signs every other device out. */
+export async function changePassword(
+	event: RequestEvent,
+	body: { currentPassword: string; newPassword: string }
+): Promise<void> {
+	await call(event, '/players/me/password', { method: 'PUT', secret: signedIn(event), body });
+}
+
 /** Signs this browser out. A secret the platform already forgot is fine: the cookie goes either way. */
 export async function logout(event: RequestEvent): Promise<void> {
 	const secret = secretOf(event.cookies);
@@ -229,6 +237,17 @@ export async function createRoom(
 	});
 
 	return room;
+}
+
+/** Which game a table code belongs to, if this player may enter it (else a PlatformError). */
+export async function roomGame(event: RequestEvent, code: string): Promise<string> {
+	const path = `/rooms/${encodeURIComponent(code)}`;
+	const { room } = await call<{ room: { game: string } }>(event, path, {
+		method: 'GET',
+		secret: signedIn(event)
+	});
+
+	return room.game;
 }
 
 /** The table's invite link token, the same one until it is reset. */
@@ -402,7 +421,7 @@ export async function myMatches(
 }
 
 /** The player's record in one game: finished matches played, and won. */
-export type GameStats = { game: string; played: number; wins: number };
+export type GameStats = { game: string; played: number; wins: number; bestStreak: number };
 
 /** The signed-in player's record per game, for their profile. */
 export async function myStats(event: RequestEvent): Promise<{ games: GameStats[] }> {
