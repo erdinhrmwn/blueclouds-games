@@ -41,14 +41,14 @@ export function fairnessText(event: LogEvent): string | null {
 
 	switch (event.type) {
 		case 'fairness':
-			return `Seeds committed. Server seed hash ${String(data.serverSeedHash)}.`;
+			return `Round ${String(data.round)} seed committed. Server seed hash ${String(data.serverSeedHash)}.`;
 		case 'shuffle': {
 			const cards = (data.deck as unknown[] | undefined)?.length ?? 0;
 
 			return `Shuffle #${String(data.nonce)} of round ${String(data.round)}: ${cards} cards.`;
 		}
 		case 'reveal':
-			return `Server seed revealed: ${String(data.serverSeed)}.`;
+			return `Round ${String(data.round)} server seed revealed: ${String(data.serverSeed)}.`;
 		default:
 			return null;
 	}

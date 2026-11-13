@@ -6,6 +6,7 @@ let platformDown = false;
 mock.module("../../platform", () => ({
 	verifyPlayToken: async () => null,
 	reportMatch: async () => ({ result: "sent" }),
+	reportRound: async () => ({ result: "sent" }),
 	fetchRoomSeats: async () => null,
 	markRoom: async () => ({ ok: true }),
 	fetchVipIds: async () => {

@@ -2,12 +2,18 @@ import { describe, expect, test } from 'bun:test';
 // The real rules and log code, so the replay is checked against what the room actually records.
 import { chooseBotCard } from '../../../server/src/games/bust-31/bots';
 import { logEvents, type MatchState } from '../../../server/src/games/bust-31/match';
-import { fairRng, newCommitment } from '../../../server/src/games/shared/fair-rng';
 import {
-	checkFairness,
+	fairRng,
+	matchSeeds,
+	newCommitment,
+	seedsForRound
+} from '../../../server/src/games/shared/fair-rng';
+import {
+	checkMatch,
 	type MatchSeeds,
-	proofFromLog
+	proofsFromLog
 } from '../../../server/src/games/shared/fairness';
+import { closedRounds } from '../../../server/src/games/shared/rounds';
 import { type LogEntry, stamp } from '../../../server/src/games/shared/match';
 import {
 	addPlayer,
@@ -23,21 +29,33 @@ function playedGame() {
 	let g = createGame();
 	for (let i = 0; i < 4; i++) g = addPlayer(g, `bot-${i}`, `Bot ${i}`, true);
 	let match: MatchState = { id: 'm', startedAt: new Date(0).toISOString(), out: [], seq: 0 };
-	const next = newCommitment();
-	let seeds: MatchSeeds = { ...next, matchId: 'm', last: null };
-	let pending: LogEntry[] = [{ type: 'fairness', data: { serverSeedHash: next.serverSeedHash } }];
+	let seeds: MatchSeeds = { ...matchSeeds(newCommitment()), matchId: 'm' };
+	let pending: LogEntry[] = [];
 	const rng = fairRng(
-		() => seeds,
+		(round) => {
+			const result = seedsForRound(seeds, round);
+			seeds = result.seeds;
+			if (result.started) {
+				const { roundId, serverSeedHash } = seeds.current!;
+				pending.push({ type: 'fairness', data: { round, roundId, serverSeedHash } });
+			}
+			return seeds;
+		},
 		(record) => {
 			pending.push({ type: 'shuffle', data: record });
 			seeds = { ...seeds, last: record };
 		}
 	);
 	const events: LogEvent[] = [];
+	// As the room does: a closed round reveals its seed after its moves.
+	const revealsOf = (moves: LogEntry[], finished: boolean) =>
+		closedRounds(moves, seeds.current?.round ?? null, finished).map((round) => {
+			const seed = [seeds.previous, seeds.current].find((held) => held?.round === round)!;
+			return { type: 'reveal', data: { round, serverSeed: seed.serverSeed } };
+		});
 	const step = (next: Game) => {
-		const ended =
-			next.phase === 'finished' ? [{ type: 'reveal', data: { serverSeed: seeds.serverSeed } }] : [];
-		const entries = [...pending, ...logEvents(g, next, true), ...ended];
+		const moves = logEvents(g, next, true);
+		const entries = [...pending, ...moves, ...revealsOf(moves, next.phase === 'finished')];
 		pending = [];
 		const stamped = stamp(match, entries, events.length * 1000);
 		match = stamped.match;
@@ -62,19 +80,20 @@ describe('Bust 31 replay', () => {
 			expect(steps.filter((s) => s.mismatch)).toEqual([]);
 			const last = steps.findLast((s) => s.event.type === 'finished')!;
 			expect(last.text).toBe(`${game.players.find((p) => p.id === game.winnerId)!.name} wins.`);
-			expect(steps.at(-1)!.text).toStartWith('Server seed revealed: ');
+			expect(steps.at(-1)!.text).toMatch(/^Round \d+ server seed revealed: /);
 			expect(last.state!.seats.map((s) => s.lives)).toEqual(
 				game.players.map((p) => Math.max(0, p.lives))
 			);
 		}
 	});
 
-	test('the shuffles of a played game check out with its revealed seed', async () => {
+	test('every round of a played game checks out with its own revealed seed', async () => {
 		const { log } = playedGame();
-		const proof = proofFromLog('m', log.events)!;
+		const proofs = proofsFromLog('m', log.events);
+		const deals = log.events.filter((event) => event.type === 'deal');
 
-		expect(proof.shuffles.length).toBeGreaterThan(0);
-		expect((await checkFairness(proof)).ok).toBe(true);
+		expect(proofs.length).toBe(deals.length);
+		expect((await checkMatch(proofs)).ok).toBe(true);
 	});
 
 	test('a tampered log is flagged', () => {

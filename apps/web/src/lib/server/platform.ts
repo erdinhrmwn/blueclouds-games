@@ -1,6 +1,7 @@
 import { error, json, type Cookies, type RequestEvent } from '@sveltejs/kit';
 import { dev } from '$app/env';
 import { PLATFORM_URL } from '$app/env/private';
+import type { MatchRounds } from '#lib/rounds.ts';
 import { log } from './log.ts';
 
 /**
@@ -373,6 +374,47 @@ export async function readName(request: Request): Promise<string> {
 	}
 
 	return name;
+}
+
+/** One of the player's finished matches, as their history lists it. */
+export type MatchSummary = {
+	id: string;
+	game: string;
+	roomCode: string;
+	startedAt: string;
+	endedAt: string;
+	endReason: 'finished' | 'terminated';
+	players: number;
+	seat: number;
+	placement: number;
+	score: number;
+};
+
+/** The player's finished matches, newest first, a page at a time. */
+export async function myMatches(
+	event: RequestEvent,
+	cursor: string | null
+): Promise<{ matches: MatchSummary[]; nextCursor: string | null }> {
+	const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : '';
+
+	return call(event, `/players/me/matches${query}`, { method: 'GET', secret: signedIn(event) });
+}
+
+/** A match's rounds, running or finished. Matches are public: any player may look. */
+export async function matchRounds(event: RequestEvent, matchId: string): Promise<MatchRounds> {
+	const path = `/matches/${encodeURIComponent(matchId)}/rounds`;
+
+	return call(event, path, { method: 'GET', secret: signedIn(event) });
+}
+
+/** The player's secret, or a 401 the browser sees like any other platform answer. */
+function signedIn(event: RequestEvent): string {
+	const secret = secretOf(event.cookies);
+	if (!secret) {
+		throw new PlatformError(401, 'unauthenticated', 'Sign in as a player first.');
+	}
+
+	return secret;
 }
 
 /** An error answer in the same `{ error: { code, message } }` shape as `failure`. */

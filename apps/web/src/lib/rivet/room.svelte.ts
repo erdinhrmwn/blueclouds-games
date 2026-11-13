@@ -51,10 +51,19 @@ export type BaseView = {
 		closed: boolean;
 	} | null;
 	/**
-	 * Provably fair shuffles, while a match is played: the hash of its server seed (revealed when it ends) and the
-	 * client seed of its last shuffle. Null outside a match.
+	 * Provably fair rounds: the hash of the round being played (in the lobby: of the next match's first round)
+	 * and of the round after it, both locked in before they are dealt; while a match is played also its id and the
+	 * client seed of its last shuffle. Null for a match started before provably fair shuffles.
 	 */
-	fairness: { serverSeedHash: string; clientSeed: string } | null;
+	fairness: {
+		matchId: string | null;
+		/** The last match played at this table, whose rounds the dialog still shows once it ended. */
+		lastMatchId: string | null;
+		round: number;
+		serverSeedHash: string;
+		clientSeed: string | null;
+		nextServerSeedHash: string | null;
+	} | null;
 };
 
 /**

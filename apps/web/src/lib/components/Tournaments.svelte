@@ -8,6 +8,7 @@
 	} from '#lib/platform.ts';
 	import { player } from '#lib/player.svelte.ts';
 	import { enterTable } from '#lib/tables.ts';
+	import { when } from '#lib/when.ts';
 
 	/** A game's tournaments: the player's own table first, then the ones open for sign-up. Hidden when there are none. */
 	let { game }: { game: string } = $props();
@@ -70,15 +71,6 @@
 			busy = null;
 		}
 	}
-
-	const when = (iso: string) =>
-		new Intl.DateTimeFormat(undefined, {
-			weekday: 'short',
-			day: 'numeric',
-			month: 'short',
-			hour: '2-digit',
-			minute: '2-digit'
-		}).format(new Date(iso));
 </script>
 
 {#if tables.length || open.length}

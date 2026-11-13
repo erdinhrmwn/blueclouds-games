@@ -13,7 +13,7 @@ import {
 	startGame,
 	TURN_MS,
 } from "./rules";
-import { buildReport, logEvents, type MatchState, noteMove } from "./match";
+import { buildReport, logEvents, roundResult, type MatchState, noteMove } from "./match";
 import { PlayInput } from "./schema";
 import {
 	apply,
@@ -280,6 +280,7 @@ const commit = (c: Ctx, auto = false, extra: LogEntry[] = []) =>
 			slug: SLUG,
 			scheduleTurn: () => scheduleTurn(c),
 			logEvents,
+			roundResult,
 			noteMove,
 			buildReport,
 			view: () => viewOf(c),

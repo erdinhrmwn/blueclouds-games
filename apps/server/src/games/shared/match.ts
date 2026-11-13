@@ -46,8 +46,6 @@ export type MatchReport = {
 		score: number;
 	}[];
 	log: { logVersion: number; events: LogEvent[] };
-	/** The revealed seeds (fairness.ts). Missing for matches started before provably fair shuffles. */
-	fairness?: { serverSeed: string; serverSeedHash: string };
 };
 
 /**

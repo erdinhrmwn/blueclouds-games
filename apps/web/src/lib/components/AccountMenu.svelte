@@ -140,6 +140,28 @@
 				</svg>
 				Profile
 			</a>
+			<a
+				href="/history"
+				role="menuitem"
+				class="flex min-h-11 items-center gap-2.5 px-3 text-sm hover:bg-paper/5 focus:bg-paper/5 focus:outline-none"
+				onclick={() => close(false)}
+			>
+				<!-- A clock: past matches. -->
+				<svg
+					viewBox="0 0 20 20"
+					class="size-4 text-paper/70"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="1.6"
+					stroke-linecap="round"
+					stroke-linejoin="round"
+					aria-hidden="true"
+				>
+					<circle cx="10" cy="10" r="6.5" />
+					<path d="M10 6.5V10l2.5 1.5" />
+				</svg>
+				Match history
+			</a>
 			<button
 				role="menuitem"
 				class="flex min-h-11 w-full items-center gap-2.5 px-3 text-left text-sm hover:bg-paper/5 focus:bg-paper/5 focus:outline-none"

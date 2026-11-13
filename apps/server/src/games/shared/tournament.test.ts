@@ -6,6 +6,7 @@ let seats: unknown = null;
 mock.module("../../platform", () => ({
 	verifyPlayToken: async () => null,
 	reportMatch: async () => ({ result: "sent" }),
+	reportRound: async () => ({ result: "sent" }),
 	fetchRoomSeats: async () => seats,
 	fetchVipIds: async () => new Set(),
 	markRoom: async (code: string, change: string) => (

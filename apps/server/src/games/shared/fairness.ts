@@ -1,15 +1,18 @@
 // Provably fair shuffles (docs/architecture/fairness.md). Pure and Web Crypto only, so the room, the backoffice
-// and the player's browser all check a match the same way.
+// and the player's browser all check a round the same way.
 //
-// Before a match the room commits to sha256(serverSeed) and to the match id. Every shuffle has its own client
-// seed, "matchId:round:nonce": the round it deals or reshuffles in and its count within that round (0, 1, 2…).
-// The shuffle draws its numbers from HMAC_SHA256(serverSeed, "clientSeed:block"), 8 per 32-byte block (4 bytes
-// each, big-endian, / 2^32); a deck needs more than one block, and `block` only counts them.
-// The cards are first put in id order, then shuffled Fisher-Yates from the end. The server seed is revealed
-// when the match ends.
+// Every round has its own server seed. The room commits to sha256(serverSeed) and to the round's id before the
+// round is dealt, and reveals the seed when the round closes. Every shuffle has its own client seed,
+// "matchId:round:nonce": the round it deals or reshuffles in and its count within that round (0, 1, 2…). The
+// shuffle draws its numbers from HMAC_SHA256(serverSeed, "clientSeed:block"), 8 per 32-byte block (4 bytes each,
+// big-endian, / 2^32); a deck needs more than one block, and `block` only counts them. The cards are first put in
+// id order, then shuffled Fisher-Yates from the end.
 
-/** What the room commits to before a match: the match id (the client seed) and the hash of its server seed. */
-export type Commitment = { matchId: string; serverSeedHash: string };
+/** What the room commits to before a round is dealt: the round's id and the hash of its server seed. */
+export type RoundCommitment = { roundId: string; serverSeedHash: string };
+
+/** A round's commitment with its seed, kept by the room until the round closes and the seed is revealed. */
+export type RoundSeed = RoundCommitment & { serverSeed: string };
 
 /** A shuffle's place in the match: the round it deals or reshuffles in, and its count in that round, from 0. */
 export type ShuffleKey = { round: number; nonce: number };
@@ -17,13 +20,16 @@ export type ShuffleKey = { round: number; nonce: number };
 /** One logged shuffle: its place in the match and the cards it produced, top first. */
 export type ShuffleRecord = ShuffleKey & { deck: string[] };
 
-/** The seeds of the match being played, and the last shuffle's place (null before the first). */
-export type MatchSeeds = Commitment & { serverSeed: string; last: ShuffleKey | null };
-
-/** A finished match's seeds and shuffles, kept by the room after it ends so anyone at the table can check it. */
-export type Revealed = Commitment & {
-	serverSeed: string;
-	shuffles: ShuffleRecord[];
+/**
+ * The seeds of the match being played: the round being played (null before the first deal), the one it was
+ * before (its seed is revealed when it closes), the next round's commitment, and the last shuffle's place.
+ */
+export type MatchSeeds = {
+	matchId: string;
+	current: (RoundSeed & { round: number }) | null;
+	previous: (RoundSeed & { round: number }) | null;
+	next: RoundSeed;
+	last: ShuffleKey | null;
 };
 
 /** A shuffle's client seed, e.g. "0192…:2:1": match id, round, nonce. */
@@ -40,13 +46,20 @@ export function nextNonce(last: ShuffleKey | null, round: number): number {
 	return last.nonce + 1;
 }
 
-/** What a finished match reveals, enough to check every shuffle in it. */
-export type FairnessProof = Revealed;
+/** Everything that checks one closed round: its revealed seed and its shuffles, in order. */
+export type RoundProof = {
+	matchId: string;
+	round: number;
+	serverSeed: string;
+	serverSeedHash: string;
+	shuffles: { nonce: number; deck: string[] }[];
+};
 
-/** The result of checking a match: the seed against its hash, then each shuffle. */
-export type FairnessCheck = {
+/** The result of checking a round: the seed against its hash, then each shuffle. */
+export type RoundCheck = {
+	round: number;
 	hashMatches: boolean;
-	shuffles: (ShuffleKey & { ok: boolean })[];
+	shuffles: { nonce: number; ok: boolean }[];
 	ok: boolean;
 };
 
@@ -135,29 +148,18 @@ async function shuffleFloats(
 	return floats;
 }
 
-/** A shuffle comes after the last one: in the same round or a later one, its nonce counting up from 0. */
-function inOrder(last: ShuffleKey | null, record: ShuffleKey): boolean {
-	if (last && record.round < last.round) {
-		return false;
-	}
-
-	return record.nonce === nextNonce(last, record.round);
-}
-
 /**
- * Checks a finished match: the revealed seed matches the hash shown before it, the shuffles come in order
- * (rounds never go back, nonces count up from 0 in each round) and each one is exactly what the seeds give
- * for its cards.
+ * Checks a closed round: the revealed seed matches the hash shown before the round, the nonces count 0, 1, 2…
+ * and each shuffle is exactly what the seeds give for its cards.
  */
-export async function checkFairness(proof: FairnessProof): Promise<FairnessCheck> {
+export async function checkRound(proof: RoundProof): Promise<RoundCheck> {
 	const hashMatches =
 		SERVER_SEED.test(proof.serverSeed) &&
 		(await sha256Hex(proof.serverSeed)) === proof.serverSeedHash;
 
-	const shuffles: FairnessCheck["shuffles"] = [];
-	let last: ShuffleKey | null = null;
-	for (const record of proof.shuffles) {
-		const key = { round: record.round, nonce: record.nonce };
+	const shuffles: RoundCheck["shuffles"] = [];
+	for (const [index, record] of proof.shuffles.entries()) {
+		const key = { round: proof.round, nonce: record.nonce };
 		const cards = canonical(record.deck.map((id) => ({ id })));
 		const floats = await shuffleFloats(
 			proof.serverSeed,
@@ -165,43 +167,62 @@ export async function checkFairness(proof: FairnessProof): Promise<FairnessCheck
 			floatsNeeded(cards.length),
 		);
 		const expected = fisherYates(cards, floats).map((card) => card.id);
-		const ok = inOrder(last, key) && expected.join(",") === record.deck.join(",");
+		const ok = record.nonce === index && expected.join(",") === record.deck.join(",");
 
-		shuffles.push({ ...key, ok });
-		last = key;
+		shuffles.push({ nonce: record.nonce, ok });
 	}
 
-	const ok = hashMatches && shuffles.every((shuffle) => shuffle.ok);
+	const ok = hashMatches && shuffles.length > 0 && shuffles.every((shuffle) => shuffle.ok);
 
-	return { hashMatches, shuffles, ok };
+	return { round: proof.round, hashMatches, shuffles, ok };
 }
 
 /**
- * The fairness events of a match's move log: the commitment at the start, each shuffle and the reveal at the
- * end. Null when the log has no commitment or no reveal.
+ * Checks a match's closed rounds: they run 1, 2, 3… with none skipped (so the room can't pick among rounds for
+ * a deck it likes), and each one checks out.
  */
-export function proofFromLog(
-	matchId: string,
-	events: { type: string; data?: Record<string, unknown> }[],
-): FairnessProof | null {
-	const start = events.find((event) => event.type === "fairness")?.data;
-	const reveal = events.find((event) => event.type === "reveal")?.data;
-	if (!start || !reveal) {
-		return null;
+export async function checkMatch(
+	rounds: RoundProof[],
+): Promise<{ rounds: RoundCheck[]; ok: boolean }> {
+	const checks: RoundCheck[] = [];
+	for (const [index, proof] of rounds.entries()) {
+		const check = await checkRound(proof);
+		const inOrder = proof.round === index + 1;
+
+		checks.push({ ...check, ok: check.ok && inOrder });
 	}
 
-	const shuffles = events
-		.filter((event) => event.type === "shuffle")
-		.map((event) => ({
-			round: Number(event.data?.round),
+	const ok = checks.every((check) => check.ok);
+
+	return { rounds: checks, ok };
+}
+
+type Event = { type: string; data?: Record<string, unknown> };
+
+/**
+ * The closed rounds of a move log, oldest first: each round's commitment (`fairness`), its shuffles and its
+ * revealed seed (`reveal`). A round still being played has no reveal yet and is left out.
+ */
+export function proofsFromLog(matchId: string, events: Event[]): RoundProof[] {
+	const ofRound = (type: string, round: number) =>
+		events.filter((event) => event.type === type && Number(event.data?.round) === round);
+
+	const reveals = events.filter((event) => event.type === "reveal");
+
+	return reveals.map((reveal) => {
+		const round = Number(reveal.data?.round);
+		const committed = ofRound("fairness", round).at(0);
+		const shuffles = ofRound("shuffle", round).map((event) => ({
 			nonce: Number(event.data?.nonce),
 			deck: (event.data?.deck as string[] | undefined) ?? [],
 		}));
 
-	return {
-		matchId,
-		serverSeedHash: String(start.serverSeedHash),
-		serverSeed: String(reveal.serverSeed),
-		shuffles,
-	};
+		return {
+			matchId,
+			round,
+			serverSeed: String(reveal.data?.serverSeed),
+			serverSeedHash: String(committed?.data?.serverSeedHash),
+			shuffles,
+		};
+	});
 }

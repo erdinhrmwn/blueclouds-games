@@ -8,6 +8,7 @@ import {
 	moveBy,
 	placementsInOrder,
 } from "../shared/match";
+import type { RoundResult } from "../shared/rounds";
 
 /** Bump when a rule change makes old results incomparable to new ones. */
 export const RULES_VERSION = 1;
@@ -189,3 +190,13 @@ const missing = (from: Card[], to: Card[]) => from.find((card) => !hasCard(to, c
 /** The card a player drew after playing: in their new hand but not their old one. */
 const drawn = (before: Player, after: Player) =>
 	ids(after.hand.filter((card) => !hasCard(before.hand, card)));
+
+/** A Bust 31 round's summary: the seat that busted, its card and total, and the lives it kept. */
+export const roundResult: RoundResult = (events) => {
+	const bust = events.find((event) => event.type === "bust");
+	if (!bust) {
+		return {};
+	}
+
+	return { seat: bust.seat, ...bust.data };
+};

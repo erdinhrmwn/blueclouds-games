@@ -22,6 +22,9 @@ const MAX_BODY_BYTES = 16 * 1024;
 /** Match reports carry the whole move log (a 6-player Bust 31 match is about 25 KB). */
 const MAX_MATCH_BODY_BYTES = 512 * 1024;
 const MATCH_REPORT_PATH = "/v1/matches";
+/** Round reports carry one round's moves and decks: a long Cloudburst round is about 20 KB. */
+const MAX_ROUND_BODY_BYTES = 128 * 1024;
+const ROUND_REPORT_PATH = "/v1/matches/:id/rounds";
 
 /** Error codes for the HTTPExceptions Hono's own middleware may throw; other 4xx are bad input. */
 const HTTP_EXCEPTION_CODES: Partial<Record<number, ErrorCode>> = {
@@ -44,8 +47,9 @@ export function createApp(deps: Deps) {
 			onError: (c) => fail(c, new ApiError("payload_too_large", 413, "Request body is too large.")),
 		});
 
-	app.use(except(MATCH_REPORT_PATH, limitBody(MAX_BODY_BYTES)));
+	app.use(except([MATCH_REPORT_PATH, ROUND_REPORT_PATH], limitBody(MAX_BODY_BYTES)));
 	app.use(MATCH_REPORT_PATH, limitBody(MAX_MATCH_BODY_BYTES));
+	app.use(ROUND_REPORT_PATH, limitBody(MAX_ROUND_BODY_BYTES));
 
 	/** For the container healthcheck: the process is up and the database answers. */
 	app.get("/v1/health", async (c) => {

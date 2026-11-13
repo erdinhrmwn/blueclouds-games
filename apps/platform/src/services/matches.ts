@@ -25,7 +25,7 @@ export const MAX_LOG_EVENTS = 5_000;
 const MAX_EVENT_DATA_BYTES = 4 * 1024;
 
 /** The envelope every game's log event shares; `data` is the game's own and stored as is. */
-const LogEvent = z.object({
+export const LogEvent = z.object({
 	seq: z.number().int().min(0),
 	t: z.number().int().min(0),
 	type: z.string().regex(/^[a-z_]{1,32}$/),
@@ -37,14 +37,6 @@ const LogEvent = z.object({
 			`Must be at most ${MAX_EVENT_DATA_BYTES} bytes.`,
 		)
 		.optional(),
-});
-
-const Hex64 = z.string().regex(/^[0-9a-f]{64}$/);
-
-/** A match's revealed seeds (docs/architecture/fairness.md). */
-const Fairness = z.object({
-	serverSeed: Hex64,
-	serverSeedHash: Hex64,
 });
 
 const MatchLog = z.object({
@@ -65,8 +57,6 @@ export const MatchReport = z
 		endReason: z.enum(["finished", "terminated"]).default("finished"),
 		players: z.array(Seat).min(1).max(32),
 		log: MatchLog,
-		/** Missing only for matches started before provably fair shuffles. */
-		fairness: Fairness.optional(),
 	})
 	.superRefine((match, ctx) => {
 		const issue = (message: string, path: string) => {
@@ -100,45 +90,10 @@ export const MatchReport = z
 		if (badEvent >= 0) {
 			issue(`Event ${badEvent} must have seq ${badEvent} and a seat from players.`, "log");
 		}
-
-		const fairnessIssue = checkFairness(match);
-		if (fairnessIssue) {
-			issue(fairnessIssue, "fairness");
-		}
 	});
 export type MatchReport = z.output<typeof MatchReport>;
 
 const HISTORY_PAGE = 20;
-
-/**
- * What is wrong with a match's seeds, or null. The seed must match the hash the room committed to, and the log
- * must open with that commitment and end with the same seed revealed. The shuffles themselves, each with its own
- * client seed (fairness.ts in the game server), are checked by the backoffice and players.
- */
-function checkFairness(match: {
-	log: { events: { type: string; data?: Record<string, unknown> }[] };
-	fairness?: z.output<typeof Fairness>;
-}): string | null {
-	const start = match.log.events.find((event) => event.type === "fairness")?.data;
-	const reveal = match.log.events.find((event) => event.type === "reveal")?.data;
-	const { fairness } = match;
-
-	if (!fairness) {
-		return start ? "The log has fairness events but the seeds are missing." : null;
-	}
-
-	const hash = new Bun.CryptoHasher("sha256").update(fairness.serverSeed).digest("hex");
-	if (hash !== fairness.serverSeedHash) {
-		return "The server seed does not match its hash.";
-	}
-
-	const committed = start?.serverSeedHash === fairness.serverSeedHash;
-	if (!committed || reveal?.serverSeed !== fairness.serverSeed) {
-		return "The log must hold the same commitment and reveal as the seeds.";
-	}
-
-	return null;
-}
 
 /** The ids of the seats a person (not a bot) sat in. */
 function humanPlayerIds(players: { playerId: string | null }[]): string[] {
@@ -217,9 +172,7 @@ export async function recordMatch(sql: SQL, match: MatchReport): Promise<boolean
 				started_at,
 				ended_at,
 				end_reason,
-				body_hash,
-				server_seed_hash,
-				server_seed
+				body_hash
 			)
 			VALUES (
 				${match.matchId},
@@ -229,9 +182,7 @@ export async function recordMatch(sql: SQL, match: MatchReport): Promise<boolean
 				${match.startedAt},
 				${match.endedAt},
 				${match.endReason},
-				${hash},
-				${match.fairness?.serverSeedHash ?? null},
-				${match.fairness?.serverSeed ?? null}
+				${hash}
 			)
 			ON CONFLICT (id) DO NOTHING
 			RETURNING id`;

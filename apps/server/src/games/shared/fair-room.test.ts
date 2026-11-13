@@ -5,12 +5,13 @@ import { expect, mock, test } from "bun:test";
 mock.module("../../platform", () => ({
 	verifyPlayToken: async () => null,
 	reportMatch: async () => ({ result: "sent" }),
+	reportRound: async () => ({ result: "sent" }),
 	fetchRoomSeats: async () => null,
 	markRoom: async () => ({ ok: true }),
 	fetchVipIds: async () => new Set(),
 }));
 const room = await import("./room");
-const { checkFairness, proofFromLog } = await import("./fairness");
+const { checkMatch, proofsFromLog } = await import("./fairness");
 const { chooseBotCard } = await import("../bust-31/bots");
 const match = await import("../bust-31/match");
 const rules = await import("../bust-31/rules");
@@ -57,6 +58,7 @@ const commit = (c: unknown, auto = false) =>
 			scheduleTurn: async () => {},
 			logEvents: match.logEvents,
 			noteMove: match.noteMove,
+			roundResult: match.roundResult,
 			buildReport: match.buildReport,
 			view: () => null,
 			handOf: () => null,
@@ -64,61 +66,94 @@ const commit = (c: unknown, auto = false) =>
 		auto,
 	);
 
-test("a match deals from the seed it committed to before it started, and reports the proof", async () => {
+test("each round deals from the seed committed before it, and is reported with that seed revealed", async () => {
 	const { c, db } = fakeRoom();
 	await room.migrateRoom(db);
 
-	const committed = { ...c.vars.next! };
-	expect(room.fairnessView(c)).toBeNull();
+	const committed = structuredClone(c.vars.next!);
+	// The lobby shows the hash round 1 of the next match is locked to, before anyone is dealt a card.
+	expect(room.fairnessView(c)).toEqual({
+		matchId: null,
+		lastMatchId: null,
+		round: 1,
+		serverSeedHash: committed.firstRound.serverSeedHash,
+		clientSeed: null,
+		nextServerSeedHash: null,
+	});
 
 	room.beginMatch(c, { out: [] }, (rng) => rules.startGame(c.vars.game, "ann", rng));
 	await commit(c);
 	expect(c.vars.next!.matchId).not.toBe(committed.matchId);
-	expect(room.fairnessView(c)).toEqual({
-		serverSeedHash: committed.serverSeedHash,
+
+	const playing = room.fairnessView(c)!;
+	expect(playing).toMatchObject({
+		matchId: committed.matchId,
+		round: 1,
+		serverSeedHash: committed.firstRound.serverSeedHash,
 		clientSeed: `${committed.matchId}:1:0`,
 	});
+
+	// Round 2 is dealt from the seed whose hash the table showed during round 1.
+	const round2Hash = playing.nextServerSeedHash;
+	let seenRound2 = false;
 
 	while (c.vars.game.phase === "playing") {
 		const player = c.vars.game.players[c.vars.game.turn]!;
 		const card = chooseBotCard(player.hand, c.vars.game.total)!;
 		c.vars.game = room.withRng(c, (rng) => rules.playCard(c.vars.game, player.id, card.id, rng));
 		await commit(c, true);
+
+		const view = room.fairnessView(c);
+		if (view?.round === 2) {
+			seenRound2 = true;
+			expect(view.serverSeedHash).toBe(round2Hash!);
+		}
 	}
+	expect(seenRound2).toBe(true);
 
 	const [row] = await db.execute("SELECT body FROM match_reports");
 	const report = JSON.parse(String(row!.body));
 
 	expect(report.matchId).toBe(committed.matchId);
-	expect(report.fairness).toEqual({
-		serverSeed: committed.serverSeed,
-		serverSeedHash: committed.serverSeedHash,
+	expect(report).not.toHaveProperty("fairness");
+
+	const proofs = proofsFromLog(report.matchId, report.log.events);
+	const deals = report.log.events.filter((event: { type: string }) => event.type === "deal");
+	expect(proofs.length).toBe(deals.length);
+	expect(room.fairnessView(c)!.lastMatchId).toBe(committed.matchId);
+	expect(proofs.at(0)!.serverSeed).toBe(committed.firstRound.serverSeed);
+	expect(await checkMatch(proofs)).toMatchObject({ ok: true });
+
+	// Every round went to the round outbox once, in order, with its seed and every shuffle's client seed.
+	const roundRows = await db.execute("SELECT round, body FROM round_reports ORDER BY round");
+	const rounds = roundRows.map((roundRow) => JSON.parse(String(roundRow.body)));
+
+	expect(rounds.map((round) => round.round)).toEqual(proofs.map((proof) => proof.round));
+	expect(rounds.at(0)).toMatchObject({
+		roundId: committed.firstRound.roundId,
+		game: "bust-31",
+		roomCode: "ROOM42",
+		serverSeed: committed.firstRound.serverSeed,
+		serverSeedHash: committed.firstRound.serverSeedHash,
 	});
-
-	const types = report.log.events.map((event: { type: string }) => event.type);
-	expect(types[0]).toBe("fairness");
-	expect(types[1]).toBe("shuffle");
-	expect(types.at(-1)).toBe("reveal");
-
-	const proof = proofFromLog(report.matchId, report.log.events)!;
-	expect(proof.shuffles[0]).toMatchObject({ round: 1, nonce: 0 });
-	expect(await checkFairness(proof)).toMatchObject({ ok: true });
-	expect(room.fairnessView(c)).toBeNull();
+	expect(rounds.at(0).shuffles.at(0).clientSeed).toBe(`${committed.matchId}:1:0`);
+	expect(rounds.every((round) => "seat" in round.result)).toBe(true);
 });
 
 test("a move the rules refuse takes back its shuffle", () => {
 	const { c } = fakeRoom();
 	room.beginMatch(c, { out: [] }, (rng) => rules.startGame(c.vars.game, "ann", rng));
-	const before = { last: c.vars.match!.seeds!.last, pending: c.vars.fairLog.length };
+	const before = { seeds: c.vars.match!.seeds, pending: c.vars.fairLog.length };
 
+	// A refused move that would have started round 2 keeps round 2's committed seed for the real one.
 	expect(() =>
 		room.withRng(c, (rng) => {
-			rng.shuffle([{ id: "a" }, { id: "b" }], 1);
+			rng.shuffle([{ id: "a" }, { id: "b" }], 2);
 			throw new RuleError("nope");
 		}),
 	).toThrow("nope");
 
-	expect(c.vars.match!.seeds!.last).toEqual(before.last);
+	expect(c.vars.match!.seeds).toEqual(before.seeds);
 	expect(c.vars.fairLog.length).toBe(before.pending);
 });
 

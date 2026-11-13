@@ -8,10 +8,12 @@ import {
 	type Identity,
 	markRoom,
 	reportMatch,
+	reportRound,
 	verifyPlayToken,
 } from "../../platform";
-import { fairRng, newCommitment, type NextMatch } from "./fair-rng";
-import { clientSeedOf } from "./fairness";
+import { fairRng, matchSeeds, newCommitment, type NextMatch, seedsForRound } from "./fair-rng";
+import { clientSeedOf, type MatchSeeds } from "./fairness";
+import { closedRounds, type RoundReport, type RoundResult, roundReport } from "./rounds";
 import {
 	type LogEntry,
 	type LogEvent,
@@ -68,8 +70,8 @@ export type Termination = { at: number; reason: string };
 /**
  * What a room saves: the game, its turn timer, the match being played (null in the lobby), its
  * tournament (null = an open room, undefined = not asked yet), whether it is in the room list (public),
- * the players kicked off it (they can't come back), whether an admin terminated it, and the seeds the
- * next match is committed to.
+ * the players kicked off it (they can't come back), whether an admin terminated it, the seeds the
+ * next match is committed to, and the last match played.
  */
 export type Saved<G extends Table, M extends MatchState = MatchState> = {
 	game: G;
@@ -80,6 +82,8 @@ export type Saved<G extends Table, M extends MatchState = MatchState> = {
 	kicked?: string[];
 	terminated?: Termination | null;
 	next?: NextMatch;
+	/** The last match played here, so the table can still show its rounds once it ended. */
+	lastMatchId?: string | null;
 };
 
 /**
@@ -124,6 +128,16 @@ export async function migrateRoom(d: {
 			attempts INTEGER NOT NULL DEFAULT 0
 		)`);
 
+	// Outbox: closed rounds waiting to reach the platform (rounds.ts), sent before their match's report.
+	await d.execute(`
+		CREATE TABLE IF NOT EXISTS round_reports (
+			match_id TEXT NOT NULL,
+			round INTEGER NOT NULL,
+			body TEXT NOT NULL,
+			attempts INTEGER NOT NULL DEFAULT 0,
+			PRIMARY KEY (match_id, round)
+		)`);
+
 	// Move log of the match being played; moved into its report when the match ends.
 	await d.execute(`
 		CREATE TABLE IF NOT EXISTS match_events (
@@ -143,7 +157,14 @@ export async function loadRoom(c: Ctx): Promise<void> {
 	c.vars.match ??= null;
 	c.vars.kicked ??= [];
 	c.vars.terminated ??= null;
-	c.vars.next ??= newCommitment();
+	// A room saved before seeds were made per round commits again; a match it was playing deals on unseeded.
+	if (!c.vars.next?.firstRound) {
+		c.vars.next = newCommitment();
+	}
+	if (c.vars.match?.seeds && !c.vars.match.seeds.next) {
+		c.vars.match.seeds = undefined;
+	}
+
 	c.vars.fairLog = [];
 
 	// Matches started before the move log have no seq yet.
@@ -155,8 +176,8 @@ export async function loadRoom(c: Ctx): Promise<void> {
 /**
  * After every change: arm the turn clock (`scheduleTurn`), log what changed, save room + log in one
  * transaction (so the log never skips or repeats a move), then push the view to everyone and each
- * hand to its owner. When the game just finished, or an admin terminated the table mid-match, its
- * result and full log go to the outbox. `auto` marks a move the server made (bot, timeout or away
+ * hand to its owner. Each round the change closes goes to the round outbox (rounds.ts). When the game just
+ * finished, or an admin terminated the table mid-match, its result and full log go to the outbox. `auto` marks a move the server made (bot, timeout or away
  * player) for the move log; `extra` is logged before what the game's own diff finds (a kick, a
  * termination).
  */
@@ -168,6 +189,8 @@ export async function commitRoom<G extends Table, M extends MatchState>(
 		logEvents: (before: G, after: G, auto: boolean) => LogEntry[];
 		/** Updates the match record after each move (e.g. who was knocked out). */
 		noteMove?: (match: M, game: G) => M;
+		/** The game's summary of a closed round, for the round history. */
+		roundResult: RoundResult;
 		buildReport: (
 			match: M,
 			game: G,
@@ -200,17 +223,16 @@ export async function commitRoom<G extends Table, M extends MatchState>(
 
 	const finished = end !== null;
 	const seeds = vars.match?.seeds;
-	const reveal: LogEntry[] =
-		finished && seeds ? [{ type: "reveal", data: { serverSeed: seeds.serverSeed } }] : [];
-
-	const entries = vars.match
-		? [
-				...extra,
-				...vars.fairLog,
-				...withoutKickedAway(extra, game.logEvents(vars.logged, vars.game, auto)),
-				...reveal,
-			]
+	const moves = vars.match
+		? withoutKickedAway(extra, game.logEvents(vars.logged, vars.game, auto))
 		: [];
+
+	// The rounds this change closes: a new deal closes the round before it, the end of the match its last one.
+	// Each closed round's seed is revealed after its moves.
+	const closing = seeds ? closedRounds(moves, seeds.current?.round ?? null, finished) : [];
+	const reveals = closing.flatMap((round) => revealOf(seeds!, round));
+
+	const entries = vars.match ? [...extra, ...vars.fairLog, ...moves, ...reveals] : [];
 	vars.logged = vars.game;
 	vars.fairLog = [];
 
@@ -222,6 +244,9 @@ export async function commitRoom<G extends Table, M extends MatchState>(
 	}
 
 	vars.match = finished ? null : match;
+	if (finished) {
+		vars.lastMatchId = match!.id;
+	}
 
 	const saved: Saved<G, M> = {
 		game: vars.game,
@@ -232,6 +257,7 @@ export async function commitRoom<G extends Table, M extends MatchState>(
 		kicked: vars.kicked,
 		terminated: vars.terminated,
 		next: vars.next,
+		lastMatchId: vars.lastMatchId ?? null,
 	};
 	await c.db.transaction(
 		async (tx: Ctx) => {
@@ -244,26 +270,32 @@ export async function commitRoom<G extends Table, M extends MatchState>(
 				);
 			}
 
-			if (finished) {
+			const roomCode = c.key[0] as string;
+			let log: LogEvent[] = [];
+			if (finished || closing.length > 0) {
 				const rows = await tx.execute(
 					"SELECT body FROM match_events WHERE match_id = ? ORDER BY seq",
 					match!.id,
 				);
-				const log: LogEvent[] = rows.map(
-					(row: { body: string }) => JSON.parse(row.body) as LogEvent,
-				);
-				const roomCode = c.key[0] as string;
+				log = rows.map((row: { body: string }) => JSON.parse(row.body) as LogEvent);
+			}
+
+			const matchInfo = {
+				id: match?.id ?? "",
+				game: game.slug,
+				roomCode,
+				startedAt: match?.startedAt ?? "",
+			};
+			for (const round of closing) {
+				const closed = roundReport(log, round, matchInfo, game.roundResult);
+				if (closed) {
+					await queueRound(tx, match!.id, closed);
+				}
+			}
+
+			if (finished) {
 				const endedAt = new Date().toISOString();
-				const built = game.buildReport(match!, vars.game, roomCode, endedAt, log, end!);
-				const report: MatchReport = seeds
-					? {
-							...built,
-							fairness: {
-								serverSeed: seeds.serverSeed,
-								serverSeedHash: seeds.serverSeedHash,
-							},
-						}
-					: built;
+				const report = game.buildReport(match!, vars.game, roomCode, endedAt, log, end!);
 
 				await tx.execute(
 					"INSERT OR IGNORE INTO match_reports (match_id, body) VALUES (?, ?)",
@@ -291,11 +323,32 @@ export async function commitRoom<G extends Table, M extends MatchState>(
 	// After the players got their update, so the list never slows a move.
 	await reportToDirectory(c, game.slug);
 
-	if (finished) await c.schedule.after(0, "sendReports");
+	if (finished || closing.length > 0) {
+		await c.schedule.after(0, "sendReports");
+	}
+}
+
+/** The `reveal` entry of a closed round: its seed, now that nobody is dealt from it again. */
+function revealOf(seeds: MatchSeeds, round: number): LogEntry[] {
+	const seed = [seeds.previous, seeds.current].find((held) => held?.round === round);
+	if (!seed) {
+		return [];
+	}
+
+	return [{ type: "reveal", data: { round, serverSeed: seed.serverSeed } }];
+}
+
+async function queueRound(tx: Ctx, matchId: string, round: RoundReport): Promise<void> {
+	await tx.execute(
+		"INSERT OR IGNORE INTO round_reports (match_id, round, body) VALUES (?, ?, ?)",
+		matchId,
+		round.round,
+		JSON.stringify(round),
+	);
 }
 
 /**
- * Starts a match on the seeds the room committed to before it: the committed match id and server seed. `start`
+ * Starts a match on what the room committed to before it: the match id and its first round's seed. `start`
  * deals with the room's fair rng; `extra` fills the game's own match fields. If `start` refuses (a rule),
  * nothing changed. The next match gets a new commitment.
  */
@@ -312,11 +365,11 @@ export function beginMatch<G extends Table, M extends MatchState>(
 		id: next.matchId,
 		startedAt: new Date().toISOString(),
 		seq: 0,
-		seeds: { ...next, last: null },
+		seeds: matchSeeds(next),
 	} as M;
 
 	vars.match = match;
-	vars.fairLog = [{ type: "fairness", data: { serverSeedHash: next.serverSeedHash } }];
+	vars.fairLog = [];
 
 	try {
 		vars.game = withRng(c, start);
@@ -348,8 +401,9 @@ export function withRng<G>(c: Ctx, move: (rng: Rng) => G): G {
 }
 
 /**
- * The rng a room deals with: the running match's seeds, keeping each shuffle as the last one (for the next
- * nonce) and logging it. A match started before provably fair shuffles keeps a plain random one.
+ * The rng a room deals with: the running match's seeds. The first shuffle of a round starts it on the committed
+ * seed and logs that commitment (`fairness`); every shuffle is kept as the last one (for the next nonce) and
+ * logged. A match started before provably fair shuffles keeps a plain random one.
  */
 function roomRng(c: Ctx): Rng {
 	const vars = c.vars as RoomVars<Table>;
@@ -357,32 +411,65 @@ function roomRng(c: Ctx): Rng {
 		return randomRng();
 	}
 
-	return fairRng(
-		() => vars.match!.seeds!,
-		(record) => {
-			const seeds = vars.match!.seeds!;
-			const last = { round: record.round, nonce: record.nonce };
+	const seedsFor = (round: number) => {
+		const { seeds, started } = seedsForRound(vars.match!.seeds!, round);
+		if (!started) {
+			return seeds;
+		}
 
-			vars.match = { ...vars.match!, seeds: { ...seeds, last } };
-			vars.fairLog.push({ type: "shuffle", data: record });
-		},
-	);
+		const { roundId, serverSeedHash } = seeds.current!;
+		vars.match = { ...vars.match!, seeds };
+		vars.fairLog.push({ type: "fairness", data: { round, roundId, serverSeedHash } });
+
+		return seeds;
+	};
+
+	return fairRng(seedsFor, (record) => {
+		const seeds = vars.match!.seeds!;
+		const last = { round: record.round, nonce: record.nonce };
+
+		vars.match = { ...vars.match!, seeds: { ...seeds, last } };
+		vars.fairLog.push({ type: "shuffle", data: record });
+	});
 }
 
 /**
- * What the table shows about fairness while a match is played: the hash of its server seed (the seed itself
- * is revealed when the match ends) and the client seed of its last shuffle. Null outside a match, or for a
+ * What the table shows about fairness: the hash of the round being played (in the lobby: of the next match's
+ * first round) and of the round after it, both locked in before they are dealt; while a match is played also its
+ * id, its round and the client seed of its last shuffle. Each seed is revealed when its round closes. Null for a
  * match started before provably fair shuffles.
  */
 export function fairnessView(c: Ctx) {
-	const seeds = (c.vars as RoomVars<Table>).match?.seeds;
-	if (!seeds?.last) {
+	const vars = c.vars as RoomVars<Table>;
+
+	if (!vars.match) {
+		const firstRound = vars.next!.firstRound;
+
+		return {
+			matchId: null,
+			lastMatchId: vars.lastMatchId ?? null,
+			round: 1,
+			serverSeedHash: firstRound.serverSeedHash,
+			clientSeed: null,
+			nextServerSeedHash: null,
+		};
+	}
+
+	const seeds = vars.match.seeds;
+	if (!seeds?.current) {
 		return null;
 	}
 
-	const clientSeed = clientSeedOf(seeds.matchId, seeds.last);
+	const clientSeed = seeds.last ? clientSeedOf(seeds.matchId, seeds.last) : null;
 
-	return { serverSeedHash: seeds.serverSeedHash, clientSeed };
+	return {
+		matchId: seeds.matchId,
+		lastMatchId: vars.lastMatchId ?? null,
+		round: seeds.current.round,
+		serverSeedHash: seeds.current.serverSeedHash,
+		clientSeed,
+		nextServerSeedHash: seeds.next.serverSeedHash,
+	};
 }
 
 /** A kicked player's chair turns "away" in the game's diff; the "kicked" entry already says so. */
@@ -847,20 +934,38 @@ export function directoryKey(slug: string, listed: boolean, tournament: boolean)
 
 /** onWake: a send may have been cut off by the actor stopping; the platform ignores duplicates. */
 export async function resumeReports(c: Ctx): Promise<void> {
-	const [pending] = await c.db.execute("SELECT count(*) AS n FROM match_reports");
-	if (pending?.n) await c.schedule.after(REPORT_RETRY_MS[0]!, "sendReports");
+	const [matches] = await c.db.execute("SELECT count(*) AS n FROM match_reports");
+	const [rounds] = await c.db.execute("SELECT count(*) AS n FROM round_reports");
+
+	if (matches?.n || rounds?.n) {
+		await c.schedule.after(REPORT_RETRY_MS[0]!, "sendReports");
+	}
 }
 
-/** Body of the scheduled `sendReports` action: sends queued results, retrying with backoff. */
+/**
+ * Body of the scheduled `sendReports` action: sends queued rounds, then queued results, retrying with backoff.
+ * A match's rounds go in order, and its result waits until they are all sent.
+ */
 export async function sendReports(c: Ctx): Promise<void> {
+	let retryIn: number | null = null;
+	const retryAfter = (attempts: number) => {
+		const step = Math.min(attempts, REPORT_RETRY_MS.length - 1);
+		const wait = REPORT_RETRY_MS[step]!;
+		retryIn = Math.min(retryIn ?? wait, wait);
+	};
+
+	const waiting = await sendRounds(c, retryAfter);
+
 	type ReportRow = { match_id: string; body: string; attempts: number };
 	const rows = (await c.db.execute(
 		"SELECT match_id, body, attempts FROM match_reports",
 	)) as ReportRow[];
 
-	let retryIn: number | null = null;
-
 	for (const row of rows) {
+		if (waiting.has(row.match_id)) {
+			continue;
+		}
+
 		const { result, detail } = await reportMatch(JSON.parse(row.body));
 
 		if (result === "retry") {
@@ -868,10 +973,7 @@ export async function sendReports(c: Ctx): Promise<void> {
 				"UPDATE match_reports SET attempts = attempts + 1 WHERE match_id = ?",
 				row.match_id,
 			);
-
-			const step = Math.min(row.attempts, REPORT_RETRY_MS.length - 1);
-			const wait = REPORT_RETRY_MS[step]!;
-			retryIn = Math.min(retryIn ?? wait, wait);
+			retryAfter(row.attempts);
 
 			c.log.warn({
 				msg: "match report failed, will retry",
@@ -894,7 +996,58 @@ export async function sendReports(c: Ctx): Promise<void> {
 		await c.db.execute("DELETE FROM match_reports WHERE match_id = ?", row.match_id);
 	}
 
-	if (retryIn !== null) await c.schedule.after(retryIn, "sendReports");
+	if (retryIn !== null) {
+		await c.schedule.after(retryIn, "sendReports");
+	}
+}
+
+/** Sends queued rounds in order. Returns the matches with a round still waiting: their later rounds wait too. */
+async function sendRounds(c: Ctx, retryAfter: (attempts: number) => void): Promise<Set<string>> {
+	type RoundRow = { match_id: string; round: number; body: string; attempts: number };
+	const rows = (await c.db.execute(
+		"SELECT match_id, round, body, attempts FROM round_reports ORDER BY match_id, round",
+	)) as RoundRow[];
+
+	const waiting = new Set<string>();
+
+	for (const row of rows) {
+		if (waiting.has(row.match_id)) {
+			continue;
+		}
+
+		const { result, detail } = await reportRound(row.match_id, JSON.parse(row.body));
+		const where = { matchId: row.match_id, round: row.round };
+
+		if (result === "retry") {
+			await c.db.execute(
+				"UPDATE round_reports SET attempts = attempts + 1 WHERE match_id = ? AND round = ?",
+				row.match_id,
+				row.round,
+			);
+			retryAfter(row.attempts);
+			waiting.add(row.match_id);
+
+			c.log.warn({
+				msg: "round report failed, will retry",
+				...where,
+				attempts: row.attempts + 1,
+				detail,
+			});
+			continue;
+		}
+
+		if (result === "rejected") {
+			c.log.error({ msg: "round report rejected, dropped", ...where, body: row.body, detail });
+		}
+
+		await c.db.execute(
+			"DELETE FROM round_reports WHERE match_id = ? AND round = ?",
+			row.match_id,
+			row.round,
+		);
+	}
+
+	return waiting;
 }
 
 /** The room's tournament and whether it is listed: the known answer, else asked from the platform. */

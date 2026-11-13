@@ -91,7 +91,7 @@
 	{#if room?.view}
 		<div class="flex shrink-0 items-center gap-2">
 			{#if room.status !== 'refused'}
-				<FairPlay {room} />
+				<FairPlay {room} game={game.slug} />
 			{/if}
 			<button
 				class="btn-ghost size-10 shrink-0 p-0 sm:size-11"

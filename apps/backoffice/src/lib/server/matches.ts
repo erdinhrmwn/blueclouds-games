@@ -1,5 +1,5 @@
 import type { SQL } from 'bun';
-import { checkFairness, proofFromLog } from 'server/games/shared/fairness';
+import { checkMatch, proofsFromLog } from 'server/games/shared/fairness';
 import type { MatchLog } from '../replay.ts';
 import { isUuid, PAGE_SIZE } from './players.ts';
 
@@ -115,18 +115,8 @@ export type MatchTable = {
 	openedByAdmin: string | null;
 };
 
-/**
- * A match's revealed seeds (docs/architecture/fairness.md); both null for matches played before them. Each
- * shuffle's client seed is built from its log event.
- */
-export type MatchSeeds = {
-	serverSeedHash: string | null;
-	serverSeed: string | null;
-};
-
 export type MatchDetail = Omit<MatchRow, 'players' | 'winner'> &
-	MatchTable &
-	MatchSeeds & { rulesVersion: number; startedAt: Date; scoreLabel: string; seats: Seat[] };
+	MatchTable & { rulesVersion: number; startedAt: Date; scoreLabel: string; seats: Seat[] };
 
 export async function matchDetail(sql: SQL, id: string): Promise<MatchDetail | null> {
 	if (!isUuid(id)) return null;
@@ -142,8 +132,6 @@ export async function matchDetail(sql: SQL, id: string): Promise<MatchDetail | n
 			m.started_at AS "startedAt",
 			m.ended_at AS "endedAt",
 			m.end_reason AS "endReason",
-			m.server_seed_hash AS "serverSeedHash",
-			m.server_seed AS "serverSeed",
 			r.tournament_id AS "tournamentId",
 			t.name AS "tournamentName",
 			r.created_by_player_id AS "openedByPlayerId",
@@ -188,34 +176,42 @@ export async function matchLog(sql: SQL, id: string): Promise<MatchLog | null> {
 }
 
 /**
- * How a match's shuffles check against its seeds: null when it has none, else which shuffles failed, each as
- * "round 2 #1".
+ * How a match's rounds check against their seeds: null when it has none, else how many rounds and shuffles were
+ * checked and which failed, each as "round 2" (its seed) or "round 2 #1" (a shuffle).
  */
-export type FairnessResult = { ok: boolean; shuffles: number; failed: string[] } | null;
+export type FairnessResult = {
+	ok: boolean;
+	rounds: number;
+	shuffles: number;
+	failed: string[];
+} | null;
 
 /**
- * Checks every shuffle in the log against the stored seeds, the way a player can (fairness.ts). The log's
- * commitment must be the stored one too.
+ * Checks every closed round in the log against the seed it revealed, the way a player can (fairness.ts): the
+ * seed against the hash shown before the round, the rounds in order, and every shuffle.
  */
 export async function checkMatchFairness(
-	match: MatchSeeds & { id: string },
+	matchId: string,
 	log: MatchLog | null
 ): Promise<FairnessResult> {
-	if (!match.serverSeed || !match.serverSeedHash || !log) {
+	const proofs = log ? proofsFromLog(matchId, log.events) : [];
+	if (proofs.length === 0) {
 		return null;
 	}
 
-	const proof = proofFromLog(match.id, log.events);
-	const sameSeeds =
-		proof?.serverSeed === match.serverSeed && proof.serverSeedHash === match.serverSeedHash;
-	if (!proof || !sameSeeds) {
-		return { ok: false, shuffles: 0, failed: [] };
-	}
+	const check = await checkMatch(proofs);
+	const failed = check.rounds.flatMap((round) => {
+		const badShuffles = round.shuffles
+			.filter((shuffle) => !shuffle.ok)
+			.map((shuffle) => `round ${round.round} #${shuffle.nonce}`);
 
-	const check = await checkFairness(proof);
-	const failed = check.shuffles
-		.filter((shuffle) => !shuffle.ok)
-		.map((shuffle) => `round ${shuffle.round} #${shuffle.nonce}`);
+		if (round.ok || badShuffles.length > 0) {
+			return badShuffles;
+		}
 
-	return { ok: check.ok, shuffles: check.shuffles.length, failed };
+		return [`round ${round.round}`];
+	});
+	const shuffles = check.rounds.reduce((count, round) => count + round.shuffles.length, 0);
+
+	return { ok: check.ok, rounds: check.rounds.length, shuffles, failed };
 }

@@ -233,61 +233,6 @@ describe("match logs", () => {
 	});
 });
 
-describe("provably fair seeds", () => {
-	/** A report with seeds that agree with its log, as a room sends it. */
-	const fairReport = () => {
-		const body = report();
-		const serverSeed = "ab".repeat(32);
-		const serverSeedHash = new Bun.CryptoHasher("sha256").update(serverSeed).digest("hex");
-		const log = [
-			{ type: "fairness", data: { serverSeedHash } },
-			{ type: "shuffle", data: { round: 1, nonce: 0, deck: ["n7-1"] } },
-			...events().map(({ seq: _, ...event }) => event),
-			{ type: "reveal", data: { serverSeed } },
-		].map((event, seq) => ({ seq, t: 0, ...event }));
-
-		return {
-			...body,
-			log: { logVersion: 1, events: log },
-			fairness: { serverSeed, serverSeedHash },
-		};
-	};
-
-	test("are stored with the match", async () => {
-		const body = fairReport();
-		expect((await post(body)).status).toBe(201);
-
-		const [row] = await t.sql`
-			SELECT server_seed_hash, server_seed
-			FROM matches
-			WHERE id = ${body.matchId}`;
-		expect(row).toEqual({
-			server_seed_hash: body.fairness.serverSeedHash,
-			server_seed: body.fairness.serverSeed,
-		});
-	});
-
-	test("refuses a seed that misses its hash, or a log without them", async () => {
-		const field = async (body: unknown) => (await post(body)).json.error?.fields?.fairness;
-
-		const body = fairReport();
-		const wrongSeed = { ...body.fairness, serverSeed: "cd".repeat(32) };
-		expect(await field({ ...body, fairness: wrongSeed })).toBe(
-			"The server seed does not match its hash.",
-		);
-
-		const { fairness: _, ...withoutSeeds } = body;
-		expect(await field(withoutSeeds)).toBe(
-			"The log has fairness events but the seeds are missing.",
-		);
-
-		const plainLog = { ...body, log: { logVersion: 1, events: events() } };
-		expect(await field(plainLog)).toBe(
-			"The log must hold the same commitment and reveal as the seeds.",
-		);
-	});
-});
-
 describe("my match history", () => {
 	test("lists my matches newest first with paging", async () => {
 		const carl = await guest(t.app, "Carl");

@@ -207,6 +207,10 @@ Player accounts (migration `011`). Register takes `{ "name", "username", "passwo
 
 Bearer player secret. The player's own history, newest first, 20 per page: `data: { "matches": [...], "nextCursor": "…" | null }`. Cheap to add because the table already exists, and it lets the game show "your last games".
 
+### `GET /v1/matches/:matchId/rounds`
+
+Bearer player secret. Matches are public: any signed-in player may read any match. A match's closed rounds, oldest first, running or finished: `data: { "match": { "id", "game", "finished" }, "rounds": [{ "id", "round", "startedAt", "endedAt", "result", "serverSeedHash", "serverSeed", "shuffles": [{ "nonce", "clientSeed", "deck" }] }] }`. 404 when the match has neither a report nor a round. See [fairness.md](fairness.md#round-history).
+
 ## Server API (MVP)
 
 ### `POST /v1/matches`
@@ -247,6 +251,10 @@ Called by a room actor when a game finishes. Bearer `PLATFORM_SERVER_KEY`.
 Validation: `game` must be a row in `games` and the seat count within its limits, a bot seat needs `botName`, `score` is any integer the game defines (see [match-schema.md](match-schema.md)), seats unique, exactly one `placement: 1`, every non-bot `playerId` must exist (`422 unknown_player`). Matches against bots only are recorded too.
 
 **Actor side (outbox):** on `finished`, the room saves `{matchId, body}` (result and full move log) to a `match_reports` row in its own SQLite, then calls the API. On failure it retries with `c.schedule.after` (10s, 1m, 5m, 30m, then 6h until it succeeds, logging each failure). Because the endpoint is idempotent, a retry after a timeout that actually succeeded is harmless. A finished game never waits on this call.
+
+### `POST /v1/matches/:matchId/rounds`
+
+Called by a room actor when a round closes, before the match's own report. Bearer `PLATFORM_SERVER_KEY`. Body: `roundId` (UUIDv7, made with the round's seed), `game`, `roomCode`, `round`, `serverSeedHash`, `serverSeed`, `shuffles: [{ nonce, clientSeed, deck }]`, `result` (the game's own summary), `startedAt`, `endedAt`. 400 when the seed misses its hash, a client seed is not `matchId:round:nonce` or the nonces are not 0, 1, 2…; 201 stored, 200 for the same body again, 409 for another body for the same round, a round id used twice, or another room than the match's earlier rounds.
 
 ## Backoffice (MVP)
 

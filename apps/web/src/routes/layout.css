@@ -15,6 +15,8 @@
 	--color-brass: #d2a54c;
 	--color-brass-dim: #8a6b2e;
 	--color-ember: #d9643f; /* AA (5:1) as text on the dark room */
+	--color-panel: #1b1611; /* dialogs and cards over the room */
+	--shadow-chip: 0 1px 2px rgb(0 0 0 / 0.5); /* a small card lying on a panel */
 	/* Cloudburst suits: ink on the cream card face, all 5:1 or more */
 	--color-sun: #8c5400;
 	--color-rain: #2c5f8a;

@@ -1,7 +1,7 @@
 import { actor, UserError } from "rivetkit";
 import { db } from "rivetkit/db";
 import { chooseBotMove } from "./bots";
-import { buildReport, logEvents } from "./match";
+import { buildReport, logEvents, roundResult } from "./match";
 import {
 	addPlayer,
 	createGame,
@@ -297,6 +297,7 @@ const commit = (c: Ctx, auto = false, extra: LogEntry[] = []) =>
 			slug: SLUG,
 			scheduleTurn: () => scheduleTurn(c),
 			logEvents,
+			roundResult,
 			buildReport,
 			view: () => viewOf(c),
 			handOf: (id) => handOf(c.vars.game, id),

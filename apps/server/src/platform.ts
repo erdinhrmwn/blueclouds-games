@@ -85,12 +85,23 @@ export async function verifyPlayToken(token: unknown): Promise<Identity | null> 
  * Sends a finished match. "sent": stored (or already stored, the platform is idempotent by matchId).
  * "rejected": the platform will never accept this body, so retrying is pointless. "retry": try again later.
  */
-export async function reportMatch(report: {
-	matchId: string;
-}): Promise<{ result: "sent" | "rejected" | "retry"; detail?: string }> {
+export function reportMatch(report: { matchId: string }): Promise<SendResult> {
+	return send("/matches", report);
+}
+
+/** Sends a closed round of a running or finished match (rounds.ts); answered like `reportMatch`. */
+export function reportRound(matchId: string, round: { round: number }): Promise<SendResult> {
+	return send(`/matches/${matchId}/rounds`, round);
+}
+
+export type SendResult = { result: "sent" | "rejected" | "retry"; detail?: string };
+
+async function send(path: string, body: unknown): Promise<SendResult> {
 	try {
-		const res = await callPlatform("POST", "/matches", report);
-		if (res.ok) return { result: "sent" };
+		const res = await callPlatform("POST", path, body);
+		if (res.ok) {
+			return { result: "sent" };
+		}
 
 		const detail = await failureDetail(res);
 		const result = REJECTED_STATUSES.includes(res.status) ? "rejected" : "retry";

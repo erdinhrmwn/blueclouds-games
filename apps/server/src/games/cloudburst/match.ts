@@ -7,6 +7,7 @@ import {
 	moveBy,
 	placementsInOrder,
 } from "../shared/match";
+import type { RoundResult } from "../shared/rounds";
 import { type Card, type Game, placements } from "./rules";
 
 /** Bump when a rule change makes old results incomparable to new ones. */
@@ -152,3 +153,10 @@ function awayChanges(before: Game, after: Game): LogEntry[] {
 }
 
 const ids = (cards: Card[]) => cards.map((card) => card.id);
+
+/** A Cloudburst round's summary: the seat that went out, the cards each seat was left with and the points. */
+export const roundResult: RoundResult = (events) => {
+	const end = events.find((event) => event.type === "round_end");
+
+	return end?.data ?? {};
+};
