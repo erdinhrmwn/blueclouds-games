@@ -244,6 +244,13 @@
 				</section>
 			{/if}
 
+			<a
+				class="btn-ghost flex h-11 w-full items-center justify-center rounded-xl"
+				href="/{game}/tournaments/{tournament.id}"
+			>
+				{ranksByPoints(tournament.format) ? 'See every round' : 'See the bracket'}
+			</a>
+
 			<section aria-labelledby="standings-title">
 				<h3 id="standings-title" class="flex items-baseline justify-between gap-3">
 					<span class="font-display text-base font-bold"

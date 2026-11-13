@@ -337,6 +337,25 @@ describe("rounds", () => {
 		await play((await tablesOf(id, 2))[0].id, winners);
 		await runTournamentJob(t.sql);
 
+		// The tournament page: every round's tables with who finished where, and the standings.
+		const board = await call(t.app, "GET", `/v1/tournaments/${id}`, { token: winner.secret });
+		expect(board.json.data.tournament).toMatchObject({
+			game: "bust-31",
+			players: 4,
+			playersPerRoom: 2,
+		});
+		expect(
+			board.json.data.rounds.map((round: { tables: unknown[] }) => round.tables.length),
+		).toEqual([2, 1]);
+		const final = board.json.data.rounds[1].tables[0];
+		expect(final.players.map((seat: { playerId: string }) => seat.playerId)).toEqual(winners);
+		expect(final.players.map((seat: { placement: number }) => seat.placement)).toEqual([1, 2]);
+		expect(board.json.data.me).toMatchObject({ playerId: winner.player.id });
+		expect(
+			(await call(t.app, "GET", `/v1/tournaments/${crypto.randomUUID()}`, { token: winner.secret }))
+				.status,
+		).toBe(404);
+
 		const finished = await live(loser.secret);
 		expect(finished.endedAt).not.toBeNull();
 		expect(finished.top.map((x: { playerId: string }) => x.playerId).slice(0, 2)).toEqual(winners);

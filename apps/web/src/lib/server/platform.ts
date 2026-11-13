@@ -506,6 +506,43 @@ export async function matchRounds(event: RequestEvent, matchId: string): Promise
 	return call(event, path, { method: 'GET', secret: signedIn(event) });
 }
 
+/** One table of a tournament round, its players best finish first; an unplayed seat has no placement. */
+export type BoardTable = {
+	code: string;
+	startedAt: string | null;
+	closedAt: string | null;
+	closeReason: string | null;
+	players: { playerId: string; name: string; seat: number | null; placement: number | null }[];
+};
+
+/** A tournament's own page: what it is, every round's tables (the bracket), and the standings. */
+export type TournamentBoard = {
+	tournament: {
+		id: string;
+		game: string;
+		name: string;
+		format: TournamentFormat | null;
+		rounds: number | null;
+		/** Seats at each table. */
+		playersPerRoom: number;
+		startsAt: string;
+		endedAt: string | null;
+		cancelled: boolean;
+		players: number;
+		prizes: TournamentPrize[];
+	};
+	rounds: { round: number; startsAt: string; endedAt: string | null; tables: BoardTable[] }[];
+	standings: Standing[];
+	me: Standing | null;
+};
+
+export async function tournamentBoard(event: RequestEvent, id: string): Promise<TournamentBoard> {
+	return call(event, `/tournaments/${encodeURIComponent(id)}`, {
+		method: 'GET',
+		secret: signedIn(event)
+	});
+}
+
 /** The player's secret, or a 401 the browser sees like any other platform answer. */
 function signedIn(event: RequestEvent): string {
 	const secret = secretOf(event.cookies);
