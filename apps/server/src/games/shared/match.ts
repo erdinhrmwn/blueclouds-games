@@ -86,3 +86,17 @@ export function uuidv7(now = Date.now()): string {
 	const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
 	return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
+
+/**
+ * How a seat is reported. A bot a host added at an open table is a bot (`bot-…` id, no account). A bot account
+ * the platform signed up for a tournament is a player like anyone: it reports under its own id, so its finish
+ * counts in the tournament and its prize can be paid.
+ */
+export function reportedSeat(player: { id: string; name: string; bot: boolean }) {
+	const tableBot = player.bot && player.id.startsWith("bot-");
+	if (tableBot) {
+		return { playerId: null, bot: true, botName: player.name };
+	}
+
+	return { playerId: player.id, bot: false };
+}

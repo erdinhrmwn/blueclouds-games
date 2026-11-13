@@ -64,6 +64,8 @@ export type TournamentRoom = {
 	cancelled: boolean;
 	minPlayers: number;
 	seats: Record<string, number | null>;
+	/** Bot accounts among the seats, by id, with the name they play under; the room plays their seats. */
+	bots?: Record<string, string>;
 	closed: boolean;
 };
 
@@ -1094,7 +1096,11 @@ export async function refreshTournament(c: Ctx): Promise<TournamentRoom | null> 
 	}
 
 	const seats = Object.fromEntries(room!.seats.map((seat) => [seat.playerId, seat.seat]));
+	const bots = Object.fromEntries(
+		room!.seats.filter((seat) => seat.bot).map((seat) => [seat.playerId, seat.name || "Bot"]),
+	);
 	c.vars.tournament = {
+		bots,
 		id: tournament.id,
 		name: tournament.name,
 		round: tournament.round,
@@ -1158,7 +1164,12 @@ export function requireOpenTable(c: Ctx): void {
  */
 export async function tournamentTick(
 	c: Ctx,
-	game: { start: () => void; commit: () => Promise<void> },
+	game: {
+		start: () => void;
+		commit: () => Promise<void>;
+		/** Sits a bot account at its seat; the room then plays it like any bot. */
+		seatBot: (id: string, name: string, seat: number | null) => void;
+	},
 ): Promise<void> {
 	const tournament = c.vars.tournament as TournamentRoom | null | undefined;
 	const table = c.vars.game as Table;
@@ -1180,8 +1191,19 @@ export async function tournamentTick(
 		c.vars.game = removePlayer(c.vars.game as Table, player.id);
 	}
 
+	// Bot accounts are always on time: they take their seats as soon as the table may start.
+	const bots = seated.bots ?? {};
+	for (const [id, name] of Object.entries(bots)) {
+		const sitting = (c.vars.game as Table).players.some((player) => player.id === id);
+		if (!sitting) {
+			game.seatBot(id, name, seated.seats[id] ?? null);
+		}
+	}
+
+	const people = Object.keys(seated.seats).filter((id) => !(id in bots)).length;
 	const present = (c.vars.game as Table).players.filter((player) => !player.bot).length;
-	const everyoneIsHere = present >= Object.keys(seated.seats).length;
+	const everyoneIsHere = present >= people;
+	const seatedCount = (c.vars.game as Table).players.length;
 	const stillWaiting = now < seated.startsAt + LATE_GRACE_MS;
 	if (!everyoneIsHere && stillWaiting) {
 		if (unseated.length > 0) await game.commit();
@@ -1190,7 +1212,7 @@ export async function tournamentTick(
 
 	const code = c.key[0] as string;
 
-	if (present >= seated.minPlayers) {
+	if (seatedCount >= seated.minPlayers) {
 		game.start();
 		await game.commit();
 

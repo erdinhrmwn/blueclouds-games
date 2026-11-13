@@ -21,12 +21,14 @@ async function tournament(opts: {
 	max?: number;
 	format?: "arena" | "knockout" | "swiss";
 	rounds?: number;
+	/** Let the job fill its tables with bots; other tests leave bots out. */
+	bots?: boolean;
 	game?: string;
 }) {
 	const at = (min: number) => new Date(Date.now() + min * 60_000);
 	const [row] = await t.sql`
-		INSERT INTO tournaments (game_slug, name, players_per_room, min_players, max_players, format, rounds, starts_at, registration_opens_at, registration_closes_at, created_by_admin_id)
-		VALUES (${opts.game ?? "bust-31"}, 'Friday Cup', ${opts.perRoom ?? 6}, ${opts.min ?? null}, ${opts.max ?? null}, ${opts.format ?? null}, ${opts.rounds ?? null}, ${at(opts.starts)}, ${at(opts.opens ?? -60)}, ${at(opts.closes)}, ${admin})
+		INSERT INTO tournaments (game_slug, name, players_per_room, min_players, max_players, format, rounds, bots_added_at, starts_at, registration_opens_at, registration_closes_at, created_by_admin_id)
+		VALUES (${opts.game ?? "bust-31"}, 'Friday Cup', ${opts.perRoom ?? 6}, ${opts.min ?? null}, ${opts.max ?? null}, ${opts.format ?? null}, ${opts.rounds ?? null}, ${opts.bots ? null : new Date()}, ${at(opts.starts)}, ${at(opts.opens ?? -60)}, ${at(opts.closes)}, ${admin})
 		RETURNING id`;
 	return row.id as string;
 }
@@ -388,6 +390,93 @@ describe("rounds", () => {
 		const [champion] =
 			await t.sql`SELECT player_id FROM tournament_results WHERE tournament_id = ${id} AND place = 1`;
 		expect(champion.player_id).toBe(firstRound[0].players[0]);
+	});
+});
+
+describe("bots", () => {
+	test("in sign-up's last minute bots fill every table, pay the fee, and sit at the tables", async () => {
+		const id = await tournament({
+			closes: 0.5,
+			starts: 10,
+			perRoom: 4,
+			format: "arena",
+			bots: true,
+		});
+		await t.sql`UPDATE tournaments SET fee = 100 WHERE id = ${id}`;
+		await register(id, 7);
+
+		expect((await runTournamentJob(t.sql)).botsFilled).toBe(1);
+		const signedUp = await t.sql`
+			SELECT p.is_bot, tp.fee_paid
+			FROM tournament_players tp
+			JOIN players p ON p.id = tp.player_id
+			WHERE tp.tournament_id = ${id}`;
+		const bots = signedUp.filter((row: { is_bot: boolean }) => row.is_bot);
+		expect(signedUp.length).toBe(8);
+		expect(bots.length).toBe(1);
+		expect(bots.every((row: { fee_paid: number }) => Number(row.fee_paid) === 100)).toBe(true);
+
+		// Each bot was topped up to the fee, then paid it.
+		const reasons = await t.sql`
+			SELECT cl.reason, cl.amount
+			FROM coin_ledger cl
+			JOIN players p ON p.id = cl.player_id
+			WHERE p.is_bot AND (cl.tournament_id = ${id} OR cl.reason = 'bot_funding')`;
+		expect(
+			reasons.filter((row: { reason: string }) => row.reason === "tournament_fee").length,
+		).toBe(1);
+
+		// Once only, and the bots sit at the tables when they're handed out.
+		await t.sql`UPDATE tournaments SET registration_closes_at = now() - interval '1 second' WHERE id = ${id}`;
+		expect((await runTournamentJob(t.sql)).botsFilled).toBe(0);
+		expect(await sizes(id)).toEqual([4, 4]);
+
+		// The bot's table tells the room which seat is a bot, and its name.
+		const [table] = await t.sql`
+			SELECT r.code
+			FROM rooms r
+			JOIN room_assignments ra ON ra.room_id = r.id
+			JOIN players p ON p.id = ra.player_id
+			WHERE r.tournament_id = ${id} AND p.is_bot
+			LIMIT 1`;
+		const seats = (await server("GET", `/v1/rooms/${table.code}/seats`)).json.data.room.seats;
+		expect(
+			seats.some(
+				(seat: { bot: boolean; name: string }) => seat.bot && seat.name.startsWith("Bot "),
+			),
+		).toBe(true);
+	});
+
+	test("a knockout fills to a perfect bracket", async () => {
+		const id = await tournament({ closes: 0.5, starts: 10, perRoom: 2, bots: true });
+		await register(id, 13);
+
+		expect((await runTournamentJob(t.sql)).botsFilled).toBe(1);
+		const [{ n }] =
+			await t.sql`SELECT count(*)::int AS n FROM tournament_players WHERE tournament_id = ${id}`;
+		expect(n).toBe(16);
+	});
+
+	test("no bots for a tournament nobody signed up for, or one short of 80% or its minimum", async () => {
+		const empty = await tournament({ closes: 0.5, starts: 10, perRoom: 4, bots: true });
+		const thin = await tournament({
+			closes: 0.5,
+			starts: 10,
+			perRoom: 4,
+			max: 12,
+			format: "arena",
+			bots: true,
+		});
+		await register(thin, 9);
+		const short = await tournament({ closes: 0.5, starts: 10, perRoom: 4, min: 8, bots: true });
+		await register(short, 7);
+
+		expect((await runTournamentJob(t.sql)).botsFilled).toBe(0);
+		const rows =
+			await t.sql`SELECT bots_added_at FROM tournaments WHERE id IN ${t.sql([empty, thin, short])}`;
+		expect(rows.every((row: { bots_added_at: Date | null }) => row.bots_added_at === null)).toBe(
+			true,
+		);
 	});
 });
 

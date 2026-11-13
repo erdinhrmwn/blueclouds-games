@@ -3,6 +3,7 @@ import { ApiError } from "../lib/http";
 import { log } from "../lib/log";
 import { moveCoins, refundEveryone, refundSignUp } from "./coins";
 import { insertRoom } from "./rooms";
+import { fillDueWithBots, spreadPeople } from "./tournament-bots";
 import {
 	type FinalPlace,
 	finalPlaces,
@@ -221,11 +222,20 @@ async function seatRound(
 		adminId: string | null;
 	},
 ): Promise<void> {
+	// Bots fill tables, people play them: every table gets a person while there are enough to go round.
+	const everyone = round.tables.flat();
+	const botRows =
+		everyone.length > 0
+			? await tx`SELECT id FROM players WHERE is_bot AND id IN ${tx(everyone)}`
+			: [];
+	const bots = new Set(botRows.map((row: { id: string }) => row.id));
+	const tables = spreadPeople(round.tables, (playerId) => bots.has(playerId));
+
 	await tx`
 		INSERT INTO tournament_rounds (tournament_id, round, starts_at)
 		VALUES (${round.tournamentId}, ${round.round}, ${round.startsAt})`;
 
-	for (const tablePlayers of round.tables) {
+	for (const tablePlayers of tables) {
 		const room = await insertRoom(tx, {
 			game: round.game,
 			tournamentId: round.tournamentId,
@@ -532,8 +542,12 @@ export async function runTournamentJob(sql: SQL): Promise<{
 	closed: number;
 	nextRounds: number;
 	finished: number;
+	botsFilled: number;
 }> {
 	return sql.begin(async (tx) => {
+		// First, so a tournament closing now gets its bots before it is checked against its minimum.
+		const botsFilled = await fillDueWithBots(tx);
+
 		const due = await tx`
 			SELECT id
 			FROM tournaments
@@ -582,7 +596,7 @@ export async function runTournamentJob(sql: SQL): Promise<{
 
 		const advanced = await advanceDue(tx);
 
-		return { distributed, cancelled, failed, closed: closed.length, ...advanced };
+		return { distributed, cancelled, failed, closed: closed.length, ...advanced, botsFilled };
 	});
 }
 

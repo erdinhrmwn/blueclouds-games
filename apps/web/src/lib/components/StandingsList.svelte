@@ -84,6 +84,12 @@
 						>
 						<span class="truncate {mine ? 'font-bold' : ''}">{standing.name}</span>
 						{#if mine}<span class="shrink-0 text-xs text-brass">you</span>{/if}
+						{#if standing.bot}
+							<span
+								class="shrink-0 rounded bg-paper/10 px-1.5 text-[10px] font-semibold text-paper/70"
+								>bot</span
+							>
+						{/if}
 					</span>
 				</td>
 				{#if byPoints}

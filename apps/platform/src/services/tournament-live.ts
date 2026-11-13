@@ -22,6 +22,8 @@ export type Standing = {
 	wins: number;
 	/** The furthest round they were seated in; in a knockout, below the current round means they are out. */
 	lastRound: number;
+	/** A bot account the platform signed up to fill the tables. */
+	bot: boolean;
 };
 
 type LiveRow = {
@@ -61,7 +63,8 @@ export async function standingsOf(sql: SQL, tournamentId: string): Promise<Stand
 				p.display_name AS name,
 				tr.points,
 				tr.wins,
-				tr.last_round AS "lastRound"
+				tr.last_round AS "lastRound",
+				p.is_bot AS bot
 			FROM tournament_results tr
 			JOIN players p ON p.id = tr.player_id
 			WHERE tr.tournament_id = ${tournamentId}
@@ -86,21 +89,28 @@ export async function standingsOf(sql: SQL, tournamentId: string): Promise<Stand
 	return places.slice(0, STANDINGS_LIMIT).map((place) => ({
 		place: place.place,
 		playerId: place.playerId,
-		name: names.get(place.playerId) ?? "Player",
+		name: names.get(place.playerId)?.name ?? "Player",
+		bot: names.get(place.playerId)?.bot ?? false,
 		points: place.points,
 		wins: place.wins,
 		lastRound: place.lastRound,
 	}));
 }
 
-async function namesOf(sql: SQL, ids: string[]): Promise<Map<string, string>> {
+async function namesOf(
+	sql: SQL,
+	ids: string[],
+): Promise<Map<string, { name: string; bot: boolean }>> {
 	if (ids.length === 0) {
 		return new Map();
 	}
 
-	const rows = await sql`SELECT id, display_name FROM players WHERE id IN ${sql(ids)}`;
+	const rows = await sql`SELECT id, display_name, is_bot FROM players WHERE id IN ${sql(ids)}`;
 	return new Map(
-		rows.map((row: { id: string; display_name: string }) => [row.id, row.display_name]),
+		rows.map((row: { id: string; display_name: string; is_bot: boolean }) => [
+			row.id,
+			{ name: row.display_name, bot: row.is_bot },
+		]),
 	);
 }
 
@@ -204,7 +214,13 @@ export type BoardTable = {
 	startedAt: string | null;
 	closedAt: string | null;
 	closeReason: string | null;
-	players: { playerId: string; name: string; seat: number | null; placement: number | null }[];
+	players: {
+		playerId: string;
+		name: string;
+		bot: boolean;
+		seat: number | null;
+		placement: number | null;
+	}[];
 };
 
 /**
@@ -258,6 +274,7 @@ export async function tournamentBoard(sql: SQL, tournamentId: string, playerId: 
 				json_build_object(
 					'playerId', ra.player_id,
 					'name', p.display_name,
+					'bot', p.is_bot,
 					'seat', ra.seat,
 					'placement', mp.placement
 				)

@@ -18,7 +18,8 @@ export type CoinReason =
 	| "admin_take"
 	| "tournament_fee"
 	| "tournament_refund"
-	| "tournament_prize";
+	| "tournament_prize"
+	| "bot_funding";
 
 /** Not enough coins for a spend; carries both numbers so the message can say how many are missing. */
 export class NotEnoughCoins extends ApiError {

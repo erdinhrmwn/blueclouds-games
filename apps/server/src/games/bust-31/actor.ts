@@ -314,6 +314,9 @@ function begin(c: Ctx, by: string): void {
 const tournament = (c: Ctx) => ({
 	start: () => begin(c, c.vars.game.hostId),
 	commit: () => commit(c),
+	seatBot: (id: string, name: string, seat: number | null) => {
+		c.vars.game = apply(() => addPlayer(c.vars.game, id, name, true, seat ?? undefined));
+	},
 });
 
 /** Arms the clock when a new turn starts; a no-op while the same turn runs. */
