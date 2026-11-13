@@ -22,6 +22,9 @@
 	let busy = $state(false);
 	/** The picked format: a knockout has no round count, it plays until one player is left. */
 	let format = $state('');
+	/** Players per table as typed: the most players can't be fewer than one table. */
+	let perTable = $state('');
+	const fewestMost = $derived(perTable || values.playersPerRoom || picked?.maxPlayers);
 
 	/** Paid places, 1st first; three to start with, as most tournaments pay a podium. */
 	const STARTING_PLACES = 3;
@@ -171,6 +174,7 @@
 						min={picked?.minPlayers}
 						max={picked?.maxPlayers}
 						value={values.playersPerRoom ?? picked?.maxPlayers}
+						oninput={(e) => (perTable = e.currentTarget.value)}
 						required
 					/>
 				</div>
@@ -195,7 +199,7 @@
 						id="maxPlayers"
 						name="maxPlayers"
 						type="number"
-						min={values.playersPerRoom ?? picked?.maxPlayers}
+						min={fewestMost}
 						max={MAX_PLAYERS_LIMIT}
 						value={values.maxPlayers ?? ''}
 						required

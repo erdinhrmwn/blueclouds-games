@@ -171,6 +171,25 @@
 		if (player.ready && player.name) void load();
 	});
 
+	/**
+	 * The platform's job runs every minute: it closes sign-up, hands out tables and starts rounds. Reloading this often
+	 * shows a waiting player their table without a page refresh.
+	 */
+	const RELOAD_MS = 30_000;
+
+	$effect(() => {
+		const waiting = open.length > 0 || running.length > 0;
+		if (!waiting || !player.name) {
+			return;
+		}
+
+		const timer = setInterval(() => {
+			void load();
+		}, RELOAD_MS);
+
+		return () => clearInterval(timer);
+	});
+
 	/** Gives up a seat already handed out. The platform keeps the player out of this tournament from then on. */
 	async function withdraw(tournament: LiveTournament) {
 		const { id, name } = tournament;

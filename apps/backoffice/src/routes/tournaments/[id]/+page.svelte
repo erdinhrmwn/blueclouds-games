@@ -251,11 +251,12 @@
 				<p class="text-sm {r.closeReason === 'not_enough_players' ? 'text-danger' : 'text-muted'}">
 					{roomState(r)}
 				</p>
-				<ol class="mt-2 space-y-1 text-sm">
+				<ul class="mt-2 space-y-1 text-sm">
 					{#each seatedAt(r) as p (p.playerId)}
 						<li class="flex items-center justify-between gap-2">
 							<span>
-								<span class="text-muted tabular-nums">{(p.seat ?? 0) + 1}.</span>
+								<!-- A seat, not a place: "1." read like the table's winner. -->
+								<span class="text-muted tabular-nums">Seat {(p.seat ?? 0) + 1}</span>
 								<a class="link" href="/players/{p.playerId}">{p.name}</a>
 								{#if p.disabled}<span class="text-danger">(disabled)</span>{/if}
 								{#if p.status === 'disqualified'}<span class="text-danger">(disqualified)</span
@@ -273,7 +274,7 @@
 							{/if}
 						</li>
 					{/each}
-				</ol>
+				</ul>
 			</section>
 		{/each}
 	</div>
