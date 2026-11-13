@@ -297,6 +297,8 @@ export type TournamentTable = {
 	code: string;
 	game: string;
 	seat: number | null;
+	/** Its match began: withdrawing is no longer possible, the player leaves from the table. */
+	started: boolean;
 	tournament: { id: string; name: string; startsAt: string };
 };
 

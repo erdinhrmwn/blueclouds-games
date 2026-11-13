@@ -100,12 +100,13 @@ export async function distributeIn(
 		throw new DistributeError("Players already have their tables.");
 	}
 
-	// Disabled players can't play, so they don't take a seat.
+	// Disabled and disqualified players can't play, so they don't take a seat.
 	const registered = await tx`
 		SELECT tp.player_id
 		FROM tournament_players tp
 		JOIN players p ON p.id = tp.player_id
 		WHERE tp.tournament_id = ${tournamentId}
+			AND tp.status = 'registered'
 			AND p.disabled_at IS NULL
 			AND NOT EXISTS (
 				SELECT 1 FROM room_assignments ra
@@ -280,11 +281,13 @@ export async function listOpen(sql: SQL, game: string, playerId: string) {
 			t.players_per_room,
 			(
 				SELECT count(*)::int FROM tournament_players x
-				WHERE x.tournament_id = t.id
+				WHERE x.tournament_id = t.id AND x.status = 'registered'
 			) AS registered,
 			EXISTS (
 				SELECT 1 FROM tournament_players x
-				WHERE x.tournament_id = t.id AND x.player_id = ${playerId}
+				WHERE x.tournament_id = t.id
+					AND x.player_id = ${playerId}
+					AND x.status = 'registered'
 			) AS joined
 		FROM tournaments t
 		WHERE t.game_slug = ${game}
@@ -306,10 +309,20 @@ export async function listOpen(sql: SQL, game: string, playerId: string) {
 	}));
 }
 
-/** Signs the player up. Signing up twice is a no-op. */
+/** Signs the player up. Signing up twice is a no-op; a disqualified player can't sign up again. */
 export async function joinTournament(sql: SQL, tournamentId: string, playerId: string) {
 	await sql.begin(async (tx) => {
-		await lockOpenRegistration(tx, tournamentId);
+		const tournament = await lockTournament(tx, tournamentId);
+		requireOpenRegistration(tournament);
+
+		const [signedUp] = await tx`
+			SELECT status
+			FROM tournament_players
+			WHERE tournament_id = ${tournamentId} AND player_id = ${playerId}`;
+
+		if (signedUp?.status === "disqualified") {
+			throw new ApiError("forbidden", 403, "You were disqualified from this tournament.");
+		}
 
 		await tx`
 			INSERT INTO tournament_players (tournament_id, player_id)
@@ -318,23 +331,62 @@ export async function joinTournament(sql: SQL, tournamentId: string, playerId: s
 	});
 }
 
-/** Signs the player out. Signing out when not signed up is a no-op. */
+/**
+ * Signs the player out. While registration is open, the sign-up is deleted. Once the tables are handed out, the
+ * player withdraws: their seat is freed and they can't come back. Refused once their table started; they leave it
+ * from the table then. Signing out when not signed up is a no-op.
+ */
 export async function leaveTournament(sql: SQL, tournamentId: string, playerId: string) {
 	await sql.begin(async (tx) => {
-		await lockOpenRegistration(tx, tournamentId);
+		const tournament = await lockTournament(tx, tournamentId);
+
+		if (!tournament.distributed_at) {
+			requireOpenRegistration(tournament);
+
+			await tx`
+				DELETE FROM tournament_players
+				WHERE tournament_id = ${tournamentId}
+					AND player_id = ${playerId}
+					AND status = 'registered'`;
+			return;
+		}
+
+		const [seat] = await tx`
+			SELECT r.started_at, r.closed_at
+			FROM room_assignments ra
+			JOIN rooms r ON r.id = ra.room_id
+			JOIN tournament_players tp
+				ON tp.tournament_id = ra.tournament_id AND tp.player_id = ra.player_id
+			WHERE ra.tournament_id = ${tournamentId}
+				AND ra.player_id = ${playerId}
+				AND tp.status = 'registered'`;
+
+		if (seat?.started_at || seat?.closed_at) {
+			throw new ApiError(
+				"conflict",
+				409,
+				"Your table already started. Leave it from the table instead.",
+			);
+		}
 
 		await tx`
-			DELETE FROM tournament_players
+			DELETE FROM room_assignments
+			WHERE tournament_id = ${tournamentId} AND player_id = ${playerId}`;
+
+		await tx`
+			UPDATE tournament_players
+			SET status = 'withdrawn', status_changed_at = now()
 			WHERE tournament_id = ${tournamentId}
-				AND player_id = ${playerId}`;
+				AND player_id = ${playerId}
+				AND status = 'registered'`;
 	});
 }
 
 /**
- * Stops unless the tournament's registration is open. FOR SHARE holds the row for the transaction,
- * so a distribute run on the same tournament waits.
+ * The tournament, refused when missing or cancelled. FOR SHARE holds the row for the transaction, so a distribute
+ * run on the same tournament waits.
  */
-async function lockOpenRegistration(tx: SQL, tournamentId: string) {
+async function lockTournament(tx: SQL, tournamentId: string) {
 	const [tournament] = await tx`
 		SELECT
 			cancelled_at,
@@ -352,6 +404,10 @@ async function lockOpenRegistration(tx: SQL, tournamentId: string) {
 		throw new ApiError("conflict", 409, "This tournament was cancelled.");
 	}
 
+	return tournament as { distributed_at: Date | null; open: boolean };
+}
+
+function requireOpenRegistration(tournament: { distributed_at: Date | null; open: boolean }) {
 	if (!tournament.open || tournament.distributed_at) {
 		throw new ApiError("conflict", 409, "Registration for this tournament is closed.");
 	}
@@ -362,11 +418,14 @@ export async function seatedRooms(sql: SQL, playerId: string, game: string | und
 	const gameFilter = game ? sql`AND r.game_slug = ${game}` : sql``;
 
 	const rows = await sql`
-		SELECT r.code, r.game_slug, ra.seat, t.id AS tournament_id, t.name, t.starts_at
+		SELECT r.code, r.game_slug, ra.seat, r.started_at, t.id AS tournament_id, t.name, t.starts_at
 		FROM room_assignments ra
 		JOIN rooms r ON r.id = ra.room_id
 		JOIN tournaments t ON t.id = ra.tournament_id
+		JOIN tournament_players tp
+			ON tp.tournament_id = ra.tournament_id AND tp.player_id = ra.player_id
 		WHERE ra.player_id = ${playerId}
+			AND tp.status = 'registered'
 			AND r.closed_at IS NULL
 			AND t.cancelled_at IS NULL
 			${gameFilter}
@@ -377,6 +436,7 @@ export async function seatedRooms(sql: SQL, playerId: string, game: string | und
 		code: row.code,
 		game: row.game_slug,
 		seat: row.seat,
+		started: !!row.started_at,
 		tournament: {
 			id: row.tournament_id,
 			name: row.name,

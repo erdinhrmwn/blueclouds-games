@@ -148,3 +148,24 @@ test("closes the table when fewer than the game's minimum came", async () => {
 		"This table has finished.",
 	);
 });
+
+test("a player who lost their seat since sitting down (withdrew, disqualified) leaves before the start", async () => {
+	const c = room();
+	await loadTournament(c);
+	sit(c, ANN, BEN, CY);
+	seats = {
+		...(seats as object),
+		seats: [
+			{ playerId: ANN, seat: 0 },
+			{ playerId: CY, seat: 2 },
+		],
+	};
+	setSystemTime(START + 1000);
+	const { calls, game } = runner(c);
+	await tournamentTick(c, game);
+	expect(calls.started).toBe(1);
+	expect(c.vars.game.players.map((p) => p.id)).toEqual([ANN, CY]);
+	expect(seatFor(c, { id: BEN, name: "Ben", vip: false })).rejects.toThrow(
+		"This table is for players of Friday Cup.",
+	);
+});

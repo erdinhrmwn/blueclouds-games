@@ -12,7 +12,10 @@
 	const manageable = $derived(
 		!tournament.cancelledAt && !tournament.endedAt && data.admin?.role !== 'viewer'
 	);
-	const waiting = $derived(data.players.filter((p) => !p.roomCode));
+	/** Still in: not withdrawn or disqualified. */
+	const signedUp = $derived(data.players.filter((p) => p.status === 'registered'));
+	const out = $derived(data.players.filter((p) => p.status !== 'registered'));
+	const waiting = $derived(signedUp.filter((p) => !p.roomCode));
 	/** Tables that haven't started and still have a free seat. */
 	const seatable = $derived(
 		data.rooms.filter((r) => !r.startedAt && !r.closedAt && r.players < tournament.playersPerRoom)
@@ -150,6 +153,8 @@
 								<span class="text-muted tabular-nums">{(p.seat ?? 0) + 1}.</span>
 								<a class="link" href="/players/{p.playerId}">{p.name}</a>
 								{#if p.disabled}<span class="text-danger">(disabled)</span>{/if}
+								{#if p.status === 'disqualified'}<span class="text-danger">(disqualified)</span
+									>{/if}
 							</span>
 							{#if manageable && !r.startedAt && !r.closedAt}
 								<form method="POST" action="?/unassign" use:enhance={submit}>
@@ -208,15 +213,15 @@
 <h2 class="mt-8 font-semibold">
 	{tournament.distributedAt ? 'Registered without a table' : 'Registered players'} ({tournament.distributedAt
 		? waiting.length
-		: data.players.length})
+		: signedUp.length})
 </h2>
-{#if (tournament.distributedAt ? waiting : data.players).length === 0}
+{#if (tournament.distributedAt ? waiting : signedUp).length === 0}
 	<p class="mt-2 text-sm text-muted">
 		{tournament.distributedAt ? 'Everyone has a table.' : 'Nobody yet.'}
 	</p>
 {:else}
 	<ul class="panel mt-3 max-w-3xl divide-y divide-line text-sm">
-		{#each tournament.distributedAt ? waiting : data.players as p (p.playerId)}
+		{#each tournament.distributedAt ? waiting : signedUp as p (p.playerId)}
 			<li class="flex items-center justify-between gap-3 px-5 py-2.5">
 				<span>
 					<a class="link" href="/players/{p.playerId}">{p.name}</a>
@@ -236,6 +241,70 @@
 			</li>
 		{/each}
 	</ul>
+{/if}
+
+{#if out.length}
+	<h2 class="mt-8 font-semibold">Withdrawn and disqualified ({out.length})</h2>
+	<ul class="panel mt-3 max-w-3xl divide-y divide-line text-sm">
+		{#each out as p (p.playerId)}
+			<li class="px-5 py-2.5">
+				<a class="link" href="/players/{p.playerId}">{p.name}</a>
+				{#if p.status === 'withdrawn'}
+					<span class="text-muted">withdrew {utc(p.statusChangedAt!)}</span>
+				{:else}
+					<span class="text-danger">disqualified {utc(p.statusChangedAt!)}</span>
+					<span class="block text-muted">Reason: {p.statusReason}</span>
+				{/if}
+			</li>
+		{/each}
+	</ul>
+{/if}
+
+{#if manageable && signedUp.length}
+	<section class="mt-8 max-w-3xl panel p-5" aria-labelledby="disqualify">
+		<h2 id="disqualify" class="font-semibold">Disqualify a player</h2>
+		<p class="mt-1 text-sm text-muted">
+			They can't sign up or sit down again in this tournament. A table that hasn't started frees
+			their seat. The reason goes to the audit log.
+		</p>
+		<form
+			method="POST"
+			action="?/disqualify"
+			class="mt-3 grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end"
+			use:enhance={({ cancel, formData }) => {
+				const name = signedUp.find((p) => p.playerId === formData.get('playerId'))?.name;
+				if (!confirm(`Disqualify ${name}? This can't be undone.`)) return cancel();
+
+				busy = true;
+				// Unlike the other forms, a success clears the reason, so it isn't reused by mistake.
+				return async ({ update }) => {
+					await update();
+					busy = false;
+				};
+			}}
+		>
+			<div>
+				<label class="label" for="dq-player">Player</label>
+				<select class="field" id="dq-player" name="playerId">
+					{#each signedUp as p (p.playerId)}<option value={p.playerId}
+							>{p.name}{p.roomCode ? ` (table ${p.roomCode})` : ''}</option
+						>{/each}
+				</select>
+			</div>
+			<div>
+				<label class="label" for="dq-reason">Reason</label>
+				<input
+					class="field"
+					id="dq-reason"
+					name="reason"
+					maxlength={data.reasonMax}
+					required
+					value={form && 'reason' in form ? form.reason : ''}
+				/>
+			</div>
+			<button class="btn-danger" disabled={busy}>Disqualify</button>
+		</form>
+	</section>
 {/if}
 
 {#if manageable}

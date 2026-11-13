@@ -204,6 +204,7 @@ describe("tournament rooms", () => {
 				code,
 				game: "bust-31",
 				seat: expect.any(Number),
+				started: false,
 				tournament: { id, name: "Friday Cup", startsAt: expect.any(String) },
 			},
 		]);
@@ -282,5 +283,73 @@ describe("tournament rooms", () => {
 		expect(
 			(await call(t.app, "GET", `/v1/rooms/${c2}`, { token: ann.secret })).json.error.message,
 		).toBe("Friday Cup was cancelled.");
+	});
+});
+
+describe("withdrawn and disqualified players", () => {
+	const disqualify = (tournamentId: string, playerId: string) => t.sql`
+		UPDATE tournament_players
+		SET status = 'disqualified', status_reason = 'Cheating', status_changed_at = now()
+		WHERE tournament_id = ${tournamentId} AND player_id = ${playerId}`;
+
+	test("after the tables are handed out a player withdraws; their seat is freed and they can't come back", async () => {
+		const id = await tournament({ closes: -1, starts: 10, perRoom: 3 });
+		const [ann, ben, cy] = await Promise.all(
+			["Ann", "Ben", "Cy"].map((name) => guest(t.app, name)),
+		);
+		await t.sql`INSERT INTO tournament_players ${t.sql([ann!, ben!, cy!].map((p) => ({ tournament_id: id, player_id: p.player.id })))}`;
+		await runTournamentJob(t.sql);
+		const [{ code }] = await t.sql`SELECT code FROM rooms WHERE tournament_id = ${id}`;
+		const registration = (method: string, token: string) =>
+			call(t.app, method, `/v1/tournaments/${id}/registration`, { token });
+
+		expect((await registration("DELETE", ann!.secret)).status).toBe(200);
+		const [row] =
+			await t.sql`SELECT status, status_changed_at FROM tournament_players WHERE tournament_id = ${id} AND player_id = ${ann!.player.id}`;
+		expect(row.status).toBe("withdrawn");
+		expect(row.status_changed_at).not.toBeNull();
+		expect(
+			(await call(t.app, "GET", "/v1/players/me/rooms", { token: ann!.secret })).json.data.rooms,
+		).toEqual([]);
+		const enter = await call(t.app, "GET", `/v1/rooms/${code}`, { token: ann!.secret });
+		expect(enter.status).toBe(403);
+		expect(enter.json.error.message).toBe("You withdrew from Friday Cup.");
+		expect((await registration("POST", ann!.secret)).status).toBe(409);
+
+		// Disqualified mid-way: the seat stays on record, but the room no longer counts them.
+		await disqualify(id, ben!.player.id);
+		const refused = await call(t.app, "GET", `/v1/rooms/${code}`, { token: ben!.secret });
+		expect(refused.json.error.message).toBe("You were disqualified from Friday Cup.");
+		const seats = (await server("GET", `/v1/rooms/${code}/seats`)).json.data.room.seats;
+		expect(seats.map((s: { playerId: string }) => s.playerId)).toEqual([cy!.player.id]);
+
+		await server("POST", `/v1/rooms/${code}/start`);
+		const late = await registration("DELETE", cy!.secret);
+		expect(late.status).toBe(409);
+		expect(late.json.error.message).toBe(
+			"Your table already started. Leave it from the table instead.",
+		);
+	});
+
+	test("a disqualified player can't sign up again or erase it by leaving", async () => {
+		const id = await tournament({ closes: 5, starts: 15 });
+		const ann = await guest(t.app, "Ann");
+		const registration = (method: string) =>
+			call(t.app, method, `/v1/tournaments/${id}/registration`, { token: ann.secret });
+
+		await registration("POST");
+		await disqualify(id, ann.player.id);
+
+		const again = await registration("POST");
+		expect(again.status).toBe(403);
+		expect(again.json.error.message).toBe("You were disqualified from this tournament.");
+		expect((await registration("DELETE")).status).toBe(200);
+
+		const list = await call(t.app, "GET", "/v1/tournaments?game=bust-31", { token: ann.secret });
+		const cup = list.json.data.tournaments.find((x: { id: string }) => x.id === id);
+		expect(cup).toMatchObject({ registered: 0, joined: false });
+		expect(
+			(await t.sql`SELECT status FROM tournament_players WHERE tournament_id = ${id}`)[0].status,
+		).toBe("disqualified");
 	});
 });

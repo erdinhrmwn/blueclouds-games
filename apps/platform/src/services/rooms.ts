@@ -80,8 +80,8 @@ export async function insertRoom(
 
 /**
  * The room behind a code, if this player may enter it; throws otherwise. A tournament room lets in only its
- * assigned players (also after it closed, to see how it ended), and nobody once its tournament was cancelled.
- * A private room lets in its opener and players who redeemed an invite.
+ * assigned players who did not withdraw or get disqualified (also after it closed, to see how it ended), and nobody
+ * once its tournament was cancelled. A private room lets in its opener and players who redeemed an invite.
  */
 export async function enterable(sql: SQL, code: string, playerId: string): Promise<Access> {
 	const [row] = await sql`
@@ -98,6 +98,10 @@ export async function enterable(sql: SQL, code: string, playerId: string): Promi
 				SELECT 1 FROM room_assignments ra
 				WHERE ra.room_id = r.id AND ra.player_id = ${playerId}
 			) AS assigned,
+			(
+				SELECT tp.status FROM tournament_players tp
+				WHERE tp.tournament_id = r.tournament_id AND tp.player_id = ${playerId}
+			) AS status,
 			EXISTS (
 				SELECT 1 FROM room_members rm
 				WHERE rm.room_id = r.id AND rm.player_id = ${playerId}
@@ -114,6 +118,12 @@ export async function enterable(sql: SQL, code: string, playerId: string): Promi
 	if (isTournamentRoom) {
 		if (row.cancelled_at) {
 			throw new ApiError("forbidden", 403, `${row.name} was cancelled.`);
+		}
+		if (row.status === "disqualified") {
+			throw new ApiError("forbidden", 403, `You were disqualified from ${row.name}.`);
+		}
+		if (row.status === "withdrawn") {
+			throw new ApiError("forbidden", 403, `You withdrew from ${row.name}.`);
 		}
 		if (!row.assigned) {
 			throw new ApiError("forbidden", 403, `This table is for players of ${row.name}.`);
@@ -278,7 +288,10 @@ export async function roomSeats(sql: SQL, code: string) {
 				SELECT ra.player_id AS "playerId", ra.seat
 				FROM room_assignments ra
 				JOIN rooms r ON r.id = ra.room_id
+				JOIN tournament_players tp
+					ON tp.tournament_id = ra.tournament_id AND tp.player_id = ra.player_id
 				WHERE r.code = ${code}
+					AND tp.status = 'registered'
 				ORDER BY ra.seat`
 		: [];
 

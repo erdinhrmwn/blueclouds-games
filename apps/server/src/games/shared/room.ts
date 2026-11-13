@@ -1040,14 +1040,27 @@ export async function tournamentTick(
 	}
 	if (table.phase !== "lobby" || now < tournament.startsAt) return;
 
-	const present = table.players.filter((player) => !player.bot).length;
-	const everyoneIsHere = present >= Object.keys(tournament.seats).length;
-	const stillWaiting = now < tournament.startsAt + LATE_GRACE_MS;
-	if (!everyoneIsHere && stillWaiting) return;
+	// Since they sat down a player may have withdrawn, been disqualified or moved by an admin: ask again, and
+	// whoever has no seat here anymore leaves before the match starts.
+	const seated = (await refreshTournament(c).catch(() => null)) ?? tournament;
+	if (seated.cancelled) return;
+
+	const unseated = table.players.filter((player) => !player.bot && !(player.id in seated.seats));
+	for (const player of unseated) {
+		c.vars.game = removePlayer(c.vars.game as Table, player.id);
+	}
+
+	const present = (c.vars.game as Table).players.filter((player) => !player.bot).length;
+	const everyoneIsHere = present >= Object.keys(seated.seats).length;
+	const stillWaiting = now < seated.startsAt + LATE_GRACE_MS;
+	if (!everyoneIsHere && stillWaiting) {
+		if (unseated.length > 0) await game.commit();
+		return;
+	}
 
 	const code = c.key[0] as string;
 
-	if (present >= tournament.minPlayers) {
+	if (present >= seated.minPlayers) {
 		game.start();
 		await game.commit();
 
@@ -1058,7 +1071,7 @@ export async function tournamentTick(
 		return;
 	}
 
-	c.vars.tournament = { ...tournament, closed: true };
+	c.vars.tournament = { ...seated, closed: true };
 	await game.commit();
 
 	const marked = await markRoom(code, "close");

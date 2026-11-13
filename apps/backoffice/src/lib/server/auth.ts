@@ -45,6 +45,7 @@ export type AuditAction =
 	| 'tournament.register'
 	| 'tournament.unregister'
 	| 'tournament.distribute'
+	| 'tournament.disqualify'
 	| 'room.assign'
 	| 'room.unassign'
 	| 'room.kick'

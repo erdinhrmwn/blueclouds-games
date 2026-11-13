@@ -126,6 +126,18 @@ describe("tournament rooms", () => {
 		);
 	});
 
+	test("only a disqualification has a reason, and a changed status has a time", async () => {
+		const setStatus = (status: string, reason: string | null, changed: boolean) => sql`
+			UPDATE tournament_players
+			SET status = ${status}, status_reason = ${reason}, status_changed_at = ${changed ? new Date() : null}
+			WHERE tournament_id = ${cup} AND player_id = ${other}`;
+
+		await refused(setStatus("disqualified", null, true), /status_reason_check/);
+		await refused(setStatus("withdrawn", "Left", true), /status_reason_check/);
+		await refused(setStatus("withdrawn", null, false), /status_changed_check/);
+		await refused(setStatus("gone", null, true), /status_check/);
+	});
+
 	test("one player per seat, only registered players, one room per player per tournament", async () => {
 		await refused(assign(cupRoom, other, 0), /room_id_seat_key/);
 		const [{ id: stranger }] =

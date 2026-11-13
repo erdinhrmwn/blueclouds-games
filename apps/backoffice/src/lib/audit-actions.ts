@@ -14,6 +14,7 @@ export const AUDIT_ACTIONS: Record<string, string> = {
 	'tournament.register': 'Registered players',
 	'tournament.unregister': 'Unregistered player',
 	'tournament.distribute': 'Handed out tables',
+	'tournament.disqualify': 'Disqualified player',
 	'room.assign': 'Seated player',
 	'room.unassign': 'Took player off table',
 	'room.kick': 'Kicked player from table',

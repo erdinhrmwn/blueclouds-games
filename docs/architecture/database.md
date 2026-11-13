@@ -41,7 +41,7 @@ No soft delete (`deleted_at`) anywhere. A soft-deleted row has to be filtered ou
 | `player_secrets` | Revoked (`revoked_at`), never deleted | Forever (tiny, and useful when looking into abuse) |
 | `games` | Never deleted once a match uses it (the foreign key refuses) | Forever |
 | `tournaments` | Cancelled (`cancelled_at`), never deleted | Forever |
-| `tournament_players` | Deleted when an admin unregisters a player (audited) | While registered |
+| `tournament_players` | Deleted when an admin unregisters a player (audited) or the player leaves before tables are handed out; after that, withdrawing or a disqualification only sets `status` | While registered; withdrawn and disqualified rows stay |
 | `rooms` | Never deleted: matches point to them | Forever (one small row per table opened) |
 | `room_assignments` | Deleted when an admin takes a player out of a room (audited) | While the assignment holds |
 | `matches`, `match_players`, `match_logs` | Append-only | Forever (Erdin's decision) |
@@ -106,6 +106,9 @@ CREATE TABLE tournament_players (
   tournament_id                uuid NOT NULL REFERENCES tournaments(id),
   player_id               uuid NOT NULL REFERENCES players(id),
   registered_by_admin_id  uuid REFERENCES admins(id),  -- null = the player signed up themselves
+  status                  text NOT NULL DEFAULT 'registered',  -- registered | withdrawn | disqualified (migration 013)
+  status_reason           text,         -- why they were disqualified; set only then, 1-200 chars
+  status_changed_at       timestamptz,  -- null while registered
   created_at, updated_at,
   PRIMARY KEY (tournament_id, player_id)
 );
@@ -156,6 +159,7 @@ How a tournament runs:
 2. **Register players**, two ways: a player presses **Join** on the game's home page while registration is open (`registration_opens_at` to `registration_closes_at`; `registered_by_admin_id` is then null), or an admin pastes a list of player ids in the backoffice, any time until the tables are handed out. A player can leave again until it closes. Registering twice does nothing.
 3. **Distribute, automatically**: when registration closes (`registration_closes_at`) the platform's distribute job does it, with no admin needed (Erdin wanted it fully automatic). The backoffice also has a "Distribute now" button that runs the same code early. The platform shuffles the registered players who have no room yet, opens `ceil(n / players_per_room)` rooms, and splits them as evenly as possible, each on a seat. 20 players at 6 per room → 4 rooms of 5, not 6+6+6+2. If a room would end up below the game's minimum (3 players at 2 per room → 2 + 1), it refuses and says how many players to add or remove. Everything happens in one transaction with one audit event, and sets `distributed_at`. If the job can't distribute (too few players for the game's minimum, or nobody registered), it writes the reason to `distribute_error`, the tournament page shows it in red, and the job tries again on every tick until an admin fixes the registrations or cancels.
 4. **Late changes**: once registration has closed, nobody can sign up; an admin can still add a player by hand into a room with a free seat. Nobody already seated is ever moved. Unregistering a seated player removes their seat first.
+5. **Withdrawn and disqualified** (migration 013): once the tables are handed out, a player can **withdraw** from the game's home page until their table starts. Their seat is freed and the row stays as `withdrawn`. An admin can **disqualify** a player with a reason (audited as `tournament.disqualify`) until the tournament ends. A table that hasn't started frees their seat; at a running table the seat stays on record and the admin kicks them from Live tables. Either way the player can't sign up, enter the table or be seated again, the room no longer counts their seat, and at the start time the room drops anyone who sat down but no longer has a seat there.
 5. **Play**: players see their table on the game's home page and join before the start; every room starts on its own at `starts_at` (see "Inside the room" below).
 
 | Room | Who makes it | Who can sit |
@@ -210,7 +214,7 @@ How it flows (the parts outside the schema, for the build):
 1. **New table:** browser → game server `POST /api/<game>/rooms` → platform `POST /v1/rooms {game, visibility}` (player secret) → returns the code. The browser no longer makes codes. The opener picks **private** (the default: invite only) or **public** (listed in "Open tables", anyone may join); see "Invites" below.
 2. **Entering a room:** before the game server issues a room token, it asks the platform `GET /v1/rooms/<code>` with the player's secret. Unknown code or wrong game → 404; a tournament room the player isn't assigned to, or of a cancelled tournament → 403; a private room the player isn't a member of → 403. So a typed-in code can neither create a room nor open a private one.
 3. **Inside the room:** when the room actor starts, it reads its room from the platform with the server key (tournament, start time, assignments). In a tournament room only assigned players can take a seat, each on their fixed seat, and nobody presses Start: the room **starts by itself at `starts_at`** (Erdin, 2026-11-11), with `c.schedule` like the turn timer. **Late players** (Erdin, 2026-11-11): the room waits up to **3 minutes** after `starts_at` so everyone can arrive. It starts as soon as every assigned player is connected, or when the 3 minutes are up, with whoever is there, if that is at least the game's minimum (2 for both games today). Assigned players who still aren't there then lose their seat for that match. Below the minimum at 3 minutes, the room closes the table with "Not enough players showed up". The wait is one constant (`LATE_GRACE_MS`) in the shared room code. Tournament rooms don't report to the public room list.
-4. **Players find tournaments:** platform `GET /v1/tournaments?game=<slug>` lists tournaments with open registration (name, start time, players registered); `POST` / `DELETE /v1/tournaments/:id/registration` signs the player up or out, refused outside the window or for a disabled player.
+4. **Players find tournaments:** platform `GET /v1/tournaments?game=<slug>` lists tournaments with open registration (name, start time, players registered); `POST` / `DELETE /v1/tournaments/:id/registration` signs the player up or out, refused outside the window, for a disabled player, or (sign-up) for a disqualified one. After the tables are handed out, `DELETE` withdraws the player instead, until their table starts.
 5. **Assigned players find their room:** platform `GET /v1/players/me/rooms` returns the tournament rooms the player is assigned to, with the tournament's name and start time, so the game's home page can show "Friday Cup, 20:00, your table: K7QXM, Join".
 6. **Backoffice:** a Tournaments screen (list, new tournament, cancel); a tournament's page registers players (paste ids), runs Distribute, lists its rooms and who sits where, and moves or removes players by hand; rooms and matches link back to their tournament. Every write is an audit event.
 
@@ -526,6 +530,10 @@ references. Later files change that schema in place (widen a CHECK, add a column
 | `007_matches.sql` | `matches`, `match_players`, `match_logs` (append-only). |
 | `008_admin_audit_events.sql` | `admin_audit_events` (append-only). |
 | `009_admin_table_controls.sql` | `matches.end_reason` (`finished`/`terminated`), `rooms.close_reason` `terminated`, audit actions `room.kick`, `room.terminate`, `admin.password_change`. |
+| `010_fair_shuffles.sql` | `matches.server_seed_hash`, `server_seed`, `client_seed` ([fairness.md](fairness.md)). |
+| `011_invite_expiry.sql` | `room_invites.expires_at`: a link works for 24 hours. |
+| `012_game_maintenance.sql` | `games.maintenance_at`, audit actions `game.maintenance_start`, `game.maintenance_end`. |
+| `013_tournament_player_status.sql` | `tournament_players.status` (registered, withdrawn, disqualified), `status_reason`, `status_changed_at`, audit action `tournament.disqualify`. |
 
 The files were squashed on 2026-11-12, before any production database existed (Erdin): a database made from the old
 files (`001_init.sql` … `016_admin_management.sql`) is dropped and rebuilt from these. A later change gets its own

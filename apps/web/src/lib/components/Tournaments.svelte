@@ -32,6 +32,26 @@
 		if (player.ready && player.name) void load();
 	});
 
+	/** Gives up a seat already handed out. The platform keeps the player out of this tournament from then on. */
+	async function withdraw(table: TournamentTable) {
+		const { id, name } = table.tournament;
+		if (!confirm(`Withdraw from ${name}? Your seat is given up and you can't come back to it.`)) {
+			return;
+		}
+
+		busy = id;
+		error = null;
+
+		try {
+			await leaveTournament(id);
+			await load();
+		} catch (err) {
+			error = err instanceof Error ? err.message : 'Something went wrong. Try again.';
+		} finally {
+			busy = null;
+		}
+	}
+
 	async function toggle(tournament: Tournament) {
 		busy = tournament.id;
 		error = null;
@@ -74,6 +94,16 @@
 							<span class="font-mono tracking-[0.15em] text-brass">{t.code}</span>.</span
 						>
 					</span>
+					{#if !t.started}
+						<button
+							class="btn-ghost shrink-0"
+							onclick={() => withdraw(t)}
+							disabled={busy === t.tournament.id}
+							aria-label="Withdraw from {t.tournament.name}"
+						>
+							{busy === t.tournament.id ? 'Saving…' : 'Withdraw'}
+						</button>
+					{/if}
 					<button class="btn-brass shrink-0" onclick={() => (error = enterTable(game, t.code))}
 						>Go to your table</button
 					>

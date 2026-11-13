@@ -8,6 +8,7 @@ Admin UI for staff: SvelteKit (`adapter-node`) running on Bun. It has no API of 
 |---|---|
 | Players | Search by name or id; detail with status and recent matches; disable (with a reason) / enable |
 | Matches | Filter by game, player id and UTC date range; detail with every seat, the provably fair check of every shuffle ([fairness.md](../architecture/fairness.md)) and the move replay (timeline, step slider, JSON download) |
+| Tournaments | Create, register players, hand out tables, seat or take off by hand, disqualify a player with a reason (audited), cancel. Withdrawn and disqualified players are listed apart |
 | Games | Start or end a game's maintenance: no new tables or tournaments while it runs, open tables play on. Audited |
 | Audit log | Every admin sign-in and change, newest first |
 
