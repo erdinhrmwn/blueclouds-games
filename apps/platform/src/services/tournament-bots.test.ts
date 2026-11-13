@@ -4,7 +4,7 @@ import {
 	type BotInput,
 	botTarget,
 	perfectBracket,
-	spreadPeople,
+	spreadBots,
 } from "./tournament-bots";
 
 const input = (overrides: Partial<BotInput>): BotInput => ({
@@ -45,6 +45,12 @@ describe("botTarget", () => {
 		expect(botTarget(input({ ...arena, registered: 21, people: 21, maxPlayers: 24 }))).toBe(24);
 	});
 
+	test("at most 5 bots, however far the target is", () => {
+		// 2 a table, 26 people: the perfect bracket is 32; 5 bots would leave a table of one, so 4 make 30.
+		expect(botTarget(input({ registered: 26, people: 26, perTable: 2 }))).toBe(30);
+		expect(botTarget(input({ registered: 29, people: 29, perTable: 2 }))).toBe(32);
+	});
+
 	test("never below the minimum, never for nobody", () => {
 		expect(botTarget(input({ registered: 7, people: 7, perTable: 2, minPlayers: 8 }))).toBeNull();
 		expect(botTarget(input({ registered: 0, people: 0 }))).toBeNull();
@@ -59,34 +65,37 @@ describe("botAccountName", () => {
 	});
 });
 
-describe("spreadPeople", () => {
-	test("a table of only bots gets a person from a table with two or more", () => {
-		const isBot = (id: string) => id.startsWith("b");
-		const tables = spreadPeople(
+describe("spreadBots", () => {
+	const isBot = (id: string) => id.startsWith("b");
+	const botsAt = (tables: string[][]) => tables.map((table) => table.filter(isBot).length);
+
+	test("bots are dealt round the tables, at most 2 a table, each table with a person", () => {
+		const tables = spreadBots(
 			[
-				["p1", "p2", "b1"],
-				["b2", "b3", "b4"],
+				["b1", "b2", "b3", "b4"],
+				["b5", "p1", "p2", "p3"],
+				["p4", "p5", "p6", "p7"],
 			],
 			isBot,
 		);
 
-		expect(tables.every((table) => table.some((id) => !isBot(id)))).toBe(true);
-		expect(tables.flat().sort()).toEqual(["b1", "b2", "b3", "b4", "p1", "p2"]);
+		expect(botsAt(tables)).toEqual([2, 2, 1]);
+		expect(tables.map((table) => table.length)).toEqual([4, 4, 4]);
+		expect(tables.flat().sort()).toEqual(
+			["b1", "b2", "b3", "b4", "b5", "p1", "p2", "p3", "p4", "p5", "p6", "p7"].sort(),
+		);
 	});
 
-	test("with fewer people than tables, some tables stay bots only", () => {
-		const isBot = (id: string) => id.startsWith("b");
-		const tables = spreadPeople(
+	test("with too few people, tables take more bots, still a person each while they last", () => {
+		const tables = spreadBots(
 			[
-				["b1", "b2"],
-				["p1", "b3"],
+				["b1", "b2", "b3"],
+				["b4", "b5", "p1"],
 			],
 			isBot,
 		);
 
-		expect(tables).toEqual([
-			["b1", "b2"],
-			["p1", "b3"],
-		]);
+		expect(botsAt(tables)).toEqual([3, 2]);
+		expect(tables[1]).toContain("p1");
 	});
 });

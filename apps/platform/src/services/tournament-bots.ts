@@ -40,6 +40,9 @@ const BOT_NAMES = [
 	"Yarrow",
 ];
 
+/** Most bots one tournament takes (Erdin, 2026-11-14): past this, the tables stay as the people left them. */
+export const MAX_BOTS = 5;
+
 /** Bots only top up a tournament whose people already fill this share of it (Erdin, 2026-11-14). */
 export const BOTS_FROM_SHARE = 0.8;
 
@@ -77,7 +80,8 @@ export function perfectBracket(players: number, perTable: number): number {
  *   and never rescue one too few people wanted;
  * - a knockout aims for a perfect bracket (or, past the maximum, full tables); Arena and Swiss for full tables,
  *   their size being the maximum when there is one;
- * - never past the maximum, never more tables than people, never fewer than already signed up.
+ * - never past the maximum, never more tables than people, never fewer than already signed up;
+ * - at most MAX_BOTS bots, stopping at whole tables when that limit falls short.
  */
 export function botTarget(input: BotInput): number | null {
 	const { registered, people, perTable, minPlayers, maxPlayers, format } = input;
@@ -111,37 +115,76 @@ export function botTarget(input: BotInput): number | null {
 		return null;
 	}
 
-	const capped = Math.min(target, people * perTable);
-	return Math.max(capped, registered);
+	const capped = Math.min(target, people * perTable, registered + MAX_BOTS);
+	if (capped <= registered) {
+		return registered;
+	}
+
+	// When the bot limit stops short of the target, stop at whole tables, so no table is left too thin to play.
+	const wholeTables = Math.floor(capped / perTable) * perTable;
+	return wholeTables > registered ? wholeTables : capped;
 }
 
 /**
- * Moves people between tables so every table has at least one, when there are enough: a table of only bots
- * swaps one of its bots for a person from a table that has two or more.
+ * Spreads bots over the tables as evenly as they go (Erdin, 2026-11-14: no more than 2 bots at a table unless
+ * there are too few people), keeping each table's size. Bots are dealt one per table in turn, then people fill
+ * the seats left, in the order they came; so every table also gets a person while there are enough.
  */
-export function spreadPeople(tables: string[][], isBot: (playerId: string) => boolean): string[][] {
-	const spread = tables.map((table) => [...table]);
-	const peopleAt = (table: string[]) => table.filter((playerId) => !isBot(playerId));
+export function spreadBots(tables: string[][], isBot: (playerId: string) => boolean): string[][] {
+	const everyone = tables.flat();
+	const bots = everyone.filter((playerId) => isBot(playerId));
+	const people = everyone.filter((playerId) => !isBot(playerId));
+	const sizes = tables.map((table) => table.length);
+	const botsAt = sizes.map(() => 0);
 
-	for (const lonely of spread) {
-		if (peopleAt(lonely).length > 0) {
-			continue;
+	// Deal bots round the tables; a table keeps a seat for a person while people remain to take it.
+	let dealt = 0;
+	while (dealt < bots.length) {
+		let placedThisPass = false;
+
+		for (let index = 0; index < sizes.length && dealt < bots.length; index += 1) {
+			const room = botsAt[index]! < sizes[index]! - (people.length > 0 ? 1 : 0);
+			if (room) {
+				botsAt[index]! += 1;
+				dealt += 1;
+				placedThisPass = true;
+			}
 		}
 
-		const donor = spread.find((table) => peopleAt(table).length >= 2);
-		if (!donor) {
-			break;
+		// Every table kept its last seat for a person: those seats go to bots too.
+		if (!placedThisPass) {
+			for (let index = 0; index < sizes.length && dealt < bots.length; index += 1) {
+				if (botsAt[index]! < sizes[index]!) {
+					botsAt[index]! += 1;
+					dealt += 1;
+				}
+			}
 		}
-
-		const person = peopleAt(donor)[0]!;
-		const botIndex = lonely.findIndex((playerId) => isBot(playerId));
-		const bot = lonely[botIndex]!;
-
-		lonely[botIndex] = person;
-		donor[donor.indexOf(person)] = bot;
 	}
 
-	return spread;
+	let nextBot = 0;
+	let nextPerson = 0;
+
+	return sizes.map((size, index) => {
+		const table: string[] = [];
+
+		for (let seat = 0; seat < botsAt[index]!; seat += 1) {
+			table.push(bots[nextBot]!);
+			nextBot += 1;
+		}
+
+		while (table.length < size && nextPerson < people.length) {
+			table.push(people[nextPerson]!);
+			nextPerson += 1;
+		}
+
+		while (table.length < size) {
+			table.push(bots[nextBot]!);
+			nextBot += 1;
+		}
+
+		return table;
+	});
 }
 
 /** Name for the n-th new bot account (0-based). */

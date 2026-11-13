@@ -3,7 +3,7 @@ import { ApiError } from "../lib/http";
 import { log } from "../lib/log";
 import { moveCoins, refundEveryone, refundSignUp } from "./coins";
 import { insertRoom } from "./rooms";
-import { fillDueWithBots, spreadPeople } from "./tournament-bots";
+import { fillDueWithBots, spreadBots } from "./tournament-bots";
 import {
 	type FinalPlace,
 	finalPlaces,
@@ -222,14 +222,14 @@ async function seatRound(
 		adminId: string | null;
 	},
 ): Promise<void> {
-	// Bots fill tables, people play them: every table gets a person while there are enough to go round.
+	// Bots spread over the tables, at most 2 a table while there are enough people, each table with a person.
 	const everyone = round.tables.flat();
 	const botRows =
 		everyone.length > 0
 			? await tx`SELECT id FROM players WHERE is_bot AND id IN ${tx(everyone)}`
 			: [];
 	const bots = new Set(botRows.map((row: { id: string }) => row.id));
-	const tables = spreadPeople(round.tables, (playerId) => bots.has(playerId));
+	const tables = spreadBots(round.tables, (playerId) => bots.has(playerId));
 
 	await tx`
 		INSERT INTO tournament_rounds (tournament_id, round, starts_at)
