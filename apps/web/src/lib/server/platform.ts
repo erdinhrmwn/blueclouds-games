@@ -114,7 +114,13 @@ function secretOrNameFirst(cookies: Cookies): string {
 	return secret;
 }
 
-export type Me = { name: string; username: string | null; guest: boolean };
+export type Me = {
+	name: string;
+	username: string | null;
+	guest: boolean;
+	/** Coin balance; left out where an answer doesn't carry it (sign-in, register). */
+	coins?: number;
+};
 
 /**
  * Who this browser plays as, asked from the platform on every page load so the page never trusts a stale copy.
@@ -125,8 +131,11 @@ export async function whoAmI(event: RequestEvent): Promise<Me | null> {
 	if (!secret) return null;
 
 	try {
-		const { player } = await call<{ player: Me }>(event, '/players/me', { method: 'GET', secret });
-		return { name: player.name, username: player.username, guest: player.guest };
+		const { player, coins } = await call<{ player: Me; coins: number }>(event, '/players/me', {
+			method: 'GET',
+			secret
+		});
+		return { name: player.name, username: player.username, guest: player.guest, coins };
 	} catch (err) {
 		if (lost(err)) {
 			event.cookies.delete(SECRET_COOKIE, { path: '/' });
@@ -355,6 +364,8 @@ export type LiveTournament = {
 	/** When round 1 started; with `endedAt`, how long it ran. */
 	startsAt: string;
 	endedAt: string | null;
+	/** Finished: whether an admin paid the prizes out yet. */
+	prizesPaid: boolean;
 	/** How many sat down in round 1. */
 	players: number;
 	prizes: TournamentPrize[];
@@ -504,6 +515,30 @@ export async function matchRounds(event: RequestEvent, matchId: string): Promise
 	const path = `/matches/${encodeURIComponent(matchId)}/rounds`;
 
 	return call(event, path, { method: 'GET', secret: signedIn(event) });
+}
+
+/** What changed a player's coins: a fee, refund, prize, bonus or an admin's change with its note. */
+export type CoinChange = {
+	id: string;
+	amount: number;
+	balanceAfter: number;
+	reason:
+		| 'signup_bonus'
+		| 'admin_grant'
+		| 'admin_take'
+		| 'tournament_fee'
+		| 'tournament_refund'
+		| 'tournament_prize';
+	note: string | null;
+	at: string;
+	tournament: { id: string; name: string; cancelled: boolean } | null;
+};
+
+/** The player's coins and their history, newest first. */
+export async function coinsOf(
+	event: RequestEvent
+): Promise<{ balance: number; history: CoinChange[] }> {
+	return call(event, '/players/me/coins', { method: 'GET', secret: signedIn(event) });
 }
 
 /** One table of a tournament round, its players best finish first; an unplayed seat has no placement. */

@@ -31,6 +31,23 @@
 			busy = false;
 		};
 	};
+
+	const COIN_REASONS: Record<string, string> = {
+		signup_bonus: 'Account bonus',
+		admin_grant: 'Added by an admin',
+		admin_take: 'Taken by an admin',
+		tournament_fee: 'Fee',
+		tournament_refund: 'Refund',
+		tournament_prize: 'Prize'
+	};
+
+	/** "Fee · Night Owls", "Added by an admin · launch gift". */
+	function coinLabel(row: (typeof data.coinHistory)[number]): string {
+		const label = COIN_REASONS[row.reason] ?? row.reason;
+		const about = row.tournament?.name ?? row.note;
+
+		return about ? `${label} · ${about}` : label;
+	}
 </script>
 
 <svelte:head><title>{player.name} · Players · Backoffice</title></svelte:head>
@@ -157,6 +174,66 @@
 				</div>
 			</section>
 		{/if}
+
+		<section class="panel" aria-labelledby="coins">
+			<div class="panel-head">
+				<h2 id="coins" class="font-semibold">Coins</h2>
+				<span class="font-semibold tabular-nums">{data.coins.toLocaleString('en')}</span>
+			</div>
+			{#if data.coinHistory.length === 0}
+				<p class="px-5 py-4 text-sm text-muted">No coins have moved yet.</p>
+			{:else}
+				<ul class="divide-y divide-line text-sm">
+					{#each data.coinHistory as row (row.id)}
+						<li class="flex items-baseline justify-between gap-3 px-5 py-2.5">
+							<span class="min-w-0">
+								<span class="font-medium">{coinLabel(row)}</span>
+								<span class="block text-xs text-muted">{utc(new Date(row.at))}</span>
+							</span>
+							<span class="font-semibold tabular-nums {row.amount > 0 ? 'text-felt' : ''}"
+								>{row.amount > 0 ? '+' : ''}{row.amount.toLocaleString('en')}</span
+							>
+						</li>
+					{/each}
+				</ul>
+			{/if}
+			{#if data.admin?.role !== 'viewer'}
+				<form
+					method="POST"
+					action="?/adjustCoins"
+					class="space-y-3 border-t border-line px-5 py-4"
+					use:enhance={submit}
+				>
+					{#if form?.coinError}<p class="text-sm text-danger" role="alert">{form.coinError}</p>{/if}
+					<div>
+						<label class="label" for="amount">Coins to add (minus to take away)</label>
+						<input
+							class="field"
+							id="amount"
+							name="amount"
+							type="number"
+							step="1"
+							value={form?.amount ?? ''}
+							required
+							placeholder="500"
+						/>
+					</div>
+					<div>
+						<label class="label" for="note">Why (the player sees this)</label>
+						<input
+							class="field"
+							id="note"
+							name="note"
+							value={form?.note ?? ''}
+							maxlength={REASON_MAX}
+							required
+							placeholder="Launch gift"
+						/>
+					</div>
+					<button class="btn-primary w-full" disabled={busy}>Change coins</button>
+				</form>
+			{/if}
+		</section>
 
 		<section class="panel" aria-labelledby="history">
 			<div class="panel-head">

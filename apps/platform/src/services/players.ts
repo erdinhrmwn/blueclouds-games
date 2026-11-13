@@ -2,6 +2,7 @@ import type { SQL } from "bun";
 import { ApiError } from "../lib/http";
 import type { Signer } from "../lib/play-tokens";
 import { hashSecret, newSecret, SECRET_PATTERN } from "../lib/secrets";
+import { grantSignupBonus } from "./coins";
 import { deleteGuestIfUnused } from "./guests";
 
 /** A guest has a generated `guest_…` username and no password: it exists only in the browser that holds its secret. */
@@ -153,14 +154,23 @@ export async function register(
 	const passwordHash = await Bun.password.hash(password); // argon2id
 	try {
 		if (current) {
-			const [row] = await sql`
-				UPDATE players
-				SET display_name = ${name}, username = ${username}, password_hash = ${passwordHash}
-				WHERE id = ${current.id} AND is_guest
-				${RETURNING(sql)}`;
+			// The guest becomes the account and gets the account's coins in the same step.
+			const row = await sql.begin(async (tx) => {
+				const [updated] = await tx`
+					UPDATE players
+					SET display_name = ${name}, username = ${username}, password_hash = ${passwordHash}
+					WHERE id = ${current.id} AND is_guest
+					${RETURNING(tx)}`;
 
-			if (!row) throw new ApiError("conflict", 409, "You already have an account. Log out first.");
-			return { player: toPlayer(row as PlayerRow) };
+				if (!updated) {
+					throw new ApiError("conflict", 409, "You already have an account. Log out first.");
+				}
+
+				await grantSignupBonus(tx, updated.id);
+				return updated as PlayerRow;
+			});
+
+			return { player: toPlayer(row) };
 		}
 
 		const secret = newSecret();
@@ -172,6 +182,7 @@ export async function register(
 			await tx`
 				INSERT INTO player_secrets (secret_hash, player_id)
 				VALUES (${hashSecret(secret)}, ${player.id})`;
+			await grantSignupBonus(tx, player.id);
 
 			return player as PlayerRow;
 		});

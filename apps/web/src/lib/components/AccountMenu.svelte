@@ -83,7 +83,9 @@
 		aria-haspopup="menu"
 		aria-expanded={open}
 		aria-controls="account-menu"
-		aria-label="Account: {player.name}{player.guest ? ', guest' : ''}"
+		aria-label="Account: {player.name}{player.guest
+			? ', guest'
+			: `, ${player.coins.toLocaleString()} coins`}"
 		onclick={toggle}
 		onkeydown={(event) => {
 			if (event.key === 'ArrowDown' && !open) {
@@ -92,7 +94,16 @@
 			}
 		}}
 	>
-		<!-- The pill hugs its content: the avatar always, the name and a Guest mark from tablet width up. -->
+		<!-- The pill hugs its content: the balance (accounts), the avatar always, the name and a Guest mark from
+			 tablet width up. -->
+		{#if !player.guest}
+			<span
+				class="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full bg-brass/16 pr-2.5 pl-1.5 text-[13px] font-extrabold text-brass tabular-nums"
+			>
+				<span class="coin size-4 rounded-full" aria-hidden="true"></span>
+				{player.coins.toLocaleString()}
+			</span>
+		{/if}
 		<span
 			class="grid size-8 shrink-0 place-items-center rounded-full bg-brass font-display text-sm font-bold text-ink"
 			aria-hidden="true">{player.name.trim().charAt(0).toUpperCase()}</span
@@ -124,7 +135,7 @@
 			role="menu"
 			tabindex="-1"
 			aria-label="Account"
-			class="absolute top-full right-0 z-20 mt-1 w-44 rounded-lg border border-paper/15 bg-[#1b1611] py-1 shadow-[0_8px_24px_rgb(0_0_0/0.5)]"
+			class="absolute top-full right-0 z-20 mt-1 w-44 rounded-lg border border-paper/15 bg-panel py-1 shadow-[0_8px_24px_rgb(0_0_0/0.5)]"
 			onkeydown={onKeydown}
 		>
 			<a
@@ -194,6 +205,14 @@
 </div>
 
 <style>
+	.coin {
+		background: radial-gradient(
+			circle at 35% 30%,
+			var(--color-brass) 0 55%,
+			var(--color-brass-dim) 100%
+		);
+		box-shadow: inset 0 0 0 1.5px rgb(34 28 22 / 0.35);
+	}
 	.pill {
 		background: rgb(0 0 0 / 0.3);
 		box-shadow: inset 0 0 0 1px rgb(243 234 214 / 0.16);

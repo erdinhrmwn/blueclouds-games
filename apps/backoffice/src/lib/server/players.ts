@@ -1,4 +1,5 @@
 import type { SQL } from 'bun';
+import { moveCoins, NotEnoughCoins } from '../../../../platform/src/services/coins.ts';
 import type { Admin } from './auth.ts';
 import { audit } from './auth.ts';
 import { REASON_MAX } from '../limits.ts';
@@ -275,3 +276,55 @@ export async function revokeVip(
 		return true;
 	});
 }
+
+/** Most coins one admin change may add or take. */
+export const COIN_ADJUST_MAX = 1_000_000_000;
+
+/**
+ * Adds coins (amount > 0) or takes them (amount < 0) with a note, audited. Refused when it would take more than
+ * the player has.
+ */
+export async function adjustCoins(
+	sql: SQL,
+	admin: Admin,
+	playerId: string,
+	amount: number,
+	note: string,
+	ip: string | null
+): Promise<number> {
+	return sql.begin(async (tx) => {
+		const [player] = await tx`SELECT 1 FROM players WHERE id = ${playerId}`;
+		if (!player) {
+			throw new CoinAdjustError('This player no longer exists.');
+		}
+
+		let balance: number;
+		try {
+			balance = await moveCoins(tx, {
+				playerId,
+				amount,
+				reason: amount > 0 ? 'admin_grant' : 'admin_take',
+				adminId: admin.id,
+				note
+			});
+		} catch (err) {
+			if (err instanceof NotEnoughCoins) {
+				throw new CoinAdjustError(`They only have ${err.balance.toLocaleString('en')} coins.`);
+			}
+			throw err;
+		}
+
+		await audit(tx, {
+			adminId: admin.id,
+			action: 'player.coins_adjust',
+			playerId,
+			detail: { amount, note, balance },
+			ip
+		});
+
+		return balance;
+	});
+}
+
+/** A coin change an admin can't make; the message is shown on the form. */
+export class CoinAdjustError extends Error {}

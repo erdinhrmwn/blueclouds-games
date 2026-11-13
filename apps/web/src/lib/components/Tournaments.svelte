@@ -7,7 +7,7 @@
 		type LiveTournament,
 		type Tournament
 	} from '#lib/platform.ts';
-	import { player } from '#lib/player.svelte.ts';
+	import { player, refreshCoins } from '#lib/player.svelte.ts';
 	import { enterTable } from '#lib/tables.ts';
 	import { gameBySlug } from '#lib/games/catalog.ts';
 	import {
@@ -143,7 +143,8 @@
 			return { label: saving ? 'Saving…' : 'Leave', style: 'btn-ghost', disabled: saving };
 		}
 
-		if (status === SIGN_UP_OPEN) {
+		const affordable = shortBy(tournament) === 0;
+		if (status === SIGN_UP_OPEN && affordable) {
 			return { label: saving ? 'Saving…' : 'Join', style: 'btn-brass', disabled: saving };
 		}
 
@@ -188,6 +189,7 @@
 		try {
 			await leaveTournament(id);
 			await load();
+			void refreshCoins();
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Something went wrong. Try again.';
 		} finally {
@@ -253,7 +255,36 @@
 		liveOpen = true;
 	}
 
+	/** Joining with a fee asks first, showing what it costs and what is left. */
+	async function confirmFee(tournament: Tournament): Promise<boolean> {
+		if (tournament.joined || tournament.fee === 0) {
+			return true;
+		}
+
+		const left = player.coins - tournament.fee;
+		return ask({
+			title: `Join ${tournament.name}?`,
+			body: 'You get the fee back if you leave before your table starts.',
+			action: `Join for ${tournament.fee.toLocaleString()}`,
+			tone: 'brass',
+			rows: [
+				{ label: 'Fee', value: coins(tournament.fee) },
+				{ label: 'Your coins', value: coins(player.coins) },
+				{ label: 'Left after joining', value: coins(left), strong: true }
+			]
+		});
+	}
+
+	/** Coins missing to join; 0 when the player can afford it (or it's free, or they're in). */
+	const shortBy = (tournament: Tournament) =>
+		tournament.joined ? 0 : Math.max(tournament.fee - player.coins, 0);
+
 	async function toggle(tournament: Tournament) {
+		const sure = await confirmFee(tournament);
+		if (!sure) {
+			return;
+		}
+
 		busy = tournament.id;
 		error = null;
 
@@ -265,6 +296,7 @@
 			}
 
 			await load();
+			void refreshCoins();
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Something went wrong. Try again.';
 		} finally {
@@ -376,6 +408,11 @@
 								joined={t.joined}
 								full={status === FULL}
 							/>
+							{#if shortBy(t) > 0}
+								<p class="mt-2 text-xs font-bold text-ember">
+									You have {coins(player.coins)}, {shortBy(t).toLocaleString()} short
+								</p>
+							{/if}
 						</div>
 						<div class="mt-4 grid grid-cols-2 gap-2.5">
 							<button
@@ -436,6 +473,19 @@
 								</li>
 							{/each}
 						</ol>
+						{#if t.prizes.length > 0}
+							<p
+								class="mt-3 inline-flex items-center gap-1.5 self-start rounded-full px-2.5 py-1 text-xs font-bold {t.prizesPaid
+									? 'bg-go/15 text-go'
+									: 'bg-brass/15 text-brass'}"
+							>
+								<span
+									class="size-1.5 rounded-full {t.prizesPaid ? 'bg-go' : 'bg-brass'}"
+									aria-hidden="true"
+								></span>
+								{t.prizesPaid ? 'Prizes paid' : 'Prizes pending'}
+							</p>
+						{/if}
 						<div class="mt-auto pt-4">
 							<button
 								class="btn-ghost h-11 w-full rounded-xl"

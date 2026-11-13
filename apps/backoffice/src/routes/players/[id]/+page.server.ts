@@ -2,7 +2,11 @@ import { error, fail } from '@sveltejs/kit';
 import { auditIp } from '#lib/server/auth.ts';
 import { listAudit, NO_AUDIT_FILTER } from '#lib/server/audit-log.ts';
 import { sql } from '#lib/server/db.ts';
+import { balanceOf, coinHistory } from '../../../../../platform/src/services/coins.ts';
 import {
+	adjustCoins,
+	COIN_ADJUST_MAX,
+	CoinAdjustError,
 	disablePlayer,
 	enablePlayer,
 	grantVip,
@@ -13,6 +17,8 @@ import {
 import type { Actions, PageServerLoad } from './$types';
 
 const AUDIT_ROWS = 10;
+/** Coin changes the player page lists; the full history is the player's own Coins page. */
+const COIN_ROWS = 10;
 
 export const load: PageServerLoad = async ({ params }) => {
 	const filter = { ...NO_AUDIT_FILTER, player: params.id };
@@ -22,7 +28,12 @@ export const load: PageServerLoad = async ({ params }) => {
 	]);
 	if (!detail) error(404, 'Player not found');
 
-	return { ...detail, audit };
+	const [coins, coinRows] = await Promise.all([
+		balanceOf(sql, params.id),
+		coinHistory(sql, params.id)
+	]);
+
+	return { ...detail, audit, coins, coinHistory: coinRows.slice(0, COIN_ROWS) };
 };
 
 export const actions: Actions = {
@@ -55,6 +66,46 @@ export const actions: Actions = {
 		if (!done) return fail(409, { error: 'This player is already a VIP.' });
 
 		return { message: 'Player is now a VIP.' };
+	},
+	adjustCoins: async ({ params, request, locals, getClientAddress }) => {
+		const form = await request.formData();
+		const amountText = String(form.get('amount') ?? '').trim();
+		const note = String(form.get('note') ?? '').trim();
+		const amount = Number(amountText);
+
+		const validAmount =
+			Number.isSafeInteger(amount) && amount !== 0 && Math.abs(amount) <= COIN_ADJUST_MAX;
+		if (!validAmount) {
+			return fail(400, {
+				amount: amountText,
+				note,
+				coinError: 'Enter a whole number of coins, minus to take them away.'
+			});
+		}
+		if (!note || note.length > REASON_MAX) {
+			return fail(400, {
+				amount: amountText,
+				note,
+				coinError: `Say why, in 1-${REASON_MAX} characters.`
+			});
+		}
+
+		try {
+			const balance = await adjustCoins(
+				sql,
+				locals.admin!,
+				params.id,
+				amount,
+				note,
+				auditIp(getClientAddress())
+			);
+			return { message: `Done. They now have ${balance.toLocaleString('en')} coins.` };
+		} catch (err) {
+			if (err instanceof CoinAdjustError) {
+				return fail(409, { amount: amountText, note, coinError: err.message });
+			}
+			throw err;
+		}
 	},
 	revokeVip: async ({ params, locals, getClientAddress }) => {
 		const ip = auditIp(getClientAddress());

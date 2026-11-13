@@ -11,6 +11,7 @@ import {
 	REASON_MAX,
 	registerPlayers,
 	tournamentDetail,
+	payPrizes,
 	TournamentError,
 	unassignPlayer,
 	unregisterPlayer
@@ -127,6 +128,14 @@ export const actions: Actions = {
 			const ip = auditIp(getClientAddress());
 			await cancelTournament(sql, locals.admin!, params.id, ip);
 
-			return 'Tournament cancelled. Its tables no longer let anyone in.';
+			return 'Tournament cancelled. Its tables no longer let anyone in, and every fee went back.';
+		}),
+	payout: async ({ params, locals, getClientAddress }) =>
+		attempt(async () => {
+			const ip = auditIp(getClientAddress());
+			const paid = await payPrizes(sql, locals.admin!, params.id, ip);
+			const coins = paid.coins.toLocaleString('en');
+
+			return `Paid ${coins} coins to ${paid.players} ${paid.players === 1 ? 'player' : 'players'}.`;
 		})
 };
