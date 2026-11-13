@@ -9,15 +9,13 @@
 		count,
 		seat,
 		children,
-		name = '',
-		rule = ''
+		name = ''
 	}: {
 		count: number;
 		seat: Snippet<[number]>;
 		children: Snippet;
-		/** Printed faintly on the felt, like a casino table: the game's name and its one rule. */
+		/** Printed faintly on the felt, like a casino table: the game's name. */
 		name?: string;
-		rule?: string;
 	} = $props();
 
 	/** Where the arms of the U start, and where its bottom curve starts, as % of the table's height. */
@@ -95,17 +93,11 @@
 		<div class="felt u relative grid h-full w-full place-items-center">
 			<div class="inlay u pointer-events-none absolute inset-2 sm:inset-3" aria-hidden="true"></div>
 			{#if name}
-				<div
-					class="pointer-events-none absolute inset-x-0 bottom-[14%] flex flex-col items-center gap-1 text-center"
-					aria-hidden="true"
+				<!-- Printed faintly at the foot of the felt, clear of the middle of the table. -->
+				<span
+					class="pointer-events-none absolute inset-x-0 bottom-[2%] text-center font-display text-lg font-bold text-paper/[0.08] italic sm:text-2xl"
+					aria-hidden="true">{name}</span
 				>
-					<span class="font-display text-2xl font-bold text-paper/[0.09] italic sm:text-5xl"
-						>{name}</span
-					>
-					{#if rule}
-						<span class="hidden text-xs font-medium text-paper/[0.18] sm:block">{rule}</span>
-					{/if}
-				</div>
 			{/if}
 			{@render children()}
 		</div>

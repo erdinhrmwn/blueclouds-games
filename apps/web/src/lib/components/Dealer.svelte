@@ -46,7 +46,7 @@
 
 	{#if direction !== null}
 		<p
-			class="absolute top-1/2 right-full mr-3 flex items-center gap-1.5 rounded-full bg-black/40 px-2.5 py-1 text-[11px] whitespace-nowrap text-paper/85 sm:mr-5"
+			class="absolute top-1/2 right-full mr-3 flex items-center gap-1.5 rounded-full bg-black/40 px-1.5 py-1.5 sm:px-2.5 sm:py-1 text-[11px] whitespace-nowrap text-paper/85 sm:mr-5"
 			aria-live="polite"
 		>
 			<span class="direction inline-flex" class:ccw={direction === -1} aria-hidden="true">
@@ -63,7 +63,7 @@
 					<path d="M4 12a6 6 0 1 0 2-6m0 0H2.5m3.5 0V2.5" />
 				</svg>
 			</span>
-			{direction === 1 ? 'Clockwise' : 'Counter-clockwise'}
+			<span class="max-sm:sr-only">{direction === 1 ? 'Clockwise' : 'Counter-clockwise'}</span>
 		</p>
 	{/if}
 </div>

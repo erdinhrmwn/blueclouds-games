@@ -114,9 +114,11 @@
 		class="placard mx-auto w-full max-w-md min-w-0 flex-1 rounded-2xl px-4 py-3 text-center sm:px-6"
 	>
 		<h1 class="font-display text-lg leading-tight font-bold text-paper sm:text-xl">
-			<span class="sr-only">{game.name}: </span><Marquee text={roomName} />
+			<span class="sr-only">{game.name},&nbsp;</span><Marquee text={roomName} />
 		</h1>
-		<p class="mt-2 flex flex-wrap items-center justify-center gap-1.5 text-xs">
+		<p
+			class="mt-2 flex flex-wrap items-center justify-center gap-1 text-[11px] sm:gap-1.5 sm:text-xs"
+		>
 			<span class="chip">
 				<span class="text-paper/55">Room</span>
 				<span class="font-semibold text-paper/90">{code}</span>
@@ -222,10 +224,10 @@
 	.chip {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.375rem;
+		gap: 0.3rem;
 		border-radius: 9999px;
 		background: rgb(0 0 0 / 0.4);
-		padding: 0.25rem 0.625rem;
+		padding: 0.25rem 0.5rem;
 		white-space: nowrap;
 	}
 </style>

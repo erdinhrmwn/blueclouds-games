@@ -28,13 +28,14 @@
 	const left = $derived(limit - total);
 	const leftText = $derived(left >= 0 ? `${left} to bust` : 'bust');
 
-	/** Tick labels: every ten, and the limit itself. */
-	const ticks = $derived(
-		[
-			...Array.from({ length: Math.floor(limit / TICK_STEP) + 1 }, (_, i) => i * TICK_STEP),
-			limit
-		].filter((value, index, all) => all.indexOf(value) === index)
-	);
+	/** Tick labels: every ten, and the limit itself; a ten too close to the limit (30 next to 31) is left out. */
+	const MIN_TICK_GAP = TICK_STEP / 2;
+	const ticks = $derived([
+		...Array.from({ length: Math.floor(limit / TICK_STEP) + 1 }, (_, i) => i * TICK_STEP).filter(
+			(value) => limit - value >= MIN_TICK_GAP
+		),
+		limit
+	]);
 
 	/** The note sits on the side away from the thumb, so they never meet. */
 	const noteOnLeft = $derived(ratio > 0.5);

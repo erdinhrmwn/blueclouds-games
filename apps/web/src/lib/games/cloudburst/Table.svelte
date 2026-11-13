@@ -32,6 +32,20 @@
 
 	const view = $derived(room.view!);
 	const inSeat = (seat: number) => view.players.find((p) => p.seat === seat) ?? null;
+	/**
+	 * Which side a chair fans its card backs: towards the middle of the table, except the two chairs at the
+	 * top of the arms, which fan outward to stay clear of the dealer's shoe and the turn direction.
+	 */
+	const backsSide = (chair: number): 'left' | 'right' => {
+		const right = chair <= MAX_PLAYERS / 2;
+		const topCorner = chair === 1 || chair === MAX_PLAYERS;
+		if (topCorner) {
+			return right ? 'right' : 'left';
+		}
+
+		return right ? 'left' : 'right';
+	};
+
 	const nameOf = (id: string | null | undefined) =>
 		view.players.find((p) => p.id === id)?.name ?? '?';
 
@@ -459,7 +473,7 @@
 
 <!-- clip sideways only, so cards flying in mid-animation never add a horizontal scrollbar on phones -->
 <div class="table-back-cloudburst overflow-x-clip">
-	<Felt count={MAX_PLAYERS + 1} name="Cloudburst" rule="Match the suit or the next number">
+	<Felt count={MAX_PLAYERS + 1} name="Cloudburst">
 		{#snippet seat(k)}
 			{#if k === 0}
 				<Dealer deckCount={view.deckCount} direction={view.direction} />
@@ -520,7 +534,7 @@
 					player={p}
 					number={k}
 					cards={p ? (reveal ? 0 : p.cards) : 0}
-					cardSide={k <= MAX_PLAYERS / 2 ? 'left' : 'right'}
+					cardSide={backsSide(k)}
 					isTurn={!!p && (p.id === view.turnPlayerId || p.id === view.winnerId)}
 					isHost={!!p && p.id === view.hostId}
 					isMe={!!p && p.id === room.playerId}
