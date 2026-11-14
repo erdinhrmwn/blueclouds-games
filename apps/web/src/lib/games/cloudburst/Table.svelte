@@ -6,6 +6,7 @@
 	import HandBar from '#lib/components/HandBar.svelte';
 	import WinCascade from '#lib/components/WinCascade.svelte';
 	import TournamentNext from '#lib/components/TournamentNext.svelte';
+	import ResultDialog from '#lib/components/ResultDialog.svelte';
 	import { dealCards, placeCard, seatRect, shake, whenDealt } from '#lib/motion.ts';
 	import {
 		type Card,
@@ -18,7 +19,6 @@
 	} from 'server/games/cloudburst/rules';
 	import { prefersReducedMotion } from 'svelte/motion';
 	import { MediaQuery } from 'svelte/reactivity';
-	import { fly } from 'svelte/transition';
 	import CloudCard from './CloudCard.svelte';
 	import type { CloudburstConnection } from './connection.svelte.ts';
 	import WeatherVane from './WeatherVane.svelte';
@@ -520,6 +520,8 @@
 
 	const standings = $derived([...view.players].sort((a, b) => a.points - b.points));
 	const iWon = $derived(view.winnerId !== null && view.winnerId === room.playerId);
+	/** The finished table's result popup; it opens by itself, and "See the result" opens it again. */
+	let resultOpen = $state(false);
 
 	/** The result heading: a win, a loss for a seated player, else who won. */
 	const resultTitle = $derived.by(() => {
@@ -650,50 +652,9 @@
 
 		{#if view.phase === 'finished'}
 			<WinCascade />
-			<div class="relative flex flex-col items-center gap-1 text-center sm:gap-2">
-				<p
-					class="label"
-					in:fly={{ y: 10, duration: prefersReducedMotion.current ? 0 : 300, delay: 200 }}
-				>
-					{resultTitle}
-				</p>
-				<p
-					class="winner font-display text-3xl font-black text-brass sm:text-5xl"
-					class:still={prefersReducedMotion.current}
-				>
-					{nameOf(view.winnerId)}
-				</p>
-				<!-- Two columns on phones, so six players still fit inside the felt. -->
-				<ol
-					class="mt-1 grid grid-cols-2 gap-x-4 text-xs tabular-nums sm:block sm:text-sm"
-					aria-label="Final points"
-				>
-					{#each standings as p (p.id)}
-						<li class={p.id === view.winnerId ? 'text-brass' : 'text-paper/80'}>
-							{p.name}: {p.points}
-						</li>
-					{/each}
-				</ol>
-				{#if view.tournament}
-					{#if view.tournament.id}
-						<TournamentNext
-							game={room.game}
-							tournamentId={view.tournament.id}
-							tournamentName={view.tournament.name}
-							round={view.tournament.round ?? 1}
-						/>
-					{:else}
-						<p class="text-sm text-paper/75">This {view.tournament.name} table is done.</p>
-					{/if}
-				{:else if room.isHost}
-					<button class="btn-brass mt-2" onclick={room.reset} disabled={room.busy}
-						>Shuffle &amp; play again</button
-					>
-				{:else}
-					<p class="text-sm text-paper/75">Waiting for the host to open a new table…</p>
-				{/if}
-			</div>
-		{:else if summary}
+		{/if}
+		<!-- The pile stays when the table finishes; the result is a popup. -->
+		{#if summary && view.phase !== 'finished'}
 			<div
 				class="relative flex flex-col items-center gap-1.5 rounded-lg bg-black/60 px-3 py-3 text-center sm:gap-2 sm:px-5 sm:py-4"
 				role="status"
@@ -746,6 +707,45 @@
 </div>
 
 <DealerLine text={dealerLine} moveKey={view.moves} />
+
+{#if view.phase === 'finished'}
+	<div class="flex justify-center">
+		<button class="btn-brass" onclick={() => (resultOpen = true)}>See the result</button>
+	</div>
+	<ResultDialog bind:open={resultOpen} title={resultTitle} winner={nameOf(view.winnerId)}>
+		{#snippet details()}
+			<ol
+				class="mx-auto grid max-w-xs grid-cols-2 gap-x-4 text-sm tabular-nums"
+				aria-label="Final points"
+			>
+				{#each standings as p (p.id)}
+					<li class={p.id === view.winnerId ? 'text-brass' : 'text-paper/80'}>
+						{p.name}: {p.points}
+					</li>
+				{/each}
+			</ol>
+		{/snippet}
+		{#snippet actions()}
+			{#if view.tournament?.id}
+				<TournamentNext
+					game={room.game}
+					tournamentId={view.tournament.id}
+					tournamentName={view.tournament.name}
+					round={view.tournament.round ?? 1}
+					onchange={() => (resultOpen = true)}
+				/>
+			{:else if view.tournament}
+				<p class="text-sm text-paper/75">This {view.tournament.name} table is done.</p>
+			{:else if room.isHost}
+				<button class="btn-brass w-full" onclick={room.reset} disabled={room.busy}
+					>Shuffle &amp; play again</button
+				>
+			{:else}
+				<p class="text-sm text-paper/75">Waiting for the host to open a new table…</p>
+			{/if}
+		{/snippet}
+	</ResultDialog>
+{/if}
 
 {#if view.phase === 'playing' && room.me}
 	<section aria-label="Your hand" class="flex flex-col items-center gap-3">
@@ -813,25 +813,6 @@
 	}
 	.suit-ring {
 		transition: color 400ms ease;
-	}
-	.winner {
-		animation:
-			rise 700ms cubic-bezier(0.2, 0.8, 0.3, 1.2) both,
-			glow 2.4s ease-in-out 700ms infinite alternate;
-	}
-	.winner.still {
-		animation: none;
-	}
-	@keyframes rise {
-		from {
-			opacity: 0;
-			transform: translateY(24px) scale(0.6);
-		}
-	}
-	@keyframes glow {
-		to {
-			text-shadow: 0 0 24px rgb(210 165 76 / 0.55);
-		}
 	}
 	/* The meter that reached the limit flashes ember twice. */
 	.burst {

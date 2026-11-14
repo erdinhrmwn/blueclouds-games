@@ -4,11 +4,11 @@
 	import type { Card } from 'server/games/bust-31/rules';
 	import { untrack } from 'svelte';
 	import { prefersReducedMotion } from 'svelte/motion';
-	import { fly } from 'svelte/transition';
 	import BustStamp from './BustStamp.svelte';
 	import Felt from '#lib/components/Felt.svelte';
 	import WinCascade from '#lib/components/WinCascade.svelte';
 	import TournamentNext from '#lib/components/TournamentNext.svelte';
+	import ResultDialog from '#lib/components/ResultDialog.svelte';
 	import PlayingCard from './PlayingCard.svelte';
 	import Seat from '#lib/components/Seat.svelte';
 	import HandBar from '#lib/components/HandBar.svelte';
@@ -166,6 +166,8 @@
 		return () => clearTimeout(id);
 	});
 
+	/** The finished table's result popup; it opens by itself, and "See the result" opens it again. */
+	let resultOpen = $state(false);
 	const iWon = $derived(view.winnerId !== null && view.winnerId === room.playerId);
 
 	/** The result heading: a win, a loss for a seated player, else who won. */
@@ -350,73 +352,36 @@
 
 		{#if view.phase === 'finished'}
 			<WinCascade />
-			<div class="relative flex flex-col items-center gap-3 text-center">
-				<p
-					class="label"
-					in:fly={{ y: 10, duration: prefersReducedMotion.current ? 0 : 300, delay: 200 }}
-				>
-					{resultTitle}
-				</p>
-				<p
-					class="winner font-display text-4xl font-black text-brass sm:text-5xl"
-					class:still={prefersReducedMotion.current}
-				>
-					{nameOf(view.winnerId)}
-				</p>
-				{#if view.tournament}
-					{#if view.tournament.id}
-						<TournamentNext
-							game={room.game}
-							tournamentId={view.tournament.id}
-							tournamentName={view.tournament.name}
-							round={view.tournament.round ?? 1}
-						/>
-					{:else}
-						<p class="text-sm text-paper/75">This {view.tournament.name} table is done.</p>
-					{/if}
-				{:else if room.isHost}
-					<button class="btn-brass mt-2" onclick={room.reset} disabled={room.busy}
-						>Shuffle &amp; play again</button
-					>
-				{:else}
-					<p class="text-sm text-paper/75">Waiting for the host to open a new table…</p>
-				{/if}
-			</div>
-		{:else}
-			<!-- The pile on top, the total's track under it. -->
-			<div class="flex translate-y-2 flex-col items-center gap-4 sm:gap-5">
-				<div
-					class="grid h-[3.55rem] w-10 place-items-center rounded-lg border border-dashed border-paper/40 sm:h-[4.6rem] sm:w-[3.25rem]"
-				>
-					{#each under as u (u.id)}
+		{/if}
+		<!-- The pile on top, the total's track under it. It stays when the table finishes; the result is a popup. -->
+		<div class="flex translate-y-2 flex-col items-center gap-4 sm:gap-5">
+			<div
+				class="grid h-[3.55rem] w-10 place-items-center rounded-lg border border-dashed border-paper/40 sm:h-[4.6rem] sm:w-[3.25rem]"
+			>
+				{#each under as u (u.id)}
+					<div class="col-start-1 row-start-1" style="rotate: {tiltOf(u.id)}deg" aria-hidden="true">
+						<PlayingCard card={u} size={pileSize} />
+					</div>
+				{/each}
+				{#key view.topCard?.id}
+					{#if view.topCard}
 						<div
 							class="col-start-1 row-start-1"
-							style="rotate: {tiltOf(u.id)}deg"
-							aria-hidden="true"
+							data-pile-top
+							in:placeCard|global={{
+								from: flightFrom(view.topCard.id),
+								tilt: flightTilt(view.topCard.id)
+							}}
 						>
-							<PlayingCard card={u} size={pileSize} />
-						</div>
-					{/each}
-					{#key view.topCard?.id}
-						{#if view.topCard}
-							<div
-								class="col-start-1 row-start-1"
-								data-pile-top
-								in:placeCard|global={{
-									from: flightFrom(view.topCard.id),
-									tilt: flightTilt(view.topCard.id)
-								}}
-							>
-								<div style="rotate: {tiltOf(view.topCard.id)}deg">
-									<PlayingCard card={view.topCard} size={pileSize} />
-								</div>
+							<div style="rotate: {tiltOf(view.topCard.id)}deg">
+								<PlayingCard card={view.topCard} size={pileSize} />
 							</div>
-						{/if}
-					{/key}
-				</div>
-				<TotalTrack total={view.total} limit={view.limit} />
+						</div>
+					{/if}
+				{/key}
 			</div>
-		{/if}
+			<TotalTrack total={view.total} limit={view.limit} />
+		</div>
 		{#if bust}
 			{#key bust.moves}
 				<BustStamp
@@ -431,6 +396,33 @@
 </div>
 
 <DealerLine text={dealerLine} moveKey={view.moves} />
+
+{#if view.phase === 'finished'}
+	<div class="flex justify-center">
+		<button class="btn-brass" onclick={() => (resultOpen = true)}>See the result</button>
+	</div>
+	<ResultDialog bind:open={resultOpen} title={resultTitle} winner={nameOf(view.winnerId)}>
+		{#snippet actions()}
+			{#if view.tournament?.id}
+				<TournamentNext
+					game={room.game}
+					tournamentId={view.tournament.id}
+					tournamentName={view.tournament.name}
+					round={view.tournament.round ?? 1}
+					onchange={() => (resultOpen = true)}
+				/>
+			{:else if view.tournament}
+				<p class="text-sm text-paper/75">This {view.tournament.name} table is done.</p>
+			{:else if room.isHost}
+				<button class="btn-brass w-full" onclick={room.reset} disabled={room.busy}
+					>Shuffle &amp; play again</button
+				>
+			{:else}
+				<p class="text-sm text-paper/75">Waiting for the host to open a new table…</p>
+			{/if}
+		{/snippet}
+	</ResultDialog>
+{/if}
 
 {#if view.phase === 'playing'}
 	{#if room.me && room.me.lives > 0}
@@ -454,26 +446,3 @@
 		<p class="text-center text-sm text-paper/75">You are out. Watch until the table finishes.</p>
 	{/if}
 {/if}
-
-<style>
-	/* Winner's name rises out of the table, then settles with a slow glow. */
-	.winner {
-		animation:
-			rise 700ms cubic-bezier(0.2, 0.8, 0.3, 1.2) both,
-			glow 2.4s ease-in-out 700ms infinite alternate;
-	}
-	.winner.still {
-		animation: none;
-	}
-	@keyframes rise {
-		from {
-			opacity: 0;
-			transform: translateY(24px) scale(0.6);
-		}
-	}
-	@keyframes glow {
-		to {
-			text-shadow: 0 0 24px rgb(210 165 76 / 0.55);
-		}
-	}
-</style>

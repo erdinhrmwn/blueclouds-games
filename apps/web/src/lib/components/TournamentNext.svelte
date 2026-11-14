@@ -5,20 +5,23 @@
 	import { ordinal, pointsText, ranksByPoints, startsIn } from '#lib/tournament-formats.ts';
 
 	/**
-	 * At a tournament table once its match is over: what happens to this player next. The next round's table only
-	 * exists once every table of this round is done, so it asks the platform every few seconds until it knows.
+	 * In a tournament table's result popup: what happens to this player next. The next round's table only exists once
+	 * every table of this round is done, so it asks the platform every few seconds until it knows, and calls
+	 * `onchange` when the answer changes (next table ready, out, tournament over) so the popup can open again.
 	 */
 	let {
 		game,
 		tournamentId,
 		tournamentName,
-		round
+		round,
+		onchange
 	}: {
 		game: string;
 		tournamentId: string;
 		tournamentName: string;
 		/** The round this table played. */
 		round: number;
+		onchange: () => void;
 	} = $props();
 
 	const POLL_MS = 5_000;
@@ -97,34 +100,48 @@
 			title: byPoints ? 'Round done' : 'Waiting to see who goes on'
 		};
 	});
+
+	// A decided answer (or a new table) is worth showing again, even after the player closed the popup.
+	let shownKey = '';
+	$effect(() => {
+		if (next.kind === 'loading' || next.kind === 'waiting') {
+			return;
+		}
+
+		const key = next.kind === 'next' ? next.code : next.kind;
+		if (key === shownKey) {
+			return;
+		}
+
+		shownKey = key;
+		onchange();
+	});
 </script>
 
-<!-- z-10: the chairs are drawn after the felt's middle, and on phones they would cover this card and its button. -->
-<div
-	class="relative z-10 w-full max-w-xs rounded-2xl border border-brass/60 bg-room/90 px-5 py-4 text-center"
-	aria-live="polite"
->
-	<p class="text-xs font-semibold text-brass">{tournamentName} · round {round} done</p>
+<div aria-live="polite">
+	<p class="text-sm font-semibold text-brass">{tournamentName} · round {round} done</p>
 	{#if next.kind === 'loading'}
-		<p class="mt-2 text-sm text-paper/70">Checking the next round…</p>
+		<p class="mt-1.5 text-sm text-paper/75">Checking the next round…</p>
 	{:else}
 		<p class="mt-1.5 font-display text-xl font-extrabold text-paper">{next.title}</p>
-		{#if next.kind === 'next'}
-			<p class="mt-1 text-sm text-paper/75">{next.line}</p>
-			<button
-				class="btn-brass mt-3 h-11 w-full rounded-xl"
-				onclick={() => (error = enterTable(game, next.code))}>Go to table</button
-			>
-		{:else if next.kind === 'waiting'}
-			<p class="mt-1 text-sm text-paper/75">Waiting for the other tables to finish…</p>
-		{:else if next.kind === 'out'}
-			<p class="mt-1 text-sm text-paper/75">Final places when the tournament ends.</p>
-		{:else}
-			<p class="mt-1 text-sm text-paper/75">See the winners in the lobby.</p>
-		{/if}
-		{#if next.kind !== 'next'}
-			<a class="btn-ghost mt-3 h-11 w-full rounded-xl" href="/{game}">Back to the lobby</a>
-		{/if}
+		<p class="mt-1 text-sm text-paper/75">
+			{#if next.kind === 'next'}
+				{next.line}
+			{:else if next.kind === 'waiting'}
+				Waiting for the other tables to finish…
+			{:else if next.kind === 'out'}
+				Final places when the tournament ends.
+			{:else}
+				See the winners in the lobby.
+			{/if}
+		</p>
 	{/if}
 	{#if error}<p class="mt-2 text-sm text-ember" role="alert">{error}</p>{/if}
+	{#if next.kind === 'next'}
+		<button class="btn-brass mt-4 w-full" onclick={() => (error = enterTable(game, next.code))}
+			>Go to table</button
+		>
+	{:else}
+		<a class="btn-ghost mt-4 w-full" href="/{game}">Back to the lobby</a>
+	{/if}
 </div>
