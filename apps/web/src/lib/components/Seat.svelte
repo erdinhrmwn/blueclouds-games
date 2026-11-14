@@ -11,7 +11,9 @@
 		isHost = false,
 		isMe = false,
 		out = false,
-		status,
+		badge,
+		meter,
+		summary,
 		timeLeft = null,
 		drain = null,
 		action,
@@ -25,8 +27,12 @@
 		isMe?: boolean;
 		/** Knocked out of the game: the seat is greyed. */
 		out?: boolean;
-		/** The game's own line under the name (lives, cards, points). */
-		status?: Snippet;
+		/** The game's quick status on the avatar's bottom right corner (lives, cards in hand). */
+		badge?: Snippet;
+		/** A game's gauge under the name plate (Cloudburst's cloud meter). */
+		meter?: Snippet;
+		/** What the badge and meter show, in words for screen readers ("2 of 3 lives"). */
+		summary?: string;
 		/** Share of the turn timer left (1 → 0), or null when no timer runs for this seat. */
 		timeLeft?: number | null;
 		/** Time left when this deadline arrived; the ring animates down from it. */
@@ -43,7 +49,7 @@
 
 	const initial = $derived(player?.name.trim().charAt(0).toUpperCase() ?? '');
 
-	/** Knocked out: the whole seat greys. Away fades the status and the avatar's letter, so the Away tag stays readable. */
+	/** Knocked out: the whole seat greys. Away fades the avatar's letter and the badge; the plate shows a moon. */
 	const outClass = $derived(out ? 'opacity-40 grayscale' : '');
 	const awayFade = $derived(player?.away ? 'opacity-50' : '');
 
@@ -87,21 +93,26 @@
 			parts.push('away');
 		}
 
+		if (summary) {
+			parts.push(summary);
+		}
+
 		return parts.join(', ');
 	});
 </script>
 
 {#if player}
+	<!-- A compact seat: the avatar, the name plate tucked under it, the game's status on the avatar's corner and any
+		 meter under the plate. Short, so the felt keeps its height. -->
 	<div
 		data-seat={player.id}
-		class="flex w-20 flex-col items-center gap-1 text-center wide:w-28 {outClass}"
+		class="flex w-24 flex-col items-center text-center wide:w-32 {outClass}"
 		role="group"
 		aria-label={seatLabel}
 	>
-		<!-- Room below for the Away tag, kept on every seat so all their lines stay level. -->
-		<div class="relative mb-1.5">
+		<div class="relative">
 			<div
-				class="relative grid size-12 place-items-center rounded-xl border-2 font-display text-lg font-bold wide:size-14 wide:rounded-[14px] wide:text-xl
+				class="avatar relative grid size-12 place-items-center rounded-xl border-2 font-display text-lg font-bold wide:size-14 wide:rounded-[14px] wide:text-xl
 					{avatarLook}"
 				aria-hidden="true"
 			>
@@ -109,7 +120,7 @@
 					<!-- robot head: bots get an icon instead of a monogram -->
 					<svg
 						viewBox="0 0 24 24"
-						class="size-6 wide:size-7"
+						class="size-6 wide:size-7 {awayFade}"
 						fill="none"
 						stroke="currentColor"
 						stroke-width="1.8"
@@ -125,7 +136,7 @@
 						<path d="M2.8 11v3.5M21.2 11v3.5" />
 					</svg>
 				{:else}
-					{initial}
+					<span class={awayFade}>{initial}</span>
 				{/if}
 				{#if timeLeft !== null}
 					<!-- The timer runs on the avatar's own edge, so the seat on turn is no bigger than the others.
@@ -149,22 +160,15 @@
 					</svg>
 				{/if}
 			</div>
-			<!-- Every mark has one fixed spot, so none can meet another: Host on the top left corner, the host's ×
-				 (or + on an empty chair) on the top right, Away on the bottom edge, VIP in the name tag below.
-				 The ring cuts a gap where a tag crosses the edge or the timer. -->
+			<!-- Every mark has one fixed spot, so none can meet another: Host on the top left corner, the game's badge on
+				 the top right (the host's × takes that corner only in the lobby, where no game has a badge), Away and VIP
+				 in the name plate. -->
 			{#if isHost}
-				<span class="seat-tag -top-2 -left-1.5 bg-brass text-ink" aria-hidden="true">Host</span>
+				<span class="seat-tag -top-2 -left-2 bg-brass text-ink" aria-hidden="true">Host</span>
 			{/if}
-			{#if player.away}
-				<span
-					class="seat-tag -bottom-2 left-1/2 -translate-x-1/2 bg-paper text-ink"
-					aria-hidden="true"
-				>
-					<!-- moon -->
-					<svg viewBox="0 0 24 24" class="size-2.5" fill="currentColor">
-						<path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z" />
-					</svg>
-					Away
+			{#if badge}
+				<span class="seat-badge -top-2 -right-3 {awayFade}" aria-hidden="true">
+					{@render badge()}
 				</span>
 			{/if}
 			{#if action}
@@ -172,34 +176,43 @@
 			{/if}
 		</div>
 		<div
-			class="flex max-w-full items-center gap-1 rounded-sm bg-black/45 px-1.5 py-0.5 text-[11px] font-medium wide:px-2 wide:text-xs
-				{player.away ? 'text-paper/70' : ''}"
+			class="plate relative -mt-1.5 flex {isMe
+				? 'mine'
+				: ''} max-w-full items-center gap-1 rounded-md px-2 py-0.5 text-[11px] leading-4 font-semibold wide:text-xs wide:leading-5
+				{isTurn ? 'bg-brass text-ink' : 'bg-[#120e0b] text-paper'}"
 			aria-hidden="true"
 		>
+			{#if player.away}
+				<!-- moon -->
+				<svg viewBox="0 0 24 24" class="size-3 shrink-0 opacity-80" fill="currentColor">
+					<path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z" />
+				</svg>
+			{/if}
 			{#if player.vip}
 				<span
-					class="shrink-0 rounded-[3px] bg-brass px-1 text-[9px] leading-[14px] font-bold text-ink"
-					>VIP</span
+					class="shrink-0 rounded-[3px] px-1 text-[9px] leading-[14px] font-bold {isTurn
+						? 'bg-ink text-brass'
+						: 'bg-brass text-ink'}">VIP</span
 				>
 			{/if}
-			<span class="min-w-0 truncate"
-				>{player.name}{#if isMe}<span class="text-paper/75">&nbsp;(you)</span>{/if}</span
+			<span class="min-w-0 truncate {player.away && !isTurn ? 'text-paper/70' : ''}"
+				>{player.name}</span
 			>
 		</div>
-		{#if status}
-			<div class="flex items-center gap-1 {awayFade}">
-				{@render status()}
+		{#if meter}
+			<div class="mt-1 {awayFade}" aria-hidden="true">
+				{@render meter()}
 			</div>
 		{/if}
 	</div>
 {:else}
 	<div
-		class="flex w-20 flex-col items-center gap-1 wide:w-28"
+		class="flex w-24 flex-col items-center wide:w-32"
 		role="group"
 		aria-label="Seat {number ?? ''}, empty"
 	>
 		<!-- The chair itself is the main button: sit down here. The host adds a bot with the small + on its corner. -->
-		<div class="relative mb-1.5">
+		<div class="relative">
 			{#if onSit}
 				<button
 					class="grid size-12 place-items-center rounded-xl border-2 border-dashed wide:size-14 wide:rounded-[14px] border-paper/40 text-paper/60 transition hover:border-solid hover:border-brass/70 hover:bg-brass/10 hover:text-brass"
@@ -218,7 +231,7 @@
 				{@render cornerButton(`Add a bot to seat ${number ?? ''}`, onAddBot, 'add')}
 			{/if}
 		</div>
-		<div class="text-[11px] text-paper/70 wide:text-xs">Seat {number ?? ''}</div>
+		<div class="mt-1 text-[11px] text-paper/70 wide:text-xs">Seat {number ?? ''}</div>
 	</div>
 {/if}
 
@@ -284,6 +297,35 @@
 <style>
 	.corner > span {
 		box-shadow: 0 0 0 2px var(--color-felt-deep);
+	}
+	.plate {
+		box-shadow:
+			0 0 0 1px rgb(210 165 76 / 0.35),
+			0 2px 4px rgb(0 0 0 / 0.4);
+	}
+	/* Your own seat: a solid brass edge on the plate, in place of a "(you)" that would crowd the name. */
+	.plate.mine {
+		box-shadow:
+			0 0 0 1.5px var(--color-brass),
+			0 2px 4px rgb(0 0 0 / 0.4);
+	}
+	.seat-badge {
+		position: absolute;
+		z-index: 10;
+		display: inline-flex;
+		height: 1.125rem;
+		align-items: center;
+		gap: 0.125rem;
+		border-radius: 9999px;
+		background: #120e0b;
+		padding-inline: 0.3125rem;
+		font-size: 11px;
+		font-weight: 600;
+		line-height: 1;
+		white-space: nowrap;
+		box-shadow:
+			0 0 0 1px rgb(243 234 214 / 0.25),
+			0 0 0 3px var(--color-felt-deep);
 	}
 	.seat-tag {
 		position: absolute;

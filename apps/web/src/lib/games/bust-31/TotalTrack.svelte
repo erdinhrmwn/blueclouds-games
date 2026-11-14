@@ -1,85 +1,78 @@
 <script lang="ts">
-	import { untrack } from 'svelte';
-	import { prefersReducedMotion, Spring } from 'svelte/motion';
+	import { prefersReducedMotion } from 'svelte/motion';
 
 	/**
-	 * Bust 31's total as a slider from 0 to the limit: brass fills up to the total, the last stretch is the
-	 * danger zone, and the total rides the end of the fill as the slider's thumb.
+	 * Bust 31's total, the heart of the game, as the table's centrepiece: the number itself, big, over a row of one pip
+	 * per point up to the limit. Brass fills the pips up to the total; the last stretch before the limit is the danger
+	 * zone, outlined in ember, and the number turns ember once the total is in it.
 	 */
 	let { total, limit }: { total: number; limit: number } = $props();
 
 	/** Points within this distance of the limit count as danger. */
 	const DANGER = 6;
-	const TICK_STEP = 10;
 
-	const ratio = $derived(Math.min(Math.max(total, 0) / limit, 1));
-
-	// The thumb slides to the new total, overshooting a touch before it settles.
-	const fill = new Spring(
-		untrack(() => ratio),
-		{ stiffness: 0.2, damping: 0.5, precision: 0.001 }
-	);
-
-	$effect(() => {
-		fill.set(ratio, { instant: prefersReducedMotion.current });
-	});
-
-	const percent = $derived(Math.min(Math.max(fill.current, 0), 1) * 100);
+	const shown = $derived(Math.max(total, 0));
+	const danger = $derived(shown > limit - DANGER);
 	const left = $derived(limit - total);
 	const leftText = $derived(left >= 0 ? `${left} to bust` : 'bust');
 
-	/** Tick labels: every ten, and the limit itself; a ten too close to the limit (30 next to 31) is left out. */
-	const MIN_TICK_GAP = TICK_STEP / 2;
-	const ticks = $derived([
-		...Array.from({ length: Math.floor(limit / TICK_STEP) + 1 }, (_, i) => i * TICK_STEP).filter(
-			(value) => limit - value >= MIN_TICK_GAP
-		),
-		limit
-	]);
+	/** A pip: filled up to the total, ember from the danger zone on. */
+	const pipClass = (point: number) => {
+		const inDanger = point > limit - DANGER;
+		if (point <= shown) {
+			return inDanger ? 'bg-ember' : 'bg-brass';
+		}
 
-	/** The note sits on the side away from the thumb, so they never meet. */
-	const noteOnLeft = $derived(ratio > 0.5);
+		return inDanger ? 'ring-1 ring-ember/70 ring-inset' : 'bg-paper/15';
+	};
 </script>
 
 <div
-	class="w-[9.5rem] wide:w-64"
+	class="flex flex-col items-center"
 	role="meter"
 	aria-valuemin="0"
 	aria-valuemax={limit}
 	aria-valuenow={total}
 	aria-label="Total {total} of {limit}, {leftText}"
 >
+	<p class="flex items-baseline gap-1 font-display leading-none" aria-hidden="true">
+		{#key shown}
+			<span
+				class="total text-[3.5rem] font-black tabular-nums wide:text-[5.5rem] {danger
+					? 'text-ember'
+					: 'text-paper'}"
+				class:pop={!prefersReducedMotion.current}>{shown}</span
+			>
+		{/key}
+		<span class="text-sm font-bold text-paper/45 wide:text-lg">/{limit}</span>
+	</p>
+	<div class="mt-2 flex gap-[1.5px] wide:mt-3 wide:gap-[2px]" aria-hidden="true">
+		{#each Array(limit) as _, i (i)}
+			<span class="h-2 w-[3px] rounded-[1px] wide:h-3 wide:w-1 {pipClass(i + 1)}"></span>
+		{/each}
+	</div>
 	<p
-		class="mb-2.5 text-[11px] text-paper/65 tabular-nums wide:text-xs {noteOnLeft
-			? 'text-left'
-			: 'text-right'}"
+		class="mt-1.5 text-[11px] font-medium tabular-nums wide:mt-2 wide:text-[13px] {danger
+			? 'text-ember'
+			: 'text-paper/65'}"
 		aria-hidden="true"
 	>
 		{leftText}
 	</p>
-	<div class="relative h-2" aria-hidden="true">
-		<div class="absolute inset-0 rounded-full bg-paper/12"></div>
-		<div
-			class="absolute inset-y-0 right-0 rounded-full bg-ember/70"
-			style="width: {(DANGER / limit) * 100}%"
-		></div>
-		<div class="absolute inset-y-0 left-0 rounded-full bg-brass" style="width: {percent}%"></div>
-		<span
-			class="thumb absolute top-1/2 grid size-[22px] -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-brass font-display text-[11px] font-black text-ink tabular-nums"
-			style="left: {percent}%">{total}</span
-		>
-	</div>
-	<div class="relative mt-3 h-4 text-[10px] text-paper/50 tabular-nums" aria-hidden="true">
-		{#each ticks as value (value)}
-			<span class="absolute -translate-x-1/2" style="left: {(value / limit) * 100}%">{value}</span>
-		{/each}
-	</div>
 </div>
 
 <style>
-	.thumb {
-		box-shadow:
-			0 0 0 1.5px rgb(243 234 214 / 0.85),
-			0 2px 4px rgb(0 0 0 / 0.4);
+	.total {
+		text-shadow: 0 3px 10px rgb(0 0 0 / 0.45);
+	}
+	/* A new total lands with a small bump, so a change catches the eye. */
+	.pop {
+		animation: pop 320ms cubic-bezier(0.3, 0.7, 0.3, 1.4);
+	}
+	@keyframes pop {
+		from {
+			transform: scale(0.8);
+			opacity: 0.4;
+		}
 	}
 </style>

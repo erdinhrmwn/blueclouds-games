@@ -14,7 +14,7 @@
 </script>
 
 <div
-	class="bust pointer-events-none absolute inset-0 z-10 grid place-items-center rounded-[50%]"
+	class="bust pointer-events-none absolute -inset-x-[15%] -inset-y-[25%] z-10 grid place-items-center"
 	class:still={prefersReducedMotion.current}
 	aria-hidden="true"
 >
@@ -38,18 +38,31 @@
 		transform: translate(-50%, -50%) rotate(-12deg);
 		animation: slam 1.8s ease-out forwards;
 	}
-	@keyframes flash {
+	/* A soft red glow from the middle of the felt, with no hard edge. */
+	.bust::before {
+		content: '';
+		position: absolute;
+		inset: 0;
+		z-index: -1;
+		background: radial-gradient(ellipse at center, rgb(217 100 63 / 0.4), transparent 65%);
+		animation: glow 1.8s ease-out forwards;
+	}
+	@keyframes glow {
 		0% {
-			background: rgb(217 100 63 / 0);
+			opacity: 0;
 		}
 		25% {
-			background: rgb(217 100 63 / 0.28);
+			opacity: 1;
 		}
+		100% {
+			opacity: 0;
+		}
+	}
+	@keyframes flash {
 		80% {
 			opacity: 1;
 		}
 		100% {
-			background: rgb(217 100 63 / 0);
 			opacity: 0;
 		}
 	}

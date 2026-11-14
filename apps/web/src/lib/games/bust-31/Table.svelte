@@ -14,6 +14,7 @@
 	import HandBar from '#lib/components/HandBar.svelte';
 	import { DEAL, HAND_SIZE, MAX_PLAYERS, START_LIVES } from 'server/games/bust-31/rules';
 	import Dealer from '#lib/components/Dealer.svelte';
+	import Deck from '#lib/components/Deck.svelte';
 	import DealerLine from '#lib/components/DealerLine.svelte';
 	import TotalTrack from './TotalTrack.svelte';
 
@@ -286,17 +287,16 @@
 	};
 </script>
 
-<!-- The felt takes the stage's free height. -->
-<div bind:this={tableEl} class="table-back-bust-31 min-h-0 flex-1">
-	<Felt count={MAX_PLAYERS + 1} name="Bust 31">
+<div bind:this={tableEl} class="table-back-bust-31 shrink-0">
+	<Felt count={MAX_PLAYERS + 1} name="Bust 31" direction={view.direction}>
 		{#snippet seat(spot)}
 			{#if spot === 0}
-				<Dealer deckCount={view.deckCount} direction={view.direction} />
+				<Dealer />
 			{:else}
 				{@const player = inSeat(spot - 1)}
 				{#snippet lives()}
 					<span
-						class="flex items-center gap-0.5"
+						class="flex items-center gap-px"
 						role="img"
 						aria-label="{player?.lives} of {START_LIVES} lives"
 					>
@@ -304,7 +304,7 @@
 							{@const kept = i < (player?.lives ?? 0)}
 							<svg
 								viewBox="0 0 24 24"
-								class="size-3 {kept ? 'text-ember' : 'text-paper/60'}"
+								class="size-2.5 wide:size-3 {kept ? 'text-ember' : 'text-paper/50'}"
 								fill={kept ? 'currentColor' : 'none'}
 								stroke="currentColor"
 								stroke-width="2"
@@ -322,10 +322,10 @@
 					{player}
 					number={spot}
 					isTurn={!!player && (player.id === view.turnPlayerId || player.id === view.winnerId)}
-					isHost={!view.tournament && !!player && player.id === view.hostId}
 					isMe={!!player && player.id === room.playerId}
 					out={!!player && player.lives === 0}
-					status={player ? lives : undefined}
+					badge={player ? lives : undefined}
+					summary={player ? `${player.lives} of ${START_LIVES} lives` : undefined}
 					timeLeft={player && player.id === view.turnPlayerId && msLeft !== null
 						? Math.min(1, msLeft / room.turnTotal)
 						: null}
@@ -337,10 +337,17 @@
 		{#if view.phase === 'finished'}
 			<WinCascade />
 		{/if}
-		<!-- The pile on top, the total's track under it. It stays when the table finishes; the result is a popup. -->
-		<div class="flex translate-y-2 flex-col items-center gap-4 wide:gap-5">
+		<!-- The total is the hero: on the wide stage between the deck and the pile, on the tall one under them. The pile
+			 stays when the table finishes; the result is a popup. -->
+		<div
+			class="grid grid-cols-2 items-center justify-items-center gap-x-10 gap-y-4 wide:flex wide:gap-12"
+		>
+			<Deck count={view.deckCount} />
+			<div class="col-span-2 row-start-2">
+				<TotalTrack total={view.total} limit={view.limit} />
+			</div>
 			<div
-				class="grid h-[3.55rem] w-10 place-items-center rounded-lg border border-dashed border-paper/40 wide:h-[4.6rem] wide:w-[3.25rem]"
+				class="grid h-[3.55rem] w-10 place-items-center rounded-lg border border-dashed border-paper/30 wide:h-[4.6rem] wide:w-[3.25rem]"
 			>
 				{#each under as u (u.id)}
 					<div class="col-start-1 row-start-1" style="rotate: {tiltOf(u.id)}deg" aria-hidden="true">
@@ -364,7 +371,6 @@
 					{/if}
 				{/key}
 			</div>
-			<TotalTrack total={view.total} limit={view.limit} />
 		</div>
 		{#if bust}
 			{#key bust.moves}
@@ -382,7 +388,7 @@
 <DealerLine text={dealerLine} moveKey={view.moves} />
 
 {#if view.phase === 'finished'}
-	<div class="flex shrink-0 justify-center pb-2">
+	<div class="flex flex-1 items-center justify-center">
 		<button class="btn-brass" onclick={() => (resultOpen = true)}>See the result</button>
 	</div>
 	<ResultDialog bind:open={resultOpen} title={resultTitle} winner={nameOf(view.winnerId)}>
@@ -410,9 +416,8 @@
 
 {#if view.phase === 'playing'}
 	{#if room.me && room.me.lives > 0}
-		<section aria-label="Your hand" class="flex shrink-0 flex-col items-center gap-2 wide:gap-3">
-			<HandBar active={room.myTurn} label={turnLabel} {secondsLeft} />
-			<div class="flex justify-center px-4 pt-2" class:pointer-events-none={dealing}>
+		<HandBar active={room.myTurn} label={turnLabel} {secondsLeft}>
+			<div class="flex justify-center px-4 pt-3 wide:pt-4" class:pointer-events-none={dealing}>
 				{#each room.hand as card, i (card.id)}
 					{@const landed = !dealing || i < dealtCount}
 					<div
@@ -425,9 +430,9 @@
 					</div>
 				{/each}
 			</div>
-		</section>
+		</HandBar>
 	{:else}
-		<p class="shrink-0 pb-4 text-center text-sm text-paper/75">
+		<p class="my-auto text-center text-sm text-paper/75">
 			You are out. Watch until the table finishes.
 		</p>
 	{/if}
