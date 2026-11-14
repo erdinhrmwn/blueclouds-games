@@ -46,22 +46,27 @@
 
 <p class="sr-only" aria-live="polite">{entries[0]?.text ?? ''}</p>
 
-<!-- Fixed height, so the log never pushes the hand down as lines come and go. -->
+<!-- Fixed height, so the log never pushes the hand down as lines come and go. The tall stage shows only the latest
+	 line, under the table; the wide one keeps the last few in the free corner at the top left. -->
 <ol
-	class="mx-auto my-2 flex h-20 max-w-md flex-col items-center gap-1 px-4 sm:my-3 sm:h-24"
+	class="mx-auto my-1 flex h-10 w-full max-w-md shrink-0 flex-col items-center gap-1 px-4 wide:absolute wide:top-4 wide:left-6 wide:m-0 wide:h-24 wide:w-80 wide:items-start wide:px-0"
 	aria-label="Recent moves"
 >
 	{#each entries as entry, index (entry.id)}
-		<li class="max-w-full" animate:flip={{ duration }} in:fly={{ y: -6, duration }}>
+		<li
+			class="max-w-full {index ? 'hidden wide:block' : ''}"
+			animate:flip={{ duration }}
+			in:fly={{ y: -6, duration }}
+		>
 			{#if index === 0}
 				<p
-					class="flex items-center gap-2 rounded-xl border border-paper/10 bg-black/35 px-3 py-1 text-center text-xs text-paper/90 sm:px-3.5 sm:py-1.5 sm:text-sm"
+					class="flex items-center gap-2 rounded-xl border border-paper/10 bg-black/35 px-3 py-1 text-center text-xs text-paper/90 wide:px-3.5 wide:py-1.5 wide:text-sm"
 				>
-					<Nimbus head class="size-5 shrink-0 sm:size-6" />
+					<Nimbus head class="size-5 shrink-0 wide:size-6" />
 					<span class="line-clamp-2">{entry.text}</span>
 				</p>
 			{:else}
-				<p class="truncate px-3 text-[11px] sm:text-xs {OLDER_TONE[index - 1]}">{entry.text}</p>
+				<p class="truncate px-3 text-[11px] wide:text-xs {OLDER_TONE[index - 1]}">{entry.text}</p>
 			{/if}
 		</li>
 	{/each}

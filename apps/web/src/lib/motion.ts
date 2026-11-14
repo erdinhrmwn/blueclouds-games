@@ -1,6 +1,7 @@
 import { prefersReducedMotion } from 'svelte/motion';
 import { cubicOut } from 'svelte/easing';
 import type { TransitionConfig } from 'svelte/transition';
+import { stage, unscaled } from './stage.svelte.ts';
 
 const PLACE_MS = 420;
 const SHAKE_MS = 450;
@@ -29,8 +30,9 @@ export function placeCard(
 	const to = node.getBoundingClientRect();
 	const start = centerOf(from);
 	const end = centerOf(to);
-	const dx = start.x - end.x;
-	const dy = start.y - end.y;
+	// Measured on screen; the card moves inside the stage, which may be scaled.
+	const dx = unscaled(start.x - end.x);
+	const dy = unscaled(start.y - end.y);
 
 	const startScale = Math.min(1.4, Math.max(0.35, from.width / to.width));
 	const arc = Math.min(80, Math.hypot(dx, dy) * 0.25);
@@ -132,7 +134,9 @@ export function dealCards(
 	layer.style.cssText = 'position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:30';
 	document.body.append(layer);
 
-	const { width, height } = DEAL_CARD;
+	// The flight layer is outside the scaled stage, so the cards take its scale along.
+	const width = DEAL_CARD.width * stage.scale;
+	const height = DEAL_CARD.height * stage.scale;
 	const start = centerOf(from);
 	// The flight layer sits on <body>, outside the table, so it takes the deck's card back along.
 	const deck = document.querySelector('[data-deck]');

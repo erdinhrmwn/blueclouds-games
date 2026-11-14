@@ -1,5 +1,9 @@
 @import 'tailwindcss';
 
+/* Styles for the table's stage in use (see Stage.svelte): `wide:` on the 16:9 stage, `tall:` on the 1:2 one. */
+@custom-variant wide (&:where([data-stage='wide'], [data-stage='wide'] *));
+@custom-variant tall (&:where([data-stage='tall'], [data-stage='tall'] *));
+
 @theme {
 	--font-display: 'Fraunces', Georgia, serif;
 	--font-sans: 'IBM Plex Sans', system-ui, sans-serif;

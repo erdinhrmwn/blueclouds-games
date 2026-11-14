@@ -42,7 +42,7 @@
 </script>
 
 <div
-	class="w-[9.5rem] sm:w-64"
+	class="w-[9.5rem] wide:w-64"
 	role="meter"
 	aria-valuemin="0"
 	aria-valuemax={limit}
@@ -50,7 +50,7 @@
 	aria-label="Total {total} of {limit}, {leftText}"
 >
 	<p
-		class="mb-2.5 text-[11px] text-paper/65 tabular-nums sm:text-xs {noteOnLeft
+		class="mb-2.5 text-[11px] text-paper/65 tabular-nums wide:text-xs {noteOnLeft
 			? 'text-left'
 			: 'text-right'}"
 		aria-hidden="true"

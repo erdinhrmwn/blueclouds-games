@@ -48,23 +48,23 @@
 	});
 </script>
 
-<div class="flex flex-col items-center gap-6 sm:gap-8">
-	<div class="vane relative grid size-28 place-items-center rounded-full sm:size-[9.25rem]">
+<div class="flex flex-col items-center gap-6 wide:gap-8">
+	<div class="vane relative grid size-28 place-items-center rounded-full wide:size-[9.25rem]">
 		{#each SUITS as point (point)}
 			{@const lit = point === suit}
 			<span
 				class="absolute grid place-items-center rounded-full {POINT[point]} {lit
-					? `size-7 text-paper sm:size-9 ${LIT[point]} lit`
-					: 'size-5 bg-panel text-paper/70 ring-1 ring-paper/20 sm:size-6'}"
+					? `size-7 text-paper wide:size-9 ${LIT[point]} lit`
+					: 'size-5 bg-panel text-paper/70 ring-1 ring-paper/20 wide:size-6'}"
 				aria-hidden="true"
 			>
-				<SuitGlyph suit={point} class={lit ? 'size-4 sm:size-5' : 'size-3 sm:size-3.5'} />
+				<SuitGlyph suit={point} class={lit ? 'size-4 wide:size-5' : 'size-3 wide:size-3.5'} />
 			</span>
 		{/each}
 		{@render children()}
 	</div>
 	<p
-		class="rounded-full bg-black/40 px-3 py-1 text-xs font-semibold whitespace-nowrap text-paper/90 sm:text-sm"
+		class="rounded-full bg-black/40 px-3 py-1 text-xs font-semibold whitespace-nowrap text-paper/90 wide:text-sm"
 		aria-live="polite"
 	>
 		<span class="sr-only">Play </span>{hint}

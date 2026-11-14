@@ -146,35 +146,37 @@
 		});
 </script>
 
-<!-- Spot 0 is the dealer at the head of the table; chairs 1–6 follow clockwise. -->
-<Felt count={seats + 1}>
-	{#snippet seat(spot)}
-		{#if spot === 0}
-			<Dealer />
-		{:else}
-			{@const seatIndex = spot - 1}
-			{@const player = inSeat(seatIndex)}
-			<Seat
-				{player}
-				number={spot}
-				isHost={!tournament && player?.id === view.hostId}
-				isMe={player?.id === room.playerId}
-				action={hostAction(player)}
-				onSit={player || tournament ? undefined : () => room.takeSeat(seatIndex)}
-				onAddBot={!player && host ? () => room.addBot(seatIndex) : undefined}
-			/>
+<!-- Spot 0 is the dealer at the head of the table; chairs 1–6 follow clockwise. The felt takes the stage's free height. -->
+<div class="min-h-0 flex-1">
+	<Felt count={seats + 1}>
+		{#snippet seat(spot)}
+			{#if spot === 0}
+				<Dealer />
+			{:else}
+				{@const seatIndex = spot - 1}
+				{@const player = inSeat(seatIndex)}
+				<Seat
+					{player}
+					number={spot}
+					isHost={!tournament && player?.id === view.hostId}
+					isMe={player?.id === room.playerId}
+					action={hostAction(player)}
+					onSit={player || tournament ? undefined : () => room.takeSeat(seatIndex)}
+					onAddBot={!player && host ? () => room.addBot(seatIndex) : undefined}
+				/>
+			{/if}
+		{/snippet}
+
+		{#if tournament}
+			<div class="flex flex-col items-center gap-1 text-center">
+				<p class="label">Tournament table</p>
+				<p class="text-sm text-paper/80">{tournament.name}</p>
+			</div>
 		{/if}
-	{/snippet}
+	</Felt>
+</div>
 
-	{#if tournament}
-		<div class="flex flex-col items-center gap-1 text-center">
-			<p class="label">Tournament table</p>
-			<p class="text-sm text-paper/80">{tournament.name}</p>
-		</div>
-	{/if}
-</Felt>
-
-<div class="mt-6 flex flex-col items-center gap-3">
+<div class="flex shrink-0 flex-col items-center gap-3 pt-2">
 	{#if !tournament}
 		<div class="flex w-full max-w-md flex-col items-center gap-2 text-center">
 			<p class="label">Invite friends</p>
