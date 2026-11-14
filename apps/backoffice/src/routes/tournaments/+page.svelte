@@ -14,6 +14,10 @@
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
+	/**
+	 * What a refused form sent back. The fields take it as defaultValue, not value: the form's attributes update
+	 * together, so with value, typing in one field (players per table) wiped what was already typed in the others.
+	 */
 	const values = $derived(form?.values ?? {});
 	let game = $state('');
 	const picked = $derived(
@@ -22,9 +26,12 @@
 	let busy = $state(false);
 	/** The picked format: a knockout has no round count, it plays until one player is left. */
 	let format = $state('');
-	/** Players per table as typed: the most players can't be fewer than one table. */
-	let perTable = $state('');
-	const fewestMost = $derived(perTable || values.playersPerRoom || picked?.maxPlayers);
+	/** Players per table as typed (undefined until typed): the most players can't be fewer than one table. */
+	let perTable = $state<number | null | undefined>(undefined);
+	const shownPerTable = $derived(
+		perTable === undefined ? Number(values.playersPerRoom ?? picked?.maxPlayers) : perTable
+	);
+	const fewestMost = $derived(shownPerTable || picked?.maxPlayers);
 
 	/** Paid places, 1st first; three to start with, as most tournaments pay a podium. */
 	const STARTING_PLACES = 3;
@@ -147,7 +154,7 @@
 						class="field"
 						id="name"
 						name="name"
-						value={values.name ?? ''}
+						defaultValue={values.name ?? ''}
 						maxlength="80"
 						required
 						placeholder="Friday Cup"
@@ -160,7 +167,7 @@
 						id="startsAt"
 						name="startsAt"
 						type="datetime-local"
-						value={values.startsAt ?? ''}
+						defaultValue={values.startsAt ?? ''}
 						required
 					/>
 				</div>
@@ -173,8 +180,7 @@
 						type="number"
 						min={picked?.minPlayers}
 						max={picked?.maxPlayers}
-						value={values.playersPerRoom ?? picked?.maxPlayers}
-						oninput={(e) => (perTable = e.currentTarget.value)}
+						bind:value={() => shownPerTable, (typed) => (perTable = typed)}
 						required
 					/>
 				</div>
@@ -187,7 +193,7 @@
 						type="number"
 						min={picked?.minPlayers}
 						max={MAX_PLAYERS_LIMIT}
-						value={values.minPlayers ?? ''}
+						defaultValue={values.minPlayers ?? ''}
 						required
 						placeholder="8"
 					/>
@@ -201,7 +207,7 @@
 						type="number"
 						min={fewestMost}
 						max={MAX_PLAYERS_LIMIT}
-						value={values.maxPlayers ?? ''}
+						defaultValue={values.maxPlayers ?? ''}
 						required
 						placeholder="36"
 					/>
@@ -231,7 +237,7 @@
 							min="1"
 							max={ROUNDS_MAX}
 							step="1"
-							value={values.rounds ?? ROUNDS_DEFAULT}
+							defaultValue={values.rounds ?? ROUNDS_DEFAULT}
 							required
 						/>
 					</div>
@@ -285,7 +291,7 @@
 						min="0"
 						max={FEE_MAX}
 						step="1"
-						value={values.fee ?? ''}
+						defaultValue={values.fee ?? ''}
 						placeholder="0"
 					/>
 				</div>
@@ -296,8 +302,8 @@
 						id="description"
 						name="description"
 						maxlength={TOURNAMENT_TEXT_MAX.description}
-						placeholder="How it's played and what's at stake.">{values.description ?? ''}</textarea
-					>
+						defaultValue={values.description ?? ''}
+						placeholder="How it's played and what's at stake."></textarea>
 				</div>
 				<div>
 					<label class="label" for="registrationOpensAt">Sign-up opens (UTC, empty = now)</label>
@@ -306,7 +312,7 @@
 						id="registrationOpensAt"
 						name="registrationOpensAt"
 						type="datetime-local"
-						value={values.registrationOpensAt ?? ''}
+						defaultValue={values.registrationOpensAt ?? ''}
 					/>
 				</div>
 				<div>
@@ -318,7 +324,7 @@
 						id="registrationClosesAt"
 						name="registrationClosesAt"
 						type="datetime-local"
-						value={values.registrationClosesAt ?? ''}
+						defaultValue={values.registrationClosesAt ?? ''}
 					/>
 				</div>
 				<div class="sm:col-span-2 xl:col-span-1">
