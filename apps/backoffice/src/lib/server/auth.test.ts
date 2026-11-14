@@ -13,7 +13,10 @@ afterAll(() => sql.close());
 
 const failures = async (username: string) =>
 	(
-		await sql`SELECT count(*)::int AS n FROM admin_audit_events WHERE action = 'login_failed' AND detail->>'username' = ${username}`
+		await sql`
+			SELECT count(*)::int AS n
+			FROM admin_audit_events
+			WHERE action = 'login_failed' AND detail->>'username' = ${username}`
 	)[0].n;
 
 describe('admin login', () => {
@@ -27,7 +30,10 @@ describe('admin login', () => {
 
 	test('the right password gives a session that logout ends', async () => {
 		const res = await login(sql, 'Root ', 'correct horse battery', null);
-		if (!res.ok) throw new Error('expected login to work');
+		if (!res.ok) {
+			throw new Error('expected login to work');
+		}
+
 		expect(await sessionAdmin(sql, res.token)).toEqual({
 			id: res.admin.id,
 			username: 'root',
@@ -39,7 +45,10 @@ describe('admin login', () => {
 
 	test('5 failures within 15 minutes lock the username, even with the right password', async () => {
 		await createAdmin(sql, 'ops', 'another long password');
-		for (let i = 0; i < 5; i++) await login(sql, 'ops', 'nope', null);
+		for (let i = 0; i < 5; i++) {
+			await login(sql, 'ops', 'nope', null);
+		}
+
 		expect(await login(sql, 'ops', 'another long password', null)).toEqual({
 			ok: false,
 			reason: 'locked'
@@ -53,7 +62,10 @@ describe('admin login', () => {
 	test('a disabled admin cannot sign in or keep a session', async () => {
 		const id = await createAdmin(sql, 'temp', 'temporary password');
 		const res = await login(sql, 'temp', 'temporary password', null);
-		await sql`UPDATE admins SET disabled_at = now() WHERE id = ${id}`;
+		await sql`
+			UPDATE admins
+			SET disabled_at = now()
+			WHERE id = ${id}`;
 		expect(res.ok && (await sessionAdmin(sql, res.token))).toBeNull();
 		expect(await login(sql, 'temp', 'temporary password', null)).toEqual({
 			ok: false,

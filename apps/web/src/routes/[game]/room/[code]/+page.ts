@@ -8,8 +8,14 @@ export const ssr = false;
 
 export const load: PageLoad = ({ params }) => {
 	const game = gameBySlug(params.game);
-	if (!game) error(404, 'Game not found');
+	if (!game) {
+		error(404, 'Game not found');
+	}
+
 	const code = params.code.toUpperCase();
-	if (!isRoomCode(code)) error(404, 'Invalid table code');
+	if (!isRoomCode(code)) {
+		error(404, 'Invalid table code');
+	}
+
 	return { game, code };
 };

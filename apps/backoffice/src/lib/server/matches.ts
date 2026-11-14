@@ -39,7 +39,11 @@ export async function listMatches(
 			r.code AS "roomCode",
 			m.ended_at AS "endedAt",
 			m.end_reason AS "endReason",
-			(SELECT count(*)::int FROM match_players x WHERE x.match_id = m.id) AS players,
+			(
+				SELECT count(*)::int
+				FROM match_players x
+				WHERE x.match_id = m.id
+			) AS players,
 			(
 				SELECT coalesce(p.display_name, w.bot_name)
 				FROM match_players w
@@ -79,6 +83,7 @@ function matchConditions(sql: SQL, filter: MatchFilter) {
 	if (DATE.test(filter.from)) {
 		conditions.push(sql`m.ended_at >= ${filter.from}::date::timestamp AT TIME ZONE 'UTC'`);
 	}
+
 	if (DATE.test(filter.to)) {
 		conditions.push(sql`m.ended_at < (${filter.to}::date + 1)::timestamp AT TIME ZONE 'UTC'`);
 	}
@@ -92,7 +97,10 @@ function matchConditions(sql: SQL, filter: MatchFilter) {
 
 /** Every game in the catalog, for the filter. */
 export async function matchGames(sql: SQL): Promise<{ slug: string; name: string }[]> {
-	const rows = await sql`SELECT slug, name FROM games ORDER BY name`;
+	const rows = await sql`
+		SELECT slug, name
+		FROM games
+		ORDER BY name`;
 
 	return rows as { slug: string; name: string }[];
 }
@@ -119,7 +127,9 @@ export type MatchDetail = Omit<MatchRow, 'players' | 'winner'> &
 	MatchTable & { rulesVersion: number; startedAt: Date; scoreLabel: string; seats: Seat[] };
 
 export async function matchDetail(sql: SQL, id: string): Promise<MatchDetail | null> {
-	if (!isUuid(id)) return null;
+	if (!isUuid(id)) {
+		return null;
+	}
 
 	const [match] = await sql`
 		SELECT
@@ -145,7 +155,9 @@ export async function matchDetail(sql: SQL, id: string): Promise<MatchDetail | n
 		LEFT JOIN admins oa ON oa.id = r.created_by_admin_id
 		WHERE m.id = ${id}`;
 
-	if (!match) return null;
+	if (!match) {
+		return null;
+	}
 
 	const seats = (await sql`
 		SELECT
@@ -165,7 +177,9 @@ export async function matchDetail(sql: SQL, id: string): Promise<MatchDetail | n
 
 /** The match's move log, or null for a match stored before logs existed. Holds every hand: backoffice only. */
 export async function matchLog(sql: SQL, id: string): Promise<MatchLog | null> {
-	if (!isUuid(id)) return null;
+	if (!isUuid(id)) {
+		return null;
+	}
 
 	const [row] = await sql`
 		SELECT log_version AS "logVersion", events

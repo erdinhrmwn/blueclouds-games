@@ -22,7 +22,9 @@ export function placeCard(
 	node: Element,
 	{ from, tilt = 0 }: { from: DOMRect | null; tilt?: number }
 ): TransitionConfig {
-	if (!from || prefersReducedMotion.current) return { duration: 0 };
+	if (!from || prefersReducedMotion.current) {
+		return { duration: 0 };
+	}
 
 	const to = node.getBoundingClientRect();
 	const start = centerOf(from);
@@ -56,7 +58,9 @@ export function seatRect(playerId: string | null): DOMRect | null {
 
 /** Short horizontal shake, used when someone busts. */
 export function shake(node: HTMLElement | undefined): void {
-	if (!node || prefersReducedMotion.current) return;
+	if (!node || prefersReducedMotion.current) {
+		return;
+	}
 
 	const offsets = [0, -10, 9, -7, 5, -3, 0];
 	const frames = offsets.map((x) => ({ transform: `translateX(${x}px)` }));
@@ -82,7 +86,9 @@ export function countdown(node: Element, params: Countdown) {
 		}
 
 		const deadlineMoved = Math.abs(endsAt - performance.now() - timer.ms) >= DEADLINE_JITTER_MS;
-		if (anim && !deadlineMoved) return;
+		if (anim && !deadlineMoved) {
+			return;
+		}
 
 		anim?.cancel();
 		endsAt = performance.now() + timer.ms;
@@ -117,7 +123,9 @@ export function dealCards(
 	{ passes, stepMs, flightMs }: { passes: number; stepMs: number; flightMs: number }
 ): void {
 	const targets = seats.filter((rect): rect is DOMRect => rect !== null);
-	if (!from || targets.length === 0 || prefersReducedMotion.current) return;
+	if (!from || targets.length === 0 || prefersReducedMotion.current) {
+		return;
+	}
 
 	const layer = document.createElement('div');
 	layer.setAttribute('aria-hidden', 'true');
@@ -137,6 +145,7 @@ export function dealCards(
 			}
 		}
 	}
+
 	let last: Animation | undefined;
 
 	for (let pass = 0; pass < passes; pass++) {
@@ -188,7 +197,9 @@ export function whenDealt(
 	delayMs: number,
 	land: (count: number) => void
 ): void {
-	if (seatIndex < 0) return;
+	if (seatIndex < 0) {
+		return;
+	}
 
 	for (let pass = 0; pass < passes; pass += 1) {
 		const landsAt = delayMs + (pass * seatCount + seatIndex) * stepMs + flightMs;

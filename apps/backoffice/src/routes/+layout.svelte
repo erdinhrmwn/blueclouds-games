@@ -47,7 +47,9 @@
 
 	const current = (href: string) => {
 		const path = page.url.pathname;
-		if (href === '/') return path === '/';
+		if (href === '/') {
+			return path === '/';
+		}
 
 		return path === href || path.startsWith(href + '/');
 	};

@@ -56,11 +56,15 @@ export function fairnessText(event: LogEvent): string | null {
 
 export function replay(game: string, log: MatchLog, seats: ReplaySeat[]): Step[] {
 	const render = Object.hasOwn(RENDERERS, game) ? RENDERERS[game] : undefined;
-	if (render && log.logVersion === 1) return render(log, seats);
+	if (render && log.logVersion === 1) {
+		return render(log, seats);
+	}
 
 	/** "Ann: " before a seat's event, nothing before a table event. */
 	const prefix = (seat?: number) => {
-		if (seat === undefined) return '';
+		if (seat === undefined) {
+			return '';
+		}
 
 		const name = seats.find((s) => s.seat === seat)?.name ?? `Seat ${seat + 1}`;
 		return `${name}: `;

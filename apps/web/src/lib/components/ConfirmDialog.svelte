@@ -6,7 +6,9 @@
 	const question = $derived(confirmState.current);
 
 	$effect(() => {
-		if (!dialog) return;
+		if (!dialog) {
+			return;
+		}
 
 		if (question && !dialog.open) {
 			dialog.showModal();

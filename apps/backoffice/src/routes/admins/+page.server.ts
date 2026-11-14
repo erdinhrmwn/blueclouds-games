@@ -51,6 +51,7 @@ export const actions: Actions = {
 		if (!result.ok && result.reason === 'invalid') {
 			return fail(400, { username, error: 'Use 3-32 characters: a-z, 0-9, _ . - (not root).' });
 		}
+
 		if (!result.ok) {
 			return fail(409, { username, error: `There is already an admin called ${username}.` });
 		}
@@ -62,7 +63,9 @@ export const actions: Actions = {
 		const id = await targetId(request);
 
 		const done = await disableAdmin(sql, owner, id, auditIp(getClientAddress()));
-		if (!done) return fail(409, { error: 'That admin is already disabled, or cannot be.' });
+		if (!done) {
+			return fail(409, { error: 'That admin is already disabled, or cannot be.' });
+		}
 
 		return { message: 'Admin disabled and signed out everywhere.' };
 	},
@@ -76,7 +79,9 @@ export const actions: Actions = {
 		}
 
 		const done = await changeRole(sql, owner, id, role, auditIp(getClientAddress()));
-		if (!done) return fail(409, { error: 'That role cannot be changed.' });
+		if (!done) {
+			return fail(409, { error: 'That role cannot be changed.' });
+		}
 
 		return { message: 'Role changed.' };
 	},
@@ -85,7 +90,9 @@ export const actions: Actions = {
 		const id = await targetId(request);
 
 		const done = await enableAdmin(sql, owner, id, auditIp(getClientAddress()));
-		if (!done) return fail(409, { error: 'That admin is already enabled.' });
+		if (!done) {
+			return fail(409, { error: 'That admin is already enabled.' });
+		}
 
 		return { message: 'Admin enabled. They sign in with their old password.' };
 	},

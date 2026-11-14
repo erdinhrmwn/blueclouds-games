@@ -318,12 +318,16 @@ describe("bots", () => {
 		for (let run = 0; run < 50; run++) {
 			let g = createGame();
 			const n = 2 + (run % 5);
-			for (let i = 0; i < n; i++) g = addPlayer(g, `p${i}`, `P${i}`, i > 0);
+			for (let i = 0; i < n; i++) {
+				g = addPlayer(g, `p${i}`, `P${i}`, i > 0);
+			}
+
 			const lobby = g;
 			g = startGame(g, "p0", random);
 			const log: LogEntry[] = logEvents(lobby, g);
 			let steps = 0;
-			while (g.phase === "playing" && steps++ < 5000) {
+			while (g.phase === "playing" && steps < 5000) {
+				steps += 1;
 				const id = g.players[g.turn]!.id;
 				const move = chooseBotMove(g);
 				const next =
@@ -335,6 +339,7 @@ describe("bots", () => {
 				log.push(...logEvents(g, next, true));
 				g = next;
 			}
+
 			expect(g.phase).toBe("finished");
 			// Every move is logged once, rounds open with a deal, and the log ends with the final points.
 			expect(log[0]!.type).toBe("deal");

@@ -168,7 +168,9 @@
 
 	// Reload once the player has a name: a brand-new visitor has no account to sign up with yet.
 	$effect(() => {
-		if (player.ready && player.name) void load();
+		if (player.ready && player.name) {
+			void load();
+		}
 	});
 
 	/**

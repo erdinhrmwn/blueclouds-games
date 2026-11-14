@@ -60,9 +60,17 @@
 	}
 
 	function tableState(table: BoardTable, startsAt: string): string {
-		if (table.closeReason === 'not_enough_players') return 'Didn’t start';
-		if (table.closedAt) return 'Done';
-		if (table.startedAt) return 'In play';
+		if (table.closeReason === 'not_enough_players') {
+			return 'Didn’t start';
+		}
+
+		if (table.closedAt) {
+			return 'Done';
+		}
+
+		if (table.startedAt) {
+			return 'In play';
+		}
 
 		return Date.parse(startsAt) > Date.now() ? 'Not started' : 'Starting';
 	}
@@ -72,8 +80,13 @@
 		Math.max(board.tournament.playersPerRoom, table.players.length);
 
 	function placeNote(placement: number | null, closed: boolean): string {
-		if (placement === 1) return 'won';
-		if (placement !== null) return ordinal(placement);
+		if (placement === 1) {
+			return 'won';
+		}
+
+		if (placement !== null) {
+			return ordinal(placement);
+		}
 
 		return closed ? 'no-show' : '';
 	}
@@ -84,7 +97,9 @@
 		const table = next?.tables.find((entry) =>
 			entry.players.some((seat) => seat.playerId === playerId)
 		);
-		if (!next || !table) return null;
+		if (!next || !table) {
+			return null;
+		}
 
 		return `${roundTitle(next) === 'Final' ? 'the final' : `round ${next.round}`} at ${table.code}`;
 	}
@@ -95,7 +110,9 @@
 	let size = $state({ width: 0, height: 0 });
 
 	function measure() {
-		if (!canvas) return;
+		if (!canvas) {
+			return;
+		}
 
 		const box = canvas.getBoundingClientRect();
 		const point = (element: Element, side: 'left' | 'right') => {
@@ -108,7 +125,9 @@
 		for (const round of rounds) {
 			for (const table of round.tables) {
 				const winner = table.players.find((seat) => seat.placement === 1);
-				if (!winner) continue;
+				if (!winner) {
+					continue;
+				}
 
 				const from = canvas.querySelector(`[data-seat="${round.round}:${winner.playerId}"]`);
 				const to =
@@ -116,7 +135,9 @@
 					(champion?.playerId === winner.playerId && round.round === lastRound
 						? canvas.querySelector('[data-champion]')
 						: null);
-				if (!from || !to) continue;
+				if (!from || !to) {
+					continue;
+				}
 
 				const start = point(from, 'right');
 				const end = point(to, 'left');
@@ -133,7 +154,9 @@
 	}
 
 	$effect(() => {
-		if (!canvas) return;
+		if (!canvas) {
+			return;
+		}
 
 		void rounds;
 		measure();

@@ -46,8 +46,13 @@ export const isAlarming = (action: string) => ALARMING.has(action);
 
 /** Who did it: the admin, or the platform for the automatic table hand-out. */
 export function auditActor(row: AuditRow): string {
-	if (row.admin) return row.admin;
-	if (row.action === 'tournament.distribute') return 'Platform';
+	if (row.admin) {
+		return row.admin;
+	}
+
+	if (row.action === 'tournament.distribute') {
+		return 'Platform';
+	}
 
 	return '';
 }
@@ -56,20 +61,34 @@ export function auditActor(row: AuditRow): string {
 export function auditNote(row: AuditRow): string {
 	const { action, detail } = row;
 
-	if (action === 'login_failed') return `as “${detail.username}”`;
-	if (action.startsWith('game.')) return String(detail.game);
+	if (action === 'login_failed') {
+		return `as “${detail.username}”`;
+	}
+
+	if (action.startsWith('game.')) {
+		return String(detail.game);
+	}
+
 	if (action === 'room.kick' || action === 'room.terminate') {
 		return `Table ${row.roomCode ?? detail.code}. Reason: ${detail.reason}`;
 	}
-	if (typeof detail.reason === 'string') return `Reason: ${detail.reason}`;
+
+	if (typeof detail.reason === 'string') {
+		return `Reason: ${detail.reason}`;
+	}
 
 	if (action === 'tournament.distribute') {
 		const automatic = detail.auto ? ', automatic' : '';
 		return `${detail.players} players, ${detail.rooms} tables${automatic}`;
 	}
 
-	if (action === 'tournament.register') return `${detail.players} players`;
-	if (row.targetAdmin) return `Admin ${row.targetAdmin}`;
+	if (action === 'tournament.register') {
+		return `${detail.players} players`;
+	}
+
+	if (row.targetAdmin) {
+		return `Admin ${row.targetAdmin}`;
+	}
 
 	return row.roomCode ? `Table ${row.roomCode}` : '';
 }

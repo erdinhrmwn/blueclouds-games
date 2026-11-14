@@ -17,7 +17,10 @@ export const load: PageServerLoad = async (event) => {
 	try {
 		room = await redeemInvite(event, event.params.token);
 	} catch (err) {
-		if (err instanceof PlatformError) return { problem: err.message };
+		if (err instanceof PlatformError) {
+			return { problem: err.message };
+		}
+
 		throw err;
 	}
 

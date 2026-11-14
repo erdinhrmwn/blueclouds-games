@@ -52,7 +52,9 @@ export const validate = <Target extends keyof ValidationTargets, Schema extends 
 	schema: Schema,
 ) =>
 	zValidator(target, schema, (result) => {
-		if (result.success) return;
+		if (result.success) {
+			return;
+		}
 
 		const fields: Record<string, string> = {};
 		for (const issue of result.error.issues) {

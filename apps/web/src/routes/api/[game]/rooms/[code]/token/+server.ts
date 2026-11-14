@@ -11,6 +11,7 @@ export const POST: RequestHandler = async (event) => {
 	if (!hasRooms(params.game)) {
 		return apiError(404, 'not_found', 'There is no such game.');
 	}
+
 	if (!isRoomCode(params.code)) {
 		return apiError(400, 'bad_input', 'A table code is 4–8 letters or digits.');
 	}

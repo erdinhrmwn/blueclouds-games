@@ -6,8 +6,10 @@ let t: Awaited<ReturnType<typeof setupTestApp>>;
 let admin: string;
 beforeAll(async () => {
 	t = await setupTestApp();
-	[{ id: admin }] =
-		await t.sql`INSERT INTO admins (username, password_hash, role) VALUES ('root', '$argon2id$v=19$test', 'owner') RETURNING id`;
+	[{ id: admin }] = await t.sql`
+			INSERT INTO admins (username, password_hash, role)
+			VALUES ('root', '$argon2id$v=19$test', 'owner')
+			RETURNING id`;
 });
 afterAll(() => t.sql.close());
 
@@ -35,16 +37,21 @@ async function tournament(opts: {
 
 async function register(tournamentId: string, n: number): Promise<string[]> {
 	const rows = Array.from({ length: n }, (_, i) => ({ display_name: `P${i}` }));
-	const players = await t.sql`INSERT INTO players ${t.sql(rows)} RETURNING id`;
+	const players = await t.sql`
+		INSERT INTO players ${t.sql(rows)}
+		RETURNING id`;
 	const ids = players.map((p: { id: string }) => p.id);
 	await t.sql`INSERT INTO tournament_players ${t.sql(ids.map((player_id: string) => ({ tournament_id: tournamentId, player_id })))}`;
 	return ids;
 }
 
 const sizes = (id: string) =>
-	t.sql`SELECT r.code, count(ra.*)::int AS n FROM rooms r LEFT JOIN room_assignments ra ON ra.room_id = r.id WHERE r.tournament_id = ${id} GROUP BY r.code`.then(
-		(rows) => rows.map((r: { n: number }) => r.n).sort(),
-	);
+	t.sql`
+		SELECT r.code, count(ra.*)::int AS n
+		FROM rooms r
+		LEFT JOIN room_assignments ra ON ra.room_id = r.id
+		WHERE r.tournament_id = ${id}
+		GROUP BY r.code`.then((rows) => rows.map((r: { n: number }) => r.n).sort());
 
 const server = (method: string, path: string, body?: unknown) =>
 	call(t.app, method, path, { token: SERVER_KEY, body });
@@ -79,14 +86,23 @@ describe("the distribute job", () => {
 		const runs = await Promise.all([runTournamentJob(t.sql), runTournamentJob(t.sql)]);
 		expect(runs.reduce((n, r) => n + r.distributed, 0)).toBe(1);
 		expect(await sizes(id)).toEqual([5, 5, 5, 5]);
-		const before =
-			await t.sql`SELECT room_id, player_id, seat FROM room_assignments WHERE tournament_id = ${id} ORDER BY player_id`;
+		const before = await t.sql`
+				SELECT room_id, player_id, seat
+				FROM room_assignments
+				WHERE tournament_id = ${id}
+				ORDER BY player_id`;
 		await runTournamentJob(t.sql);
 		expect(
-			await t.sql`SELECT room_id, player_id, seat FROM room_assignments WHERE tournament_id = ${id} ORDER BY player_id`,
+			await t.sql`
+				SELECT room_id, player_id, seat
+				FROM room_assignments
+				WHERE tournament_id = ${id}
+				ORDER BY player_id`,
 		).toEqual(before);
-		const [audit] =
-			await t.sql`SELECT admin_id, detail FROM admin_audit_events WHERE tournament_id = ${id} AND action = 'tournament.distribute'`;
+		const [audit] = await t.sql`
+				SELECT admin_id, detail
+				FROM admin_audit_events
+				WHERE tournament_id = ${id} AND action = 'tournament.distribute'`;
 		expect(audit).toEqual({ admin_id: null, detail: { rooms: 4, players: 20, auto: true } });
 	});
 
@@ -95,13 +111,18 @@ describe("the distribute job", () => {
 		await register(short, 3);
 		const cancelled = await tournament({ closes: -1, starts: 10 });
 		await register(cancelled, 4);
-		await t.sql`UPDATE tournaments SET cancelled_at = now() WHERE id = ${cancelled}`;
+		await t.sql`
+			UPDATE tournaments
+			SET cancelled_at = now()
+			WHERE id = ${cancelled}`;
 		const later = await tournament({ closes: 5, starts: 10 });
 		await register(later, 4);
 
 		await runTournamentJob(t.sql);
-		const rows =
-			await t.sql`SELECT id, distributed_at, distribute_error FROM tournaments WHERE id IN ${t.sql([short, cancelled, later])}`;
+		const rows = await t.sql`
+				SELECT id, distributed_at, distribute_error
+				FROM tournaments
+				WHERE id IN ${t.sql([short, cancelled, later])}`;
 		const byId = Object.fromEntries(rows.map((r: any) => [r.id, r]));
 		expect(byId[short].distribute_error).toBe(
 			"3 players can't fill every table with at least 2. Add 1 player or remove 1.",
@@ -125,15 +146,19 @@ describe("the distribute job", () => {
 		const run = await runTournamentJob(t.sql);
 		expect(run.cancelled).toBeGreaterThanOrEqual(1);
 
-		const [cancelled] =
-			await t.sql`SELECT cancelled_at, cancel_reason, distributed_at FROM tournaments WHERE id = ${short}`;
+		const [cancelled] = await t.sql`
+				SELECT cancelled_at, cancel_reason, distributed_at
+				FROM tournaments
+				WHERE id = ${short}`;
 		expect(cancelled.cancelled_at).toBeInstanceOf(Date);
 		expect(cancelled.cancel_reason).toBe("Only 3 of the 4 players needed signed up.");
 		expect(cancelled.distributed_at).toBeNull();
 		expect(await sizes(short)).toEqual([]);
 
-		const [audit] =
-			await t.sql`SELECT admin_id, detail FROM admin_audit_events WHERE tournament_id = ${short} AND action = 'tournament.cancel'`;
+		const [audit] = await t.sql`
+				SELECT admin_id, detail
+				FROM admin_audit_events
+				WHERE tournament_id = ${short} AND action = 'tournament.cancel'`;
 		expect(audit).toEqual({ admin_id: null, detail: { registered: 3, minPlayers: 4, auto: true } });
 
 		expect(await sizes(enough)).toEqual([2, 2]);
@@ -145,26 +170,49 @@ describe("the distribute job", () => {
 		await runTournamentJob(t.sql); // distributes and, being past +4 min, closes both unopened rooms
 		expect(
 			(
-				await t.sql`SELECT count(*)::int AS n FROM rooms WHERE tournament_id = ${id} AND close_reason = 'not_enough_players'`
+				await t.sql`
+					SELECT count(*)::int AS n
+					FROM rooms
+					WHERE tournament_id = ${id} AND close_reason = 'not_enough_players'`
 			)[0].n,
 		).toBe(2);
 		expect(
-			(await t.sql`SELECT ended_at FROM tournaments WHERE id = ${id}`)[0].ended_at,
+			(
+				await t.sql`
+				SELECT ended_at
+				FROM tournaments
+				WHERE id = ${id}`
+			)[0].ended_at,
 		).not.toBeNull();
 		// Nobody played, so nobody has a place.
 		expect(
 			(
-				await t.sql`SELECT count(*)::int AS n FROM tournament_results WHERE tournament_id = ${id}`
+				await t.sql`
+					SELECT count(*)::int AS n
+					FROM tournament_results
+					WHERE tournament_id = ${id}`
 			)[0].n,
 		).toBe(0);
 
 		const started = await tournament({ opens: -60, closes: -10, starts: -5 });
 		await register(started, 2);
-		await t.sql`UPDATE tournaments SET starts_at = now() + interval '10 min' WHERE id = ${started}`;
+		await t.sql`
+			UPDATE tournaments
+			SET starts_at = now() + interval '10 min'
+			WHERE id = ${started}`;
 		await runTournamentJob(t.sql);
-		await t.sql`UPDATE rooms SET started_at = now() WHERE tournament_id = ${started}`;
-		await t.sql`UPDATE tournaments SET starts_at = now() - interval '5 min' WHERE id = ${started}`;
-		await t.sql`UPDATE tournament_rounds SET starts_at = now() - interval '5 min' WHERE tournament_id = ${started}`;
+		await t.sql`
+			UPDATE rooms
+			SET started_at = now()
+			WHERE tournament_id = ${started}`;
+		await t.sql`
+			UPDATE tournaments
+			SET starts_at = now() - interval '5 min'
+			WHERE id = ${started}`;
+		await t.sql`
+			UPDATE tournament_rounds
+			SET starts_at = now() - interval '5 min'
+			WHERE tournament_id = ${started}`;
 		expect((await runTournamentJob(t.sql)).closed).toBe(0);
 	});
 });
@@ -174,7 +222,10 @@ describe("rounds", () => {
 
 	/** Reports a table's match with players finishing in the order given. */
 	async function play(roomId: string, order: string[]) {
-		const [{ code }] = await t.sql`SELECT code FROM rooms WHERE id = ${roomId}`;
+		const [{ code }] = await t.sql`
+			SELECT code
+			FROM rooms
+			WHERE id = ${roomId}`;
 		matchNumber += 1;
 		const now = new Date().toISOString();
 		const report = {
@@ -220,14 +271,18 @@ describe("rounds", () => {
 		const moved = await runTournamentJob(t.sql);
 		expect(moved).toMatchObject({ nextRounds: 1, finished: 0 });
 
-		const [firstDone] =
-			await t.sql`SELECT ended_at FROM tournament_rounds WHERE tournament_id = ${id} AND round = 1`;
+		const [firstDone] = await t.sql`
+				SELECT ended_at
+				FROM tournament_rounds
+				WHERE tournament_id = ${id} AND round = 1`;
 		expect(firstDone.ended_at).not.toBeNull();
 
 		const [final] = await tablesOf(id, 2);
 		expect([...final.players].sort()).toEqual([...winners].sort());
-		const [{ minutes }] =
-			await t.sql`SELECT round(extract(epoch FROM starts_at - now()) / 60)::int AS minutes FROM tournament_rounds WHERE tournament_id = ${id} AND round = 2`;
+		const [{ minutes }] = await t.sql`
+				SELECT round(extract(epoch FROM starts_at - now()) / 60)::int AS minutes
+				FROM tournament_rounds
+				WHERE tournament_id = ${id} AND round = 2`;
 		expect(minutes).toBe(3);
 
 		// The champion's lobby shows the final table; nothing more happens until it is played.
@@ -235,14 +290,22 @@ describe("rounds", () => {
 		await play(final.id, [winners[1], winners[0]]);
 		expect(await runTournamentJob(t.sql)).toMatchObject({ finished: 1 });
 
-		const results =
-			await t.sql`SELECT player_id, place, wins, last_round FROM tournament_results WHERE tournament_id = ${id} ORDER BY place`;
+		const results = await t.sql`
+				SELECT player_id, place, wins, last_round
+				FROM tournament_results
+				WHERE tournament_id = ${id}
+				ORDER BY place`;
 		expect(results.length).toBe(4);
 		expect(results[0]).toEqual({ player_id: winners[1], place: 1, wins: 2, last_round: 2 });
 		expect(results[1]).toEqual({ player_id: winners[0], place: 2, wins: 1, last_round: 2 });
 		expect(results.slice(2).map((row: { last_round: number }) => row.last_round)).toEqual([1, 1]);
 		expect(
-			(await t.sql`SELECT ended_at FROM tournaments WHERE id = ${id}`)[0].ended_at,
+			(
+				await t.sql`
+				SELECT ended_at
+				FROM tournaments
+				WHERE id = ${id}`
+			)[0].ended_at,
 		).not.toBeNull();
 	});
 
@@ -255,6 +318,7 @@ describe("rounds", () => {
 		for (const table of await tablesOf(id, 1)) {
 			await play(table.id, [table.players[1], table.players[0]]);
 		}
+
 		expect(await runTournamentJob(t.sql)).toMatchObject({ nextRounds: 1 });
 
 		const secondRound = await tablesOf(id, 2);
@@ -264,10 +328,14 @@ describe("rounds", () => {
 		for (const table of secondRound) {
 			await play(table.id, [table.players[0], table.players[1]]);
 		}
+
 		expect(await runTournamentJob(t.sql)).toMatchObject({ finished: 1 });
 
-		const results =
-			await t.sql`SELECT player_id, place, points, wins, last_round FROM tournament_results WHERE tournament_id = ${id} ORDER BY place`;
+		const results = await t.sql`
+				SELECT player_id, place, points, wins, last_round
+				FROM tournament_results
+				WHERE tournament_id = ${id}
+				ORDER BY place`;
 		expect(results.length).toBe(4);
 		// Tables of two: a win is 2 points, a loss 1; four matches each round.
 		const total = results.reduce((sum: number, row: { points: number }) => sum + row.points, 0);
@@ -286,6 +354,7 @@ describe("rounds", () => {
 		for (const table of firstRound) {
 			await play(table.id, [table.players[0], table.players[1]]);
 		}
+
 		await runTournamentJob(t.sql);
 
 		const secondRound = await tablesOf(id, 2);
@@ -315,6 +384,7 @@ describe("rounds", () => {
 		for (const table of await tablesOf(id, 1)) {
 			await play(table.id, [table.players[0], table.players[1]]);
 		}
+
 		await runTournamentJob(t.sql);
 
 		const winners = (await tablesOf(id, 2))[0].players as string[];
@@ -383,12 +453,18 @@ describe("rounds", () => {
 		for (const table of firstRound) {
 			await play(table.id, [table.players[0], table.players[1]]);
 		}
+
 		const quitter = firstRound[1].players[0];
-		await t.sql`UPDATE tournament_players SET status = 'withdrawn', status_changed_at = now() WHERE tournament_id = ${id} AND player_id = ${quitter}`;
+		await t.sql`
+			UPDATE tournament_players
+			SET status = 'withdrawn', status_changed_at = now()
+			WHERE tournament_id = ${id} AND player_id = ${quitter}`;
 
 		expect(await runTournamentJob(t.sql)).toMatchObject({ nextRounds: 0, finished: 1 });
-		const [champion] =
-			await t.sql`SELECT player_id FROM tournament_results WHERE tournament_id = ${id} AND place = 1`;
+		const [champion] = await t.sql`
+				SELECT player_id
+				FROM tournament_results
+				WHERE tournament_id = ${id} AND place = 1`;
 		expect(champion.player_id).toBe(firstRound[0].players[0]);
 	});
 });
@@ -402,7 +478,10 @@ describe("bots", () => {
 			format: "arena",
 			bots: true,
 		});
-		await t.sql`UPDATE tournaments SET fee = 100 WHERE id = ${id}`;
+		await t.sql`
+			UPDATE tournaments
+			SET fee = 100
+			WHERE id = ${id}`;
 		await register(id, 7);
 
 		expect((await runTournamentJob(t.sql)).botsFilled).toBe(1);
@@ -427,7 +506,10 @@ describe("bots", () => {
 		).toBe(1);
 
 		// Once only, and the bots sit at the tables when they're handed out.
-		await t.sql`UPDATE tournaments SET registration_closes_at = now() - interval '1 second' WHERE id = ${id}`;
+		await t.sql`
+			UPDATE tournaments
+			SET registration_closes_at = now() - interval '1 second'
+			WHERE id = ${id}`;
 		expect((await runTournamentJob(t.sql)).botsFilled).toBe(0);
 		expect(await sizes(id)).toEqual([4, 4]);
 
@@ -452,8 +534,10 @@ describe("bots", () => {
 		await register(id, 13);
 
 		expect((await runTournamentJob(t.sql)).botsFilled).toBe(1);
-		const [{ n }] =
-			await t.sql`SELECT count(*)::int AS n FROM tournament_players WHERE tournament_id = ${id}`;
+		const [{ n }] = await t.sql`
+				SELECT count(*)::int AS n
+				FROM tournament_players
+				WHERE tournament_id = ${id}`;
 		expect(n).toBe(16);
 	});
 
@@ -472,8 +556,10 @@ describe("bots", () => {
 		await register(short, 7);
 
 		expect((await runTournamentJob(t.sql)).botsFilled).toBe(0);
-		const rows =
-			await t.sql`SELECT bots_added_at FROM tournaments WHERE id IN ${t.sql([empty, thin, short])}`;
+		const rows = await t.sql`
+				SELECT bots_added_at
+				FROM tournaments
+				WHERE id IN ${t.sql([empty, thin, short])}`;
 		expect(rows.every((row: { bots_added_at: Date | null }) => row.bots_added_at === null)).toBe(
 			true,
 		);
@@ -528,7 +614,10 @@ describe("sign-up", () => {
 		).toBe(200);
 		expect(
 			(
-				await t.sql`SELECT count(*)::int AS n FROM tournament_players WHERE tournament_id = ${open}`
+				await t.sql`
+					SELECT count(*)::int AS n
+					FROM tournament_players
+					WHERE tournament_id = ${open}`
 			)[0].n,
 		).toBe(0);
 	});
@@ -538,7 +627,9 @@ describe("the lobby list", () => {
 	test("names the first sign-ups and lists prizes by place", async () => {
 		const cup = await tournament({ closes: 5, starts: 15 });
 		await register(cup, 7);
-		await t.sql`INSERT INTO tournament_prizes (tournament_id, place, coins, extra) VALUES (${cup}, 2, 1000, NULL), (${cup}, 1, 2000, 'Night Owl badge')`;
+		await t.sql`
+			INSERT INTO tournament_prizes (tournament_id, place, coins, extra)
+			VALUES (${cup}, 2, 1000, NULL), (${cup}, 1, 2000, 'Night Owl badge')`;
 		const ann = await guest(t.app, "Ann");
 
 		const list = await call(t.app, "GET", "/v1/tournaments?game=bust-31", { token: ann.secret });
@@ -590,7 +681,10 @@ describe("tournament rooms", () => {
 		ben = await guest(t.app, "Ben");
 		await t.sql`INSERT INTO tournament_players ${t.sql([ann, ben].map((p) => ({ tournament_id: id, player_id: p.player.id })))}`;
 		await runTournamentJob(t.sql);
-		[{ code }] = await t.sql`SELECT code FROM rooms WHERE tournament_id = ${id}`;
+		[{ code }] = await t.sql`
+			SELECT code
+			FROM rooms
+			WHERE tournament_id = ${id}`;
 	});
 
 	test("the assigned player sees their table and may enter; an outsider may not", async () => {
@@ -650,18 +744,37 @@ describe("tournament rooms", () => {
 			log: { logVersion: 1, events: [{ seq: 0, t: 0, type: "started" }] },
 		};
 		expect((await server("POST", "/v1/matches", report)).status).toBe(201);
-		const [room] = await t.sql`SELECT started_at, close_reason FROM rooms WHERE code = ${code}`;
+		const [room] = await t.sql`
+			SELECT started_at, close_reason
+			FROM rooms
+			WHERE code = ${code}`;
 		expect(room.close_reason).toBe("finished");
 		expect(room.started_at).not.toBeNull();
-		expect((await t.sql`SELECT ended_at FROM tournaments WHERE id = ${id}`)[0].ended_at).toBeNull();
+		expect(
+			(
+				await t.sql`
+			SELECT ended_at
+			FROM tournaments
+			WHERE id = ${id}`
+			)[0].ended_at,
+		).toBeNull();
 
 		// One table, so its winner is the champion: no further round.
 		await runTournamentJob(t.sql);
 		expect(
-			(await t.sql`SELECT ended_at FROM tournaments WHERE id = ${id}`)[0].ended_at,
+			(
+				await t.sql`
+				SELECT ended_at
+				FROM tournaments
+				WHERE id = ${id}`
+			)[0].ended_at,
 		).not.toBeNull();
 		expect(
-			await t.sql`SELECT player_id, place, wins, last_round FROM tournament_results WHERE tournament_id = ${id} ORDER BY place`,
+			await t.sql`
+				SELECT player_id, place, wins, last_round
+				FROM tournament_results
+				WHERE tournament_id = ${id}
+				ORDER BY place`,
 		).toEqual([
 			{ player_id: ann.player.id, place: 1, wins: 1, last_round: 1 },
 			{ player_id: ben.player.id, place: 2, wins: 0, last_round: 1 },
@@ -676,18 +789,29 @@ describe("tournament rooms", () => {
 		const other = await tournament({ closes: -1, starts: 10, perRoom: 2 });
 		await t.sql`INSERT INTO tournament_players ${t.sql([ann, ben].map((p) => ({ tournament_id: other, player_id: p.player.id })))}`;
 		await runTournamentJob(t.sql);
-		const [{ code: c2 }] = await t.sql`SELECT code FROM rooms WHERE tournament_id = ${other}`;
+		const [{ code: c2 }] = await t.sql`
+			SELECT code
+			FROM rooms
+			WHERE tournament_id = ${other}`;
 		expect((await server("POST", `/v1/rooms/${c2}/close`, { reason: "finished" })).status).toBe(
 			400,
 		);
 		expect(
 			(await server("POST", `/v1/rooms/${c2}/close`, { reason: "not_enough_players" })).status,
 		).toBe(200);
-		expect((await t.sql`SELECT close_reason FROM rooms WHERE code = ${c2}`)[0].close_reason).toBe(
-			"not_enough_players",
-		);
+		expect(
+			(
+				await t.sql`
+			SELECT close_reason
+			FROM rooms
+			WHERE code = ${c2}`
+			)[0].close_reason,
+		).toBe("not_enough_players");
 
-		await t.sql`UPDATE tournaments SET cancelled_at = now() WHERE id = ${other}`;
+		await t.sql`
+			UPDATE tournaments
+			SET cancelled_at = now()
+			WHERE id = ${other}`;
 		expect(
 			(await call(t.app, "GET", `/v1/rooms/${c2}`, { token: ann.secret })).json.error.message,
 		).toBe("Friday Cup was cancelled.");
@@ -707,13 +831,18 @@ describe("withdrawn and disqualified players", () => {
 		);
 		await t.sql`INSERT INTO tournament_players ${t.sql([ann!, ben!, cy!].map((p) => ({ tournament_id: id, player_id: p.player.id })))}`;
 		await runTournamentJob(t.sql);
-		const [{ code }] = await t.sql`SELECT code FROM rooms WHERE tournament_id = ${id}`;
+		const [{ code }] = await t.sql`
+			SELECT code
+			FROM rooms
+			WHERE tournament_id = ${id}`;
 		const registration = (method: string, token: string) =>
 			call(t.app, method, `/v1/tournaments/${id}/registration`, { token });
 
 		expect((await registration("DELETE", ann!.secret)).status).toBe(200);
-		const [row] =
-			await t.sql`SELECT status, status_changed_at FROM tournament_players WHERE tournament_id = ${id} AND player_id = ${ann!.player.id}`;
+		const [row] = await t.sql`
+				SELECT status, status_changed_at
+				FROM tournament_players
+				WHERE tournament_id = ${id} AND player_id = ${ann!.player.id}`;
 		expect(row.status).toBe("withdrawn");
 		expect(row.status_changed_at).not.toBeNull();
 		expect(
@@ -757,7 +886,12 @@ describe("withdrawn and disqualified players", () => {
 		const cup = list.json.data.tournaments.find((x: { id: string }) => x.id === id);
 		expect(cup).toMatchObject({ registered: 0, joined: false });
 		expect(
-			(await t.sql`SELECT status FROM tournament_players WHERE tournament_id = ${id}`)[0].status,
+			(
+				await t.sql`
+				SELECT status
+				FROM tournament_players
+				WHERE tournament_id = ${id}`
+			)[0].status,
 		).toBe("disqualified");
 	});
 });

@@ -193,7 +193,10 @@ describe("logEvents", () => {
 	test("a whole bot game logs every move in order", () => {
 		let g = createGame();
 		g = addPlayer(g, "a", "Ann");
-		for (let i = 1; i < 6; i++) g = addPlayer(g, `bot-${i}`, `Bot ${i}`, true);
+		for (let i = 1; i < 6; i++) {
+			g = addPlayer(g, `bot-${i}`, `Bot ${i}`, true);
+		}
+
 		const entries: LogEntry[] = [];
 		const step = (next: Game) => {
 			entries.push(...logEvents(g, next, true));
@@ -204,6 +207,7 @@ describe("logEvents", () => {
 			const p = g.players[g.turn]!;
 			step(playCard(g, p.id, chooseBotCard(p.hand, g.total)!.id, randomRng()));
 		}
+
 		const count = (type: string) => entries.filter((e) => e.type === type).length;
 		expect(count("deal")).toBe(g.round);
 		expect(count("bust")).toBe(g.players.reduce((n, p) => n + 3 - Math.max(0, p.lives), 0));

@@ -49,8 +49,10 @@ type LiveRow = {
  * so far with the same rules the job uses at the end.
  */
 export async function standingsOf(sql: SQL, tournamentId: string): Promise<Standing[]> {
-	const [tournament] =
-		await sql`SELECT format, ended_at FROM tournaments WHERE id = ${tournamentId}`;
+	const [tournament] = await sql`
+			SELECT format, ended_at
+			FROM tournaments
+			WHERE id = ${tournamentId}`;
 	if (!tournament) {
 		throw new ApiError("not_found", 404, "There is no such tournament.");
 	}
@@ -105,7 +107,10 @@ async function namesOf(
 		return new Map();
 	}
 
-	const rows = await sql`SELECT id, display_name, is_bot FROM players WHERE id IN ${sql(ids)}`;
+	const rows = await sql`
+		SELECT id, display_name, is_bot
+		FROM players
+		WHERE id IN ${sql(ids)}`;
 	return new Map(
 		rows.map((row: { id: string; display_name: string; is_bot: boolean }) => [
 			row.id,

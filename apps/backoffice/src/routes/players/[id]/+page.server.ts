@@ -26,7 +26,9 @@ export const load: PageServerLoad = async ({ params }) => {
 		playerDetail(sql, params.id),
 		listAudit(sql, filter, AUDIT_ROWS)
 	]);
-	if (!detail) error(404, 'Player not found');
+	if (!detail) {
+		error(404, 'Player not found');
+	}
 
 	const [coins, coinRows] = await Promise.all([
 		balanceOf(sql, params.id),
@@ -56,14 +58,18 @@ export const actions: Actions = {
 	enable: async ({ params, locals, getClientAddress }) => {
 		const ip = auditIp(getClientAddress());
 		const done = await enablePlayer(sql, locals.admin!, params.id, ip);
-		if (!done) return fail(409, { error: 'This player is already active.' });
+		if (!done) {
+			return fail(409, { error: 'This player is already active.' });
+		}
 
 		return { message: 'Player enabled. They start a new guest session next time they play.' };
 	},
 	grantVip: async ({ params, locals, getClientAddress }) => {
 		const ip = auditIp(getClientAddress());
 		const done = await grantVip(sql, locals.admin!, params.id, ip);
-		if (!done) return fail(409, { error: 'This player is already a VIP.' });
+		if (!done) {
+			return fail(409, { error: 'This player is already a VIP.' });
+		}
 
 		return { message: 'Player is now a VIP.' };
 	},
@@ -82,6 +88,7 @@ export const actions: Actions = {
 				coinError: 'Enter a whole number of coins, minus to take them away.'
 			});
 		}
+
 		if (!note || note.length > REASON_MAX) {
 			return fail(400, {
 				amount: amountText,
@@ -104,13 +111,16 @@ export const actions: Actions = {
 			if (err instanceof CoinAdjustError) {
 				return fail(409, { amount: amountText, note, coinError: err.message });
 			}
+
 			throw err;
 		}
 	},
 	revokeVip: async ({ params, locals, getClientAddress }) => {
 		const ip = auditIp(getClientAddress());
 		const done = await revokeVip(sql, locals.admin!, params.id, ip);
-		if (!done) return fail(409, { error: 'This player is not a VIP.' });
+		if (!done) {
+			return fail(409, { error: 'This player is not a VIP.' });
+		}
 
 		return { message: 'VIP taken away.' };
 	}

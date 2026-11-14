@@ -7,8 +7,13 @@
 	const filter = $derived(data.filter);
 	const filtered = $derived(!!(filter.game || filter.player || filter.from || filter.to));
 	const emptyText = $derived.by(() => {
-		if (filtered) return 'No matches fit these filters.';
-		if (filter.before) return 'No more matches.';
+		if (filtered) {
+			return 'No matches fit these filters.';
+		}
+
+		if (filter.before) {
+			return 'No more matches.';
+		}
 
 		return 'No matches yet.';
 	});

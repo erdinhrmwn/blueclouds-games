@@ -30,28 +30,30 @@ export function startJobs(sql: SQL): { stop: () => Promise<void> } {
 			cron,
 			() => {
 				// Errors are caught here: an unhandled rejection from a cron callback exits the process.
-				const p: Promise<unknown> = run()
+				const pending: Promise<unknown> = run()
 					.then((fields) => fields && log.info({ msg: name, ...fields }))
 					.catch((err) => log.error({ msg: `${name} failed`, err }))
-					.finally(() => running.delete(p));
-				running.add(p);
-				return p;
+					.finally(() => running.delete(pending));
+				running.add(pending);
+
+				return pending;
 			},
 			{ tz: "UTC" },
 		);
 
 	const jobs = [
 		schedule("tournament job", SCHEDULES.tournaments, async () => {
-			const r = await runTournamentJob(sql);
+			const result = await runTournamentJob(sql);
 			const changed =
-				r.distributed +
-				r.cancelled +
-				r.failed +
-				r.closed +
-				r.nextRounds +
-				r.finished +
-				r.botsFilled;
-			return changed > 0 ? r : null;
+				result.distributed +
+				result.cancelled +
+				result.failed +
+				result.closed +
+				result.nextRounds +
+				result.finished +
+				result.botsFilled;
+
+			return changed > 0 ? result : null;
 		}),
 		schedule("guest sweep", SCHEDULES.guestSweep, async () => {
 			const deleted = await sweepGuests(sql);
@@ -61,7 +63,10 @@ export function startJobs(sql: SQL): { stop: () => Promise<void> } {
 
 	return {
 		stop: async () => {
-			for (const job of jobs) job.stop();
+			for (const job of jobs) {
+				job.stop();
+			}
+
 			await Promise.all(running);
 		},
 	};

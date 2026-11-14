@@ -7,7 +7,9 @@ const problem = (err: unknown) =>
 
 /** Opens a listed table by its code. Returns an error to show, or null when it went there. */
 export function enterTable(game: string, code: string): string | null {
-	if (!isRoomCode(code)) return 'A table code is 4–8 letters or digits.';
+	if (!isRoomCode(code)) {
+		return 'A table code is 4–8 letters or digits.';
+	}
 
 	goto(`/${game}/room/${code}`);
 	return null;
@@ -15,7 +17,9 @@ export function enterTable(game: string, code: string): string | null {
 
 /** Joins a table by its code alone, from a page that doesn't know its game. Returns an error to show, or null. */
 export async function enterTableByCode(code: string): Promise<string | null> {
-	if (!isRoomCode(code)) return 'A table code is 4–8 letters or digits.';
+	if (!isRoomCode(code)) {
+		return 'A table code is 4–8 letters or digits.';
+	}
 
 	try {
 		const { game } = await findRoom(code);

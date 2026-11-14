@@ -7,8 +7,10 @@ let t: Awaited<ReturnType<typeof setupTestApp>>;
 let admin: string;
 beforeAll(async () => {
 	t = await setupTestApp();
-	[{ id: admin }] =
-		await t.sql`INSERT INTO admins (username, password_hash, role) VALUES ('root', '$argon2id$v=19$test', 'owner') RETURNING id`;
+	[{ id: admin }] = await t.sql`
+			INSERT INTO admins (username, password_hash, role)
+			VALUES ('root', '$argon2id$v=19$test', 'owner')
+			RETURNING id`;
 });
 afterAll(() => t.sql.close());
 
@@ -32,9 +34,14 @@ const coinsOf = async (secret: string) =>
 
 /** The balance always equals the sum of the player's ledger. */
 async function ledgerMatches(playerId: string) {
-	const [{ sum }] =
-		await t.sql`SELECT coalesce(sum(amount), 0)::bigint AS sum FROM coin_ledger WHERE player_id = ${playerId}`;
-	const [wallet] = await t.sql`SELECT balance FROM wallets WHERE player_id = ${playerId}`;
+	const [{ sum }] = await t.sql`
+			SELECT coalesce(sum(amount), 0)::bigint AS sum
+			FROM coin_ledger
+			WHERE player_id = ${playerId}`;
+	const [wallet] = await t.sql`
+		SELECT balance
+		FROM wallets
+		WHERE player_id = ${playerId}`;
 	expect(Number(sum)).toBe(Number(wallet?.balance ?? 0));
 }
 
@@ -85,7 +92,10 @@ describe("the wallet", () => {
 			),
 		).rejects.toThrow("Not enough coins");
 		await expect(
-			t.sql`UPDATE coin_ledger SET amount = 5 WHERE player_id = ${acc.id}`,
+			t.sql`
+				UPDATE coin_ledger
+				SET amount = 5
+				WHERE player_id = ${acc.id}`,
 		).rejects.toThrow();
 		await ledgerMatches(acc.id);
 	});
@@ -128,8 +138,10 @@ describe("tournament fees", () => {
 		const refused = await join(dear, acc.secret);
 		expect(refused.status).toBe(409);
 		expect(refused.json.error.message).toBe("Not enough coins: you have 700, this needs 1,000.");
-		const [{ n }] =
-			await t.sql`SELECT count(*)::int AS n FROM tournament_players WHERE tournament_id = ${dear}`;
+		const [{ n }] = await t.sql`
+				SELECT count(*)::int AS n
+				FROM tournament_players
+				WHERE tournament_id = ${dear}`;
 		expect(n).toBe(0);
 		await ledgerMatches(acc.id);
 	});
@@ -145,7 +157,10 @@ describe("tournament fees", () => {
 
 		await join(cup, ann.secret);
 		await join(cup, bob.secret);
-		await t.sql`UPDATE tournaments SET registration_closes_at = now() - interval '1 minute' WHERE id = ${cup}`;
+		await t.sql`
+			UPDATE tournaments
+			SET registration_closes_at = now() - interval '1 minute'
+			WHERE id = ${cup}`;
 		await runTournamentJob(t.sql);
 
 		expect((await leave(cup, bob.secret)).status).toBe(200);
@@ -170,7 +185,10 @@ describe("tournament fees", () => {
 		expect((await leave(cup, ann.secret)).status).toBe(200);
 		expect(await coinsOf(ann.secret)).toBe(SIGNUP_BONUS - 200);
 
-		await t.sql`UPDATE tournaments SET registration_closes_at = now() - interval '1 minute' WHERE id = ${cup}`;
+		await t.sql`
+			UPDATE tournaments
+			SET registration_closes_at = now() - interval '1 minute'
+			WHERE id = ${cup}`;
 		await runTournamentJob(t.sql);
 		await disqualify(bob.id);
 		expect((await leave(cup, bob.secret)).status).toBe(200);
@@ -183,12 +201,17 @@ describe("tournament fees", () => {
 		await join(cup, ann.secret);
 		expect(await coinsOf(ann.secret)).toBe(SIGNUP_BONUS - 150);
 
-		await t.sql`UPDATE tournaments SET registration_closes_at = now() - interval '1 minute' WHERE id = ${cup}`;
+		await t.sql`
+			UPDATE tournaments
+			SET registration_closes_at = now() - interval '1 minute'
+			WHERE id = ${cup}`;
 		expect((await runTournamentJob(t.sql)).cancelled).toBeGreaterThanOrEqual(1);
 		expect(await coinsOf(ann.secret)).toBe(SIGNUP_BONUS);
 
-		const [signUp] =
-			await t.sql`SELECT fee_paid FROM tournament_players WHERE tournament_id = ${cup} AND player_id = ${ann.id}`;
+		const [signUp] = await t.sql`
+				SELECT fee_paid
+				FROM tournament_players
+				WHERE tournament_id = ${cup} AND player_id = ${ann.id}`;
 		expect(Number(signUp.fee_paid)).toBe(0);
 		await ledgerMatches(ann.id);
 	});

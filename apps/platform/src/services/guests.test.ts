@@ -11,9 +11,17 @@ afterAll(async () => {
 });
 
 const exists = async (id: string) =>
-	(await t.sql`SELECT 1 FROM players WHERE id = ${id}`).length > 0;
+	(
+		await t.sql`
+		SELECT 1
+		FROM players
+		WHERE id = ${id}`
+	).length > 0;
 const age = (id: string, days: number) =>
-	t.sql`UPDATE players SET last_seen_at = now() - make_interval(days => ${days}) WHERE id = ${id}`;
+	t.sql`
+		UPDATE players
+		SET last_seen_at = now() - make_interval(days => ${days})
+		WHERE id = ${id}`;
 const logout = (secret: string) => call(t.app, "POST", "/v1/players/logout", { token: secret });
 
 /** A finished match with this player in seat 0, reported the way the game's server does. */
@@ -43,8 +51,10 @@ describe("guest cleanup", () => {
 		const g = await guest(t.app, "Lone");
 		expect((await logout(g.secret)).status).toBe(200);
 		expect(await exists(g.player.id)).toBe(false);
-		const [{ n }] =
-			await t.sql`SELECT count(*)::int AS n FROM player_secrets WHERE player_id = ${g.player.id}`;
+		const [{ n }] = await t.sql`
+				SELECT count(*)::int AS n
+				FROM player_secrets
+				WHERE player_id = ${g.player.id}`;
 		expect(n).toBe(0);
 	});
 
@@ -66,8 +76,14 @@ describe("guest cleanup", () => {
 		});
 		await playMatch(played.player.id, "GSTB1");
 		const roomId = await room(t.sql, "bust-31", "GSTC1");
-		await t.sql`UPDATE rooms SET created_by_player_id = ${old.player.id} WHERE id = ${roomId}`;
-		for (const p of [old, played, account]) await age(p.player.id, GUEST_UNUSED_DAYS + 1);
+		await t.sql`
+			UPDATE rooms
+			SET created_by_player_id = ${old.player.id}
+			WHERE id = ${roomId}`;
+		for (const p of [old, played, account]) {
+			await age(p.player.id, GUEST_UNUSED_DAYS + 1);
+		}
+
 		await age(fresh.player.id, GUEST_UNUSED_DAYS - 1);
 
 		expect(await sweepGuests(t.sql)).toBeGreaterThanOrEqual(1);
@@ -77,7 +93,10 @@ describe("guest cleanup", () => {
 			await exists(played.player.id),
 			await exists(account.player.id),
 		]).toEqual([true, true, true]);
-		const [r] = await t.sql`SELECT created_by_player_id FROM rooms WHERE id = ${roomId}`;
+		const [r] = await t.sql`
+			SELECT created_by_player_id
+			FROM rooms
+			WHERE id = ${roomId}`;
 		expect(r.created_by_player_id).toBeNull();
 	});
 

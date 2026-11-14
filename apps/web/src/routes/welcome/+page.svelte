@@ -20,6 +20,14 @@
 	let mode = $state<'guest' | 'login' | 'signup'>('guest');
 	let busy = $state(false);
 
+	const submitLabel = $derived.by(() => {
+		if (busy) {
+			return 'Please wait…';
+		}
+
+		return mode === 'login' ? 'Log in' : 'Create account';
+	});
+
 	// Only the starting name is wanted: the visitor edits it here.
 	// svelte-ignore state_referenced_locally
 	let guestName = $state(data.guestName);
@@ -33,13 +41,17 @@
 	const enter = () => goto(nextPath(page.url), { invalidateAll: true });
 
 	async function run(task: () => Promise<boolean>) {
-		if (busy) return;
+		if (busy) {
+			return;
+		}
 
 		busy = true;
 		const ok = await task();
 		busy = false;
 
-		if (ok) await enter();
+		if (ok) {
+			await enter();
+		}
 	}
 
 	function switchTo(next: typeof mode) {
@@ -52,7 +64,9 @@
 		event.preventDefault();
 
 		guestError = nameError(guestName);
-		if (guestError) return;
+		if (guestError) {
+			return;
+		}
 
 		return run(async () => {
 			const failed = await playAsGuest(guestName.trim());
@@ -185,7 +199,7 @@
 				<p class="text-sm text-ember" role="alert">{errors.form}</p>
 			{/if}
 			<button class="btn-brass h-12 w-full rounded-xl text-base" type="submit" disabled={busy}
-				>{busy ? 'Please wait…' : mode === 'login' ? 'Log in' : 'Create account'}</button
+				>{submitLabel}</button
 			>
 		</form>
 		<p class="mt-6 text-sm text-paper/60">

@@ -19,14 +19,18 @@ export const actions: Actions = {
 	start: async ({ request, locals, getClientAddress }) => {
 		const slug = await slugOf(request);
 		const done = await setMaintenance(sql, locals.admin!, slug, true, auditIp(getClientAddress()));
-		if (!done) return fail(409, { error: 'This game is already under maintenance.' });
+		if (!done) {
+			return fail(409, { error: 'This game is already under maintenance.' });
+		}
 
 		return { message: 'Maintenance started. No new tables or tournaments until you end it.' };
 	},
 	end: async ({ request, locals, getClientAddress }) => {
 		const slug = await slugOf(request);
 		const done = await setMaintenance(sql, locals.admin!, slug, false, auditIp(getClientAddress()));
-		if (!done) return fail(409, { error: 'This game is not under maintenance.' });
+		if (!done) {
+			return fail(409, { error: 'This game is not under maintenance.' });
+		}
 
 		return { message: 'Maintenance ended. Players can open tables again.' };
 	}

@@ -22,7 +22,9 @@
 	// The name is read once: changing it later applies to the next table you join.
 	let connected = false;
 	$effect(() => {
-		if (!player.name || connected) return;
+		if (!player.name || connected) {
+			return;
+		}
 
 		connected = true;
 		room = connect();
@@ -44,9 +46,17 @@
 	/** A tournament table goes by its tournament's name; any other table by its host's. */
 	const roomName = $derived.by(() => {
 		const view = room?.view;
-		if (!view) return 'Table';
-		if (view.tournament) return view.tournament.name;
-		if (view.roomName) return view.roomName;
+		if (!view) {
+			return 'Table';
+		}
+
+		if (view.tournament) {
+			return view.tournament.name;
+		}
+
+		if (view.roomName) {
+			return view.roomName;
+		}
 
 		const host = view.players.find((p) => p.id === view.hostId);
 		return host ? `${host.name}’s table` : 'Table';

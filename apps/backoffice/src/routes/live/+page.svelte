@@ -62,8 +62,13 @@
 
 	const updated = $derived.by(() => {
 		const seconds = Math.max(0, Math.round((now - new Date(data.checkedAt).getTime()) / 1000));
-		if (seconds < 5) return 'Updated just now';
-		if (seconds < 60) return `Updated ${seconds}s ago`;
+		if (seconds < 5) {
+			return 'Updated just now';
+		}
+
+		if (seconds < 60) {
+			return `Updated ${seconds}s ago`;
+		}
 
 		return `Updated ${Math.floor(seconds / 60)} min ago`;
 	});

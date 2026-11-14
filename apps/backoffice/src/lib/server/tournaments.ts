@@ -151,7 +151,11 @@ const COLUMNS = (sql: SQL) => sql`
 		SELECT count(*)::int FROM tournament_players tp
 		WHERE tp.tournament_id = t.id AND tp.status = 'registered'
 	) AS registered,
-	(SELECT count(*)::int FROM rooms r WHERE r.tournament_id = t.id) AS rooms`;
+	(
+		SELECT count(*)::int
+		FROM rooms r
+		WHERE r.tournament_id = t.id
+	) AS rooms`;
 
 /** Newest start first. */
 export async function listTournaments(sql: SQL): Promise<TournamentRow[]> {
@@ -355,7 +359,9 @@ export async function createTournament(
 }
 
 export async function tournamentDetail(sql: SQL, id: string) {
-	if (!isUuid(id)) return null;
+	if (!isUuid(id)) {
+		return null;
+	}
 
 	const [tournament] = (await sql`
 		SELECT ${COLUMNS(sql)}
@@ -363,7 +369,9 @@ export async function tournamentDetail(sql: SQL, id: string) {
 		JOIN games g ON g.slug = t.game_slug
 		WHERE t.id = ${id}`) as TournamentRow[];
 
-	if (!tournament) return null;
+	if (!tournament) {
+		return null;
+	}
 
 	const playersQuery = sql`
 		SELECT
@@ -398,7 +406,11 @@ export async function tournamentDetail(sql: SQL, id: string) {
 			r.started_at AS "startedAt",
 			r.closed_at AS "closedAt",
 			r.close_reason AS "closeReason",
-			(SELECT count(*)::int FROM room_assignments ra WHERE ra.room_id = r.id) AS players,
+			(
+				SELECT count(*)::int
+				FROM room_assignments ra
+				WHERE ra.room_id = r.id
+			) AS players,
 			coalesce(
 				(
 					SELECT json_agg(json_build_object('playerId', ra.player_id, 'seat', ra.seat) ORDER BY ra.seat)
@@ -461,6 +473,7 @@ async function lockOpen(tx: SQL, id: string) {
 	if (!tournament) {
 		throw new TournamentError('This tournament no longer exists.');
 	}
+
 	if (tournament.cancelled_at) {
 		throw new TournamentError('This tournament was cancelled.');
 	}
@@ -482,6 +495,7 @@ export async function registerPlayers(
 	if (ids.length === 0) {
 		throw new TournamentError('Paste at least one player id.');
 	}
+
 	if (ids.length > REGISTER_MAX) {
 		throw new TournamentError(`Paste at most ${REGISTER_MAX} ids at a time.`);
 	}
@@ -494,7 +508,10 @@ export async function registerPlayers(
 			);
 		}
 
-		const knownRows = await tx`SELECT id FROM players WHERE id IN ${tx(ids)}`;
+		const knownRows = await tx`
+			SELECT id
+			FROM players
+			WHERE id IN ${tx(ids)}`;
 		const known = new Set(knownRows.map((row: { id: string }) => row.id));
 
 		const unknown = ids.filter((playerId) => !known.has(playerId));
@@ -541,7 +558,9 @@ async function requireFreePlaces(
 	maxPlayers: number | null,
 	ids: string[]
 ): Promise<void> {
-	if (maxPlayers === null) return;
+	if (maxPlayers === null) {
+		return;
+	}
 
 	const [counts] = await tx`
 		SELECT
@@ -685,11 +704,15 @@ export async function assignPlayer(
 		if (!room) {
 			throw new TournamentError('That table is not part of this tournament.');
 		}
+
 		if (room.started_at || room.closed_at) {
 			throw new TournamentError('That table already started.');
 		}
 
-		const [player] = await tx`SELECT 1 FROM players WHERE id = ${playerId}`;
+		const [player] = await tx`
+			SELECT 1
+			FROM players
+			WHERE id = ${playerId}`;
 		if (!player) {
 			throw new TournamentError('Unknown player id.');
 		}
@@ -765,7 +788,10 @@ async function firstFreeSeat(
 	roomId: string,
 	seatCount: number
 ): Promise<number | undefined> {
-	const rows = await tx`SELECT seat FROM room_assignments WHERE room_id = ${roomId}`;
+	const rows = await tx`
+		SELECT seat
+		FROM room_assignments
+		WHERE room_id = ${roomId}`;
 	const taken = new Set(rows.map((row: { seat: number | null }) => row.seat));
 	const allSeats = Array.from({ length: seatCount }, (_, seat) => seat);
 
@@ -795,6 +821,7 @@ export async function unassignPlayer(
 		if (!seat) {
 			throw new TournamentError('That player has no table.');
 		}
+
 		if (seat.started_at) {
 			throw new TournamentError('Their table already started.');
 		}
@@ -861,6 +888,7 @@ export async function disqualifyPlayer(
 		if (!player) {
 			throw new TournamentError('That player is not registered.');
 		}
+
 		if (player.status !== 'registered') {
 			throw new TournamentError(`They already ${outText(player.status)}.`);
 		}
@@ -985,12 +1013,15 @@ export async function payPrizes(
 		if (!tournament) {
 			throw new TournamentError('This tournament no longer exists.');
 		}
+
 		if (tournament.cancelled_at) {
 			throw new TournamentError('This tournament was cancelled.');
 		}
+
 		if (!tournament.ended_at) {
 			throw new TournamentError('Prizes are paid once the tournament has finished.');
 		}
+
 		if (tournament.prizes_paid_at) {
 			throw new TournamentError('The prizes were already paid.');
 		}

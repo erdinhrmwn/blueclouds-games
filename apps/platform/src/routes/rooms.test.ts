@@ -33,7 +33,9 @@ const redeem = (secret: string, token = bob.secret, ip = "10.1.0.3") =>
 
 describe("rooms", () => {
 	test("codes are 8 characters without 0/O/1/I", () => {
-		for (let i = 0; i < 200; i++) expect(newRoomCode()).toMatch(/^[A-HJ-NP-Z2-9]{8}$/);
+		for (let i = 0; i < 200; i++) {
+			expect(newRoomCode()).toMatch(/^[A-HJ-NP-Z2-9]{8}$/);
+		}
 	});
 
 	test("a player opens a table and the platform picks a unique code", async () => {
@@ -42,8 +44,10 @@ describe("rooms", () => {
 		expect(a.status).toBe(201);
 		expect(a.json.data.room).toMatchObject({ game: "bust-31" });
 		expect(a.json.data.room.code).not.toBe(b.json.data.room.code);
-		const [row] =
-			await t.sql`SELECT created_by_player_id FROM rooms WHERE code = ${a.json.data.room.code}`;
+		const [row] = await t.sql`
+				SELECT created_by_player_id
+				FROM rooms
+				WHERE code = ${a.json.data.room.code}`;
 		expect(row.created_by_player_id).toBe(ann.player.id);
 	});
 
@@ -56,7 +60,10 @@ describe("rooms", () => {
 
 	test("a game under maintenance opens no new tables, and the catalog says so", async () => {
 		const { code } = (await open("cloudburst")).json.data.room;
-		await t.sql`UPDATE games SET maintenance_at = now() WHERE slug = 'cloudburst'`;
+		await t.sql`
+			UPDATE games
+			SET maintenance_at = now()
+			WHERE slug = 'cloudburst'`;
 
 		try {
 			const refused = await open("cloudburst");
@@ -75,7 +82,10 @@ describe("rooms", () => {
 			);
 			expect(maintenance).toMatchObject({ "bust-31": false, cloudburst: true });
 		} finally {
-			await t.sql`UPDATE games SET maintenance_at = NULL WHERE slug = 'cloudburst'`;
+			await t.sql`
+				UPDATE games
+				SET maintenance_at = NULL
+				WHERE slug = 'cloudburst'`;
 		}
 	});
 
@@ -132,6 +142,7 @@ describe("rooms", () => {
 		for (let i = 0; i < 10; i++) {
 			expect((await redeem(unknown, bob.secret, "10.9.9.9")).status).toBe(404);
 		}
+
 		expect((await redeem(unknown, bob.secret, "10.9.9.9")).status).toBe(429);
 		expect((await redeem("ZZZZZZ", bob.secret, "10.9.9.8")).status).toBe(400); // an old-style code
 		expect((await redeem("bad invite!", bob.secret, "10.9.9.8")).status).toBe(400);

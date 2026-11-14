@@ -20,7 +20,12 @@ beforeAll(async () => {
 afterAll(() => sql.close());
 
 const newPlayer = async (name: string) =>
-	(await sql`INSERT INTO players (display_name) VALUES (${name}) RETURNING id`)[0].id as string;
+	(
+		await sql`
+		INSERT INTO players (display_name)
+		VALUES (${name})
+		RETURNING id`
+	)[0].id as string;
 
 async function cup(opts: { ended?: boolean } = {}) {
 	const [row] = await sql`
@@ -46,8 +51,10 @@ describe('coins in the backoffice', () => {
 			'They only have 300 coins.'
 		);
 
-		const [{ n }] =
-			await sql`SELECT count(*)::int AS n FROM admin_audit_events WHERE action = 'player.coins_adjust' AND player_id = ${rina}`;
+		const [{ n }] = await sql`
+				SELECT count(*)::int AS n
+				FROM admin_audit_events
+				WHERE action = 'player.coins_adjust' AND player_id = ${rina}`;
 		expect(n).toBe(2);
 	});
 
@@ -56,7 +63,9 @@ describe('coins in the backoffice', () => {
 		const sky = await newPlayer('Sky');
 		await adjustCoins(sql, admin, sky, 100, 'For the fee', null);
 		await sql.begin(async (tx) => {
-			await tx`INSERT INTO tournament_players (tournament_id, player_id, fee_paid) VALUES (${id}, ${sky}, 100)`;
+			await tx`
+				INSERT INTO tournament_players (tournament_id, player_id, fee_paid)
+				VALUES (${id}, ${sky}, 100)`;
 			await moveCoins(tx, {
 				playerId: sky,
 				amount: -100,

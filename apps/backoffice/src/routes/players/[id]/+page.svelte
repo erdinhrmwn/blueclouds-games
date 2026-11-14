@@ -10,14 +10,21 @@
 	const player = $derived(data.player);
 	const type = $derived(playerType(player));
 	const account = $derived.by(() => {
-		if (player.isBot) return 'Run by the system';
-		if (player.isGuest) return player.username ? `Guest @${player.username}` : 'Guest';
+		if (player.isBot) {
+			return 'Run by the system';
+		}
+
+		if (player.isGuest) {
+			return player.username ? `Guest @${player.username}` : 'Guest';
+		}
 
 		return `@${player.username}`;
 	});
 	const winRate = $derived.by(() => {
 		const { played, won } = data.stats;
-		if (played === 0) return '–';
+		if (played === 0) {
+			return '–';
+		}
 
 		return `${Math.round((won / played) * 100)}%`;
 	});

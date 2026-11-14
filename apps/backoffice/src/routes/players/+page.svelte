@@ -17,15 +17,25 @@
 	});
 
 	const accountOf = (player: (typeof data.players)[number]) => {
-		if (player.isBot) return 'System';
-		if (player.isGuest) return 'Guest';
+		if (player.isBot) {
+			return 'System';
+		}
+
+		if (player.isGuest) {
+			return 'Guest';
+		}
 
 		return `@${player.username}`;
 	};
 
 	const emptyText = $derived.by(() => {
-		if (filtered) return 'No players fit these filters.';
-		if (data.paged) return 'No more players.';
+		if (filtered) {
+			return 'No players fit these filters.';
+		}
+
+		if (data.paged) {
+			return 'No more players.';
+		}
 
 		return 'No players yet.';
 	});

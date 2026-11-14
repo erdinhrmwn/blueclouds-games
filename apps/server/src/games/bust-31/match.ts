@@ -97,7 +97,9 @@ function standings(game: Game, out: string[]): Map<string, number> {
  */
 export function logEvents(before: Game, after: Game, auto = false): LogEntry[] {
 	const entries: LogEntry[] = awayChanges(before, after);
-	if (after.moves === before.moves || after.phase === "lobby") return entries;
+	if (after.moves === before.moves || after.phase === "lobby") {
+		return entries;
+	}
 
 	const event = after.lastEvent;
 	const mover = before.phase === "playing" ? before.players[before.turn] : undefined;
@@ -178,7 +180,9 @@ export function logEvents(before: Game, after: Game, auto = false): LogEntry[] {
 
 /** "away" / "back" entries for players whose away flag changed mid-match. */
 function awayChanges(before: Game, after: Game): LogEntry[] {
-	if (before.phase !== "playing") return [];
+	if (before.phase !== "playing") {
+		return [];
+	}
 
 	const entries: LogEntry[] = [];
 	for (const player of after.players) {

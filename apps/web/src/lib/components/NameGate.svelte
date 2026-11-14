@@ -8,7 +8,9 @@
 	let saving = $state(false);
 
 	$effect(() => {
-		if (!dialog) return;
+		if (!dialog) {
+			return;
+		}
 
 		if (player.editing && !dialog.open) {
 			draft = player.name;
@@ -21,7 +23,9 @@
 
 	async function submit(event: SubmitEvent) {
 		event.preventDefault();
-		if (saving) return;
+		if (saving) {
+			return;
+		}
 
 		saving = true;
 		error = await setPlayerName(draft);

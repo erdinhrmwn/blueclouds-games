@@ -25,7 +25,9 @@ export class RoomList {
 
 		try {
 			const res = await fetch(url, { cache: 'no-store' });
-			if (!res.ok) throw new Error(`room list ${res.status}`);
+			if (!res.ok) {
+				throw new Error(`room list ${res.status}`);
+			}
 
 			const body = (await res.json()) as { rooms: OpenTable[] };
 			this.rooms = body.rooms;

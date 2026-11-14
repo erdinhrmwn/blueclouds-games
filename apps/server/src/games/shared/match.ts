@@ -17,8 +17,14 @@ export type MoveBy = "player" | "bot" | "away" | "timeout";
 
 /** `auto` is true when the server made the move (a bot, a timeout, or an away player). */
 export function moveBy(mover: { bot: boolean; away?: boolean }, auto: boolean): MoveBy {
-	if (mover.bot) return "bot";
-	if (!auto) return "player";
+	if (mover.bot) {
+		return "bot";
+	}
+
+	if (!auto) {
+		return "player";
+	}
+
 	return mover.away ? "away" : "timeout";
 }
 
@@ -56,14 +62,18 @@ export function placementsInOrder(bestFirst: { id: string }[]): Map<string, numb
 	return new Map(bestFirst.map((player, index) => [player.id, index + 1]));
 }
 
-/** Gives new log entries their place and time. The clock may step back, so `t` never goes below 0. */
+/** Gives new log entries their place and time. The clock may step back, so the elapsed time never goes below 0. */
 export function stamp<M extends MatchState>(
 	match: M,
 	entries: LogEntry[],
 	now: number,
 ): { match: M; events: LogEvent[] } {
-	const t = Math.max(0, now - Date.parse(match.startedAt));
-	const events = entries.map((entry, index) => ({ seq: match.seq + index, t, ...entry }));
+	const elapsedMs = Math.max(0, now - Date.parse(match.startedAt));
+	const events = entries.map((entry, index) => ({
+		seq: match.seq + index,
+		t: elapsedMs,
+		...entry,
+	}));
 
 	return { match: { ...match, seq: match.seq + entries.length }, events };
 }

@@ -38,6 +38,7 @@
 		if (!top || top.suit === null) {
 			return name;
 		}
+
 		if (top.kind !== 'number') {
 			return `${name} or ${ACTION[top.kind]}`;
 		}

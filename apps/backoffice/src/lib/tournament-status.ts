@@ -15,7 +15,9 @@ export type TournamentFormat = (typeof TOURNAMENT_FORMATS)[number]['value'];
 /** "Knockout · Lose and you’re out". */
 export function formatLabel(value: TournamentFormat): string {
 	const format = TOURNAMENT_FORMATS.find((entry) => entry.value === value);
-	if (!format) return value;
+	if (!format) {
+		return value;
+	}
 
 	return `${format.label} · ${format.note}`;
 }
@@ -36,17 +38,30 @@ export function tournamentStatus(
 	},
 	now = new Date()
 ): TournamentStatus {
-	if (tournament.cancelledAt) return { label: 'Cancelled' };
-	if (tournament.endedAt) return { label: 'Ended' };
+	if (tournament.cancelledAt) {
+		return { label: 'Cancelled' };
+	}
+
+	if (tournament.endedAt) {
+		return { label: 'Ended' };
+	}
 
 	if (tournament.distributedAt) {
 		const started = tournament.startsAt <= now;
 		return started ? { label: 'Playing', running: true } : { label: 'Tables handed out' };
 	}
 
-	if (tournament.distributeError) return { label: 'Needs attention', bad: true };
-	if (tournament.registrationClosesAt <= now) return { label: 'Handing out tables' };
-	if (tournament.registrationOpensAt <= now) return { label: 'Sign-up open', running: true };
+	if (tournament.distributeError) {
+		return { label: 'Needs attention', bad: true };
+	}
+
+	if (tournament.registrationClosesAt <= now) {
+		return { label: 'Handing out tables' };
+	}
+
+	if (tournament.registrationOpensAt <= now) {
+		return { label: 'Sign-up open', running: true };
+	}
 
 	return { label: 'Sign-up opens later' };
 }
@@ -59,6 +74,7 @@ export function duration(from: Date, to: Date): string {
 	if (elapsed.asMinutes() < 1) {
 		return elapsed.format('s [sec]');
 	}
+
 	if (elapsed.asHours() < 1) {
 		return elapsed.format('m [min] s [sec]');
 	}
@@ -70,8 +86,13 @@ export function duration(from: Date, to: Date): string {
 
 /** The pill for a status: red when it needs an admin, green while it's running, plain otherwise. */
 export function statusTag(status: TournamentStatus): string {
-	if (status.bad) return 'tag-bad';
-	if (status.running) return 'tag-good';
+	if (status.bad) {
+		return 'tag-bad';
+	}
+
+	if (status.running) {
+		return 'tag-good';
+	}
 
 	return 'tag';
 }

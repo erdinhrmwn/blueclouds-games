@@ -63,7 +63,9 @@ const failures = new Map<string, { count: number; resetAt: number }>();
 
 function isLocked(username: string): boolean {
 	const entry = failures.get(username);
-	if (!entry) return false;
+	if (!entry) {
+		return false;
+	}
 
 	return entry.resetAt > Date.now() && entry.count >= LOCKOUT.tries;
 }
@@ -72,7 +74,9 @@ function noteFailure(username: string): void {
 	const now = Date.now();
 	if (failures.size > FAILURES_SWEEP_AT) {
 		for (const [name, entry] of failures) {
-			if (entry.resetAt <= now) failures.delete(name);
+			if (entry.resetAt <= now) {
+				failures.delete(name);
+			}
 		}
 	}
 
@@ -94,7 +98,9 @@ const isUniqueViolation = (err: unknown) => (err as { errno?: string })?.errno =
  * Throws 403 for a disabled player: the backoffice revokes their secrets too, and they should be told why.
  */
 export async function findBySecret(sql: SQL, secret: string | null): Promise<PlayerRow | null> {
-	if (!secret || !SECRET_PATTERN.test(secret)) return null;
+	if (!secret || !SECRET_PATTERN.test(secret)) {
+		return null;
+	}
 
 	const [row] = (await sql`
 		SELECT ${PLAYER_COLUMNS(sql)}, s.revoked_at
@@ -102,8 +108,13 @@ export async function findBySecret(sql: SQL, secret: string | null): Promise<Pla
 		JOIN players p ON p.id = s.player_id
 		WHERE s.secret_hash = ${hashSecret(secret)}`) as (PlayerRow & { revoked_at: Date | null })[];
 
-	if (row?.disabled_at) throw new ApiError("forbidden", 403, "This player has been disabled.");
-	if (!row || row.revoked_at) return null;
+	if (row?.disabled_at) {
+		throw new ApiError("forbidden", 403, "This player has been disabled.");
+	}
+
+	if (!row || row.revoked_at) {
+		return null;
+	}
 
 	return row;
 }
@@ -131,9 +142,12 @@ export async function createGuest(sql: SQL, name: string | undefined): Promise<R
 
 			return { player: toPlayer(row), playerSecret: secret };
 		} catch (err) {
-			if (!isUniqueViolation(err)) throw err; // that number is taken: draw another
+			if (!isUniqueViolation(err)) {
+				throw err;
+			} // that number is taken: draw another
 		}
 	}
+
 	throw new ApiError("internal", 500, "Could not make a guest right now. Try again.");
 }
 
@@ -224,7 +238,9 @@ export async function login(
 	}
 
 	failures.delete(username);
-	if (row.disabled_at) throw new ApiError("forbidden", 403, "This player has been disabled.");
+	if (row.disabled_at) {
+		throw new ApiError("forbidden", 403, "This player has been disabled.");
+	}
 
 	const secret = newSecret();
 	await sql`
@@ -284,9 +300,14 @@ export async function changePassword(
 
 /** Signs this device out: its secret stops working. A guest that never played is deleted, since it can't come back. */
 export async function logout(sql: SQL, player: Player, secret: string): Promise<void> {
-	await sql`UPDATE player_secrets SET revoked_at = now() WHERE secret_hash = ${hashSecret(secret)}`;
+	await sql`
+		UPDATE player_secrets
+		SET revoked_at = now()
+		WHERE secret_hash = ${hashSecret(secret)}`;
 
-	if (player.guest) await deleteGuestIfUnused(sql, player.id);
+	if (player.guest) {
+		await deleteGuestIfUnused(sql, player.id);
+	}
 }
 
 /** Counts as being seen, at most one write an hour, so the guest sweep spares the player. */

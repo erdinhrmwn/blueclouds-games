@@ -38,7 +38,9 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 	}
 
 	const data = await res.json().catch(() => null);
-	if (res.ok) return data as T;
+	if (res.ok) {
+		return data as T;
+	}
 
 	// Our routes answer { error: { code, message } }; SvelteKit's error() answers { message }.
 	const code = data?.error?.code ?? 'internal';

@@ -20,7 +20,9 @@
 	let busy = $state(false);
 
 	$effect(() => {
-		if (!dialog) return;
+		if (!dialog) {
+			return;
+		}
 
 		if (open && !dialog.open) {
 			name = player.name ? `${player.name}’s table`.slice(0, NAME_MAX) : '';
@@ -35,7 +37,9 @@
 
 	async function submit(event: SubmitEvent) {
 		event.preventDefault();
-		if (busy) return;
+		if (busy) {
+			return;
+		}
 
 		busy = true;
 		error = await newTable(game, visibility, name.trim());

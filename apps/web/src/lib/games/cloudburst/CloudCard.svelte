@@ -32,6 +32,7 @@
 		if (card.suit === null) {
 			return card.kind;
 		}
+
 		if (card.kind === 'number') {
 			return `${card.suit}-${card.value}`;
 		}
@@ -45,6 +46,7 @@
 		if (card.kind === 'rainbow') {
 			return 'Rainbow';
 		}
+
 		if (card.kind === 'tempest') {
 			return 'Tempest +4';
 		}

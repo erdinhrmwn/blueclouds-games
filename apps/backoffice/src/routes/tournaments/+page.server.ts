@@ -54,6 +54,7 @@ export const actions: Actions = {
 			if (err instanceof TournamentError) {
 				return fail(400, { values, prizes, error: err.message });
 			}
+
 			throw err;
 		}
 

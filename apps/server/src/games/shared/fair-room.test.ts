@@ -109,6 +109,7 @@ test("each round deals from the seed committed before it, and is reported with t
 			expect(view.serverSeedHash).toBe(round2Hash!);
 		}
 	}
+
 	expect(seenRound2).toBe(true);
 
 	const [row] = await db.execute("SELECT body FROM match_reports");

@@ -36,6 +36,7 @@ export const actions: Actions = {
 		if (!current || !next) {
 			return fail(400, { error: 'Enter your current password and a new one.' });
 		}
+
 		if (next !== repeat) {
 			return fail(400, { error: 'The two new passwords are not the same.' });
 		}

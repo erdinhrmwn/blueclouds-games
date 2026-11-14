@@ -82,9 +82,11 @@ function auditConditions(sql: SQL, filter: AuditFilter) {
 	if (filter.admin) {
 		conditions.push(sql`ad.username = ${filter.admin}`);
 	}
+
 	if (filter.action) {
 		conditions.push(sql`a.action = ${filter.action}`);
 	}
+
 	if (isUuid(filter.player)) {
 		conditions.push(sql`a.player_id = ${filter.player}`);
 	}
@@ -93,6 +95,7 @@ function auditConditions(sql: SQL, filter: AuditFilter) {
 	if (DATE.test(filter.from)) {
 		conditions.push(sql`a.created_at >= ${filter.from}::date::timestamp AT TIME ZONE 'UTC'`);
 	}
+
 	if (DATE.test(filter.to)) {
 		conditions.push(sql`a.created_at < (${filter.to}::date + 1)::timestamp AT TIME ZONE 'UTC'`);
 	}

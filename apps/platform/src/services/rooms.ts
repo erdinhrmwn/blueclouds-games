@@ -91,7 +91,9 @@ export async function insertRoom(
 			ON CONFLICT (code) DO NOTHING
 			RETURNING id, code, game_slug AS game`;
 
-		if (row) return row as Room;
+		if (row) {
+			return row as Room;
+		}
 	}
 
 	throw new Error(`no free room code after ${CODE_TRIES} tries`);
@@ -140,12 +142,15 @@ export async function enterable(sql: SQL, code: string, playerId: string): Promi
 		if (row.cancelled_at) {
 			throw new ApiError("forbidden", 403, `${row.name} was cancelled.`);
 		}
+
 		if (row.status === "disqualified") {
 			throw new ApiError("forbidden", 403, `You were disqualified from ${row.name}.`);
 		}
+
 		if (row.status === "withdrawn") {
 			throw new ApiError("forbidden", 403, `You withdrew from ${row.name}.`);
 		}
+
 		if (!row.assigned) {
 			throw new ApiError("forbidden", 403, `This table is for players of ${row.name}.`);
 		}
@@ -179,7 +184,9 @@ async function inviteLink(sql: SQL, roomId: string, playerId: string): Promise<s
 			FROM room_invites
 			WHERE room_id = ${roomId} AND revoked_at IS NULL`;
 
-		if (live) return live.secret;
+		if (live) {
+			return live.secret;
+		}
 
 		const [made] = await sql`
 			INSERT INTO room_invites (room_id, secret, created_by_player_id)
@@ -187,7 +194,9 @@ async function inviteLink(sql: SQL, roomId: string, playerId: string): Promise<s
 			ON CONFLICT DO NOTHING
 			RETURNING secret`;
 
-		if (made) return made.secret;
+		if (made) {
+			return made.secret;
+		}
 	}
 
 	throw new Error(`no invite link after ${CODE_TRIES} tries`);
@@ -205,7 +214,9 @@ export async function openRoom(
 
 	const room = await sql.begin(async (tx) => {
 		const made = await insertRoom(tx, { game, visibility, name, playerId });
-		await tx`INSERT INTO room_members (room_id, player_id) VALUES (${made.id}, ${playerId})`;
+		await tx`
+			INSERT INTO room_members (room_id, player_id)
+			VALUES (${made.id}, ${playerId})`;
 
 		return made;
 	});

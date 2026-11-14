@@ -31,11 +31,27 @@ function cardOf(id: string): ReplayCard {
 		const value = Number(id.slice(1, id.indexOf('-')));
 		return { value, label: String(value), effect: 'none' };
 	}
-	if (kind === 'm') return { value: -MINUS_VALUE, label: `-${MINUS_VALUE}`, effect: 'none' };
-	if (kind === 'r') return { value: 0, label: 'Reverse', effect: 'reverse' };
-	if (kind === 's') return { value: 0, label: 'Swap', effect: 'swap' };
-	if (kind === 't') return { value: 0, label: 'Ten', effect: 'ten' };
-	if (kind === 'd') return { value: 0, label: 'Double', effect: 'double' };
+
+	if (kind === 'm') {
+		return { value: -MINUS_VALUE, label: `-${MINUS_VALUE}`, effect: 'none' };
+	}
+
+	if (kind === 'r') {
+		return { value: 0, label: 'Reverse', effect: 'reverse' };
+	}
+
+	if (kind === 's') {
+		return { value: 0, label: 'Swap', effect: 'swap' };
+	}
+
+	if (kind === 't') {
+		return { value: 0, label: 'Ten', effect: 'ten' };
+	}
+
+	if (kind === 'd') {
+		return { value: 0, label: 'Double', effect: 'double' };
+	}
+
 	return { value: 0, label: '0', effect: 'none' };
 }
 
@@ -73,7 +89,9 @@ export function replayBust31(log: MatchLog, seats: ReplaySeat[]): Step[] {
 			// Wraps around both ways: ((x % n) + n) % n is never negative.
 			const index = (((start + step * direction) % count) + count) % count;
 			const seat = order[index]!;
-			if (table.get(seat)!.lives > 0) return seat;
+			if (table.get(seat)!.lives > 0) {
+				return seat;
+			}
 		}
 
 		return from;
@@ -139,6 +157,7 @@ export function replayBust31(log: MatchLog, seats: ReplaySeat[]): Step[] {
 				if (!player || !player.hand.includes(data.card)) {
 					mismatches.push(`${data.card} was not in ${who}'s hand`);
 				}
+
 				if (player) {
 					player.hand = player.hand.filter((id) => id !== data.card);
 				}
@@ -152,8 +171,13 @@ export function replayBust31(log: MatchLog, seats: ReplaySeat[]): Step[] {
 					const drew = deck.shift() ?? null;
 					expect('Card drawn', data.drew, drew);
 
-					if (player && drew) player.hand.push(drew);
-					if (card.effect === 'reverse') direction = -direction;
+					if (player && drew) {
+						player.hand.push(drew);
+					}
+
+					if (card.effect === 'reverse') {
+						direction = -direction;
+					}
 
 					const next = nextAlive(event.seat!);
 					let swapText = '';
@@ -164,6 +188,7 @@ export function replayBust31(log: MatchLog, seats: ReplaySeat[]): Step[] {
 						if (player && other) {
 							[player.hand, other.hand] = [other.hand, player.hand];
 						}
+
 						swapText = ` Swapped hands with ${name(next)}.`;
 					}
 
@@ -181,7 +206,10 @@ export function replayBust31(log: MatchLog, seats: ReplaySeat[]): Step[] {
 					break;
 				}
 
-				if (player) player.lives = Math.max(0, player.lives - 1);
+				if (player) {
+					player.lives = Math.max(0, player.lives - 1);
+				}
+
 				expect('Lives', data.lives, player?.lives);
 				turn = null;
 
@@ -191,11 +219,17 @@ export function replayBust31(log: MatchLog, seats: ReplaySeat[]): Step[] {
 				break;
 			}
 			case 'away':
-				if (player) player.away = true;
+				if (player) {
+					player.away = true;
+				}
+
 				text = `${who} closed the game. Their turns are played for them.`;
 				break;
 			case 'back':
-				if (player) player.away = false;
+				if (player) {
+					player.away = false;
+				}
+
 				text = `${who} came back.`;
 				break;
 			case 'finished':

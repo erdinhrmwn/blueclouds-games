@@ -32,7 +32,9 @@
 	let dialog = $state<HTMLDialogElement>();
 
 	$effect(() => {
-		if (!dialog) return;
+		if (!dialog) {
+			return;
+		}
 
 		if (open && !dialog.open) {
 			dialog.showModal();

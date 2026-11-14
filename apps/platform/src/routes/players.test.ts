@@ -19,8 +19,10 @@ describe("guest players", () => {
 		expect(res.json.data.player.name).toBe("Rina");
 		expect(res.json.data.player.id).toMatch(/^[0-9a-f-]{36}$/);
 		expect(res.json.data.playerSecret).toMatch(/^[A-Za-z0-9_-]{43}$/);
-		const [row] =
-			await t.sql`SELECT count(*)::int AS n FROM player_secrets WHERE player_id = ${res.json.data.player.id}`;
+		const [row] = await t.sql`
+				SELECT count(*)::int AS n
+				FROM player_secrets
+				WHERE player_id = ${res.json.data.player.id}`;
 		expect(row.n).toBe(1);
 	});
 
@@ -70,11 +72,13 @@ describe("guest players", () => {
 
 	test("rate limits guest creation per IP", async () => {
 		const ip = { "x-forwarded-for": "10.0.0.1" };
-		for (let i = 0; i < 5; i++)
+		for (let i = 0; i < 5; i++) {
 			expect(
 				(await call(t.app, "POST", "/v1/players/guest", { body: { name: "A" }, headers: ip }))
 					.status,
 			).toBe(201);
+		}
+
 		const res = await call(t.app, "POST", "/v1/players/guest", {
 			body: { name: "A" },
 			headers: ip,
@@ -119,25 +123,43 @@ describe("me", () => {
 
 	test("disabled player and revoked secret are refused", async () => {
 		const a = await guest(t.app);
-		await t.sql`UPDATE players SET disabled_at = now(), disabled_reason = 'Test' WHERE id = ${a.player.id}`;
+		await t.sql`
+			UPDATE players
+			SET disabled_at = now(), disabled_reason = 'Test'
+			WHERE id = ${a.player.id}`;
 		const disabled = await call(t.app, "GET", "/v1/players/me", { token: a.secret });
 		expect(disabled.status).toBe(403);
 		expect(disabled.json.error.code).toBe("forbidden");
 		// The backoffice also revokes their secrets; they still learn they were disabled.
-		await t.sql`UPDATE player_secrets SET revoked_at = now() WHERE player_id = ${a.player.id}`;
+		await t.sql`
+			UPDATE player_secrets
+			SET revoked_at = now()
+			WHERE player_id = ${a.player.id}`;
 		expect((await call(t.app, "GET", "/v1/players/me", { token: a.secret })).status).toBe(403);
 
 		const b = await guest(t.app);
-		await t.sql`UPDATE player_secrets SET revoked_at = now() WHERE player_id = ${b.player.id}`;
+		await t.sql`
+			UPDATE player_secrets
+			SET revoked_at = now()
+			WHERE player_id = ${b.player.id}`;
 		expect((await call(t.app, "GET", "/v1/players/me", { token: b.secret })).status).toBe(401);
 	});
 
 	test("updated_at moves on update", async () => {
 		const { player } = await guest(t.app);
-		const [before] = await t.sql`SELECT updated_at FROM players WHERE id = ${player.id}`;
+		const [before] = await t.sql`
+			SELECT updated_at
+			FROM players
+			WHERE id = ${player.id}`;
 		await Bun.sleep(5);
-		await t.sql`UPDATE players SET display_name = 'New' WHERE id = ${player.id}`;
-		const [after] = await t.sql`SELECT updated_at FROM players WHERE id = ${player.id}`;
+		await t.sql`
+			UPDATE players
+			SET display_name = 'New'
+			WHERE id = ${player.id}`;
+		const [after] = await t.sql`
+			SELECT updated_at
+			FROM players
+			WHERE id = ${player.id}`;
 		expect(after.updated_at.getTime()).toBeGreaterThan(before.updated_at.getTime());
 	});
 });
@@ -160,7 +182,10 @@ describe("play tokens", () => {
 
 	test("tells the actors a VIP is one", async () => {
 		const { player, secret } = await guest(t.app);
-		await t.sql`UPDATE players SET is_vip = true WHERE id = ${player.id}`;
+		await t.sql`
+			UPDATE players
+			SET is_vip = true
+			WHERE id = ${player.id}`;
 
 		const res = await call(t.app, "POST", "/v1/play-tokens", { token: secret });
 		const { payload } = await jwtVerify(res.json.data.token, t.publicKey, {
@@ -174,7 +199,10 @@ describe("play tokens", () => {
 	test("tells a room which of its players are VIP, with the server key only", async () => {
 		const vip = await guest(t.app);
 		const plain = await guest(t.app);
-		await t.sql`UPDATE players SET is_vip = true WHERE id = ${vip.player.id}`;
+		await t.sql`
+			UPDATE players
+			SET is_vip = true
+			WHERE id = ${vip.player.id}`;
 
 		const path = `/v1/players/vips?ids=${vip.player.id},${plain.player.id}`;
 		const res = await call(t.app, "GET", path, { token: SERVER_KEY });
@@ -189,7 +217,10 @@ describe("play tokens", () => {
 
 	test("disabled player cannot get a token", async () => {
 		const { player, secret } = await guest(t.app);
-		await t.sql`UPDATE players SET disabled_at = now(), disabled_reason = 'Test' WHERE id = ${player.id}`;
+		await t.sql`
+			UPDATE players
+			SET disabled_at = now(), disabled_reason = 'Test'
+			WHERE id = ${player.id}`;
 		expect((await call(t.app, "POST", "/v1/play-tokens", { token: secret })).status).toBe(403);
 	});
 });
@@ -221,8 +252,10 @@ describe("accounts", () => {
 			(await register({ name: "Gina", username: "gina_02", password: "long enough" }, g.secret))
 				.status,
 		).toBe(409);
-		const [row] =
-			await t.sql`SELECT password_hash, is_active, is_bot, is_vip FROM players WHERE id = ${g.player.id}`;
+		const [row] = await t.sql`
+				SELECT password_hash, is_active, is_bot, is_vip
+				FROM players
+				WHERE id = ${g.player.id}`;
 		expect(row.password_hash).toStartWith("$argon2id$");
 		expect([row.is_active, row.is_bot, row.is_vip]).toEqual([true, false, false]);
 	});
@@ -308,7 +341,10 @@ describe("accounts", () => {
 			"Wrong username or password.",
 		);
 		await register({ name: "Jo", username: "jo", password: "right password" });
-		for (let i = 0; i < 5; i++) await login("jo", "wrong password");
+		for (let i = 0; i < 5; i++) {
+			await login("jo", "wrong password");
+		}
+
 		const locked = await login("jo", "right password");
 		expect([locked.status, locked.json.error.message]).toEqual([
 			429,
@@ -320,10 +356,18 @@ describe("accounts", () => {
 		const { player } = (
 			await register({ name: "Kai", username: "kai", password: "right password" })
 		).json.data;
-		await t.sql`UPDATE players SET disabled_at = now(), disabled_reason = 'Test' WHERE id = ${player.id}`;
+		await t.sql`
+			UPDATE players
+			SET disabled_at = now(), disabled_reason = 'Test'
+			WHERE id = ${player.id}`;
 		expect((await login("kai", "right password")).status).toBe(403);
-		expect((await t.sql`SELECT is_active FROM players WHERE id = ${player.id}`)[0].is_active).toBe(
-			false,
-		);
+		expect(
+			(
+				await t.sql`
+			SELECT is_active
+			FROM players
+			WHERE id = ${player.id}`
+			)[0].is_active,
+		).toBe(false);
 	});
 });

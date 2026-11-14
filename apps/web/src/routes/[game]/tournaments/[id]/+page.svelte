@@ -15,8 +15,13 @@
 	const latestRound = $derived(board.rounds.at(-1)?.round ?? 1);
 
 	const status = $derived.by(() => {
-		if (tournament.cancelled) return { label: 'Cancelled', dot: 'bg-ember' };
-		if (finished) return { label: 'Finished', dot: 'bg-brass' };
+		if (tournament.cancelled) {
+			return { label: 'Cancelled', dot: 'bg-ember' };
+		}
+
+		if (finished) {
+			return { label: 'Finished', dot: 'bg-brass' };
+		}
 
 		return { label: `Round ${latestRound}`, dot: 'bg-paper' };
 	});

@@ -44,7 +44,9 @@
 	async function signOut() {
 		const error = await logOut();
 		logOutError = error;
-		if (!error) await goto(WELCOME, { invalidateAll: true });
+		if (!error) {
+			await goto(WELCOME, { invalidateAll: true });
+		}
 	}
 
 	/** One row per game in the catalog, played or not, so a new game shows up here by itself. */
