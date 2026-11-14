@@ -65,23 +65,37 @@
 		return host ? `${host.name}’s table` : 'Table';
 	});
 
-	/** Shows a tick on the copy button for a moment after the code is copied. */
-	const COPIED_MS = 1500;
-	let copied = $state(false);
+	/** "4 players", "1 player". */
+	const playersText = (count: number) => (count === 1 ? '1 player' : `${count} players`);
 
-	async function copyCode() {
-		try {
-			await navigator.clipboard.writeText(code);
-		} catch {
-			// The browser blocked the clipboard: the code is on screen to copy by hand.
-			return;
+	/**
+	 * The sign's one line, only what a player at the table needs. A tournament table: format, stage and entrants (the
+	 * seats are on the felt, and nobody is invited to one, so no code). Any other table: round, seats and its code.
+	 */
+	const facts = $derived.by(() => {
+		const view = room?.view;
+		if (!view) {
+			return [];
 		}
 
-		copied = true;
-		setTimeout(() => {
-			copied = false;
-		}, COPIED_MS);
-	}
+		const tournament = view.tournament;
+		if (tournament) {
+			const stage = tournament.rounds
+				? `Stage ${tournament.round} of ${tournament.rounds}`
+				: `Stage ${tournament.round}`;
+			return [
+				tournament.format ? FORMATS[tournament.format].label : 'Tournament',
+				...(tournament.round ? [stage] : []),
+				...(tournament.registered ? [playersText(tournament.registered)] : [])
+			];
+		}
+
+		return [
+			...(view.phase === 'lobby' ? [] : [`Round ${view.round}`]),
+			`${view.players.length}/${game.maxPlayers} players`,
+			code
+		];
+	});
 
 	/** The tournament's standings, opened from the sign; read from the lobby's list when asked for. */
 	const STANDINGS_TICK_MS = 1_000;
@@ -124,36 +138,6 @@
 	}
 </script>
 
-{#snippet roomCode()}
-	<span class="chip">
-		<span class="text-paper/55">Room</span>
-		<span class="font-semibold text-paper/90">{code}</span>
-		<button
-			class="-my-1 -mr-1.5 grid size-6 place-items-center rounded-full text-brass hover:bg-paper/10"
-			onclick={copyCode}
-			aria-label={copied ? 'Room code copied' : 'Copy room code'}
-			title={copied ? 'Copied' : 'Copy room code'}
-		>
-			<svg
-				viewBox="0 0 20 20"
-				class="size-3.5"
-				fill="none"
-				stroke="currentColor"
-				stroke-width="1.6"
-				stroke-linejoin="round"
-				aria-hidden="true"
-			>
-				{#if copied}
-					<path d="M4.5 10.5l3.5 3.5 7.5-8" stroke-linecap="round" />
-				{:else}
-					<rect x="7" y="7" width="9" height="10" rx="2" />
-					<path d="M4 13V5a2 2 0 0 1 2-2h7" />
-				{/if}
-			</svg>
-		</button>
-	</span>
-{/snippet}
-
 <TournamentLiveDialog
 	bind:open={standingsOpen}
 	tournament={standingsOf}
@@ -162,7 +146,7 @@
 	now={standingsNow}
 />
 
-<!-- The room's sign: its name on top, its code, round and seats below, framed in brass like the table.
+<!-- The room's sign: its name on top and one line of what matters below, framed in brass like the table.
 	 Phones put the buttons on their own row so the sign keeps the full width. -->
 <header
 	class="mb-4 flex flex-col gap-2 sm:mb-6 sm:flex-row sm:items-center {player.playing
@@ -203,50 +187,23 @@
 			<span class="sr-only">{game.name},&nbsp;</span><Marquee text={roomName} />
 		</h1>
 		<p
-			class="mt-2 flex flex-wrap items-center justify-center gap-1 text-[11px] sm:gap-1.5 sm:text-xs"
+			class="mt-1.5 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-xs text-paper/70 sm:text-sm"
 		>
-			{#if room?.view?.tournament}
-				{@const tournament = room.view.tournament}
-				{#if tournament.format}
-					<span class="chip text-brass">{FORMATS[tournament.format].label}</span>
-				{:else}
-					<span class="chip text-brass">Tournament</span>
+			{#each facts as fact, index (index)}
+				{#if index}
+					<span class="text-paper/30" aria-hidden="true">·</span>
 				{/if}
-				{#if tournament.round}
-					<span class="chip font-semibold text-paper/90 tabular-nums"
-						>Stage {tournament.round}{#if tournament.rounds}&nbsp;of {tournament.rounds}{/if}</span
-					>
-				{/if}
-				<span class="chip"
-					><span class="text-paper/55">Players</span>
-					<span class="font-semibold text-paper/90 tabular-nums"
-						>{room.view.players.length}/{tournament.seats}{#if tournament.registered}&nbsp;·
-							{tournament.registered} registered{/if}</span
-					></span
+				<span
+					class="tabular-nums {index === 0 && room?.view?.tournament
+						? 'font-semibold text-brass'
+						: ''}">{fact}</span
 				>
-				{#if tournament.id}
-					<button
-						class="chip relative text-brass after:absolute after:-inset-x-1 after:-inset-y-3 hover:bg-paper/10"
-						onclick={showStandings}>Standings</button
-					>
-				{/if}
-				{@render roomCode()}
-			{:else}
-				{@render roomCode()}
-				{#if room?.view && room.view.phase !== 'lobby'}
-					<span class="chip"
-						><span class="text-paper/55">Round</span>
-						<span class="font-semibold text-paper/90 tabular-nums">{room.view.round}</span></span
-					>
-				{/if}
-				{#if room?.view}
-					<span class="chip"
-						><span class="text-paper/55">Players</span>
-						<span class="font-semibold text-paper/90 tabular-nums"
-							>{room.view.players.length}/{game.maxPlayers}</span
-						></span
-					>
-				{/if}
+			{/each}
+			{#if room?.view?.tournament?.id}
+				<button
+					class="relative ml-1 rounded-full bg-black/40 px-2.5 py-0.5 font-semibold text-brass after:absolute after:-inset-x-1 after:-inset-y-3 hover:bg-paper/10"
+					onclick={showStandings}>Standings</button
+				>
 			{/if}
 		</p>
 	</div>
@@ -305,14 +262,5 @@
 		height: 1rem;
 		translate: -50% 0;
 		background: rgb(210 165 76 / 0.7);
-	}
-	.chip {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.3rem;
-		border-radius: 9999px;
-		background: rgb(0 0 0 / 0.4);
-		padding: 0.25rem 0.5rem;
-		white-space: nowrap;
 	}
 </style>
