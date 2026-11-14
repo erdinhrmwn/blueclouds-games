@@ -22,6 +22,8 @@ export type GameEntry = {
 	maxPlayers: number;
 	/** The utility that gives an element this game's card back (see layout.css). */
 	back: string;
+	/** The profile's line about rounds: what a round won means in this game ("Survived 3 of 4 rounds"). */
+	roundsLine: (won: number, played: number) => string;
 	/** A few sample cards: the game's picture. */
 	Fan: Component<{ size?: 'sm' | 'md' }>;
 	/** The game's own page: rules plus the create/join forms. `maintenance`: no new tables for now. */
@@ -43,6 +45,8 @@ export const GAMES: GameEntry[] = [
 		minPlayers: bust31.MIN_PLAYERS,
 		maxPlayers: bust31.MAX_PLAYERS,
 		back: 'table-back-bust-31',
+		roundsLine: (won, played) =>
+			`Survived ${won} of ${played} ${played === 1 ? 'round' : 'rounds'}`,
 		Fan: Bust31Fan,
 		Home: Bust31Home,
 		Room: Bust31Room
@@ -57,6 +61,8 @@ export const GAMES: GameEntry[] = [
 		minPlayers: cloudburst.MIN_PLAYERS,
 		maxPlayers: cloudburst.MAX_PLAYERS,
 		back: 'table-back-cloudburst',
+		roundsLine: (won, played) =>
+			`Went out first in ${won} of ${played} ${played === 1 ? 'round' : 'rounds'}`,
 		Fan: CloudburstFan,
 		Home: CloudburstHome,
 		Room: CloudburstRoom

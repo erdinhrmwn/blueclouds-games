@@ -895,3 +895,85 @@ describe("withdrawn and disqualified players", () => {
 		).toBe("disqualified");
 	});
 });
+
+describe("the player's own tournaments", () => {
+	test("lists each one's status, place, Stage and the prize its place wins, plus the record", async () => {
+		const me = await guest(t.app, "Mira");
+		const finished = await tournament({ closes: -30, starts: -20, format: "arena", rounds: 2 });
+		const live = await tournament({ closes: -5, starts: -2 });
+		const upcoming = await tournament({ closes: 30, starts: 40 });
+		const cancelled = await tournament({ closes: -50, starts: -40 });
+		const others = await register(finished, 3);
+
+		await t.sql`
+			UPDATE tournaments
+			SET distributed_at = now(), ended_at = starts_at + interval '10 minutes'
+			WHERE id = ${finished}`;
+		await t.sql`
+			UPDATE tournaments
+			SET distributed_at = now()
+			WHERE id = ${live}`;
+		await t.sql`
+			UPDATE tournaments
+			SET cancelled_at = now()
+			WHERE id = ${cancelled}`;
+		await t.sql`
+			INSERT INTO tournament_rounds (tournament_id, round, starts_at)
+			VALUES (${live}, 1, now()), (${live}, 2, now())`;
+		await t.sql`
+			INSERT INTO tournament_players ${t.sql(
+				[finished, live, upcoming, cancelled].map((tournament_id) => ({
+					tournament_id,
+					player_id: me.player.id,
+				})),
+			)}`;
+		await t.sql`
+			INSERT INTO tournament_prizes (tournament_id, place, coins, extra)
+			VALUES (${finished}, 1, 500, NULL), (${finished}, 2, 200, 'Badge')`;
+		await t.sql`
+			INSERT INTO tournament_results (tournament_id, player_id, place, wins, points, last_round)
+			VALUES
+				(${finished}, ${others[0]}, 1, 2, 10, 2),
+				(${finished}, ${me.player.id}, 2, 1, 8, 2),
+				(${finished}, ${others[1]}, 3, 0, 4, 2)`;
+
+		const res = await call(t.app, "GET", "/v1/players/me/tournaments", { token: me.secret });
+		expect(res.status).toBe(200);
+
+		const byId = new Map(
+			res.json.data.tournaments.map((row: { id: string }) => [row.id, row] as const),
+		);
+		expect(res.json.data.tournaments).toHaveLength(4);
+		expect(byId.get(finished)).toEqual(
+			expect.objectContaining({
+				status: "finished",
+				format: "arena",
+				entry: "registered",
+				players: 4,
+				stage: 2,
+				place: 2,
+				prize: { coins: 200, extra: "Badge" },
+			}),
+		);
+		expect(byId.get(live)).toEqual(
+			expect.objectContaining({ status: "live", stage: 2, place: null, prize: null }),
+		);
+		expect(byId.get(upcoming)).toEqual(
+			expect.objectContaining({ status: "upcoming", stage: null }),
+		);
+		expect(byId.get(cancelled)).toEqual(expect.objectContaining({ status: "cancelled" }));
+		expect(res.json.data.record).toEqual({ played: 1, podiums: 1, bestPlace: 2, prizeCoins: 200 });
+		// Payout status stays in the backoffice.
+		expect(JSON.stringify(res.json.data)).not.toContain("paid");
+	});
+
+	test("a player with none gets an empty list and a zero record", async () => {
+		const me = await guest(t.app, "Nora");
+		const res = await call(t.app, "GET", "/v1/players/me/tournaments", { token: me.secret });
+
+		expect(res.json.data).toEqual({
+			tournaments: [],
+			record: { played: 0, podiums: 0, bestPlace: null, prizeCoins: 0 },
+		});
+	});
+});

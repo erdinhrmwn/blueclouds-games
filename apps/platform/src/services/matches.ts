@@ -242,17 +242,43 @@ export async function recordMatch(sql: SQL, match: MatchReport): Promise<boolean
 	});
 }
 
+type StatsRow = {
+	game: string;
+	played: number;
+	wins: number;
+	best_streak: number;
+	current_streak: number;
+	average_place: string;
+	rounds_played: number;
+	rounds_won: number | null;
+};
+
 /**
- * The player's own record per game: finished matches played, won (placed first), and the longest run of wins in
- * a row. Matches an admin terminated count for none of them.
+ * The player's own record per game: finished matches played, won (placed first), the longest run of wins in a
+ * row and the one still going, their average place, and their rounds (Bust 31: survived, Cloudburst: went out
+ * first). Matches an admin terminated count for none of them.
  */
 export async function stats(sql: SQL, playerId: string) {
+	// How a round counts as won for a seat, read from the round's stored result. A game left out reports no
+	// round record (null).
+	// ponytail: game rules spelled out in SQL. Fine for a handful of games; once games multiply, have each room
+	// put the seats that won a round into its result, and count those instead.
+	const roundWon = sql`
+		CASE f.game_slug
+			WHEN 'bust-31' THEN (mr.result ->> 'seat')::int IS DISTINCT FROM f.seat
+			WHEN 'cloudburst' THEN (mr.result ->> 'out')::int = f.seat
+		END`;
+
 	// A run of wins is a stretch where a game's match number and its win number move together
 	// (gaps and islands): within one run, match number minus win number stays the same.
+	// The run still going is every match after the last one not won.
 	const rows = await sql`
 		WITH finished AS (
 			SELECT
+				m.id AS match_id,
 				m.game_slug,
+				mp.seat,
+				mp.placement,
 				mp.placement = 1 AS won,
 				row_number() OVER (PARTITION BY m.game_slug ORDER BY m.ended_at, m.id) AS nth,
 				row_number() OVER (
@@ -269,6 +295,17 @@ export async function stats(sql: SQL, playerId: string) {
 			FROM finished
 			WHERE won
 			GROUP BY game_slug, nth - nth_same
+		),
+		rounds AS (
+			SELECT
+				f.game_slug,
+				count(*)::int AS played,
+				sum((${roundWon})::int)::int AS won
+			FROM finished f
+			JOIN match_rounds mr ON mr.match_id = f.match_id
+			-- A round's first event is its deal: a seat with a hand there played the round.
+			WHERE mr.events -> 0 -> 'data' -> 'hands' -> (f.seat::text) IS NOT NULL
+			GROUP BY f.game_slug
 		)
 		SELECT
 			f.game_slug AS game,
@@ -279,24 +316,38 @@ export async function stats(sql: SQL, playerId: string) {
 				FROM streaks s
 				WHERE s.game_slug = f.game_slug
 			), 0)::int
-				AS best_streak
+				AS best_streak,
+			(count(*) - coalesce(max(f.nth) FILTER (WHERE NOT f.won), 0))::int AS current_streak,
+			round(avg(f.placement), 1) AS average_place,
+			coalesce(r.played, 0) AS rounds_played,
+			r.won AS rounds_won
 		FROM finished f
-		GROUP BY f.game_slug
+		LEFT JOIN rounds r ON r.game_slug = f.game_slug
+		GROUP BY f.game_slug, r.played, r.won
 		ORDER BY f.game_slug`;
 
 	return {
-		games: rows.map((row: { game: string; played: number; wins: number; best_streak: number }) => ({
+		games: rows.map((row: StatsRow) => ({
 			game: row.game,
 			played: row.played,
 			wins: row.wins,
 			bestStreak: row.best_streak,
+			currentStreak: row.current_streak,
+			averagePlace: Number(row.average_place),
+			rounds: { played: row.rounds_played, won: row.rounds_won },
 		})),
 	};
 }
 
-/** The player's own history, newest first. Cursor = last match id of the previous page. */
-export async function history(sql: SQL, playerId: string, cursor: string | undefined) {
+/** The player's own history, newest first, of one game or all. Cursor = last match id of the previous page. */
+export async function history(
+	sql: SQL,
+	playerId: string,
+	cursor: string | undefined,
+	game: string | undefined,
+) {
 	const afterCursor = cursor ? sql`AND mp.match_id < ${cursor}` : sql``;
+	const ofGame = game ? sql`AND m.game_slug = ${game}` : sql``;
 
 	const rows = await sql`
 		SELECT
@@ -317,7 +368,9 @@ export async function history(sql: SQL, playerId: string, cursor: string | undef
 		FROM match_players mp
 		JOIN matches m ON m.id = mp.match_id
 		JOIN rooms r ON r.id = m.room_id
-		WHERE mp.player_id = ${playerId} ${afterCursor}
+		WHERE mp.player_id = ${playerId}
+			${afterCursor}
+			${ofGame}
 		ORDER BY mp.match_id DESC
 		LIMIT ${HISTORY_PAGE + 1}`;
 

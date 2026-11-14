@@ -7,7 +7,13 @@ import { playerAuth, serverAuth } from "../middleware/auth";
 import { history, MatchReport, recordMatch, stats } from "../services/matches";
 import { matchRounds, recordRound, RoundReport } from "../services/rounds";
 
-const HistoryQuery = z.object({ cursor: z.uuid().optional() });
+const HistoryQuery = z.object({
+	cursor: z.uuid().optional(),
+	game: z
+		.string()
+		.regex(/^[a-z0-9-]{2,32}$/, "Unknown game.")
+		.optional(),
+});
 const MatchParam = z.object({ id: z.uuidv7("Not a match id.") });
 
 export function matchRoutes(sql: SQL, serverKey: string) {
@@ -49,10 +55,10 @@ export function matchRoutes(sql: SQL, serverKey: string) {
 		return ok(c, found);
 	});
 
-	/** The signed-in player's own history, newest first. */
+	/** The signed-in player's own history, newest first; `?game=` keeps one game. */
 	app.get("/players/me/matches", playerAuth(sql), validate("query", HistoryQuery), async (c) => {
-		const { cursor } = c.req.valid("query");
-		const page = await history(sql, c.get("player").id, cursor);
+		const { cursor, game } = c.req.valid("query");
+		const page = await history(sql, c.get("player").id, cursor, game);
 
 		return ok(c, page);
 	});

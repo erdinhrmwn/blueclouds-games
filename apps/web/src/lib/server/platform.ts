@@ -528,18 +528,40 @@ export type MatchSummary = {
 	score: number;
 };
 
-/** The player's finished matches, newest first, a page at a time. */
+/** The player's finished matches, newest first, a page at a time; `game` keeps one game. */
 export async function myMatches(
 	event: RequestEvent,
-	cursor: string | null
+	cursor: string | null,
+	game: string | null = null
 ): Promise<{ matches: MatchSummary[]; nextCursor: string | null }> {
-	const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : '';
+	const query = new URLSearchParams();
+	if (cursor) {
+		query.set('cursor', cursor);
+	}
 
-	return call(event, `/players/me/matches${query}`, { method: 'GET', secret: signedIn(event) });
+	if (game) {
+		query.set('game', game);
+	}
+
+	const search = query.size > 0 ? `?${query}` : '';
+
+	return call(event, `/players/me/matches${search}`, { method: 'GET', secret: signedIn(event) });
 }
 
-/** The player's record in one game: finished matches played, and won. */
-export type GameStats = { game: string; played: number; wins: number; bestStreak: number };
+/**
+ * The player's record in one game: finished matches played and won, wins in a row (best and still going), their
+ * average place, and their rounds. What a round won means is the game's (see the catalog's `roundsWon`); `won` is
+ * null for a game the platform can't count rounds for.
+ */
+export type GameStats = {
+	game: string;
+	played: number;
+	wins: number;
+	bestStreak: number;
+	currentStreak: number;
+	averagePlace: number;
+	rounds: { played: number; won: number | null };
+};
 
 /** The signed-in player's record per game, for their profile. */
 export async function myStats(event: RequestEvent): Promise<{ games: GameStats[] }> {
@@ -570,11 +592,56 @@ export type CoinChange = {
 	tournament: { id: string; name: string; cancelled: boolean } | null;
 };
 
-/** The player's coins and their history, newest first. */
+/** The player's coins and their history, newest first, a page at a time: `before` is the last change shown. */
 export async function coinsOf(
-	event: RequestEvent
+	event: RequestEvent,
+	before: string | null = null
 ): Promise<{ balance: number; history: CoinChange[] }> {
-	return call(event, '/players/me/coins', { method: 'GET', secret: signedIn(event) });
+	const query = before ? `?before=${encodeURIComponent(before)}` : '';
+
+	return call(event, `/players/me/coins${query}`, { method: 'GET', secret: signedIn(event) });
+}
+
+/** One tournament the player is or was in, as their profile lists it. */
+export type MyTournament = {
+	id: string;
+	game: string;
+	name: string;
+	format: TournamentFormat | null;
+	status: 'upcoming' | 'live' | 'finished' | 'cancelled';
+	startsAt: string;
+	endedAt: string | null;
+	entry: 'registered' | 'withdrawn' | 'disqualified';
+	players: number;
+	/** Live: the Stage being played. Finished: the last Stage they sat in. */
+	stage: number | null;
+	place: number | null;
+	/** What their place wins, never whether it was paid out yet. */
+	prize: { coins: number; extra: string | null } | null;
+};
+
+export type TournamentRecord = {
+	played: number;
+	podiums: number;
+	bestPlace: number | null;
+	prizeCoins: number;
+};
+
+/** The tournaments the player is or was in, newest first, with their record over all of them. */
+export async function myTournaments(
+	event: RequestEvent
+): Promise<{ tournaments: MyTournament[]; record: TournamentRecord }> {
+	return call(event, '/players/me/tournaments', { method: 'GET', secret: signedIn(event) });
+}
+
+/** The tournament tables the player sits at right now, in any game. */
+export async function mySeats(event: RequestEvent): Promise<TournamentTable[]> {
+	const { rooms } = await call<{ rooms: TournamentTable[] }>(event, '/players/me/rooms', {
+		method: 'GET',
+		secret: signedIn(event)
+	});
+
+	return rooms;
 }
 
 /** One table of a tournament round, its players best finish first; an unplayed seat has no placement. */

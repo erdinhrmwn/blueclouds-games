@@ -5,7 +5,13 @@ import { z } from "zod";
 import { ok, validate } from "../lib/http";
 import { playerAuth } from "../middleware/auth";
 import { listLive, standingsOf, tournamentBoard } from "../services/tournament-live";
-import { joinTournament, leaveTournament, listOpen, seatedRooms } from "../services/tournaments";
+import {
+	joinTournament,
+	leaveTournament,
+	listOpen,
+	myTournaments,
+	seatedRooms,
+} from "../services/tournaments";
 
 const GameQuery = z.object({ game: z.string().regex(/^[a-z0-9-]{2,32}$/, "Unknown game.") });
 const OptionalGame = z.object({ game: GameQuery.shape.game.optional() });
@@ -54,6 +60,13 @@ export function tournamentRoutes(sql: SQL) {
 		await leaveTournament(sql, tournamentId, c.get("player").id);
 
 		return ok(c, { registered: false });
+	});
+
+	/** The tournaments the signed-in player is or was in, with their record, for their profile. */
+	app.get("/players/me/tournaments", auth, async (c) => {
+		const mine = await myTournaments(sql, c.get("player").id);
+
+		return ok(c, mine);
 	});
 
 	app.get("/players/me/rooms", auth, validate("query", OptionalGame), async (c) => {

@@ -311,8 +311,93 @@ describe("my match history", () => {
 		const res = await call(t.app, "GET", "/v1/players/me/stats", { token: dana.secret });
 		expect(res.status).toBe(200);
 		expect(res.json.data).toEqual({
-			games: [{ game: "bust-31", played: 4, wins: 3, bestStreak: 2 }],
+			games: [
+				{
+					game: "bust-31",
+					played: 4,
+					wins: 3,
+					bestStreak: 2,
+					currentStreak: 1,
+					averagePlace: 1.3,
+					rounds: { played: 0, won: null },
+				},
+			],
 		});
+	});
+
+	test("stats count the rounds a seat was dealt into and how each game counts a round won", async () => {
+		const eve = await guest(t.app, "Eve");
+		await room(t.sql, "cloudburst", "CLD9X");
+		const seats = [
+			{ seat: 0, playerId: eve.player.id, bot: false, placement: 2, score: 1 },
+			{ seat: 1, playerId: null, bot: true, botName: "Bot Rain", placement: 1, score: 2 },
+		];
+		const bust = report({ players: seats });
+		const cloud = report({ game: "cloudburst", roomCode: "CLD9X", players: seats });
+		expect((await post(bust)).status).toBe(201);
+		expect((await post(cloud)).status).toBe(201);
+
+		// Bust 31: Eve survives round 1 (seat 1 busts), busts in round 2, sits out round 3 (no hand).
+		// Cloudburst: Eve goes out first in round 1 only.
+		const rounds = [
+			{ match: bust, round: 1, hands: { 0: [], 1: [] }, result: { seat: 1 } },
+			{ match: bust, round: 2, hands: { 0: [], 1: [] }, result: { seat: 0 } },
+			{ match: bust, round: 3, hands: { 1: [] }, result: { seat: 1 } },
+			{ match: cloud, round: 1, hands: { 0: [], 1: [] }, result: { out: 0 } },
+			{ match: cloud, round: 2, hands: { 0: [], 1: [] }, result: { out: 1 } },
+		];
+		for (const row of rounds) {
+			const events = [{ seq: 0, t: 0, type: "deal", data: { round: row.round, hands: row.hands } }];
+			await t.sql`
+				INSERT INTO match_rounds (id, match_id, round, game_slug, room_id, result, events, started_at, ended_at, body_hash)
+				SELECT
+					${Bun.randomUUIDv7()},
+					${row.match.matchId},
+					${row.round},
+					m.game_slug,
+					m.room_id,
+					${JSON.stringify(row.result)}::text::jsonb,
+					${JSON.stringify(events)}::text::jsonb,
+					m.started_at,
+					m.ended_at,
+					decode(repeat('ab', 32), 'hex')
+				FROM matches m
+				WHERE m.id = ${row.match.matchId}`;
+		}
+
+		const res = await call(t.app, "GET", "/v1/players/me/stats", { token: eve.secret });
+		const rounds_ = Object.fromEntries(
+			res.json.data.games.map((game: { game: string; rounds: unknown }) => [
+				game.game,
+				game.rounds,
+			]),
+		);
+		expect(rounds_).toEqual({
+			"bust-31": { played: 2, won: 1 },
+			cloudburst: { played: 2, won: 1 },
+		});
+	});
+
+	test("history keeps one game with ?game=", async () => {
+		const finn = await guest(t.app, "Finn");
+		await room(t.sql, "cloudburst", "CLD8Y");
+		const seats = [
+			{ seat: 0, playerId: finn.player.id, bot: false, placement: 1, score: 1 },
+			{ seat: 1, playerId: null, bot: true, botName: "Bot Rain", placement: 2, score: 0 },
+		];
+		const bust = report({ players: seats });
+		const cloud = report({ game: "cloudburst", roomCode: "CLD8Y", players: seats });
+		expect((await post(bust)).status).toBe(201);
+		expect((await post(cloud)).status).toBe(201);
+
+		const path = "/v1/players/me/matches?game=cloudburst";
+		const res = await call(t.app, "GET", path, { token: finn.secret });
+		expect(res.json.data.matches.map((match: { id: string }) => match.id)).toEqual([cloud.matchId]);
+
+		const bad = await call(t.app, "GET", "/v1/players/me/matches?game=NOPE!", {
+			token: finn.secret,
+		});
+		expect(bad.status).toBe(400);
 	});
 
 	test("bad cursor is bad_input", async () => {
