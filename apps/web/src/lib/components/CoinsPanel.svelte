@@ -3,10 +3,21 @@
 	import { player } from '#lib/player.svelte.ts';
 	import { when } from '#lib/when.ts';
 
-	/** The profile's coins: the balance, then every change with its reason, newest first. */
+	/** The platform's page of coin changes: a full page means there may be older ones. */
+	const PAGE_SIZE = 50;
+
+	/** The profile shows the latest few changes; each press shows this many more. */
+	const FIRST_SHOWN = 5;
+	const SHOW_STEP = 20;
+
+	/** The profile's coins: the balance, then every change with its reason, newest first, a page at a time. */
 	let history = $state<CoinChange[]>([]);
 	let loading = $state(true);
 	let error = $state<string | null>(null);
+	let hasMore = $state(false);
+	let shown = $state(FIRST_SHOWN);
+	let loadingMore = $state(false);
+	let moreError = $state<string | null>(null);
 
 	$effect(() => {
 		void load();
@@ -17,10 +28,37 @@
 			const coins = await fetchCoins();
 			player.coins = coins.balance;
 			history = coins.history;
+			hasMore = coins.history.length === PAGE_SIZE;
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Could not load your coins.';
 		} finally {
 			loading = false;
+		}
+	}
+
+	/** Shows older changes: the ones already loaded first, then the next page from the platform. */
+	async function showMore() {
+		shown += SHOW_STEP;
+		if (shown <= history.length || !hasMore) {
+			return;
+		}
+
+		const last = history.at(-1);
+		if (!last) {
+			return;
+		}
+
+		loadingMore = true;
+		moreError = null;
+
+		try {
+			const coins = await fetchCoins(last.id);
+			history = [...history, ...coins.history];
+			hasMore = coins.history.length === PAGE_SIZE;
+		} catch (err) {
+			moreError = err instanceof Error ? err.message : 'Could not load older changes.';
+		} finally {
+			loadingMore = false;
 		}
 	}
 
@@ -70,7 +108,7 @@
 			<p class="mt-4 text-sm text-paper/60">No coins have moved yet.</p>
 		{:else}
 			<ul class="mt-4 divide-y divide-paper/8 border-t border-paper/8">
-				{#each history as change (change.id)}
+				{#each history.slice(0, shown) as change (change.id)}
 					<li class="flex items-center justify-between gap-4 py-3">
 						<span class="min-w-0">
 							<span class="block truncate text-sm font-semibold">{label(change)}</span>
@@ -84,6 +122,15 @@
 					</li>
 				{/each}
 			</ul>
+			{#if shown < history.length || hasMore}
+				<button
+					class="btn-ghost mt-3 min-h-11 w-full"
+					onclick={showMore}
+					disabled={loadingMore}
+					aria-busy={loadingMore}>{loadingMore ? 'Loading…' : 'Show older changes'}</button
+				>
+			{/if}
+			{#if moreError}<p class="mt-2 text-sm text-ember" role="alert">{moreError}</p>{/if}
 		{/if}
 	</div>
 </section>

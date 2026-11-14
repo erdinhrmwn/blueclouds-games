@@ -4,15 +4,17 @@
 	import { WELCOME } from '#lib/guest.ts';
 	import { createAccount, type FormErrors, logOut, NAME_MAX, player } from '#lib/player.svelte.ts';
 	import CoinsPanel from '#lib/components/CoinsPanel.svelte';
+	import MyTournaments from '#lib/components/MyTournaments.svelte';
 	import PasswordDialog from '#lib/components/PasswordDialog.svelte';
+	import { ordinal } from '#lib/tournament-formats.ts';
 	import { when } from '#lib/when.ts';
 	import { onMount } from 'svelte';
 
 	let { data } = $props();
 
 	/**
-	 * Who you are, how you play each game, and your latest matches. Linking an account here is where a guest picks
-	 * a name, games and all.
+	 * Who you are, how you play each game, your tournaments and latest matches. Linking an account here is where a
+	 * guest picks a name, games and all.
 	 */
 	// Prefilled once the player loads, then the field owns it.
 	let name = $derived(player.name);
@@ -57,7 +59,10 @@
 				game,
 				played: record?.played ?? 0,
 				wins: record?.wins ?? 0,
-				bestStreak: record?.bestStreak ?? 0
+				bestStreak: record?.bestStreak ?? 0,
+				currentStreak: record?.currentStreak ?? 0,
+				averagePlace: record?.averagePlace ?? 0,
+				rounds: record?.rounds ?? { played: 0, won: null }
 			};
 		})
 	);
@@ -83,8 +88,24 @@
 		return `member since ${month}`;
 	});
 
-	const SUFFIX: Record<number, string> = { 1: 'st', 2: 'nd', 3: 'rd' };
-	const ordinal = (place: number) => `${place}${SUFFIX[place] ?? 'th'}`;
+	/** The latest finished matches, oldest first, so the strip reads left to right up to now. */
+	const form = $derived([...data.form.filter((match) => match.endReason === 'finished')].reverse());
+
+	/** "Avg place 1.8 · 3 wins in a row now · Best: 4 in a row", each part only when it says something. */
+	function recordLine(row: (typeof byGame)[number]): string {
+		const parts = [`Avg place ${row.averagePlace.toFixed(1)}`];
+
+		if (row.currentStreak > 1) {
+			parts.push(`${row.currentStreak} wins in a row now`);
+		}
+
+		// The best run is news only when it isn't the one still going.
+		if (row.bestStreak > 1 && row.bestStreak > row.currentStreak) {
+			parts.push(`Best: ${row.bestStreak} in a row`);
+		}
+
+		return parts.join(' · ');
+	}
 </script>
 
 <svelte:head><title>Profile · BlueClouds Games</title></svelte:head>
@@ -135,6 +156,33 @@
 			</div>
 		</header>
 		{#if linked}<p class="mt-4 text-sm text-brass" role="status">Account linked.</p>{/if}
+
+		{#if data.seats.length > 0}
+			<section class="mt-8 space-y-2" aria-label="Your tournament tables">
+				{#each data.seats as seat (seat.code)}
+					{@const game = gameBySlug(seat.game)}
+					<div
+						class="flex flex-wrap items-center gap-x-4 gap-y-3 rounded-2xl border-[1.5px] border-brass bg-panel p-4"
+					>
+						<span
+							class="card-back {game?.back ?? ''} block h-11 w-8 shrink-0 -rotate-3"
+							aria-hidden="true"
+						></span>
+						<div class="min-w-0 flex-1">
+							<p class="font-semibold">
+								{seat.started ? 'Your table is playing' : 'Your table is ready'}
+							</p>
+							<p class="truncate text-sm text-paper/65">
+								{seat.tournament.name} · {game?.name ?? seat.game}
+							</p>
+						</div>
+						<a class="btn-brass min-h-11 px-5" href="/{seat.game}/room/{seat.code}"
+							>{seat.started ? 'Rejoin' : 'Take your seat'}</a
+						>
+					</div>
+				{/each}
+			</section>
+		{/if}
 
 		{#if player.guest}
 			<div class="mt-8 rounded-2xl border-[1.5px] border-brass bg-panel p-6">
@@ -218,6 +266,34 @@
 			{/each}
 		</dl>
 
+		{#if form.length > 0}
+			<div class="mt-4 rounded-2xl border border-paper/10 bg-panel px-4 py-4 sm:px-5">
+				<div class="flex items-baseline justify-between gap-3">
+					<h2 class="text-sm font-semibold">Recent form</h2>
+					<p class="text-xs text-paper/50">Latest on the right</p>
+				</div>
+				<ol
+					class="mt-3 grid grid-cols-10 gap-1.5"
+					aria-label="Your last {form.length} finished matches"
+				>
+					{#each form as match (match.id)}
+						{@const won = match.placement === 1}
+						{@const name = gameBySlug(match.game)?.name ?? match.game}
+						<li
+							class="grid aspect-square max-w-11 place-items-center rounded-lg text-[11px] font-bold tabular-nums sm:text-xs {won
+								? 'bg-brass text-ink'
+								: 'bg-black/35 text-paper/80'}"
+							title="{name}: {ordinal(match.placement)} of {match.players}"
+						>
+							<span class="sr-only">{name}:</span>{ordinal(match.placement)}<span class="sr-only"
+								>of {match.players}</span
+							>
+						</li>
+					{/each}
+				</ol>
+			</div>
+		{/if}
+
 		{#if !player.guest}
 			<CoinsPanel />
 		{/if}
@@ -237,8 +313,19 @@
 							{row.played} played · {row.wins}
 							{row.wins === 1 ? 'win' : 'wins'}
 						</p>
-						{#if row.bestStreak > 1}
-							<p class="mt-0.5 text-xs text-paper/50">Best: {row.bestStreak} wins in a row</p>
+						{#if row.played > 0}
+							<p class="mt-0.5 text-xs text-paper/55 tabular-nums">{recordLine(row)}</p>
+						{/if}
+						{#if row.rounds.played > 0 && row.rounds.won !== null}
+							<p class="mt-0.5 text-xs text-paper/55 tabular-nums">
+								{row.game.roundsLine(row.rounds.won, row.rounds.played)}
+							</p>
+						{/if}
+						{#if row.played > 0}
+							<a
+								class="mt-1 inline-block py-1 text-xs font-semibold text-brass hover:underline"
+								href="/history?game={row.game.slug}">{row.game.name} matches</a
+							>
 						{/if}
 						<!-- Phones: the bar under the text. From sm up it moves to the right column. -->
 						<div
@@ -259,6 +346,8 @@
 				</li>
 			{/each}
 		</ul>
+
+		<MyTournaments tournaments={data.tournaments} record={data.tournamentRecord} {mounted} />
 
 		<div class="mt-12 flex items-baseline justify-between">
 			<h2 class="font-display text-xl font-bold">Recent matches</h2>

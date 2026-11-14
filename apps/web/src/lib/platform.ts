@@ -97,8 +97,11 @@ export const fetchTournaments = (game: string) =>
 		`/api/${encodeURIComponent(game)}/tournaments`
 	);
 export type { CoinChange } from '#lib/server/platform.ts';
-export const fetchCoins = () =>
-	request<{ balance: number; history: CoinChange[] }>('GET', '/api/account/coins');
+export const fetchCoins = (before: string | null = null) =>
+	request<{ balance: number; history: CoinChange[] }>(
+		'GET',
+		before ? `/api/account/coins?before=${encodeURIComponent(before)}` : '/api/account/coins'
+	);
 export const fetchStandings = (id: string) =>
 	request<{ standings: Standing[] }>('GET', `/api/tournaments/${encodeURIComponent(id)}/standings`);
 export const joinTournament = (id: string) =>
