@@ -203,20 +203,6 @@
 		return { ms: Math.max(0, room.turnEndsAt - Date.now()), total: room.turnTotal };
 	});
 
-	/**
-	 * Which side a chair fans its card backs: towards the middle of the table, except the two chairs at the
-	 * top of the arms, which fan outward to stay clear of the dealer's shoe and the turn direction.
-	 */
-	const backsSide = (chair: number): 'left' | 'right' => {
-		const right = chair <= MAX_PLAYERS / 2;
-		const topCorner = chair === 1 || chair === MAX_PLAYERS;
-		if (topCorner) {
-			return right ? 'right' : 'left';
-		}
-
-		return right ? 'left' : 'right';
-	};
-
 	const nameOf = (id: string | null) => view.players.find((p) => p.id === id)?.name ?? '?';
 
 	/** After a Double the player on turn plays 2 cards; older servers send no playsLeft. */
@@ -335,8 +321,6 @@
 				<Seat
 					{player}
 					number={spot}
-					cards={player && player.lives > 0 ? HAND_SIZE : 0}
-					cardSide={backsSide(spot)}
 					isTurn={!!player && (player.id === view.turnPlayerId || player.id === view.winnerId)}
 					isHost={!view.tournament && !!player && player.id === view.hostId}
 					isMe={!!player && player.id === room.playerId}

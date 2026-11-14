@@ -17,9 +17,7 @@
 		action,
 		number,
 		onSit,
-		onAddBot,
-		cards = 0,
-		cardSide = 'right'
+		onAddBot
 	}: {
 		player: SeatPlayer | null;
 		isTurn?: boolean;
@@ -41,15 +39,7 @@
 		onSit?: () => void;
 		/** Empty chair only (host): put a bot here. */
 		onAddBot?: () => void;
-		/** Cards this player holds, drawn as backs beside the avatar (count stays in the status line). */
-		cards?: number;
-		/** Which side of the avatar the backs fan out on: towards the middle of the table. */
-		cardSide?: 'left' | 'right';
 	} = $props();
-
-	/** Fan at most this many backs; more would only crowd the next chair. */
-	const MAX_BACKS = 5;
-	const backs = $derived(Math.min(cards, MAX_BACKS));
 
 	const initial = $derived(player?.name.trim().charAt(0).toUpperCase() ?? '');
 
@@ -179,23 +169,6 @@
 			{/if}
 			{#if action}
 				{@render cornerButton(`${action.label} ${player.name}`, action.run, 'remove')}
-			{/if}
-			{#if backs > 0}
-				<div
-					class="backs pointer-events-none absolute top-1/2 -translate-y-1/2 {cardSide === 'right'
-						? 'left-full ml-1'
-						: 'right-full mr-1'}"
-					aria-hidden="true"
-				>
-					{#each Array(backs) as _, index (index)}
-						{@const step = cardSide === 'right' ? 1 : -1}
-						<span
-							class="card-back absolute top-0 h-[1.375rem] w-4 wide:h-7 wide:w-5"
-							style="{cardSide === 'right' ? 'left' : 'right'}: {index * 4}px; rotate: {step *
-								(6 + index * 6)}deg"
-						></span>
-					{/each}
-				</div>
 			{/if}
 		</div>
 		<div
@@ -342,10 +315,6 @@
 	}
 	.ring {
 		transition: stroke 300ms;
-	}
-	.backs {
-		width: 2.5rem;
-		height: 1.75rem;
 	}
 	@media (prefers-reduced-motion: reduce) {
 		.turn {

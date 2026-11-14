@@ -32,20 +32,6 @@
 
 	const view = $derived(room.view!);
 	const inSeat = (seat: number) => view.players.find((p) => p.seat === seat) ?? null;
-	/**
-	 * Which side a chair fans its card backs: towards the middle of the table, except the two chairs at the
-	 * top of the arms, which fan outward to stay clear of the dealer's shoe and the turn direction.
-	 */
-	const backsSide = (chair: number): 'left' | 'right' => {
-		const right = chair <= MAX_PLAYERS / 2;
-		const topCorner = chair === 1 || chair === MAX_PLAYERS;
-		if (topCorner) {
-			return right ? 'right' : 'left';
-		}
-
-		return right ? 'left' : 'right';
-	};
-
 	const nameOf = (id: string | null | undefined) =>
 		view.players.find((p) => p.id === id)?.name ?? '?';
 
@@ -635,8 +621,6 @@
 				<Seat
 					{player}
 					number={spot}
-					cards={player ? (reveal ? 0 : player.cards) : 0}
-					cardSide={backsSide(spot)}
 					isTurn={!!player && (player.id === view.turnPlayerId || player.id === view.winnerId)}
 					isHost={!view.tournament && !!player && player.id === view.hostId}
 					isMe={!!player && player.id === room.playerId}
