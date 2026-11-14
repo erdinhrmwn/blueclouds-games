@@ -228,7 +228,7 @@
 				</div>
 				{#if (format || values.format || 'arena') !== 'knockout'}
 					<div>
-						<label class="label" for="rounds">Rounds (Arena and Swiss)</label>
+						<label class="label" for="rounds">Stages (Arena and Swiss)</label>
 						<input
 							class="field"
 							id="rounds"

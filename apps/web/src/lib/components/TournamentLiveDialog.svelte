@@ -91,10 +91,10 @@
 		}
 
 		if (!byPoints) {
-			return `Round ${tournament.round}`;
+			return `Stage ${tournament.round}`;
 		}
 
-		return `Round ${tournament.round} of ${tournament.rounds ?? 3}`;
+		return `Stage ${tournament.round} of ${tournament.rounds ?? 3}`;
 	});
 
 	const headline = $derived.by(() => {
@@ -108,7 +108,7 @@
 		}
 
 		if (tournament.roundStarted) {
-			return `Round ${tournament.round} in play`;
+			return `Stage ${tournament.round} in play`;
 		}
 
 		return startsIn(tournament.roundStartsAt, now);
@@ -138,7 +138,7 @@
 		}
 
 		if (!finished && tournament.table) {
-			return `You’re in round ${tournament.round}`;
+			return `You’re in stage ${tournament.round}`;
 		}
 
 		return finished ? `You finished ${ordinal(me.place)}` : `You’re out · ${ordinal(me.place)}`;
@@ -151,14 +151,14 @@
 		}
 
 		if (table.closed) {
-			return `Your round ${tournament.round} table ${table.code} is done`;
+			return `Your stage ${tournament.round} table ${table.code} is done`;
 		}
 
 		if (table.started) {
-			return `Your round ${tournament.round} table ${table.code} is in play`;
+			return `Your stage ${tournament.round} table ${table.code} is in play`;
 		}
 
-		return `Round ${tournament.round} table ${table.code}, ${startsIn(tournament.roundStartsAt, now).toLowerCase()}`;
+		return `Stage ${tournament.round} table ${table.code}, ${startsIn(tournament.roundStartsAt, now).toLowerCase()}`;
 	});
 </script>
 
@@ -279,7 +279,7 @@
 				class="btn-ghost flex h-11 w-full items-center justify-center rounded-xl"
 				href="/{game}/tournaments/{tournament.id}"
 			>
-				{ranksByPoints(tournament.format) ? 'See every round' : 'See the bracket'}
+				{ranksByPoints(tournament.format) ? 'See every stage' : 'See the bracket'}
 			</a>
 
 			<section aria-labelledby="standings-title">
@@ -290,8 +290,8 @@
 					{#if !finished}
 						<span class="text-xs text-paper/55">
 							{tournament.roundStarted
-								? `round ${tournament.round} in play`
-								: `after round ${tournament.round - 1}`}
+								? `stage ${tournament.round} in play`
+								: `after stage ${tournament.round - 1}`}
 						</span>
 					{/if}
 				</h3>
@@ -315,7 +315,7 @@
 			<p class="text-xs text-paper/45">
 				{finished
 					? `Ended ${when(tournament.endedAt ?? '')}`
-					: `Round ${tournament.round} starts ${when(tournament.roundStartsAt)}`}
+					: `Stage ${tournament.round} starts ${when(tournament.roundStartsAt)}`}
 			</p>
 		</div>
 

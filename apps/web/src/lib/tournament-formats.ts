@@ -12,7 +12,7 @@ export function pointsText(points: number): string {
 type Format = {
 	label: string;
 	note: string;
-	/** "How it plays" in the Detail dialog, given the players per table and (Arena, Swiss) the rounds. */
+	/** "How it plays" in the Detail dialog, given the players per table and (Arena, Swiss) the stages. */
 	steps: (perTable: number, rounds: number) => string[];
 };
 
@@ -22,9 +22,9 @@ export const FORMATS: Record<TournamentFormat, Format> = {
 		label: 'Arena',
 		note: 'Most points wins',
 		steps: (perTable, rounds) => [
-			`Everyone plays ${rounds} rounds at tables of up to ${perTable}, reshuffled each round.`,
+			`Everyone plays ${rounds} stages at tables of up to ${perTable}, reshuffled each stage.`,
 			'Each match gives points by finishing place: 1st at a table of 6 scores 6, last scores 1.',
-			'The most points after the last round wins.'
+			'The most points after the last stage wins.'
 		]
 	},
 	knockout: {
@@ -40,9 +40,9 @@ export const FORMATS: Record<TournamentFormat, Format> = {
 		label: 'Swiss',
 		note: 'Paired by score',
 		steps: (perTable, rounds) => [
-			`Everyone plays ${rounds} rounds at tables of up to ${perTable}, scoring points by finishing place.`,
-			'From round 2 you sit with players on a similar score.',
-			'Nobody is knocked out; the most points after the last round wins.'
+			`Everyone plays ${rounds} stages at tables of up to ${perTable}, scoring points by finishing place.`,
+			'From stage 2 you sit with players on a similar score.',
+			'Nobody is knocked out; the most points after the last stage wins.'
 		]
 	}
 };

@@ -214,7 +214,7 @@
 				{/if}
 				{#if tournament.round}
 					<span class="chip font-semibold text-paper/90 tabular-nums"
-						>Round {tournament.round}{#if tournament.rounds}&nbsp;of {tournament.rounds}{/if}</span
+						>Stage {tournament.round}{#if tournament.rounds}&nbsp;of {tournament.rounds}{/if}</span
 					>
 				{/if}
 				<span class="chip"
@@ -235,7 +235,7 @@
 				{@render roomCode()}
 				{#if room?.view && room.view.phase !== 'lobby'}
 					<span class="chip"
-						><span class="text-paper/55">Hand</span>
+						><span class="text-paper/55">Round</span>
 						<span class="font-semibold text-paper/90 tabular-nums">{room.view.round}</span></span
 					>
 				{/if}

@@ -84,7 +84,7 @@
 			{ label: 'Sign-up opens', at: tournament.registrationOpensAt },
 			{ label: 'Sign-up closes', at: tournament.registrationClosesAt },
 			{ label: 'Tables handed out', at: tournament.registrationClosesAt },
-			{ label: 'First round', at: tournament.startsAt }
+			{ label: 'First stage', at: tournament.startsAt }
 		];
 		const nextIndex = moments.findIndex((moment) => Date.parse(moment.at) > now);
 

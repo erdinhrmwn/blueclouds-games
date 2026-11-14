@@ -23,7 +23,7 @@
 			return { label: 'Finished', dot: 'bg-brass' };
 		}
 
-		return { label: `Round ${latestRound}`, dot: 'bg-paper' };
+		return { label: `Stage ${latestRound}`, dot: 'bg-paper' };
 	});
 
 	const TABS = [
@@ -57,7 +57,7 @@
 			<span class="flex flex-wrap items-center divide-x divide-paper/20">
 				<span class="pr-3">{format?.label ?? 'Knockout'}</span>
 				<span class="px-3">{tournament.players} players</span>
-				<span class="px-3">{latestRound} {latestRound === 1 ? 'round' : 'rounds'}</span>
+				<span class="px-3">{latestRound} {latestRound === 1 ? 'stage' : 'stages'}</span>
 				{#if finished && tournament.endedAt}
 					<span class="pl-3">ran {ranFor(tournament.startsAt, tournament.endedAt)}</span>
 				{/if}
@@ -75,7 +75,7 @@
 					: 'text-paper/75 hover:text-paper'}"
 				onclick={() => (tab = entry.id)}
 			>
-				{entry.id === 'bracket' && byPoints ? 'Rounds' : entry.label}
+				{entry.id === 'bracket' && byPoints ? 'Stages' : entry.label}
 			</button>
 		{/each}
 	</div>

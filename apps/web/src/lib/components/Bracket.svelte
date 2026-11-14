@@ -56,7 +56,7 @@
 
 	function roundTitle(round: { round: number; tables: BoardTable[] }): string {
 		const isFinal = isKnockout && round.round === lastRound && round.tables.length === 1;
-		return isFinal ? 'Final' : `Round ${round.round}`;
+		return isFinal ? 'Final' : `Stage ${round.round}`;
 	}
 
 	function tableState(table: BoardTable, startsAt: string): string {
@@ -101,7 +101,7 @@
 			return null;
 		}
 
-		return `${roundTitle(next) === 'Final' ? 'the final' : `round ${next.round}`} at ${table.code}`;
+		return `${roundTitle(next) === 'Final' ? 'the final' : `stage ${next.round}`} at ${table.code}`;
 	}
 
 	// Lines between columns, measured from the cards once they are laid out.
@@ -294,7 +294,7 @@
 
 	<!-- Phones: one round at a time. -->
 	<div class="sm:hidden">
-		<div class="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1" role="tablist" aria-label="Rounds">
+		<div class="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1" role="tablist" aria-label="Stages">
 			{#each rounds as round (round.round)}
 				<button
 					role="tab"

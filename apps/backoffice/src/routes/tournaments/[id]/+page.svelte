@@ -75,7 +75,7 @@
 		<dd>
 			{tournament.gameName}, {tournament.playersPerRoom} per table{#if tournament.minPlayers !== null},
 				{tournament.minPlayers}-{tournament.maxPlayers} players{#if tournament.rounds},
-					{tournament.rounds} rounds{/if}{:else if tournament.maxPlayers !== null}, up to {tournament.maxPlayers}
+					{tournament.rounds} stages{/if}{:else if tournament.maxPlayers !== null}, up to {tournament.maxPlayers}
 				players{/if}
 		</dd>
 		{#if tournament.format}<dt>Format</dt>
@@ -232,7 +232,7 @@
 							{result.points} points ·
 						{/if}
 						{result.wins}
-						{result.wins === 1 ? 'win' : 'wins'} · reached round {result.lastRound}
+						{result.wins === 1 ? 'win' : 'wins'} · reached stage {result.lastRound}
 					</span>
 				</li>
 			{/each}
@@ -248,7 +248,7 @@
 				<p class="flex items-baseline justify-between gap-2">
 					<span class="font-mono text-lg tracking-[0.15em]">{room.code}</span>
 					<span class="text-sm text-muted">
-						Round {room.round} · {room.players}/{tournament.playersPerRoom}
+						Stage {room.round} · {room.players}/{tournament.playersPerRoom}
 					</span>
 				</p>
 				<p

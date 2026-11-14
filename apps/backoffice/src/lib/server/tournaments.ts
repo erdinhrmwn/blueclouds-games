@@ -219,9 +219,9 @@ export const NewTournament = z.object({
 	// Arena and Swiss only; a knockout plays until one player is left.
 	rounds: z.coerce
 		.number()
-		.int('Rounds: a whole number.')
-		.min(1, `Rounds: 1-${ROUNDS_MAX}.`)
-		.max(ROUNDS_MAX, `Rounds: 1-${ROUNDS_MAX}.`)
+		.int('Stages: a whole number.')
+		.min(1, `Stages: 1-${ROUNDS_MAX}.`)
+		.max(ROUNDS_MAX, `Stages: 1-${ROUNDS_MAX}.`)
 		.default(ROUNDS_DEFAULT),
 	description: optionalText('Description', TOURNAMENT_TEXT_MAX.description),
 	// 1st place first; a place may pay only an extra, like a badge.

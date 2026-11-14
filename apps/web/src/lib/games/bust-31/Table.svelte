@@ -273,7 +273,7 @@
 
 		switch (event.type) {
 			case 'started':
-				return `Hand ${view.round}. Cards dealt.`;
+				return `Round ${view.round}. Cards dealt.`;
 			case 'joined':
 				return `${nameOf(event.playerId)} sat down.`;
 			case 'played': {
@@ -282,7 +282,9 @@
 			}
 			case 'bust': {
 				const auto = event.auto ? ' (auto, time ran out)' : '';
-				const outcome = event.eliminated ? 'Out of the game.' : `Loses a life. Hand ${view.round}.`;
+				const outcome = event.eliminated
+					? 'Out of the game.'
+					: `Loses a life. Round ${view.round}.`;
 				return `${nameOf(event.playerId)} busted at ${event.total}${auto}. ${outcome}`;
 			}
 			case 'finished':
@@ -336,7 +338,7 @@
 					cards={player && player.lives > 0 ? HAND_SIZE : 0}
 					cardSide={backsSide(spot)}
 					isTurn={!!player && (player.id === view.turnPlayerId || player.id === view.winnerId)}
-					isHost={!!player && player.id === view.hostId}
+					isHost={!view.tournament && !!player && player.id === view.hostId}
 					isMe={!!player && player.id === room.playerId}
 					out={!!player && player.lives === 0}
 					status={player ? lives : undefined}

@@ -83,7 +83,7 @@
 			const title =
 				byPoints && me
 					? `${pointsText(me.points)} · ${ordinal(me.place)} overall`
-					: `You go on to round ${tournament.round}`;
+					: `You go on to stage ${tournament.round}`;
 			const when = tournament.roundStarted
 				? 'is in play'
 				: startsIn(tournament.roundStartsAt, now).toLowerCase();
@@ -97,7 +97,7 @@
 
 		return {
 			kind: 'waiting',
-			title: byPoints ? 'Round done' : 'Waiting to see who goes on'
+			title: byPoints ? 'Stage done' : 'Waiting to see who goes on'
 		};
 	});
 
@@ -119,9 +119,9 @@
 </script>
 
 <div aria-live="polite">
-	<p class="text-sm font-semibold text-brass">{tournamentName} · round {round} done</p>
+	<p class="text-sm font-semibold text-brass">{tournamentName} · stage {round} done</p>
 	{#if next.kind === 'loading'}
-		<p class="mt-1.5 text-sm text-paper/75">Checking the next round…</p>
+		<p class="mt-1.5 text-sm text-paper/75">Checking the next stage…</p>
 	{:else}
 		<p class="mt-1.5 font-display text-xl font-extrabold text-paper">{next.title}</p>
 		<p class="mt-1 text-sm text-paper/75">

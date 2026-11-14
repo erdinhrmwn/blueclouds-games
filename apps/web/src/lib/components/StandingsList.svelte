@@ -42,7 +42,7 @@
 			return 'Out in the final';
 		}
 
-		return `Out in round ${standing.lastRound}`;
+		return `Out in stage ${standing.lastRound}`;
 	}
 </script>
 

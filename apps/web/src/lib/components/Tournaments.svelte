@@ -222,16 +222,16 @@
 	/** "Round 2 of 3" for Arena and Swiss; a knockout plays until one is left, so just "Round 2". */
 	function roundLabel(tournament: LiveTournament): string {
 		if (!ranksByPoints(tournament.format)) {
-			return `Round ${tournament.round}`;
+			return `Stage ${tournament.round}`;
 		}
 
-		return `Round ${tournament.round} of ${tournament.rounds ?? 3}`;
+		return `Stage ${tournament.round} of ${tournament.rounds ?? 3}`;
 	}
 
 	/** The felt's line: when the round starts, or that it is being played. */
 	function roundLine(tournament: LiveTournament): string {
 		if (tournament.roundStarted) {
-			return `Round ${tournament.round} in play`;
+			return `Stage ${tournament.round} in play`;
 		}
 
 		return startsIn(tournament.roundStartsAt, now);
@@ -249,7 +249,7 @@
 		}
 
 		if (tournament.table) {
-			return `You’re in round ${tournament.round}`;
+			return `You’re in stage ${tournament.round}`;
 		}
 
 		return `You’re out · ${ordinal(me.place)}`;
@@ -261,7 +261,7 @@
 			return `${standing.points} ${standing.points === 1 ? 'pt' : 'pts'}`;
 		}
 
-		return standing.lastRound >= tournament.round ? 'in' : `out in round ${standing.lastRound}`;
+		return standing.lastRound >= tournament.round ? 'in' : `out in stage ${standing.lastRound}`;
 	}
 
 	const prizeFor = (tournament: LiveTournament, place: number) =>
@@ -472,7 +472,7 @@
 								>
 							{/if}
 							{t.players} players · {t.round}
-							{t.round === 1 ? 'round' : 'rounds'}
+							{t.round === 1 ? 'stage' : 'stages'}
 						</p>
 						<ol class="mt-3 space-y-2 text-sm" aria-label="Winners">
 							{#each t.top as standing (standing.playerId)}
