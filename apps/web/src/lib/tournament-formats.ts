@@ -91,6 +91,7 @@ export function ranFor(from: string, to: string): string {
 	if (elapsed.asMinutes() < 1) {
 		return elapsed.format('s [sec]');
 	}
+
 	if (elapsed.asHours() < 1) {
 		return elapsed.format('m [min] s [sec]');
 	}

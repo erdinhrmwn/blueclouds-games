@@ -22,7 +22,9 @@
 	$effect(() => {
 		const key = moveKey;
 		const line = text;
-		if (key === lastKey) return;
+		if (key === lastKey) {
+			return;
+		}
 
 		const freshTable = key < lastKey;
 		lastKey = key;

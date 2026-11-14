@@ -63,8 +63,13 @@ export function loadPlatformConfig(env: Record<string, string | undefined> = pro
 
 /** Checks a play token from the platform. Returns who it belongs to, or null if it isn't valid. */
 export async function verifyPlayToken(token: unknown): Promise<Identity | null> {
-	if (typeof token !== "string" || token.length > MAX_TOKEN_LENGTH) return null;
-	if (!publicKey) loadPlatformConfig();
+	if (typeof token !== "string" || token.length > MAX_TOKEN_LENGTH) {
+		return null;
+	}
+
+	if (!publicKey) {
+		loadPlatformConfig();
+	}
 
 	try {
 		const { payload } = await jwtVerify(token, await publicKey!, {
@@ -73,7 +78,9 @@ export async function verifyPlayToken(token: unknown): Promise<Identity | null> 
 		});
 
 		const claims = Claims.safeParse(payload);
-		if (!claims.success) return null;
+		if (!claims.success) {
+			return null;
+		}
 
 		return { id: claims.data.sub, name: claims.data.name, vip: claims.data.vip };
 	} catch {
@@ -164,8 +171,13 @@ async function failureDetail(res: Response): Promise<string> {
 /** The room's tournament, start time and seats. Null if the platform doesn't know the room; throws if it can't be reached. */
 export async function fetchRoomSeats(code: string): Promise<RoomSeats | null> {
 	const res = await callPlatform("GET", `/rooms/${encodeURIComponent(code)}/seats`);
-	if (res.status === 404) return null;
-	if (!res.ok) throw new Error(`room seats: ${res.status}`);
+	if (res.status === 404) {
+		return null;
+	}
+
+	if (!res.ok) {
+		throw new Error(`room seats: ${res.status}`);
+	}
 
 	const body = (await res.json()) as { data: { room: unknown } };
 	return TournamentRoom.parse(body.data.room);
@@ -177,7 +189,9 @@ const VipIds = z.object({ vipIds: z.array(z.uuid()) });
 export async function fetchVipIds(ids: string[]): Promise<Set<string>> {
 	const query = ids.map(encodeURIComponent).join(",");
 	const res = await callPlatform("GET", `/players/vips?ids=${query}`);
-	if (!res.ok) throw new Error(`vip lookup: ${res.status}`);
+	if (!res.ok) {
+		throw new Error(`vip lookup: ${res.status}`);
+	}
 
 	const body = (await res.json()) as { data: unknown };
 	const { vipIds } = VipIds.parse(body.data);
@@ -199,7 +213,9 @@ export async function markRoom(
 		const body = change === "close" ? { reason } : undefined;
 
 		const res = await callPlatform("POST", path, body);
-		if (res.ok) return { ok: true };
+		if (res.ok) {
+			return { ok: true };
+		}
 
 		return { ok: false, detail: await failureDetail(res) };
 	} catch (err) {

@@ -22,7 +22,10 @@ export function chooseBotMove(game: Game): BotMove {
 
 	// After a draw only the drawn card may be played.
 	const canPlay = me.hand.filter((card) => {
-		if (game.drew && card.id !== game.drawnId) return false;
+		if (game.drew && card.id !== game.drawnId) {
+			return false;
+		}
+
 		return fits(card, top, game.suit);
 	});
 
@@ -37,6 +40,7 @@ export function chooseBotMove(game: Game): BotMove {
 	if (isWild(card)) {
 		input.suit = mostHeld(rest) ?? game.suit;
 	}
+
 	if (card.kind === "gust" && rest.length > 0) {
 		input.giveId = leastUseful(rest).id;
 	}
@@ -50,7 +54,9 @@ function pickCard(game: Game, hand: Card[], canPlay: Card[]): Card {
 	if (next.hand.length <= NEARLY_OUT) {
 		for (const kind of STOPPERS) {
 			const stopper = canPlay.find((card) => card.kind === kind);
-			if (stopper) return stopper;
+			if (stopper) {
+				return stopper;
+			}
 		}
 	}
 
@@ -65,7 +71,9 @@ function pickCard(game: Game, hand: Card[], canPlay: Card[]): Card {
 function suitCounts(hand: Card[]): Map<Suit, number> {
 	const count = new Map(SUITS.map((suit) => [suit, 0]));
 	for (const card of hand) {
-		if (card.suit) count.set(card.suit, count.get(card.suit)! + 1);
+		if (card.suit) {
+			count.set(card.suit, count.get(card.suit)! + 1);
+		}
 	}
 
 	return count;
@@ -74,7 +82,9 @@ function suitCounts(hand: Card[]): Map<Suit, number> {
 function mostHeld(hand: Card[]): Suit | undefined {
 	const count = suitCounts(hand);
 	const best = Math.max(...count.values());
-	if (best === 0) return undefined;
+	if (best === 0) {
+		return undefined;
+	}
 
 	return SUITS.find((suit) => count.get(suit) === best);
 }

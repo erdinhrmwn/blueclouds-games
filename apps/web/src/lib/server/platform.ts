@@ -58,7 +58,9 @@ async function call<T>(
 	}
 
 	const body = (await res.json().catch(() => null)) as Envelope<T> | null;
-	if (body?.ok) return body.data;
+	if (body?.ok) {
+		return body.data;
+	}
 
 	throw new PlatformError(
 		res.status,
@@ -101,7 +103,9 @@ const ended = () =>
 
 function secretOrEnded(cookies: Cookies): string {
 	const secret = secretOf(cookies);
-	if (!secret) throw ended();
+	if (!secret) {
+		throw ended();
+	}
 
 	return secret;
 }
@@ -109,7 +113,9 @@ function secretOrEnded(cookies: Cookies): string {
 /** Like secretOrEnded, for a visitor who may simply not have chosen a name yet. */
 function secretOrNameFirst(cookies: Cookies): string {
 	const secret = secretOf(cookies);
-	if (!secret) throw new PlatformError(401, 'unauthenticated', 'Choose a name first.');
+	if (!secret) {
+		throw new PlatformError(401, 'unauthenticated', 'Choose a name first.');
+	}
 
 	return secret;
 }
@@ -128,7 +134,9 @@ export type Me = {
  */
 export async function whoAmI(event: RequestEvent): Promise<Me | null> {
 	const secret = secretOf(event.cookies);
-	if (!secret) return null;
+	if (!secret) {
+		return null;
+	}
 
 	try {
 		const { player, coins } = await call<{ player: Me; coins: number }>(event, '/players/me', {
@@ -143,7 +151,9 @@ export async function whoAmI(event: RequestEvent): Promise<Me | null> {
 		}
 
 		const disabled = err instanceof PlatformError && err.status === 403;
-		if (disabled) return null;
+		if (disabled) {
+			return null;
+		}
 
 		throw err;
 	}
@@ -166,13 +176,17 @@ export async function register(
 	try {
 		res = await send(secretOf(event.cookies));
 	} catch (err) {
-		if (!lost(err)) throw err;
+		if (!lost(err)) {
+			throw err;
+		}
 
 		// The guest's secret is gone: start a new account instead.
 		res = await send();
 	}
 
-	if (res.playerSecret) saveSecret(event.cookies, res.playerSecret);
+	if (res.playerSecret) {
+		saveSecret(event.cookies, res.playerSecret);
+	}
 
 	return res.player;
 }
@@ -200,12 +214,16 @@ export async function changePassword(
 export async function logout(event: RequestEvent): Promise<void> {
 	const secret = secretOf(event.cookies);
 	event.cookies.delete(SECRET_COOKIE, { path: '/' });
-	if (!secret) return;
+	if (!secret) {
+		return;
+	}
 
 	try {
 		await call(event, '/players/logout', { method: 'POST', secret });
 	} catch (err) {
-		if (!lost(err)) throw err;
+		if (!lost(err)) {
+			throw err;
+		}
 	}
 }
 
@@ -396,7 +414,9 @@ export async function tournamentsFor(
 ): Promise<{ tournaments: Tournament[]; live: LiveTournament[]; tables: TournamentTable[] }> {
 	const secret = secretOf(event.cookies);
 	const none = { tournaments: [], live: [], tables: [] };
-	if (!secret) return none;
+	if (!secret) {
+		return none;
+	}
 
 	const query = `game=${encodeURIComponent(game)}`;
 	const get = { method: 'GET', secret };
@@ -413,7 +433,10 @@ export async function tournamentsFor(
 
 		return { tournaments, live, tables: rooms };
 	} catch (err) {
-		if (lost(err)) return none;
+		if (lost(err)) {
+			return none;
+		}
+
 		throw err;
 	}
 }
@@ -421,7 +444,9 @@ export async function tournamentsFor(
 /** Whether a game is under maintenance (no new tables). False when it can't be asked, e.g. before a name. */
 export async function underMaintenance(event: RequestEvent, game: string): Promise<boolean> {
 	const secret = secretOf(event.cookies);
-	if (!secret) return false;
+	if (!secret) {
+		return false;
+	}
 
 	try {
 		const { games } = await call<{ games: { slug: string; maintenance: boolean }[] }>(
@@ -432,7 +457,10 @@ export async function underMaintenance(event: RequestEvent, game: string): Promi
 
 		return games.some((entry) => entry.slug === game && entry.maintenance);
 	} catch (err) {
-		if (lost(err)) return false;
+		if (lost(err)) {
+			return false;
+		}
+
 		throw err;
 	}
 }
@@ -605,7 +633,9 @@ export const BUSY_MESSAGE = 'The game server is busy. Try again in a moment.';
 
 /** Same `{ error: { code, message } }` shape for every failure the browser sees. */
 export function failure(err: unknown) {
-	if (!(err instanceof PlatformError)) throw err;
+	if (!(err instanceof PlatformError)) {
+		throw err;
+	}
 
 	const error = { code: err.code, message: err.message, fields: err.fields };
 	return json({ error }, { status: err.status });

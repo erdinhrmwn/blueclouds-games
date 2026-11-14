@@ -28,7 +28,9 @@ export const roomList = actor({
 		list: async (c) => listRooms(c),
 		report: async (c, input: unknown) => {
 			const parsed = RoomSummary.safeParse(input);
-			if (!parsed.success) throw new UserError("Invalid room summary.", { code: "bad_input" });
+			if (!parsed.success) {
+				throw new UserError("Invalid room summary.", { code: "bad_input" });
+			}
 
 			await c.db.execute(
 				`INSERT INTO rooms (code, data, updated_at) VALUES (?, ?, ?)
@@ -42,7 +44,9 @@ export const roomList = actor({
 		},
 		remove: async (c, code: unknown) => {
 			const parsed = RoomCode.safeParse(code);
-			if (!parsed.success) throw new UserError("Invalid room code.", { code: "bad_input" });
+			if (!parsed.success) {
+				throw new UserError("Invalid room code.", { code: "bad_input" });
+			}
 
 			await c.db.execute("DELETE FROM rooms WHERE code = ?", parsed.data);
 

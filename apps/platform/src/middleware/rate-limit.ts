@@ -17,7 +17,9 @@ export function rateLimit(limit: number, windowMs: number): MiddlewareHandler {
 		const now = Date.now();
 		if (windows.size > SWEEP_AT) {
 			for (const [ip, entry] of windows) {
-				if (entry.resetAt <= now) windows.delete(ip);
+				if (entry.resetAt <= now) {
+					windows.delete(ip);
+				}
 			}
 		}
 
@@ -46,7 +48,9 @@ export function rateLimit(limit: number, windowMs: number): MiddlewareHandler {
  */
 function clientIp(c: Context): string {
 	const forwarded = c.req.header("x-forwarded-for")?.split(",")[0]?.trim();
-	if (forwarded) return forwarded;
+	if (forwarded) {
+		return forwarded;
+	}
 
 	try {
 		return getConnInfo(c).remote.address ?? "unknown";

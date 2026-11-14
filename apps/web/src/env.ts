@@ -8,7 +8,10 @@ export const variables = defineEnvVars({
 		description: 'URL the browser uses to reach the Rivet engine.',
 		schema: (value) => {
 			const url = value || 'http://127.0.0.1:6420';
-			if (!URL.canParse(url)) throw new Error('PUBLIC_RIVET_ENDPOINT must be a URL');
+			if (!URL.canParse(url)) {
+				throw new Error('PUBLIC_RIVET_ENDPOINT must be a URL');
+			}
+
 			return url;
 		}
 	},
@@ -27,7 +30,10 @@ export const variables = defineEnvVars({
 		description:
 			'The engine as this server reaches it (internal network). Defaults to PUBLIC_RIVET_ENDPOINT.',
 		schema: (value) => {
-			if (value && !URL.canParse(value)) throw new Error('RIVET_ENDPOINT must be a URL');
+			if (value && !URL.canParse(value)) {
+				throw new Error('RIVET_ENDPOINT must be a URL');
+			}
+
 			return value || undefined;
 		}
 	},
@@ -36,7 +42,10 @@ export const variables = defineEnvVars({
 			'Platform API as this server reaches it (internal network). Browsers never call it.',
 		schema: (value) => {
 			const url = value || 'http://127.0.0.1:3000';
-			if (!URL.canParse(url)) throw new Error('PLATFORM_URL must be a URL');
+			if (!URL.canParse(url)) {
+				throw new Error('PLATFORM_URL must be a URL');
+			}
+
 			return url.replace(/\/+$/, '');
 		}
 	},

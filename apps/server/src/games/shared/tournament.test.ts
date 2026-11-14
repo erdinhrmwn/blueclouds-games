@@ -97,6 +97,7 @@ test("only a public open room goes on the room list", async () => {
 		await loadTournament(c);
 		expect((c.vars as { listed?: boolean }).listed).toBe(listed);
 	}
+
 	seats = null; // a room the platform doesn't know
 	const c = room();
 	await loadTournament(c);

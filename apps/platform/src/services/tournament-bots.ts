@@ -250,7 +250,10 @@ export async function fillWithBots(tx: SQL, tournamentId: string): Promise<numbe
 		await signBotUp(tx, tournamentId, botId, fee);
 	}
 
-	await tx`UPDATE tournaments SET bots_added_at = now() WHERE id = ${tournamentId}`;
+	await tx`
+		UPDATE tournaments
+		SET bots_added_at = now()
+		WHERE id = ${tournamentId}`;
 	return bots.length;
 }
 
@@ -275,12 +278,17 @@ async function botsFor(tx: SQL, tournamentId: string, needed: number): Promise<s
 		return found;
 	}
 
-	const [{ existing }] = await tx`SELECT count(*)::int AS existing FROM players WHERE is_bot`;
+	const [{ existing }] = await tx`
+		SELECT count(*)::int AS existing
+		FROM players
+		WHERE is_bot`;
 	const accounts = Array.from({ length: missing }, (_, index) => ({
 		display_name: botAccountName(existing + index),
 		is_bot: true,
 	}));
-	const made = await tx`INSERT INTO players ${tx(accounts)} RETURNING id`;
+	const made = await tx`
+		INSERT INTO players ${tx(accounts)}
+		RETURNING id`;
 
 	return [...found, ...made.map((row: { id: string }) => row.id)];
 }

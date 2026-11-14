@@ -108,6 +108,7 @@ export function cardFace(game: string, id: string): CardFace {
 	if (head === 'rainbow') {
 		return { mark: '✦', spoken: 'rainbow', ink: 'text-ink' };
 	}
+
 	if (head === 'tempest') {
 		return { mark: '+4', spoken: 'tempest', ink: 'text-ink' };
 	}

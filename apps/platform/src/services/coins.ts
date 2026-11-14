@@ -93,14 +93,18 @@ export async function moveCoins(
 
 /** A player's balance; 0 before they ever had coins. */
 export async function balanceOf(sql: SQL, playerId: string): Promise<number> {
-	const [wallet] = await sql`SELECT balance FROM wallets WHERE player_id = ${playerId}`;
+	const [wallet] = await sql`
+		SELECT balance
+		FROM wallets
+		WHERE player_id = ${playerId}`;
 	return wallet ? Number(wallet.balance) : 0;
 }
 
 /** Gives a new account its bonus, once ever (the ledger's unique index makes a second try a no-op). */
 export async function grantSignupBonus(tx: SQL, playerId: string): Promise<void> {
 	const [already] = await tx`
-		SELECT 1 FROM coin_ledger
+		SELECT 1
+		FROM coin_ledger
 		WHERE player_id = ${playerId} AND reason = 'signup_bonus'`;
 	if (already) {
 		return;

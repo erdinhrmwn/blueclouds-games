@@ -48,6 +48,7 @@ export function planRooms<T>(players: T[], perRoom: number, minPlayers: number):
 	if (playerCount === 0) {
 		throw new DistributeError("Nobody is registered.");
 	}
+
 	if (perRoom < minPlayers) {
 		throw new DistributeError(`Players per table must be at least ${minPlayers}.`);
 	}
@@ -146,9 +147,11 @@ export async function distributeIn(
 	if (!tournament) {
 		throw new DistributeError("Tournament not found.");
 	}
+
 	if (tournament.cancelled_at) {
 		throw new DistributeError("This tournament was cancelled.");
 	}
+
 	if (tournament.distributed_at) {
 		throw new DistributeError("Players already have their tables.");
 	}
@@ -226,7 +229,10 @@ async function seatRound(
 	const everyone = round.tables.flat();
 	const botRows =
 		everyone.length > 0
-			? await tx`SELECT id FROM players WHERE is_bot AND id IN ${tx(everyone)}`
+			? await tx`
+				SELECT id
+				FROM players
+				WHERE is_bot AND id IN ${tx(everyone)}`
 			: [];
 	const bots = new Set(botRows.map((row: { id: string }) => row.id));
 	const tables = spreadBots(round.tables, (playerId) => bots.has(playerId));
@@ -323,7 +329,11 @@ export async function advanceTournament(
 			g.min_players,
 			g.max_players,
 			tr.round,
-			(SELECT max(r.closed_at) FROM rooms r WHERE r.tournament_id = t.id AND r.tournament_round = tr.round)
+			(
+				SELECT max(r.closed_at)
+				FROM rooms r
+				WHERE r.tournament_id = t.id AND r.tournament_round = tr.round
+			)
 				AS last_closed_at
 		FROM tournaments t
 		JOIN games g ON g.slug = t.game_slug
@@ -381,6 +391,7 @@ export async function advanceTournament(
 			next =
 				tournament.format === "swiss" ? swissOrder(stillIn, seats, signUpOrder) : shuffle(stillIn);
 		}
+
 		places = () => pointsPlaces(seats, signUpOrder);
 	}
 
@@ -426,7 +437,11 @@ export async function roundSeats(tx: SQL, tournamentId: string): Promise<RoundSe
 			ra.player_id,
 			ra.tournament_round,
 			mp.placement,
-			(SELECT count(*)::int FROM match_players x WHERE x.match_id = m.id) AS table_size
+			(
+				SELECT count(*)::int
+				FROM match_players x
+				WHERE x.match_id = m.id
+			) AS table_size
 		FROM room_assignments ra
 		JOIN tournament_players tp
 			ON tp.tournament_id = ra.tournament_id AND tp.player_id = ra.player_id
@@ -492,7 +507,9 @@ async function finishTournament(
 			points: place.points,
 			last_round: place.lastRound,
 		}));
-		await tx`INSERT INTO tournament_results ${tx(rows)} ON CONFLICT DO NOTHING`;
+		await tx`
+			INSERT INTO tournament_results ${tx(rows)}
+			ON CONFLICT DO NOTHING`;
 	}
 
 	await tx`

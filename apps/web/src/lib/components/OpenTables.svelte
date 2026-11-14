@@ -19,9 +19,11 @@
 		if (phase === 'playing') {
 			return PLAYING;
 		}
+
 		if (phase === 'finished') {
 			return FINISHED;
 		}
+
 		if (players >= maxPlayers) {
 			return FULL;
 		}

@@ -23,7 +23,9 @@ let admin: Admin;
 const inMinutes = (m: number) => new Date(Date.now() + m * 60_000);
 const players = async (n: number) =>
 	(
-		await sql`INSERT INTO players ${sql(Array.from({ length: n }, (_, i) => ({ display_name: `P${i}` })))} RETURNING id`
+		await sql`
+			INSERT INTO players ${sql(Array.from({ length: n }, (_, i) => ({ display_name: `P${i}` })))}
+			RETURNING id`
 	).map((r: { id: string }) => r.id);
 const newCup = (perRoom = 6, maxPlayers = 36, minPlayers = 2) =>
 	createTournament(
@@ -171,7 +173,9 @@ describe('tournaments', () => {
 		await registerPlayers(sql, admin, id, ids, null);
 		await distributeNow(sql, admin, id, null);
 
-		await sql`INSERT INTO tournament_rounds (tournament_id, round, starts_at) VALUES (${id}, 2, now() + interval '3 min')`;
+		await sql`
+			INSERT INTO tournament_rounds (tournament_id, round, starts_at)
+			VALUES (${id}, 2, now() + interval '3 min')`;
 		const [{ id: final }] = await sql`
 			INSERT INTO rooms (game_slug, code, tournament_id, tournament_round)
 			VALUES ('bust-31', 'FINAL1', ${id}, 2)
@@ -197,7 +201,9 @@ describe('tournaments', () => {
 
 		await unassignPlayer(sql, admin, id, ids[0]!, null);
 		const [{ seats }] = await sql`
-			SELECT count(*)::int AS seats FROM room_assignments WHERE tournament_id = ${id} AND player_id = ${ids[0]}`;
+			SELECT count(*)::int AS seats
+			FROM room_assignments
+			WHERE tournament_id = ${id} AND player_id = ${ids[0]}`;
 		expect(seats).toBe(1);
 	});
 
@@ -244,7 +250,10 @@ describe('tournaments', () => {
 		);
 		await unassignPlayer(sql, admin, id, ids[7]!, null);
 		await unregisterPlayer(sql, admin, id, ids[7]!, null);
-		await sql`UPDATE rooms SET started_at = now() WHERE code = ${small.code}`;
+		await sql`
+			UPDATE rooms
+			SET started_at = now()
+			WHERE code = ${small.code}`;
 		const seated = (await tournamentDetail(sql, id))!.players.find(
 			(p) => p.roomCode === small.code
 		)!;
@@ -252,8 +261,11 @@ describe('tournaments', () => {
 			'already started'
 		);
 
-		const actions =
-			await sql`SELECT action FROM admin_audit_events WHERE tournament_id = ${id} ORDER BY id`;
+		const actions = await sql`
+				SELECT action
+				FROM admin_audit_events
+				WHERE tournament_id = ${id}
+				ORDER BY id`;
 		expect(actions.map((a: { action: string }) => a.action)).toEqual([
 			'tournament.create',
 			'tournament.register',
@@ -271,7 +283,10 @@ describe('tournaments', () => {
 		await distributeNow(sql, admin, id, null);
 		const before = (await tournamentDetail(sql, id))!;
 		const [waitingRoom, runningRoom] = before.rooms;
-		await sql`UPDATE rooms SET started_at = now() WHERE code = ${runningRoom!.code}`;
+		await sql`
+			UPDATE rooms
+			SET started_at = now()
+			WHERE code = ${runningRoom!.code}`;
 		const at = (code: string) => before.players.filter((p) => p.roomCode === code);
 		const waiter = at(waitingRoom!.code)[0]!.playerId;
 		const runner = at(runningRoom!.code)[0]!.playerId;
@@ -303,7 +318,8 @@ describe('tournaments', () => {
 		);
 
 		const [audit] = await sql`
-			SELECT player_id, detail FROM admin_audit_events
+			SELECT player_id, detail
+			FROM admin_audit_events
 			WHERE tournament_id = ${id} AND action = 'tournament.disqualify'
 			ORDER BY id
 			LIMIT 1`;

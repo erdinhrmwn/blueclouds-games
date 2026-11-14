@@ -37,8 +37,13 @@ function askHidden(question: string): Promise<string> {
 				const isCtrlC = ch === '\u0003';
 				const isBackspace = ch === '\u007f';
 
-				if (isEnter) return done();
-				if (isCtrlC) return done(new Error('Cancelled.'));
+				if (isEnter) {
+					return done();
+				}
+
+				if (isCtrlC) {
+					return done(new Error('Cancelled.'));
+				}
 
 				if (isBackspace) {
 					value = value.slice(0, -1);

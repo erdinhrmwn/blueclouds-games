@@ -104,6 +104,7 @@ export function buildDeck(): Card[] {
 		for (let value = 1; value <= HIGHEST_NUMBER; value++) {
 			cards.push({ id: `n${value}-${copy}`, kind: "number", value });
 		}
+
 		cards.push({ id: `z-${copy}`, kind: "zero", value: 0 });
 		cards.push({ id: `m-${copy}`, kind: "minus", value: -MINUS_VALUE });
 		cards.push({ id: `r-${copy}`, kind: "reverse", value: 0 });
@@ -129,7 +130,9 @@ export function totalAfter(total: number, card: Card): number {
 
 /** Sits a new player in `seat`, or in the first free one when no seat is given. */
 export function addPlayer(game: Game, id: string, name: string, bot = false, seat?: number): Game {
-	if (game.players.some((p) => p.id === id)) return game;
+	if (game.players.some((p) => p.id === id)) {
+		return game;
+	}
 
 	const player = { id, name, lives: START_LIVES, hand: [], bot };
 	const seated = seatPlayer<Game, Player>(game, player, seat);
@@ -138,8 +141,14 @@ export function addPlayer(game: Game, id: string, name: string, bot = false, sea
 }
 
 export function startGame(game: Game, byId: string, rng: Rng): Game {
-	if (game.hostId !== byId) throw new RuleError("Only the host can start the game.");
-	if (game.phase === "playing") throw new RuleError("The game is already running.");
+	if (game.hostId !== byId) {
+		throw new RuleError("Only the host can start the game.");
+	}
+
+	if (game.phase === "playing") {
+		throw new RuleError("The game is already running.");
+	}
+
 	if (game.players.length < MIN_PLAYERS) {
 		throw new RuleError(`Needs at least ${MIN_PLAYERS} players.`);
 	}
@@ -151,13 +160,19 @@ export function startGame(game: Game, byId: string, rng: Rng): Game {
 }
 
 export function playCard(game: Game, playerId: string, cardId: string, rng: Rng): Game {
-	if (game.phase !== "playing") throw new RuleError("The game has not started yet.");
+	if (game.phase !== "playing") {
+		throw new RuleError("The game has not started yet.");
+	}
 
 	const current = game.players[game.turn];
-	if (current?.id !== playerId) throw new RuleError("It is not your turn yet.");
+	if (current?.id !== playerId) {
+		throw new RuleError("It is not your turn yet.");
+	}
 
 	const card = current.hand.find((held) => held.id === cardId);
-	if (!card) throw new RuleError("That card is not in your hand.");
+	if (!card) {
+		throw new RuleError("That card is not in your hand.");
+	}
 
 	const total = totalAfter(game.total, card);
 	const hand = current.hand.filter((held) => held.id !== cardId);
@@ -221,6 +236,7 @@ function swapHands(players: Player[], a: number, b: number): Player[] {
 		if (index === a) {
 			return { ...player, hand: handB };
 		}
+
 		if (index === b) {
 			return { ...player, hand: handA };
 		}
@@ -274,8 +290,13 @@ function bust(
 
 /** Host sends everyone back to the lobby after a finished game. */
 export function resetToLobby(game: Game, byId: string): Game {
-	if (game.hostId !== byId) throw new RuleError("Only the host can start over.");
-	if (game.phase !== "finished") throw new RuleError("The game is not over yet.");
+	if (game.hostId !== byId) {
+		throw new RuleError("Only the host can start over.");
+	}
+
+	if (game.phase !== "finished") {
+		throw new RuleError("The game is not over yet.");
+	}
 
 	// Players who walked away mid-game don't come back to the lobby.
 	const players = game.players
@@ -294,7 +315,9 @@ function dealRound(game: Game, starter: number, rng: Rng): Game {
 	const round = game.round + 1;
 	let deck = shuffle(buildDeck(), rng, round);
 	const players = game.players.map((player) => {
-		if (player.lives <= 0) return { ...player, hand: [] };
+		if (player.lives <= 0) {
+			return { ...player, hand: [] };
+		}
 
 		const hand = deck.slice(0, HAND_SIZE);
 		deck = deck.slice(HAND_SIZE);
@@ -360,8 +383,13 @@ export type PublicView = ReturnType<typeof publicView>;
  */
 export function dealPauseMs(game: Game): number {
 	const event = game.lastEvent;
-	if (game.phase !== "playing") return 0;
-	if (event?.type !== "started" && event?.type !== "bust") return 0;
+	if (game.phase !== "playing") {
+		return 0;
+	}
+
+	if (event?.type !== "started" && event?.type !== "bust") {
+		return 0;
+	}
 
 	const alive = game.players.filter((player) => player.lives > 0).length;
 	const bustStampMs = event.type === "bust" ? DEAL.afterBustMs : 0;

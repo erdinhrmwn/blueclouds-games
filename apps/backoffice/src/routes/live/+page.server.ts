@@ -110,6 +110,7 @@ export const actions: Actions = {
 		if (!Number.isInteger(target.seat)) {
 			return fail(400, { code: target.code, error: 'Pick a player to kick.' });
 		}
+
 		if (!target.reason) {
 			return fail(400, { code: target.code, error: 'Say why the player is kicked.' });
 		}

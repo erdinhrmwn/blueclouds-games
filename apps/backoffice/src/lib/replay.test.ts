@@ -27,7 +27,10 @@ import { type LogEvent, replay } from './replay.ts';
 /** A full 4-player bot game, shuffled and logged the way the room does it (fairness events included). */
 function playedGame() {
 	let g = createGame();
-	for (let i = 0; i < 4; i++) g = addPlayer(g, `bot-${i}`, `Bot ${i}`, true);
+	for (let i = 0; i < 4; i++) {
+		g = addPlayer(g, `bot-${i}`, `Bot ${i}`, true);
+	}
+
 	let match: MatchState = { id: 'm', startedAt: new Date(0).toISOString(), out: [], seq: 0 };
 	let seeds: MatchSeeds = { ...matchSeeds(newCommitment()), matchId: 'm' };
 	let pending: LogEntry[] = [];
@@ -39,6 +42,7 @@ function playedGame() {
 				const { roundId, serverSeedHash } = seeds.current!;
 				pending.push({ type: 'fairness', data: { round, roundId, serverSeedHash } });
 			}
+
 			return seeds;
 		},
 		(record) => {
@@ -68,6 +72,7 @@ function playedGame() {
 		const p = g.players[g.turn]!;
 		step(playCard(g, p.id, chooseBotCard(p.hand, g.total)!.id, rng));
 	}
+
 	const seats = g.players.map((p) => ({ seat: p.seat, name: p.name }));
 	return { game: g, log: { logVersion: 1, events }, seats };
 }

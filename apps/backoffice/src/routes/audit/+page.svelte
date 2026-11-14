@@ -16,8 +16,13 @@
 		!!(filter.admin || filter.action || filter.player || filter.from || filter.to)
 	);
 	const emptyText = $derived.by(() => {
-		if (filtered) return 'No entries fit these filters.';
-		if (filter.before) return 'No older entries.';
+		if (filtered) {
+			return 'No entries fit these filters.';
+		}
+
+		if (filter.before) {
+			return 'No older entries.';
+		}
 
 		return 'Nothing logged yet.';
 	});

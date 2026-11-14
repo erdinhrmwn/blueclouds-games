@@ -81,8 +81,10 @@ describe("round reports", () => {
 			(await postRound(matchId, { ...roundBody(matchId, 2), roundId: body.roundId })).status,
 		).toBe(409);
 
-		const [{ n }] =
-			await t.sql`SELECT count(*)::int AS n FROM round_fairness WHERE round_id = ${body.roundId}`;
+		const [{ n }] = await t.sql`
+				SELECT count(*)::int AS n
+				FROM round_fairness
+				WHERE round_id = ${body.roundId}`;
 		expect(n).toBe(1);
 	});
 

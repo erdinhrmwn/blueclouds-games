@@ -33,8 +33,19 @@
 	let picked = $state<Suit | null>(null);
 	let sent = false;
 
+	/** The chosen suit stands out; once one is picked, the others fade. */
+	const pickClass = (chosen: boolean) => {
+		if (chosen) {
+			return 'chosen';
+		}
+
+		return picked ? 'opacity-55' : '';
+	};
+
 	$effect(() => {
-		if (!dialog) return;
+		if (!dialog) {
+			return;
+		}
 
 		if (open && !dialog.open) {
 			picked = null;
@@ -48,7 +59,9 @@
 	});
 
 	function confirm() {
-		if (!picked || sent) return;
+		if (!picked || sent) {
+			return;
+		}
 
 		sent = true;
 		onpick(picked);
@@ -56,7 +69,9 @@
 
 	// Time is nearly up: play the suit picked so far instead of letting the server choose.
 	$effect(() => {
-		if (!open || secondsLeft === null || secondsLeft > AUTO_PICK_AT_S) return;
+		if (!open || secondsLeft === null || secondsLeft > AUTO_PICK_AT_S) {
+			return;
+		}
 
 		confirm();
 	});
@@ -88,7 +103,7 @@
 				aria-checked={chosen}
 				class="relative flex min-h-18 items-center gap-3 rounded-xl px-4 font-display text-lg font-bold text-paper transition active:translate-y-px motion-reduce:transition-none {FILL[
 					suit
-				]} {chosen ? 'chosen' : picked ? 'opacity-55' : ''}"
+				]} {pickClass(chosen)}"
 				onclick={() => (picked = suit)}
 			>
 				<SuitGlyph {suit} class="size-7" />

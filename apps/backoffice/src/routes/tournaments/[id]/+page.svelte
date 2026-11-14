@@ -34,17 +34,20 @@
 	/** The players at a table, with their seat there (a past round's table too). */
 	const seatedAt = (room: (typeof data.rooms)[number]) =>
 		room.seats.flatMap((taken) => {
-			const p = playersById.get(taken.playerId);
-			return p ? [{ ...p, seat: taken.seat }] : [];
+			const player = playersById.get(taken.playerId);
+
+			return player ? [{ ...player, seat: taken.seat }] : [];
 		});
 
 	const roomState = (room: (typeof data.rooms)[number]) => {
 		if (room.closeReason === 'finished') {
 			return `Finished after ${duration(room.startedAt ?? tournament.startsAt, room.closedAt!)}`;
 		}
+
 		if (room.closeReason === 'not_enough_players') {
 			return 'Closed: not enough players showed up';
 		}
+
 		if (room.startedAt) {
 			return `Playing since ${utc(room.startedAt)}`;
 		}
@@ -240,35 +243,37 @@
 {#if data.rooms.length}
 	<h2 class="mt-8 font-semibold">Tables</h2>
 	<div class="mt-3 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-		{#each data.rooms as r (r.id)}
-			<section class="panel p-5" aria-label="Table {r.code}">
+		{#each data.rooms as room (room.id)}
+			<section class="panel p-5" aria-label="Table {room.code}">
 				<p class="flex items-baseline justify-between gap-2">
-					<span class="font-mono text-lg tracking-[0.15em]">{r.code}</span>
+					<span class="font-mono text-lg tracking-[0.15em]">{room.code}</span>
 					<span class="text-sm text-muted">
-						Round {r.round} · {r.players}/{tournament.playersPerRoom}
+						Round {room.round} · {room.players}/{tournament.playersPerRoom}
 					</span>
 				</p>
-				<p class="text-sm {r.closeReason === 'not_enough_players' ? 'text-danger' : 'text-muted'}">
-					{roomState(r)}
+				<p
+					class="text-sm {room.closeReason === 'not_enough_players' ? 'text-danger' : 'text-muted'}"
+				>
+					{roomState(room)}
 				</p>
 				<ul class="mt-2 space-y-1 text-sm">
-					{#each seatedAt(r) as p (p.playerId)}
+					{#each seatedAt(room) as player (player.playerId)}
 						<li class="flex items-center justify-between gap-2">
 							<span>
 								<!-- A seat, not a place: "1." read like the table's winner. -->
-								<span class="text-muted tabular-nums">Seat {(p.seat ?? 0) + 1}</span>
-								<a class="link" href="/players/{p.playerId}">{p.name}</a>
-								{#if p.disabled}<span class="text-danger">(disabled)</span>{/if}
-								{#if p.status === 'disqualified'}<span class="text-danger">(disqualified)</span
+								<span class="text-muted tabular-nums">Seat {(player.seat ?? 0) + 1}</span>
+								<a class="link" href="/players/{player.playerId}">{player.name}</a>
+								{#if player.disabled}<span class="text-danger">(disabled)</span>{/if}
+								{#if player.status === 'disqualified'}<span class="text-danger">(disqualified)</span
 									>{/if}
 							</span>
-							{#if manageable && !r.startedAt && !r.closedAt}
+							{#if manageable && !room.startedAt && !room.closedAt}
 								<form method="POST" action="?/unassign" use:enhance={submit}>
-									<input type="hidden" name="playerId" value={p.playerId} />
+									<input type="hidden" name="playerId" value={player.playerId} />
 									<button
 										class="btn-quiet"
 										disabled={busy}
-										aria-label="Take {p.name} off table {r.code}">Take off</button
+										aria-label="Take {player.name} off table {room.code}">Take off</button
 									>
 								</form>
 							{/if}
@@ -306,8 +311,8 @@
 			<div>
 				<label class="label" for="room">Table</label>
 				<select class="field" id="room" name="room">
-					{#each seatable as r (r.id)}<option value={r.code}
-							>{r.code} ({r.players}/{tournament.playersPerRoom})</option
+					{#each seatable as room (room.id)}<option value={room.code}
+							>{room.code} ({room.players}/{tournament.playersPerRoom})</option
 						>{/each}
 				</select>
 			</div>
@@ -327,20 +332,20 @@
 	</p>
 {:else}
 	<ul class="panel mt-3 max-w-3xl divide-y divide-line text-sm">
-		{#each tournament.distributedAt ? waiting : signedUp as p (p.playerId)}
+		{#each tournament.distributedAt ? waiting : signedUp as player (player.playerId)}
 			<li class="flex items-center justify-between gap-3 px-5 py-2.5">
 				<span>
-					<a class="link" href="/players/{p.playerId}">{p.name}</a>
-					<span class="text-muted">{p.byAdmin ? 'added by an admin' : 'signed up'}</span>
-					{#if p.disabled}<span class="text-danger">(disabled, gets no table)</span>{/if}
+					<a class="link" href="/players/{player.playerId}">{player.name}</a>
+					<span class="text-muted">{player.byAdmin ? 'added by an admin' : 'signed up'}</span>
+					{#if player.disabled}<span class="text-danger">(disabled, gets no table)</span>{/if}
 				</span>
 				{#if manageable}
 					<form method="POST" action="?/unregister" use:enhance={submit}>
-						<input type="hidden" name="playerId" value={p.playerId} />
+						<input type="hidden" name="playerId" value={player.playerId} />
 						<button
 							class="btn-quiet"
 							disabled={busy}
-							aria-label="Remove {p.name} from the tournament">Remove</button
+							aria-label="Remove {player.name} from the tournament">Remove</button
 						>
 					</form>
 				{/if}
@@ -352,14 +357,14 @@
 {#if out.length}
 	<h2 class="mt-8 font-semibold">Withdrawn and disqualified ({out.length})</h2>
 	<ul class="panel mt-3 max-w-3xl divide-y divide-line text-sm">
-		{#each out as p (p.playerId)}
+		{#each out as player (player.playerId)}
 			<li class="px-5 py-2.5">
-				<a class="link" href="/players/{p.playerId}">{p.name}</a>
-				{#if p.status === 'withdrawn'}
-					<span class="text-muted">withdrew {utc(p.statusChangedAt!)}</span>
+				<a class="link" href="/players/{player.playerId}">{player.name}</a>
+				{#if player.status === 'withdrawn'}
+					<span class="text-muted">withdrew {utc(player.statusChangedAt!)}</span>
 				{:else}
-					<span class="text-danger">disqualified {utc(p.statusChangedAt!)}</span>
-					<span class="block text-muted">Reason: {p.statusReason}</span>
+					<span class="text-danger">disqualified {utc(player.statusChangedAt!)}</span>
+					<span class="block text-muted">Reason: {player.statusReason}</span>
 				{/if}
 			</li>
 		{/each}
@@ -379,7 +384,9 @@
 			class="mt-3 grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end"
 			use:enhance={({ cancel, formData }) => {
 				const name = signedUp.find((p) => p.playerId === formData.get('playerId'))?.name;
-				if (!confirm(`Disqualify ${name}? This can't be undone.`)) return cancel();
+				if (!confirm(`Disqualify ${name}? This can't be undone.`)) {
+					return cancel();
+				}
 
 				busy = true;
 				// Unlike the other forms, a success clears the reason, so it isn't reused by mistake.
@@ -392,8 +399,8 @@
 			<div>
 				<label class="label" for="dq-player">Player</label>
 				<select class="field" id="dq-player" name="playerId">
-					{#each signedUp as p (p.playerId)}<option value={p.playerId}
-							>{p.name}{p.roomCode ? ` (table ${p.roomCode})` : ''}</option
+					{#each signedUp as player (player.playerId)}<option value={player.playerId}
+							>{player.name}{player.roomCode ? ` (table ${player.roomCode})` : ''}</option
 						>{/each}
 				</select>
 			</div>
@@ -425,7 +432,10 @@
 			action="?/cancel"
 			class="mt-3"
 			use:enhance={({ cancel }) => {
-				if (!confirm(`Cancel ${tournament.name}?`)) return cancel();
+				if (!confirm(`Cancel ${tournament.name}?`)) {
+					return cancel();
+				}
+
 				return submit();
 			}}
 		>

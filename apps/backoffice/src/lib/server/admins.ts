@@ -72,7 +72,9 @@ export async function addAdmin(
 	ip: string | null
 ): Promise<AddAdminResult> {
 	const name = input.username.trim().toLowerCase();
-	if (!USERNAME.test(name) || name === ROOT) return { ok: false, reason: 'invalid' };
+	if (!USERNAME.test(name) || name === ROOT) {
+		return { ok: false, reason: 'invalid' };
+	}
 
 	const password = newPassword();
 	const hash = await Bun.password.hash(password);
@@ -84,7 +86,9 @@ export async function addAdmin(
 			ON CONFLICT (username) DO NOTHING
 			RETURNING id`;
 
-		if (!row) return { ok: false, reason: 'taken' } as const;
+		if (!row) {
+			return { ok: false, reason: 'taken' } as const;
+		}
 
 		await audit(tx, {
 			adminId: owner.id,
@@ -106,7 +110,9 @@ export async function changeRole(
 	role: AdminRole,
 	ip: string | null
 ): Promise<boolean> {
-	if (!changeable(owner, id)) return false;
+	if (!changeable(owner, id)) {
+		return false;
+	}
 
 	return sql.begin(async (tx) => {
 		const [row] = await tx`
@@ -119,7 +125,9 @@ export async function changeRole(
 				AND target.role <> ${role}
 			RETURNING previous.role AS "from"`;
 
-		if (!row) return false;
+		if (!row) {
+			return false;
+		}
 
 		await audit(tx, {
 			adminId: owner.id,
@@ -143,7 +151,9 @@ export async function disableAdmin(
 	id: string,
 	ip: string | null
 ): Promise<boolean> {
-	if (!changeable(owner, id)) return false;
+	if (!changeable(owner, id)) {
+		return false;
+	}
 
 	return sql.begin(async (tx) => {
 		const [row] = await tx`
@@ -154,9 +164,13 @@ export async function disableAdmin(
 				AND disabled_at IS NULL
 			RETURNING id`;
 
-		if (!row) return false;
+		if (!row) {
+			return false;
+		}
 
-		await tx`DELETE FROM admin_sessions WHERE admin_id = ${id}`;
+		await tx`
+			DELETE FROM admin_sessions
+			WHERE admin_id = ${id}`;
 		await audit(tx, { adminId: owner.id, action: 'admin.disable', targetAdminId: id, ip });
 
 		return true;
@@ -170,7 +184,9 @@ export async function enableAdmin(
 	id: string,
 	ip: string | null
 ): Promise<boolean> {
-	if (!isUuid(id)) return false;
+	if (!isUuid(id)) {
+		return false;
+	}
 
 	return sql.begin(async (tx) => {
 		const [row] = await tx`
@@ -180,7 +196,9 @@ export async function enableAdmin(
 				AND disabled_at IS NOT NULL
 			RETURNING id`;
 
-		if (!row) return false;
+		if (!row) {
+			return false;
+		}
 
 		await audit(tx, { adminId: owner.id, action: 'admin.enable', targetAdminId: id, ip });
 
@@ -198,7 +216,9 @@ export async function resetAdminPassword(
 	id: string,
 	ip: string | null
 ): Promise<string | null> {
-	if (!changeable(owner, id)) return null;
+	if (!changeable(owner, id)) {
+		return null;
+	}
 
 	const password = newPassword();
 	const hash = await Bun.password.hash(password);
@@ -211,9 +231,13 @@ export async function resetAdminPassword(
 				AND username <> ${ROOT}
 			RETURNING id`;
 
-		if (!row) return null;
+		if (!row) {
+			return null;
+		}
 
-		await tx`DELETE FROM admin_sessions WHERE admin_id = ${id}`;
+		await tx`
+			DELETE FROM admin_sessions
+			WHERE admin_id = ${id}`;
 		await audit(tx, { adminId: owner.id, action: 'admin.password_reset', targetAdminId: id, ip });
 
 		return password;

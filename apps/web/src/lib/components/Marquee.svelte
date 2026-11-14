@@ -44,6 +44,7 @@
 			if (line) {
 				line.style.transform = '';
 			}
+
 			return;
 		}
 

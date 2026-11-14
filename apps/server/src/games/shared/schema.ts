@@ -24,9 +24,6 @@ export const AdminKickInput = z.object({ seat: SeatInput, reason: AdminReason })
 /** Room codes are the actor key: short, uppercase, easy to read aloud. */
 export const RoomCode = z.string().regex(/^[A-Z0-9]{4,8}$/);
 
-/** Game slugs key the room lists, one list per game. */
-export const GameSlug = z.string().regex(/^[a-z0-9-]{1,32}$/);
-
 /**
  * Tournament tables report to their own list per game, read only by the backoffice: the public list (keyed by the
  * bare slug) never shows them.

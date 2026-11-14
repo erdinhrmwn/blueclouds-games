@@ -31,7 +31,9 @@ export const variables = defineEnvVars({
 		description: 'The engine as this server reaches it.',
 		schema: (value) => {
 			const url = value || 'http://127.0.0.1:6420';
-			if (!URL.canParse(url)) throw new Error('RIVET_ENDPOINT must be a URL');
+			if (!URL.canParse(url)) {
+				throw new Error('RIVET_ENDPOINT must be a URL');
+			}
 
 			return url;
 		}

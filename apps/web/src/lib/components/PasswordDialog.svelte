@@ -15,7 +15,9 @@
 	let done = $state(false);
 
 	$effect(() => {
-		if (!dialog) return;
+		if (!dialog) {
+			return;
+		}
 
 		if (open && !dialog.open) {
 			currentPassword = '';
@@ -33,7 +35,9 @@
 
 	async function submit(event: SubmitEvent) {
 		event.preventDefault();
-		if (busy) return;
+		if (busy) {
+			return;
+		}
 
 		busy = true;
 		fields = {};
@@ -45,7 +49,8 @@
 		} catch (err) {
 			fields = err instanceof PlatformError ? err.fields : {};
 			const hasFields = Object.keys(fields).length > 0;
-			error = hasFields ? null : err instanceof Error ? err.message : 'Something went wrong.';
+			const message = err instanceof Error ? err.message : 'Something went wrong.';
+			error = hasFields ? null : message;
 		} finally {
 			busy = false;
 		}

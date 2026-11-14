@@ -39,12 +39,22 @@
 	let dealtMoves: number | null = null;
 	$effect(() => {
 		const event = view.lastEvent;
-		if (view.phase !== 'playing') return;
-		if (event?.type !== 'started' && event?.type !== 'bust') return;
-		if (dealtMoves === view.moves) return;
+		if (view.phase !== 'playing') {
+			return;
+		}
+
+		if (event?.type !== 'started' && event?.type !== 'bust') {
+			return;
+		}
+
+		if (dealtMoves === view.moves) {
+			return;
+		}
 
 		dealtMoves = view.moves;
-		if (prefersReducedMotion.current) return;
+		if (prefersReducedMotion.current) {
+			return;
+		}
 
 		const seats = view.players.filter((p) => p.lives > 0).map((p) => p.id);
 		const wait = event.type === 'bust' ? DEAL.afterBustMs : 0;
@@ -92,13 +102,17 @@
 
 		room.play(cardId).then(() => {
 			// Rejected: show the card again.
-			if (room.error) placing = null;
+			if (room.error) {
+				placing = null;
+			}
 		});
 	}
 
 	// The pile's fly-in has read `placing` by the time the new hand arrives (it follows the view).
 	$effect(() => {
-		if (placing && room.hand !== placing.hand) placing = null;
+		if (placing && room.hand !== placing.hand) {
+			placing = null;
+		}
 	});
 	const flightFrom = (cardId: string) =>
 		placing?.id === cardId ? placing.rect : seatRect(lastPlayer);
@@ -126,8 +140,13 @@
 
 	$effect(() => {
 		const event = view.lastEvent;
-		if (event?.type !== 'bust') return;
-		if (untrack(() => bust?.moves) === view.moves) return;
+		if (event?.type !== 'bust') {
+			return;
+		}
+
+		if (untrack(() => bust?.moves) === view.moves) {
+			return;
+		}
 
 		const moves = view.moves;
 		bust = {
@@ -140,17 +159,30 @@
 		shake(tableEl);
 
 		const id = setTimeout(() => {
-			if (bust?.moves === moves) bust = null;
+			if (bust?.moves === moves) {
+				bust = null;
+			}
 		}, BUST_STAMP_MS);
 		return () => clearTimeout(id);
 	});
 
 	const iWon = $derived(view.winnerId !== null && view.winnerId === room.playerId);
 
+	/** The result heading: a win, a loss for a seated player, else who won. */
+	const resultTitle = $derived.by(() => {
+		if (iWon) {
+			return 'You win';
+		}
+
+		return room.me ? 'You lost this one' : 'Winner';
+	});
+
 	// Ticks while a turn timer runs; the deadline itself comes from the server.
 	let now = $state(Date.now());
 	$effect(() => {
-		if (room.turnEndsAt === null) return;
+		if (room.turnEndsAt === null) {
+			return;
+		}
 
 		const id = setInterval(() => {
 			now = Date.now();
@@ -162,7 +194,10 @@
 	const secondsLeft = $derived(msLeft === null ? null : Math.ceil(msLeft / 1000));
 	// Snapshot taken once per deadline; the bar and ring animate down from it every frame.
 	const drain = $derived.by(() => {
-		if (room.turnEndsAt === null) return null;
+		if (room.turnEndsAt === null) {
+			return null;
+		}
+
 		return { ms: Math.max(0, room.turnEndsAt - Date.now()), total: room.turnTotal };
 	});
 
@@ -216,9 +251,11 @@
 		if (event.card.kind === 'swap' && event.swappedWith) {
 			return ` and swapped hands with ${nameOf(event.swappedWith)}`;
 		}
+
 		if (event.card.kind === 'ten') {
 			return '. The total is 10';
 		}
+
 		if (event.card.kind === 'double') {
 			return `. ${nameOf(view.turnPlayerId)} plays 2 cards`;
 		}
@@ -228,7 +265,9 @@
 
 	const dealerLine = $derived.by(() => {
 		const event = view.lastEvent;
-		if (!event) return '';
+		if (!event) {
+			return '';
+		}
 
 		switch (event.type) {
 			case 'started':
@@ -262,19 +301,19 @@
 <!-- clip sideways only, so cards flying in mid-animation never add a horizontal scrollbar on phones -->
 <div bind:this={tableEl} class="table-back-bust-31 overflow-x-clip">
 	<Felt count={MAX_PLAYERS + 1} name="Bust 31">
-		{#snippet seat(k)}
-			{#if k === 0}
+		{#snippet seat(spot)}
+			{#if spot === 0}
 				<Dealer deckCount={view.deckCount} direction={view.direction} />
 			{:else}
-				{@const p = inSeat(k - 1)}
+				{@const player = inSeat(spot - 1)}
 				{#snippet lives()}
 					<span
 						class="flex items-center gap-0.5"
 						role="img"
-						aria-label="{p?.lives} of {START_LIVES} lives"
+						aria-label="{player?.lives} of {START_LIVES} lives"
 					>
 						{#each Array(START_LIVES) as _, i (i)}
-							{@const kept = i < (p?.lives ?? 0)}
+							{@const kept = i < (player?.lives ?? 0)}
 							<svg
 								viewBox="0 0 24 24"
 								class="size-3 {kept ? 'text-ember' : 'text-paper/60'}"
@@ -292,19 +331,19 @@
 					</span>
 				{/snippet}
 				<Seat
-					player={p}
-					number={k}
-					cards={p && p.lives > 0 ? HAND_SIZE : 0}
-					cardSide={backsSide(k)}
-					isTurn={!!p && (p.id === view.turnPlayerId || p.id === view.winnerId)}
-					isHost={!!p && p.id === view.hostId}
-					isMe={!!p && p.id === room.playerId}
-					out={!!p && p.lives === 0}
-					status={p ? lives : undefined}
-					timeLeft={p && p.id === view.turnPlayerId && msLeft !== null
+					{player}
+					number={spot}
+					cards={player && player.lives > 0 ? HAND_SIZE : 0}
+					cardSide={backsSide(spot)}
+					isTurn={!!player && (player.id === view.turnPlayerId || player.id === view.winnerId)}
+					isHost={!!player && player.id === view.hostId}
+					isMe={!!player && player.id === room.playerId}
+					out={!!player && player.lives === 0}
+					status={player ? lives : undefined}
+					timeLeft={player && player.id === view.turnPlayerId && msLeft !== null
 						? Math.min(1, msLeft / room.turnTotal)
 						: null}
-					drain={p && p.id === view.turnPlayerId ? drain : null}
+					drain={player && player.id === view.turnPlayerId ? drain : null}
 				/>
 			{/if}
 		{/snippet}
@@ -316,7 +355,7 @@
 					class="label"
 					in:fly={{ y: 10, duration: prefersReducedMotion.current ? 0 : 300, delay: 200 }}
 				>
-					{iWon ? 'You win' : room.me ? 'You lost this one' : 'Winner'}
+					{resultTitle}
 				</p>
 				<p
 					class="winner font-display text-4xl font-black text-brass sm:text-5xl"

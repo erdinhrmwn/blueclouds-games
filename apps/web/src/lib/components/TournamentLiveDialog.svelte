@@ -41,7 +41,9 @@
 	let error = $state<string | null>(null);
 
 	$effect(() => {
-		if (!dialog) return;
+		if (!dialog) {
+			return;
+		}
 
 		if (open && !dialog.open) {
 			dialog.showModal();
@@ -79,15 +81,25 @@
 	const format = $derived(tournament?.format ? FORMATS[tournament.format] : null);
 
 	const roundLabel = $derived.by(() => {
-		if (!tournament) return '';
-		if (finished) return 'Finished';
-		if (!byPoints) return `Round ${tournament.round}`;
+		if (!tournament) {
+			return '';
+		}
+
+		if (finished) {
+			return 'Finished';
+		}
+
+		if (!byPoints) {
+			return `Round ${tournament.round}`;
+		}
 
 		return `Round ${tournament.round} of ${tournament.rounds ?? 3}`;
 	});
 
 	const headline = $derived.by(() => {
-		if (!tournament) return '';
+		if (!tournament) {
+			return '';
+		}
 
 		if (finished) {
 			const winner = standings[0] ?? tournament.top[0];
@@ -116,7 +128,9 @@
 
 	/** "You're 3rd · 9 points", "You're in round 2", "You're out · 6th". */
 	const meLine = $derived.by(() => {
-		if (!tournament || !me) return null;
+		if (!tournament || !me) {
+			return null;
+		}
 
 		if (byPoints) {
 			return `You’re ${ordinal(me.place)} · ${me.points} points`;
@@ -131,9 +145,17 @@
 
 	const tableLine = $derived.by(() => {
 		const table = tournament?.table;
-		if (!tournament || !table || finished) return null;
-		if (table.closed) return `Your round ${tournament.round} table ${table.code} is done`;
-		if (table.started) return `Your round ${tournament.round} table ${table.code} is in play`;
+		if (!tournament || !table || finished) {
+			return null;
+		}
+
+		if (table.closed) {
+			return `Your round ${tournament.round} table ${table.code} is done`;
+		}
+
+		if (table.started) {
+			return `Your round ${tournament.round} table ${table.code} is in play`;
+		}
 
 		return `Round ${tournament.round} table ${table.code}, ${startsIn(tournament.roundStartsAt, now).toLowerCase()}`;
 	});

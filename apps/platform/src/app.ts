@@ -67,7 +67,9 @@ export function createApp(deps: Deps) {
 	app.notFound((c) => fail(c, new ApiError("not_found", 404, "Not found.")));
 
 	app.onError((err, c) => {
-		if (err instanceof ApiError) return fail(c, err);
+		if (err instanceof ApiError) {
+			return fail(c, err);
+		}
 
 		if (err instanceof HTTPException && err.status < 500) {
 			const code = HTTP_EXCEPTION_CODES[err.status] ?? "bad_input";

@@ -60,8 +60,10 @@ describe("match reports", () => {
 		expect(changed.status).toBe(409);
 		expect(changed.json.error.code).toBe("conflict");
 
-		const [{ n }] =
-			await t.sql`SELECT count(*)::int AS n FROM match_players WHERE match_id = ${body.matchId}`;
+		const [{ n }] = await t.sql`
+				SELECT count(*)::int AS n
+				FROM match_players
+				WHERE match_id = ${body.matchId}`;
 		expect(n).toBe(3);
 	});
 
@@ -101,7 +103,10 @@ describe("match reports", () => {
 		const res = await post(body);
 		expect(res.status).toBe(422);
 		expect(res.json.error.code).toBe("unknown_player");
-		const [{ n }] = await t.sql`SELECT count(*)::int AS n FROM matches WHERE id = ${body.matchId}`;
+		const [{ n }] = await t.sql`
+			SELECT count(*)::int AS n
+			FROM matches
+			WHERE id = ${body.matchId}`;
 		expect(n).toBe(0);
 	});
 
@@ -153,7 +158,9 @@ describe("any game in the catalog", () => {
 		});
 		expect((await post(twoSeats)).json.error.fields.game).toBe("Unknown game.");
 
-		await t.sql`INSERT INTO games (slug, name, min_players, max_players, score_label) VALUES ('test-game', 'Test Game', 3, 4, 'Points')`;
+		await t.sql`
+			INSERT INTO games (slug, name, min_players, max_players, score_label)
+			VALUES ('test-game', 'Test Game', 3, 4, 'Points')`;
 		await room(t.sql, "test-game", "TGAME");
 		expect((await post(twoSeats)).json.error.fields.players).toBe("Needs 3–4 players.");
 		// Lower is better here, places 2 and 3 tie, and a score may be negative: all up to the game.
@@ -163,8 +170,11 @@ describe("any game in the catalog", () => {
 			players: [seat(0, 1, -2), seat(1, 2, 12), seat(2, 2, 12)],
 		});
 		expect((await post(body)).status).toBe(201);
-		const rows =
-			await t.sql`SELECT seat, placement, score FROM match_players WHERE match_id = ${body.matchId} ORDER BY seat`;
+		const rows = await t.sql`
+				SELECT seat, placement, score
+				FROM match_players
+				WHERE match_id = ${body.matchId}
+				ORDER BY seat`;
 		expect(rows.map((r: { score: number }) => r.score)).toEqual([-2, 12, 12]);
 	});
 });
@@ -173,8 +183,10 @@ describe("match logs", () => {
 	test("are stored with the match, as sent", async () => {
 		const body = report();
 		expect((await post(body)).status).toBe(201);
-		const [row] =
-			await t.sql`SELECT log_version, event_count, events FROM match_logs WHERE match_id = ${body.matchId}`;
+		const [row] = await t.sql`
+				SELECT log_version, event_count, events
+				FROM match_logs
+				WHERE match_id = ${body.matchId}`;
 		expect(row).toEqual({ log_version: 1, event_count: 3, events: events() });
 	});
 
@@ -254,6 +266,7 @@ describe("my match history", () => {
 			ids.push(body.matchId);
 			expect((await post(body)).status).toBe(201);
 		}
+
 		const first = await call(t.app, "GET", "/v1/players/me/matches", { token: carl.secret });
 		expect(first.status).toBe(200);
 		expect(first.json.data.matches).toHaveLength(20);
@@ -291,6 +304,7 @@ describe("my match history", () => {
 			const body = report({ players: seats(placement), endedAt: at(10 + index) });
 			expect((await post(body)).status).toBe(201);
 		}
+
 		const stopped = report({ players: seats(1), endReason: "terminated", endedAt: at(20) });
 		expect((await post(stopped)).status).toBe(201);
 

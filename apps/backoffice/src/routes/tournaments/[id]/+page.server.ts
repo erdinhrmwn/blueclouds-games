@@ -25,7 +25,9 @@ const plural = (count: number, word: string) => `${count} ${word}${count === 1 ?
 
 export const load: PageServerLoad = async ({ params }) => {
 	const detail = await tournamentDetail(sql, params.id);
-	if (!detail) error(404, 'Tournament not found');
+	if (!detail) {
+		error(404, 'Tournament not found');
+	}
 
 	return { ...detail, reasonMax: REASON_MAX };
 };
@@ -36,7 +38,10 @@ async function attempt(run: () => Promise<string>, values: Record<string, string
 		const message = await run();
 		return { message };
 	} catch (err) {
-		if (err instanceof TournamentError) return fail(400, { error: err.message, ...values });
+		if (err instanceof TournamentError) {
+			return fail(400, { error: err.message, ...values });
+		}
+
 		throw err;
 	}
 }
@@ -45,7 +50,9 @@ const field = (data: FormData, key: string) => String(data.get(key) ?? '').trim(
 
 function playerIdOf(data: FormData): string {
 	const id = field(data, 'playerId').toLowerCase();
-	if (!isUuid(id)) throw new TournamentError('That is not a player id.');
+	if (!isUuid(id)) {
+		throw new TournamentError('That is not a player id.');
+	}
 
 	return id;
 }

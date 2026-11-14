@@ -12,16 +12,27 @@ const hash = () => crypto.getRandomValues(new Uint8Array(32));
 
 beforeAll(async () => {
 	sql = (await resetTestDatabase()).sql;
-	[{ id: player }] = await sql`INSERT INTO players (display_name) VALUES ('Rina') RETURNING id`;
-	[{ id: admin }] =
-		await sql`INSERT INTO admins (username, password_hash, role) VALUES ('root', '$argon2id$v=19$test', 'owner') RETURNING id`;
+	[{ id: player }] = await sql`
+		INSERT INTO players (display_name)
+		VALUES ('Rina')
+		RETURNING id`;
+	[{ id: admin }] = await sql`
+			INSERT INTO admins (username, password_hash, role)
+			VALUES ('root', '$argon2id$v=19$test', 'owner')
+			RETURNING id`;
 	roomId = await room(sql, "bust-31", "ABCD");
-	await sql`INSERT INTO matches (id, game_slug, room_id, rules_version, started_at, ended_at, body_hash)
-	          VALUES (${MATCH}, 'bust-31', ${roomId}, 1, now() - interval '5 min', now(), ${hash()})`;
-	await sql`INSERT INTO match_players (match_id, seat, player_id, bot_name, placement, score)
-	          VALUES (${MATCH}, 0, ${player}, NULL, 1, 2), (${MATCH}, 1, NULL, 'Bot Rain', 2, 0)`;
-	await sql`INSERT INTO match_logs (match_id, log_version, event_count, events) VALUES (${MATCH}, 1, 1, '[{"seq":0}]')`;
-	await sql`INSERT INTO admin_audit_events (admin_id, action) VALUES (${admin}, 'login')`;
+	await sql`
+		INSERT INTO matches (id, game_slug, room_id, rules_version, started_at, ended_at, body_hash)
+		VALUES (${MATCH}, 'bust-31', ${roomId}, 1, now() - interval '5 min', now(), ${hash()})`;
+	await sql`
+		INSERT INTO match_players (match_id, seat, player_id, bot_name, placement, score)
+		VALUES (${MATCH}, 0, ${player}, NULL, 1, 2), (${MATCH}, 1, NULL, 'Bot Rain', 2, 0)`;
+	await sql`
+		INSERT INTO match_logs (match_id, log_version, event_count, events)
+		VALUES (${MATCH}, 1, 1, '[{"seq":0}]')`;
+	await sql`
+		INSERT INTO admin_audit_events (admin_id, action)
+		VALUES (${admin}, 'login')`;
 });
 afterAll(() => sql.close());
 
@@ -40,18 +51,24 @@ describe("append-only history", () => {
 describe("match rules", () => {
 	test("a second winner or a player in two seats is refused", async () => {
 		await refused(
-			sql`INSERT INTO match_players (match_id, seat, player_id, bot_name, placement, score) VALUES (${MATCH}, 2, NULL, 'Bot Sun', 1, 0)`,
+			sql`
+				INSERT INTO match_players (match_id, seat, player_id, bot_name, placement, score)
+				VALUES (${MATCH}, 2, NULL, 'Bot Sun', 1, 0)`,
 			/winner_key/,
 		);
 		await refused(
-			sql`INSERT INTO match_players (match_id, seat, player_id, bot_name, placement, score) VALUES (${MATCH}, 2, ${player}, NULL, 3, 0)`,
+			sql`
+				INSERT INTO match_players (match_id, seat, player_id, bot_name, placement, score)
+				VALUES (${MATCH}, 2, ${player}, NULL, 3, 0)`,
 			/player_id_match_id_key/,
 		);
 	});
 
 	test("a non-v7 id, a short hash or a wrong event count is refused", async () => {
 		const insert = (id: string, h: Uint8Array) =>
-			sql`INSERT INTO matches (id, game_slug, room_id, rules_version, started_at, ended_at, body_hash) VALUES (${id}, 'bust-31', ${roomId}, 1, now(), now(), ${h})`;
+			sql`
+				INSERT INTO matches (id, game_slug, room_id, rules_version, started_at, ended_at, body_hash)
+				VALUES (${id}, 'bust-31', ${roomId}, 1, now(), now(), ${h})`;
 		await refused(insert("01900000-0000-4000-8000-000000000002", hash()), /matches_id_check/);
 		await refused(
 			insert("01900000-0000-7000-8000-000000000002", new Uint8Array(1)),
@@ -59,7 +76,9 @@ describe("match rules", () => {
 		);
 		await insert("01900000-0000-7000-8000-000000000003", hash());
 		await refused(
-			sql`INSERT INTO match_logs (match_id, log_version, event_count, events) VALUES ('01900000-0000-7000-8000-000000000003', 1, 2, '[{"seq":0}]')`,
+			sql`
+				INSERT INTO match_logs (match_id, log_version, event_count, events)
+				VALUES ('01900000-0000-7000-8000-000000000003', 1, 2, '[{"seq":0}]')`,
 			/events_length_check/,
 		);
 	});
@@ -68,31 +87,52 @@ describe("match rules", () => {
 describe("admins and audit", () => {
 	test("root cannot be disabled, another admin can", async () => {
 		await refused(
-			sql`UPDATE admins SET disabled_at = now() WHERE username = 'root'`,
+			sql`
+				UPDATE admins
+				SET disabled_at = now()
+				WHERE username = 'root'`,
 			/root_enabled_check/,
 		);
-		await sql`INSERT INTO admins (username, password_hash) VALUES ('ops', '$argon2id$v=19$test')`;
-		await sql`UPDATE admins SET disabled_at = now() WHERE username = 'ops'`;
+		await sql`
+			INSERT INTO admins (username, password_hash)
+			VALUES ('ops', '$argon2id$v=19$test')`;
+		await sql`
+			UPDATE admins
+			SET disabled_at = now()
+			WHERE username = 'ops'`;
 	});
 
 	test("root is always an owner", async () => {
 		await refused(
-			sql`UPDATE admins SET role = 'viewer' WHERE username = 'root'`,
+			sql`
+				UPDATE admins
+				SET role = 'viewer'
+				WHERE username = 'root'`,
 			/root_owner_check/,
 		);
-		await refused(sql`UPDATE admins SET role = 'superuser' WHERE username = 'ops'`, /role_check/);
+		await refused(
+			sql`
+			UPDATE admins
+			SET role = 'superuser'
+			WHERE username = 'ops'`,
+			/role_check/,
+		);
 	});
 
 	test("a password that isn't an argon2id hash is refused", async () => {
 		await refused(
-			sql`INSERT INTO admins (username, password_hash) VALUES ('plain', 'hunter2')`,
+			sql`
+				INSERT INTO admins (username, password_hash)
+				VALUES ('plain', 'hunter2')`,
 			/password_hash_check/,
 		);
 	});
 
 	test("an unknown audit action is refused", async () => {
 		await refused(
-			sql`INSERT INTO admin_audit_events (admin_id, action) VALUES (${admin}, 'player.delete')`,
+			sql`
+				INSERT INTO admin_audit_events (admin_id, action)
+				VALUES (${admin}, 'player.delete')`,
 			/action_check/,
 		);
 	});
@@ -105,24 +145,42 @@ describe("tournament rooms", () => {
 	beforeAll(async () => {
 		[{ id: cup }] = await sql`
 			INSERT INTO tournaments (game_slug, name, players_per_room, starts_at, registration_closes_at, created_by_admin_id)
-			VALUES ('bust-31', 'Cup', 6, now() + interval '1 hour', now() + interval '50 min', ${admin}) RETURNING id`;
-		await sql`INSERT INTO tournament_rounds (tournament_id, round, starts_at) VALUES (${cup}, 1, now()), (${cup}, 2, now())`;
-		[{ id: cupRoom }] =
-			await sql`INSERT INTO rooms (game_slug, code, tournament_id, tournament_round) VALUES ('bust-31', 'CUP01', ${cup}, 1) RETURNING id`;
-		[{ id: other }] = await sql`INSERT INTO players (display_name) VALUES ('Ben') RETURNING id`;
-		await sql`INSERT INTO tournament_players (tournament_id, player_id) VALUES (${cup}, ${player}), (${cup}, ${other})`;
-		await sql`INSERT INTO room_assignments (room_id, tournament_id, tournament_round, player_id, seat) VALUES (${cupRoom}, ${cup}, 1, ${player}, 0)`;
+			VALUES ('bust-31', 'Cup', 6, now() + interval '1 hour', now() + interval '50 min', ${admin})
+			RETURNING id`;
+		await sql`
+			INSERT INTO tournament_rounds (tournament_id, round, starts_at)
+			VALUES (${cup}, 1, now()), (${cup}, 2, now())`;
+		[{ id: cupRoom }] = await sql`
+				INSERT INTO rooms (game_slug, code, tournament_id, tournament_round)
+				VALUES ('bust-31', 'CUP01', ${cup}, 1)
+				RETURNING id`;
+		[{ id: other }] = await sql`
+			INSERT INTO players (display_name)
+			VALUES ('Ben')
+			RETURNING id`;
+		await sql`
+			INSERT INTO tournament_players (tournament_id, player_id)
+			VALUES (${cup}, ${player}), (${cup}, ${other})`;
+		await sql`
+			INSERT INTO room_assignments (room_id, tournament_id, tournament_round, player_id, seat)
+			VALUES (${cupRoom}, ${cup}, 1, ${player}, 0)`;
 	});
 	const assign = (roomId: string, playerId: string, seat: number, round = 1) =>
-		sql`INSERT INTO room_assignments (room_id, tournament_id, tournament_round, player_id, seat) VALUES (${roomId}, ${cup}, ${round}, ${playerId}, ${seat})`;
+		sql`
+			INSERT INTO room_assignments (room_id, tournament_id, tournament_round, player_id, seat)
+			VALUES (${roomId}, ${cup}, ${round}, ${playerId}, ${seat})`;
 
 	test("a player can't make one, and it plays its tournament's game", async () => {
 		await refused(
-			sql`INSERT INTO rooms (game_slug, code, tournament_id, tournament_round, created_by_player_id) VALUES ('bust-31', 'CUP02', ${cup}, 1, ${player})`,
+			sql`
+				INSERT INTO rooms (game_slug, code, tournament_id, tournament_round, created_by_player_id)
+				VALUES ('bust-31', 'CUP02', ${cup}, 1, ${player})`,
 			/tournament_creator_check/,
 		);
 		await refused(
-			sql`INSERT INTO rooms (game_slug, code, tournament_id, tournament_round) VALUES ('cloudburst', 'CUP03', ${cup}, 1)`,
+			sql`
+				INSERT INTO rooms (game_slug, code, tournament_id, tournament_round)
+				VALUES ('cloudburst', 'CUP03', ${cup}, 1)`,
 			/tournament_id_game_slug_fkey/,
 		);
 	});
@@ -141,27 +199,37 @@ describe("tournament rooms", () => {
 
 	test("one player per seat, only registered players, one room per player per round", async () => {
 		await refused(assign(cupRoom, other, 0), /room_id_seat_key/);
-		const [{ id: stranger }] =
-			await sql`INSERT INTO players (display_name) VALUES ('Cy') RETURNING id`;
+		const [{ id: stranger }] = await sql`
+				INSERT INTO players (display_name)
+				VALUES ('Cy')
+				RETURNING id`;
 		await refused(assign(cupRoom, stranger, 1), /tournament_id_player_id_fkey/);
-		const [{ id: second }] =
-			await sql`INSERT INTO rooms (game_slug, code, tournament_id, tournament_round) VALUES ('bust-31', 'CUP04', ${cup}, 1) RETURNING id`;
+		const [{ id: second }] = await sql`
+				INSERT INTO rooms (game_slug, code, tournament_id, tournament_round)
+				VALUES ('bust-31', 'CUP04', ${cup}, 1)
+				RETURNING id`;
 		await refused(assign(second, player, 0), /round_player_key/);
 
 		// The next round seats them again, at a table of that round only.
-		const [{ id: nextRound }] =
-			await sql`INSERT INTO rooms (game_slug, code, tournament_id, tournament_round) VALUES ('bust-31', 'CUP05', ${cup}, 2) RETURNING id`;
+		const [{ id: nextRound }] = await sql`
+				INSERT INTO rooms (game_slug, code, tournament_id, tournament_round)
+				VALUES ('bust-31', 'CUP05', ${cup}, 2)
+				RETURNING id`;
 		await assign(nextRound, player, 0, 2);
 		await refused(assign(nextRound, other, 1, 1), /room_round_fkey/);
 	});
 
 	test("a tournament table has a round, and an open one has none", async () => {
 		await refused(
-			sql`INSERT INTO rooms (game_slug, code, tournament_id) VALUES ('bust-31', 'CUP06', ${cup})`,
+			sql`
+				INSERT INTO rooms (game_slug, code, tournament_id)
+				VALUES ('bust-31', 'CUP06', ${cup})`,
 			/tournament_round_check/,
 		);
 		await refused(
-			sql`INSERT INTO rooms (game_slug, code, tournament_id, tournament_round) VALUES ('bust-31', 'CUP07', ${cup}, 9)`,
+			sql`
+				INSERT INTO rooms (game_slug, code, tournament_id, tournament_round)
+				VALUES ('bust-31', 'CUP07', ${cup}, 9)`,
 			/tournament_round_fkey/,
 		);
 	});
@@ -174,30 +242,57 @@ describe("tournament rooms", () => {
 describe("player names", () => {
 	test("the database refuses a name with a newline or untrimmed spaces", async () => {
 		await refused(
-			sql`INSERT INTO players (display_name) VALUES (${"Rina\n"})`,
+			sql`
+				INSERT INTO players (display_name)
+				VALUES (${"Rina\n"})`,
 			/display_name_check/,
 		);
-		await refused(sql`INSERT INTO players (display_name) VALUES (' Rina')`, /display_name_check/);
+		await refused(
+			sql`
+			INSERT INTO players (display_name)
+			VALUES (' Rina')`,
+			/display_name_check/,
+		);
 	});
 
 	test("guests (no password) have guest_ usernames, accounts don't; is_active and is_guest can't be written", async () => {
 		await refused(
-			sql`INSERT INTO players (display_name, username) VALUES ('Lu', 'lu')`,
+			sql`
+				INSERT INTO players (display_name, username)
+				VALUES ('Lu', 'lu')`,
 			/players_guest_username_check/,
 		);
 		await refused(
-			sql`INSERT INTO players (display_name, username, password_hash) VALUES ('Lu', 'guest_lu', '$argon2id$x')`,
+			sql`
+				INSERT INTO players (display_name, username, password_hash)
+				VALUES ('Lu', 'guest_lu', '$argon2id$x')`,
 			/players_guest_username_check/,
 		);
-		const [g] =
-			await sql`INSERT INTO players (display_name, username) VALUES ('Guest 1', 'guest_000001') RETURNING is_guest`;
+		const [g] = await sql`
+				INSERT INTO players (display_name, username)
+				VALUES ('Guest 1', 'guest_000001')
+				RETURNING is_guest`;
 		expect(g.is_guest).toBe(true);
-		await refused(sql`UPDATE players SET is_guest = false WHERE id = ${player}`, /is_guest/);
 		await refused(
-			sql`INSERT INTO players (display_name, username, password_hash) VALUES ('Lu', 'Lu', '$argon2id$x')`,
+			sql`
+			UPDATE players
+			SET is_guest = false
+			WHERE id = ${player}`,
+			/is_guest/,
+		);
+		await refused(
+			sql`
+				INSERT INTO players (display_name, username, password_hash)
+				VALUES ('Lu', 'Lu', '$argon2id$x')`,
 			/players_username_check/,
 		);
-		await refused(sql`UPDATE players SET is_active = false WHERE id = ${player}`, /is_active/);
+		await refused(
+			sql`
+			UPDATE players
+			SET is_active = false
+			WHERE id = ${player}`,
+			/is_active/,
+		);
 	});
 
 	test("the API answers 400 for the same name instead of hitting the constraint", async () => {

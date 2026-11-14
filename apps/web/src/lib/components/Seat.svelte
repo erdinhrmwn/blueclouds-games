@@ -59,28 +59,40 @@
 
 	/** Every avatar keeps the same full-strength edge, so none looks smaller than the rest. */
 	const avatarLook = $derived.by(() => {
-		if (isTurn) return 'turn border-brass bg-brass text-ink';
-		if (player?.away) return 'border-dashed border-paper/70 bg-[#2a1d13] text-paper/45';
+		if (isTurn) {
+			return 'turn border-brass bg-brass text-ink';
+		}
+
+		if (player?.away) {
+			return 'border-dashed border-paper/70 bg-[#2a1d13] text-paper/45';
+		}
+
 		return 'border-rim-light bg-[#2a1d13] text-paper';
 	});
 
 	/** One label for screen readers; the avatar and tags are hidden from them. */
 	const seatLabel = $derived.by(() => {
-		if (!player) return '';
+		if (!player) {
+			return '';
+		}
 
 		const parts = [isMe ? `${player.name} (you)` : player.name];
 		if (number) {
 			parts.unshift(`Seat ${number}`);
 		}
+
 		if (isHost) {
 			parts.push('host');
 		}
+
 		if (player.vip) {
 			parts.push('VIP');
 		}
+
 		if (player.bot) {
 			parts.push('bot');
 		}
+
 		if (player.away) {
 			parts.push('away');
 		}

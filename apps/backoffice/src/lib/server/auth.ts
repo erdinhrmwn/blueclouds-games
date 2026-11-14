@@ -146,7 +146,9 @@ export async function login(
 	const token = Buffer.from(tokenBytes).toString('base64url');
 
 	await sql.begin(async (tx) => {
-		await tx`DELETE FROM admin_sessions WHERE expires_at < now()`;
+		await tx`
+			DELETE FROM admin_sessions
+			WHERE expires_at < now()`;
 		await tx`
 			INSERT INTO admin_sessions (token_hash, admin_id, expires_at)
 			VALUES (${sha256(token)}, ${row.id}, now() + make_interval(hours => ${SESSION_HOURS}))`;
@@ -158,7 +160,9 @@ export async function login(
 
 /** The admin a session cookie belongs to, or null if it is unknown, expired or the admin was disabled. */
 export async function sessionAdmin(sql: SQL, token: string | undefined): Promise<Admin | null> {
-	if (!token || token.length > MAX_TOKEN_LENGTH) return null;
+	if (!token || token.length > MAX_TOKEN_LENGTH) {
+		return null;
+	}
 
 	const [row] = await sql`
 		SELECT a.id, a.username, a.role
@@ -168,7 +172,9 @@ export async function sessionAdmin(sql: SQL, token: string | undefined): Promise
 			AND s.expires_at > now()
 			AND a.disabled_at IS NULL`;
 
-	if (!row) return null;
+	if (!row) {
+		return null;
+	}
 
 	return { id: row.id, username: row.username, role: row.role };
 }
@@ -180,7 +186,9 @@ export async function logout(
 	ip: string | null
 ): Promise<void> {
 	await sql.begin(async (tx) => {
-		await tx`DELETE FROM admin_sessions WHERE token_hash = ${sha256(token)}`;
+		await tx`
+			DELETE FROM admin_sessions
+			WHERE token_hash = ${sha256(token)}`;
 		await audit(tx, { adminId: admin.id, action: 'logout', ip });
 	});
 }
@@ -204,9 +212,11 @@ export async function changeOwnPassword(
 	if (input.next.length < PASSWORD_MIN) {
 		return { ok: false, reason: 'too_short' };
 	}
+
 	if (input.next.length > PASSWORD_MAX) {
 		return { ok: false, reason: 'too_long' };
 	}
+
 	if (input.next === input.current) {
 		return { ok: false, reason: 'unchanged' };
 	}
@@ -259,6 +269,7 @@ export async function createAdmin(sql: SQL, username: string, password: string):
 	if (!USERNAME.test(username)) {
 		throw new Error('Username must be 3-32 characters: a-z, 0-9, _ . -');
 	}
+
 	if (password.length < PASSWORD_MIN) {
 		throw new Error(`Password must be at least ${PASSWORD_MIN} characters.`);
 	}
@@ -273,7 +284,9 @@ export async function createAdmin(sql: SQL, username: string, password: string):
 		ON CONFLICT (username) DO NOTHING
 		RETURNING id`;
 
-	if (!row) throw new Error(`Admin "${username}" already exists.`);
+	if (!row) {
+		throw new Error(`Admin "${username}" already exists.`);
+	}
 
 	return row.id;
 }

@@ -175,15 +175,15 @@
 			class="mt-5 space-y-3"
 		>
 			{#if check}
+				{@const matched =
+					round.shuffles.length === 1 ? 'the shuffle matches' : 'every shuffle matches'}
 				<p
 					class="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold {check.ok
 						? 'border-brass/50 text-brass'
 						: 'border-ember/60 text-ember'}"
 					role="status"
 				>
-					{check.ok
-						? `✓ Verified: ${round.shuffles.length === 1 ? 'the shuffle matches' : 'every shuffle matches'} the seed`
-						: '✕ Does not match the seed'}
+					{check.ok ? `✓ Verified: ${matched} the seed` : '✕ Does not match the seed'}
 				</p>
 			{/if}
 

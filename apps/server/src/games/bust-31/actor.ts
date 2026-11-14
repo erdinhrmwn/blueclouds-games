@@ -82,7 +82,9 @@ export const bust31Room = actor({
 	},
 	onBeforeConnect: async (c, params: unknown) => checkConnect(c, params),
 	onConnect: async (c, conn) => {
-		if (!(await identify(c, conn))) return;
+		if (!(await identify(c, conn))) {
+			return;
+		}
 
 		await reportToDirectory(c, SLUG);
 		await armVipRefresh(c);
@@ -92,7 +94,9 @@ export const bust31Room = actor({
 		delete c.vars.who[conn.id];
 
 		await reportToDirectory(c, SLUG, conn.id);
-		if (id) await c.schedule.after(GONE_AFTER_MS, "dropIfGone", id);
+		if (id) {
+			await c.schedule.after(GONE_AFTER_MS, "dropIfGone", id);
+		}
 	},
 	actions: {
 		/** Joins (or rejoins) the room; returns your player id and the current view. */
@@ -202,7 +206,9 @@ export const bust31Room = actor({
 		play: async (c, input: unknown) => {
 			const me = requirePlayer(c);
 			const parsed = PlayInput.safeParse(input);
-			if (!parsed.success) throw new UserError("Invalid card.", { code: "bad_input" });
+			if (!parsed.success) {
+				throw new UserError("Invalid card.", { code: "bad_input" });
+			}
 
 			c.vars.game = withRng(c, (rng) => playCard(c.vars.game, me, parsed.data.cardId, rng));
 			await commit(c);
@@ -220,7 +226,9 @@ export const bust31Room = actor({
 			}
 
 			const dropped = await dropIfGone(c, id, currentTurn(c));
-			if (dropped) await commit(c);
+			if (dropped) {
+				await commit(c);
+			}
 		},
 		/** Internal (scheduler only): shows a VIP grant or revoke on a seated player's tag. */
 		refreshVips: async (c, at: unknown) => {
@@ -229,7 +237,9 @@ export const bust31Room = actor({
 			}
 
 			const changed = await refreshVips(c, at);
-			if (changed) await commit(c);
+			if (changed) {
+				await commit(c);
+			}
 		},
 		/** Internal (scheduler only): a tournament table's start time, or the end of its wait for late players. */
 		tournamentStart: async (c) => {
@@ -252,13 +262,19 @@ export const bust31Room = actor({
 
 			const { game } = c.vars;
 			// A stale or duplicate timer (e.g. after a wake) must not move twice.
-			if (game.phase !== "playing" || moves !== game.moves) return;
+			if (game.phase !== "playing" || moves !== game.moves) {
+				return;
+			}
 
 			const player = game.players[game.turn];
-			if (!player) return;
+			if (!player) {
+				return;
+			}
 
 			const card = chooseBotCard(player.hand, game.total);
-			if (!card) return;
+			if (!card) {
+				return;
+			}
 
 			const next = withRng(c, (rng) => playCard(game, player.id, card.id, rng));
 			const event = next.lastEvent;

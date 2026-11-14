@@ -81,9 +81,11 @@ function playerConditions(sql: SQL, filter: PlayerFilter) {
 	if (filter.type === 'bot') {
 		conditions.push(sql`is_bot`);
 	}
+
 	if (filter.type === 'vip') {
 		conditions.push(sql`is_vip AND NOT is_bot`);
 	}
+
 	if (filter.type === 'normal') {
 		conditions.push(sql`NOT is_vip AND NOT is_bot`);
 	}
@@ -91,6 +93,7 @@ function playerConditions(sql: SQL, filter: PlayerFilter) {
 	if (filter.status === 'active') {
 		conditions.push(sql`is_active`);
 	}
+
 	if (filter.status === 'disabled') {
 		conditions.push(sql`NOT is_active`);
 	}
@@ -100,8 +103,13 @@ function playerConditions(sql: SQL, filter: PlayerFilter) {
 
 /** Nothing typed: everyone. An id: that player. Anything else: part of a name or username. */
 function searchFilter(sql: SQL, term: string) {
-	if (!term) return sql`TRUE`;
-	if (isUuid(term)) return sql`id = ${term}`;
+	if (!term) {
+		return sql`TRUE`;
+	}
+
+	if (isUuid(term)) {
+		return sql`id = ${term}`;
+	}
 
 	return like(sql, term);
 }
@@ -135,14 +143,18 @@ export async function playerDetail(
 	sql: SQL,
 	id: string
 ): Promise<{ player: PlayerRow; matches: PlayerMatch[]; stats: PlayerStats } | null> {
-	if (!isUuid(id)) return null;
+	if (!isUuid(id)) {
+		return null;
+	}
 
 	const [player] = (await sql`
 		SELECT ${PLAYER_COLUMNS(sql)}
 		FROM players
 		WHERE id = ${id}`) as PlayerRow[];
 
-	if (!player) return null;
+	if (!player) {
+		return null;
+	}
 
 	const matches = (await sql`
 		SELECT
@@ -153,7 +165,11 @@ export async function playerDetail(
 			m.ended_at AS "endedAt",
 			m.end_reason AS "endReason",
 			mp.placement,
-			(SELECT count(*)::int FROM match_players x WHERE x.match_id = m.id) AS players
+			(
+				SELECT count(*)::int
+				FROM match_players x
+				WHERE x.match_id = m.id
+			) AS players
 		FROM match_players mp
 		JOIN matches m ON m.id = mp.match_id
 		JOIN games g ON g.slug = m.game_slug
@@ -191,7 +207,9 @@ export async function disablePlayer(
 			WHERE id = ${id} AND disabled_at IS NULL
 			RETURNING id`;
 
-		if (!row) return false;
+		if (!row) {
+			return false;
+		}
 
 		const revoked = await tx`
 			UPDATE player_secrets
@@ -225,7 +243,9 @@ export async function enablePlayer(
 			WHERE id = ${id} AND disabled_at IS NOT NULL
 			RETURNING id`;
 
-		if (!row) return false;
+		if (!row) {
+			return false;
+		}
 
 		await audit(tx, { adminId: admin.id, action: 'player.enable', playerId: id, ip });
 
@@ -247,7 +267,9 @@ export async function grantVip(
 			WHERE id = ${id} AND NOT is_vip
 			RETURNING id`;
 
-		if (!row) return false;
+		if (!row) {
+			return false;
+		}
 
 		await audit(tx, { adminId: admin.id, action: 'player.vip_grant', playerId: id, ip });
 
@@ -269,7 +291,9 @@ export async function revokeVip(
 			WHERE id = ${id} AND is_vip
 			RETURNING id`;
 
-		if (!row) return false;
+		if (!row) {
+			return false;
+		}
 
 		await audit(tx, { adminId: admin.id, action: 'player.vip_revoke', playerId: id, ip });
 
@@ -293,7 +317,10 @@ export async function adjustCoins(
 	ip: string | null
 ): Promise<number> {
 	return sql.begin(async (tx) => {
-		const [player] = await tx`SELECT 1 FROM players WHERE id = ${playerId}`;
+		const [player] = await tx`
+			SELECT 1
+			FROM players
+			WHERE id = ${playerId}`;
 		if (!player) {
 			throw new CoinAdjustError('This player no longer exists.');
 		}
@@ -311,6 +338,7 @@ export async function adjustCoins(
 			if (err instanceof NotEnoughCoins) {
 				throw new CoinAdjustError(`They only have ${err.balance.toLocaleString('en')} coins.`);
 			}
+
 			throw err;
 		}
 

@@ -48,7 +48,9 @@ type RawEnv = Record<string, string | undefined>;
 
 function check<S extends z.ZodType>(schema: S, env: RawEnv, what: string): z.output<S> {
 	const parsed = schema.safeParse(env);
-	if (parsed.success) return parsed.data;
+	if (parsed.success) {
+		return parsed.data;
+	}
 
 	const problems = parsed.error.issues
 		.map((issue) => `${issue.path.join(".")}: ${issue.message}`)

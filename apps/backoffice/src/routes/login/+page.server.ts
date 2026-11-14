@@ -8,7 +8,9 @@ const MAX_USERNAME_LENGTH = 64;
 const MAX_PASSWORD_LENGTH = 256;
 
 export const load: PageServerLoad = ({ locals }) => {
-	if (locals.admin) redirect(303, '/');
+	if (locals.admin) {
+		redirect(303, '/');
+	}
 };
 
 export const actions: Actions = {

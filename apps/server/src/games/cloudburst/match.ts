@@ -67,7 +67,9 @@ function standings(game: Game): Map<string, number> {
  */
 export function logEvents(before: Game, after: Game, auto = false): LogEntry[] {
 	const entries: LogEntry[] = awayChanges(before, after);
-	if (after.moves === before.moves || after.phase === "lobby") return entries;
+	if (after.moves === before.moves || after.phase === "lobby") {
+		return entries;
+	}
 
 	const event = after.lastEvent;
 	const seatOf = (id: string) => after.players.find((p) => p.id === id)!.seat;
@@ -94,6 +96,7 @@ export function logEvents(before: Game, after: Game, auto = false): LogEntry[] {
 				const fromNewDeck = forcedCards.slice(fromOldDeck);
 				entries.push({ type: "reshuffle", data: { deck: [...fromNewDeck, ...ids(after.deck)] } });
 			}
+
 			data.forced = { seat: victim.seat, cards: forcedCards };
 		}
 
@@ -153,7 +156,9 @@ export function logEvents(before: Game, after: Game, auto = false): LogEntry[] {
 
 /** "away" / "back" entries for players whose away flag changed mid-match. */
 function awayChanges(before: Game, after: Game): LogEntry[] {
-	if (before.phase !== "playing") return [];
+	if (before.phase !== "playing") {
+		return [];
+	}
 
 	const entries: LogEntry[] = [];
 	for (const player of after.players) {

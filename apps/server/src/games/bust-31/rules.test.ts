@@ -98,7 +98,10 @@ describe("seats", () => {
 
 	test("a full table has no free seat", () => {
 		let g = createGame();
-		for (const id of ["a", "b", "c", "d", "e", "f"]) g = addPlayer(g, id, id);
+		for (const id of ["a", "b", "c", "d", "e", "f"]) {
+			g = addPlayer(g, id, id);
+		}
+
 		expect(() => addPlayer(g, "g", "g")).toThrow("full");
 	});
 });

@@ -118,7 +118,10 @@ function hashReport(match: MatchReport): Buffer {
  */
 export async function recordMatch(sql: SQL, match: MatchReport): Promise<boolean> {
 	// The game catalog lives in the database: a new game only adds its row to `games`.
-	const [game] = await sql`SELECT min_players, max_players FROM games WHERE slug = ${match.game}`;
+	const [game] = await sql`
+		SELECT min_players, max_players
+		FROM games
+		WHERE slug = ${match.game}`;
 	if (!game) {
 		throw new ApiError("bad_input", 400, "Some fields are invalid.", { game: "Unknown game." });
 	}
@@ -134,7 +137,10 @@ export async function recordMatch(sql: SQL, match: MatchReport): Promise<boolean
 
 	return sql.begin(async (tx) => {
 		const storedHash = async () => {
-			const [row] = await tx`SELECT body_hash FROM matches WHERE id = ${match.matchId}`;
+			const [row] = await tx`
+				SELECT body_hash
+				FROM matches
+				WHERE id = ${match.matchId}`;
 			return row?.body_hash as Uint8Array | undefined;
 		};
 
@@ -147,12 +153,15 @@ export async function recordMatch(sql: SQL, match: MatchReport): Promise<boolean
 					"This match was already reported with different results.",
 				);
 			}
+
 			return false;
 		};
 
 		// A retry of a stored match is answered from the stored hash, before anything else is looked up.
 		const before = await storedHash();
-		if (before) return answerRetry(before);
+		if (before) {
+			return answerRetry(before);
+		}
 
 		const [room] = await tx`
 			SELECT id, tournament_id
@@ -265,7 +274,11 @@ export async function stats(sql: SQL, playerId: string) {
 			f.game_slug AS game,
 			count(*)::int AS played,
 			count(*) FILTER (WHERE f.won)::int AS wins,
-			coalesce((SELECT max(s.length) FROM streaks s WHERE s.game_slug = f.game_slug), 0)::int
+			coalesce((
+				SELECT max(s.length)
+				FROM streaks s
+				WHERE s.game_slug = f.game_slug
+			), 0)::int
 				AS best_streak
 		FROM finished f
 		GROUP BY f.game_slug
@@ -296,7 +309,11 @@ export async function history(sql: SQL, playerId: string, cursor: string | undef
 			mp.seat,
 			mp.placement,
 			mp.score,
-			(SELECT count(*)::int FROM match_players x WHERE x.match_id = m.id) AS players
+			(
+				SELECT count(*)::int
+				FROM match_players x
+				WHERE x.match_id = m.id
+			) AS players
 		FROM match_players mp
 		JOIN matches m ON m.id = mp.match_id
 		JOIN rooms r ON r.id = m.room_id

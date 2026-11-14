@@ -158,7 +158,9 @@ export async function migrateRoom(d: {
 /** onWake: loads the saved room into `c.vars`. */
 export async function loadRoom(c: Ctx): Promise<void> {
 	const [row] = await c.db.execute("SELECT data FROM room WHERE id = 1");
-	if (row) Object.assign(c.vars, JSON.parse(row.data));
+	if (row) {
+		Object.assign(c.vars, JSON.parse(row.data));
+	}
 
 	c.vars.timer ??= null;
 	c.vars.match ??= null;
@@ -168,6 +170,7 @@ export async function loadRoom(c: Ctx): Promise<void> {
 	if (!c.vars.next?.firstRound) {
 		c.vars.next = newCommitment();
 	}
+
 	if (c.vars.match?.seeds && !c.vars.match.seeds.next) {
 		c.vars.match.seeds = undefined;
 	}
@@ -175,7 +178,9 @@ export async function loadRoom(c: Ctx): Promise<void> {
 	c.vars.fairLog = [];
 
 	// Matches started before the move log have no seq yet.
-	if (c.vars.match) c.vars.match.seq ??= 0;
+	if (c.vars.match) {
+		c.vars.match.seq ??= 0;
+	}
 
 	c.vars.logged = c.vars.game;
 }
@@ -325,7 +330,9 @@ export async function commitRoom<G extends Table, M extends MatchState>(
 	c.broadcast("view", game.view());
 	for (const conn of c.conns.values()) {
 		const playerId = playerOf(c, conn);
-		if (playerId) conn.send("hand", game.handOf(playerId));
+		if (playerId) {
+			conn.send("hand", game.handOf(playerId));
+		}
 	}
 
 	// After the players got their update, so the list never slows a move.
@@ -496,7 +503,10 @@ export function apply<T>(fn: () => T): T {
 	try {
 		return fn();
 	} catch (err) {
-		if (err instanceof RuleError) throw new UserError(err.message, { code: "rule" });
+		if (err instanceof RuleError) {
+			throw new UserError(err.message, { code: "rule" });
+		}
+
 		throw err;
 	}
 }
@@ -550,6 +560,7 @@ function refuseIfClosed(c: Ctx, playerId: string): void {
 	if (c.vars.terminated) {
 		throw new UserError(TERMINATED_MESSAGE, { code: TABLE_CLOSED });
 	}
+
 	if ((c.vars.kicked as string[]).includes(playerId)) {
 		throw new UserError(KICKED_MESSAGE, { code: TABLE_CLOSED });
 	}
@@ -622,7 +633,9 @@ export function requireAdmin(c: Ctx): void {
 /** The player a connection sits as, if they joined the table. */
 export function playerOf(c: Ctx, conn: { id: string }): string | undefined {
 	const id = (c.vars.who[conn.id] as Identity | undefined)?.id;
-	if (!id) return undefined;
+	if (!id) {
+		return undefined;
+	}
 
 	const seated = (c.vars.game as Table).players.some((player) => player.id === id);
 	return seated ? id : undefined;
@@ -648,7 +661,9 @@ export function requireHost(c: Ctx): string {
 }
 
 export function requireScheduler(c: Ctx): void {
-	if (!c.scheduledFire) throw new UserError("Not allowed.", { code: "forbidden" });
+	if (!c.scheduledFire) {
+		throw new UserError("Not allowed.", { code: "forbidden" });
+	}
 }
 
 /** For scheduled game steps (turns, drops, starts, VIP tags): false once an admin terminated the table. */
@@ -670,10 +685,14 @@ export async function dropIfGone(
 ): Promise<boolean> {
 	const game = c.vars.game as Table;
 	const player = game.players.find((p) => p.id === id);
-	if (!player) return false;
+	if (!player) {
+		return false;
+	}
 
 	const cameBack = [...c.conns.values()].some((conn: { id: string }) => playerOf(c, conn) === id);
-	if (cameBack) return false;
+	if (cameBack) {
+		return false;
+	}
 
 	if (game.phase === "lobby") {
 		c.vars.game = removePlayer(game, player.id);
@@ -718,6 +737,7 @@ export function kickFromTable(
 	if (!target) {
 		throw new UserError("Nobody sits in that seat.", { code: "rule" });
 	}
+
 	if (target.bot) {
 		throw new UserError("That is a bot. Remove it instead.", { code: "rule" });
 	}
@@ -726,6 +746,7 @@ export function kickFromTable(
 		if (game.phase !== "lobby") {
 			throw new UserError("Players can only be removed before the game starts.", { code: "rule" });
 		}
+
 		if (target.id === by.hostId) {
 			throw new UserError("Use Leave table to leave.", { code: "rule" });
 		}
@@ -858,7 +879,9 @@ export async function armTurn(
 	}
 
 	const sameTurn = timer?.moves === opts.key;
-	if (sameTurn && !opts.resume) return;
+	if (sameTurn && !opts.resume) {
+		return;
+	}
 
 	// Resuming after a wake keeps the deadline players already saw.
 	const next: NonNullable<TurnTimer> = sameTurn
@@ -886,7 +909,9 @@ export async function armTurn(
 
 /** The turn clock as clients get it: relative, so a wrong device clock still counts down correctly. */
 export function turnClock(timer: TurnTimer): { left: number; total: number } | null {
-	if (!timer) return null;
+	if (!timer) {
+		return null;
+	}
 
 	return { left: Math.max(0, timer.endsAt - Date.now()), total: timer.total };
 }
@@ -901,7 +926,9 @@ export async function reportToDirectory(c: Ctx, slug: string, leaving?: string):
 	// seats). Private tables are for their players only.
 	const tournament = await loadTournament(c).catch(() => undefined);
 	const listKey = directoryKey(slug, c.vars.listed === true, !!tournament);
-	if (!listKey) return;
+	if (!listKey) {
+		return;
+	}
 
 	const code = c.key[0] as string;
 	const directory = c.client().roomList.getOrCreate([listKey]);
@@ -935,8 +962,13 @@ export async function reportToDirectory(c: Ctx, slug: string, leaving?: string):
 
 /** Which room list a table reports to: the public one, the backoffice's tournament one, or none (private). */
 export function directoryKey(slug: string, listed: boolean, tournament: boolean): string | null {
-	if (listed) return slug;
-	if (tournament) return tournamentListKey(slug);
+	if (listed) {
+		return slug;
+	}
+
+	if (tournament) {
+		return tournamentListKey(slug);
+	}
 
 	return null;
 }
@@ -1063,7 +1095,9 @@ async function sendRounds(c: Ctx, retryAfter: (attempts: number) => void): Promi
 export async function loadTournament(c: Ctx): Promise<TournamentRoom | null> {
 	const known = c.vars.tournament as TournamentRoom | null | undefined;
 	// `listed` is undefined in rooms saved before private tables existed: ask once more.
-	if (known !== undefined && c.vars.listed !== undefined) return known;
+	if (known !== undefined && c.vars.listed !== undefined) {
+		return known;
+	}
 
 	return refreshTournament(c);
 }
@@ -1080,12 +1114,15 @@ export async function refreshTournament(c: Ctx): Promise<TournamentRoom | null> 
 		room = await fetchRoomSeats(code);
 	} catch (err) {
 		c.log.warn({ msg: "room seats unavailable", code, err: String(err) });
-		if (known !== undefined) return known;
+		if (known !== undefined) {
+			return known;
+		}
 
 		throw new UserError("The table can't be reached right now. Try again shortly.", {
 			code: "unavailable",
 		});
 	}
+
 	const tournament = room?.tournament;
 	c.vars.listed = !tournament && room?.visibility === "public";
 	c.vars.roomName = room?.name ?? null;
@@ -1117,8 +1154,13 @@ export async function refreshTournament(c: Ctx): Promise<TournamentRoom | null> 
 /** onWake: refreshes the tournament and arms its start and the end of the wait for late players. */
 export async function wakeTournament(c: Ctx): Promise<void> {
 	const tournament = await refreshTournament(c).catch(() => null);
-	if (!tournament || tournament.closed || tournament.cancelled) return;
-	if ((c.vars.game as Table).phase !== "lobby") return;
+	if (!tournament || tournament.closed || tournament.cancelled) {
+		return;
+	}
+
+	if ((c.vars.game as Table).phase !== "lobby") {
+		return;
+	}
 
 	const now = Date.now();
 	if (tournament.startsAt > now) {
@@ -1135,14 +1177,18 @@ export async function wakeTournament(c: Ctx): Promise<void> {
  */
 export async function seatFor(c: Ctx, who: Identity): Promise<number | undefined> {
 	const tournament = c.vars.tournament === null ? null : await refreshTournament(c);
-	if (!tournament) return undefined;
+	if (!tournament) {
+		return undefined;
+	}
 
 	if (tournament.cancelled) {
 		throw new UserError(`${tournament.name} was cancelled.`, { code: "forbidden" });
 	}
+
 	if (tournament.closed) {
 		throw new UserError("This table has finished.", { code: "forbidden" });
 	}
+
 	if (!(who.id in tournament.seats)) {
 		throw new UserError(`This table is for players of ${tournament.name}.`, { code: "forbidden" });
 	}
@@ -1175,16 +1221,24 @@ export async function tournamentTick(
 	const table = c.vars.game as Table;
 	const now = Date.now();
 
-	if (!tournament || tournament.closed || tournament.cancelled) return;
+	if (!tournament || tournament.closed || tournament.cancelled) {
+		return;
+	}
+
 	if (c.vars.terminated) {
 		return;
 	}
-	if (table.phase !== "lobby" || now < tournament.startsAt) return;
+
+	if (table.phase !== "lobby" || now < tournament.startsAt) {
+		return;
+	}
 
 	// Since they sat down a player may have withdrawn, been disqualified or moved by an admin: ask again, and
 	// whoever has no seat here anymore leaves before the match starts.
 	const seated = (await refreshTournament(c).catch(() => null)) ?? tournament;
-	if (seated.cancelled) return;
+	if (seated.cancelled) {
+		return;
+	}
 
 	const unseated = table.players.filter((player) => !player.bot && !(player.id in seated.seats));
 	for (const player of unseated) {
@@ -1206,7 +1260,10 @@ export async function tournamentTick(
 	const seatedCount = (c.vars.game as Table).players.length;
 	const stillWaiting = now < seated.startsAt + LATE_GRACE_MS;
 	if (!everyoneIsHere && stillWaiting) {
-		if (unseated.length > 0) await game.commit();
+		if (unseated.length > 0) {
+			await game.commit();
+		}
+
 		return;
 	}
 
@@ -1220,6 +1277,7 @@ export async function tournamentTick(
 		if (!marked.ok) {
 			c.log.warn({ msg: "room start not recorded", code, detail: marked.detail });
 		}
+
 		return;
 	}
 
@@ -1235,7 +1293,9 @@ export async function tournamentTick(
 /** The tournament part of the view. Times are relative, like the turn clock, so a wrong device clock still counts right. */
 export function tournamentView(c: Ctx) {
 	const tournament = c.vars.tournament as TournamentRoom | null | undefined;
-	if (!tournament) return null;
+	if (!tournament) {
+		return null;
+	}
 
 	const now = Date.now();
 	return {
@@ -1254,7 +1314,9 @@ export function tournamentView(c: Ctx) {
  * connection starts a fresh check, and the timer left from before the sleep is ignored.
  */
 export async function armVipRefresh(c: Ctx): Promise<void> {
-	if (c.vars.vipCheckAt) return;
+	if (c.vars.vipCheckAt) {
+		return;
+	}
 
 	const at = Date.now() + VIP_REFRESH_MS;
 	c.vars.vipCheckAt = at;
@@ -1267,7 +1329,9 @@ export async function armVipRefresh(c: Ctx): Promise<void> {
  */
 export async function refreshVips(c: Ctx, at: unknown): Promise<boolean> {
 	// A timer from before a sleep, or a duplicate.
-	if (at !== c.vars.vipCheckAt) return false;
+	if (at !== c.vars.vipCheckAt) {
+		return false;
+	}
 
 	c.vars.vipCheckAt = null;
 	if (c.conns.size > 0) {
@@ -1277,7 +1341,9 @@ export async function refreshVips(c: Ctx, at: unknown): Promise<boolean> {
 	const humanIds = (c.vars.game as Table).players
 		.filter((player) => !player.bot)
 		.map((player) => player.id);
-	if (humanIds.length === 0) return false;
+	if (humanIds.length === 0) {
+		return false;
+	}
 
 	let vipIds: Set<string>;
 	try {
@@ -1290,7 +1356,9 @@ export async function refreshVips(c: Ctx, at: unknown): Promise<boolean> {
 	// Read the game again: a move may have landed while the platform answered.
 	const game = c.vars.game as Table;
 	const updated = showVips(game, vipIds);
-	if (updated === game) return false;
+	if (updated === game) {
+		return false;
+	}
 
 	c.vars.game = updated;
 	return true;

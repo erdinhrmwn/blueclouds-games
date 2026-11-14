@@ -65,7 +65,10 @@ function assertFreeSeat(players: Seated[], seat: number) {
 	if (!Number.isInteger(seat) || seat < 0 || seat >= SEATS) {
 		throw new RuleError("That seat does not exist.");
 	}
-	if (players.some((p) => p.seat === seat)) throw new RuleError("That seat is taken.");
+
+	if (players.some((p) => p.seat === seat)) {
+		throw new RuleError("That seat is taken.");
+	}
 }
 
 /**
@@ -77,9 +80,15 @@ export function seatPlayer<G extends Table<P>, P extends Seated>(
 	player: Omit<P, "seat">,
 	seat?: number,
 ): G {
-	if (game.phase !== "lobby") throw new RuleError("The game has already started.");
+	if (game.phase !== "lobby") {
+		throw new RuleError("The game has already started.");
+	}
+
 	const chosen = seat ?? freeSeats(game.players)[0];
-	if (chosen === undefined) throw new RuleError("This table is full.");
+	if (chosen === undefined) {
+		throw new RuleError("This table is full.");
+	}
+
 	assertFreeSeat(game.players, chosen);
 
 	const seated = { ...player, seat: chosen } as P;
@@ -90,8 +99,14 @@ export function seatPlayer<G extends Table<P>, P extends Seated>(
 
 /** Moves a player to an empty chair. Lobby only, so the turn order never changes mid-game. */
 export function takeSeat<G extends Table>(game: G, id: string, seat: number): G {
-	if (game.phase !== "lobby") throw new RuleError("Seats are locked while a game is running.");
-	if (!game.players.some((p) => p.id === id)) throw new RuleError("Join the table first.");
+	if (game.phase !== "lobby") {
+		throw new RuleError("Seats are locked while a game is running.");
+	}
+
+	if (!game.players.some((p) => p.id === id)) {
+		throw new RuleError("Join the table first.");
+	}
+
 	assertFreeSeat(game.players, seat);
 
 	const moved = game.players.map((p) => (p.id === id ? { ...p, seat } : p));
@@ -100,7 +115,9 @@ export function takeSeat<G extends Table>(game: G, id: string, seat: number): G 
 
 /** Only allowed in the lobby; mid-game seats stay so the turn order holds. */
 export function removePlayer<G extends Table>(game: G, id: string): G {
-	if (game.phase !== "lobby") return game;
+	if (game.phase !== "lobby") {
+		return game;
+	}
 
 	const players = game.players.filter((p) => p.id !== id);
 
@@ -177,7 +194,9 @@ export function nextIndex<P>(
 	for (let step = 1; step <= count; step++) {
 		// Wraps around both ways: ((x % n) + n) % n is never negative.
 		const index = (((from + step * direction) % count) + count) % count;
-		if (inPlay(players[index]!)) return index;
+		if (inPlay(players[index]!)) {
+			return index;
+		}
 	}
 
 	return from;

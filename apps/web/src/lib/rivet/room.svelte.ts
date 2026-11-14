@@ -158,7 +158,9 @@ export class RoomConnection<View extends BaseView, Hand> {
 		);
 
 		// The page closed while we were fetching the token.
-		if (this.#disposed) await this.dispose();
+		if (this.#disposed) {
+			await this.dispose();
+		}
 	}
 
 	/** The room won't take this player again: show why and stop reconnecting. */
@@ -195,7 +197,9 @@ export class RoomConnection<View extends BaseView, Hand> {
 		this.view = view;
 
 		this.turnEndsAt = view.turn ? now + view.turn.left : null;
-		if (view.turn) this.turnTotal = view.turn.total;
+		if (view.turn) {
+			this.turnTotal = view.turn.total;
+		}
 
 		this.startsAt = view.tournament ? now + view.tournament.startsIn : null;
 		this.waitEndsAt = view.tournament ? now + view.tournament.waitEndsIn : null;
@@ -230,7 +234,10 @@ export class RoomConnection<View extends BaseView, Hand> {
 	}
 
 	get #c(): Conn {
-		if (!this.#conn) throw new Error('Still connecting. Try again in a moment.');
+		if (!this.#conn) {
+			throw new Error('Still connecting. Try again in a moment.');
+		}
+
 		return this.#conn;
 	}
 
@@ -244,7 +251,9 @@ export class RoomConnection<View extends BaseView, Hand> {
 }
 
 function message(err: unknown): string {
-	if (err instanceof Error && err.message) return err.message;
+	if (err instanceof Error && err.message) {
+		return err.message;
+	}
 
 	return 'Something went wrong. Try again.';
 }

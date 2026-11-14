@@ -23,20 +23,28 @@
 
 	function close(refocus: boolean) {
 		open = false;
-		if (refocus) trigger?.focus();
+		if (refocus) {
+			trigger?.focus();
+		}
 	}
 
 	// The first item takes focus when the menu opens, so the keyboard can go straight on.
 	$effect(() => {
-		if (open) items()[0]?.focus();
+		if (open) {
+			items()[0]?.focus();
+		}
 	});
 
 	// A click anywhere else closes it.
 	$effect(() => {
-		if (!open) return;
+		if (!open) {
+			return;
+		}
 
 		const outside = (event: PointerEvent) => {
-			if (!root?.contains(event.target as Node)) close(false);
+			if (!root?.contains(event.target as Node)) {
+				close(false);
+			}
 		};
 		document.addEventListener('pointerdown', outside);
 
@@ -48,7 +56,10 @@
 			close(true);
 			return;
 		}
-		if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+
+		if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') {
+			return;
+		}
 
 		event.preventDefault();
 		const all = items();
@@ -67,12 +78,16 @@
 				action: 'Log out',
 				keep: 'Keep playing'
 			});
-			if (!sure) return;
+			if (!sure) {
+				return;
+			}
 		}
 
 		const error = await logOut();
 		onError(error);
-		if (!error) await goto(WELCOME, { invalidateAll: true });
+		if (!error) {
+			await goto(WELCOME, { invalidateAll: true });
+		}
 	}
 </script>
 

@@ -31,7 +31,9 @@
 
 	let now = $state(Date.now());
 	$effect(() => {
-		if (!tournament || tournament.closed) return;
+		if (!tournament || tournament.closed) {
+			return;
+		}
 
 		const tick = setInterval(() => {
 			now = Date.now();
@@ -146,20 +148,20 @@
 
 <!-- Spot 0 is the dealer at the head of the table; chairs 1–6 follow clockwise. -->
 <Felt count={seats + 1}>
-	{#snippet seat(k)}
-		{#if k === 0}
+	{#snippet seat(spot)}
+		{#if spot === 0}
 			<Dealer />
 		{:else}
-			{@const s = k - 1}
-			{@const p = inSeat(s)}
+			{@const seatIndex = spot - 1}
+			{@const player = inSeat(seatIndex)}
 			<Seat
-				player={p}
-				number={k}
-				isHost={!tournament && p?.id === view.hostId}
-				isMe={p?.id === room.playerId}
-				action={hostAction(p)}
-				onSit={p || tournament ? undefined : () => room.takeSeat(s)}
-				onAddBot={!p && host ? () => room.addBot(s) : undefined}
+				{player}
+				number={spot}
+				isHost={!tournament && player?.id === view.hostId}
+				isMe={player?.id === room.playerId}
+				action={hostAction(player)}
+				onSit={player || tournament ? undefined : () => room.takeSeat(seatIndex)}
+				onAddBot={!player && host ? () => room.addBot(seatIndex) : undefined}
 			/>
 		{/if}
 	{/snippet}

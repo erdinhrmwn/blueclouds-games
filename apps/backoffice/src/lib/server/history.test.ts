@@ -11,14 +11,20 @@ let rina: string;
 const empty = { game: '', player: '', from: '', to: '', before: '' };
 beforeAll(async () => {
 	sql = (await resetTestDatabase()).sql;
-	[{ id: rina }] = await sql`INSERT INTO players (display_name) VALUES ('Rina') RETURNING id`;
+	[{ id: rina }] = await sql`
+		INSERT INTO players (display_name)
+		VALUES ('Rina')
+		RETURNING id`;
 	const match = async (id: string, ended: string, humanWins: boolean) => {
 		const roomId = await room(sql, 'bust-31', 'ABCD');
-		await sql`INSERT INTO matches (id, game_slug, room_id, rules_version, started_at, ended_at, body_hash)
-		          VALUES (${id}, 'bust-31', ${roomId}, 1, ${ended}::timestamptz - interval '5 min', ${ended}, ${new Uint8Array(32)})`;
-		await sql`INSERT INTO match_players (match_id, seat, player_id, bot_name, placement, score) VALUES
-		          (${id}, 0, ${rina}, NULL, ${humanWins ? 1 : 2}, ${humanWins ? 2 : 0}),
-		          (${id}, 1, NULL, 'Bot Rain', ${humanWins ? 2 : 1}, ${humanWins ? 0 : 1})`;
+		await sql`
+			INSERT INTO matches (id, game_slug, room_id, rules_version, started_at, ended_at, body_hash)
+			VALUES (${id}, 'bust-31', ${roomId}, 1, ${ended}::timestamptz - interval '5 min', ${ended}, ${new Uint8Array(32)})`;
+		await sql`
+			INSERT INTO match_players (match_id, seat, player_id, bot_name, placement, score)
+			VALUES
+				(${id}, 0, ${rina}, NULL, ${humanWins ? 1 : 2}, ${humanWins ? 2 : 0}),
+				(${id}, 1, NULL, 'Bot Rain', ${humanWins ? 2 : 1}, ${humanWins ? 0 : 1})`;
 	};
 	await match('01900000-0000-7000-8000-000000000001', '2026-11-09T10:00:00Z', true);
 	await match('01900000-0000-7000-8000-000000000002', '2026-11-10T23:59:00Z', false);
@@ -41,7 +47,9 @@ describe('matches', () => {
 	test('move log: as stored, or null for an old match', async () => {
 		const id = '01900000-0000-7000-8000-000000000001';
 		const events = [{ seq: 0, t: 0, type: 'finished', data: { winner: 0 } }];
-		await sql`INSERT INTO match_logs (match_id, log_version, event_count, events) VALUES (${id}, 1, 1, ${JSON.stringify(events)}::text::jsonb)`;
+		await sql`
+			INSERT INTO match_logs (match_id, log_version, event_count, events)
+			VALUES (${id}, 1, 1, ${JSON.stringify(events)}::text::jsonb)`;
 		expect(await matchLog(sql, id)).toEqual({ logVersion: 1, events });
 		expect(await matchLog(sql, '01900000-0000-7000-8000-000000000002')).toBeNull();
 		expect(await matchLog(sql, 'nope')).toBeNull();
@@ -72,15 +80,23 @@ describe('matches', () => {
 		const admin = await createAdmin(sql, 'tables', 'correct horse battery');
 		const [{ id: cup }] = await sql`
 			INSERT INTO tournaments (game_slug, name, players_per_room, starts_at, registration_opens_at, registration_closes_at, created_by_admin_id)
-			VALUES ('bust-31', 'Friday Cup', 2, now(), now() - interval '1 hour', now(), ${admin}) RETURNING id`;
-		await sql`INSERT INTO tournament_rounds (tournament_id, round, starts_at) VALUES (${cup}, 1, now())`;
-		const [{ id: cupRoom }] =
-			await sql`INSERT INTO rooms (game_slug, code, tournament_id, tournament_round) VALUES ('bust-31', 'CUP01', ${cup}, 1) RETURNING id`;
-		const [{ id: openRoom }] =
-			await sql`INSERT INTO rooms (game_slug, code, created_by_player_id) VALUES ('bust-31', 'OPEN1', ${rina}) RETURNING id`;
+			VALUES ('bust-31', 'Friday Cup', 2, now(), now() - interval '1 hour', now(), ${admin})
+			RETURNING id`;
+		await sql`
+			INSERT INTO tournament_rounds (tournament_id, round, starts_at)
+			VALUES (${cup}, 1, now())`;
+		const [{ id: cupRoom }] = await sql`
+				INSERT INTO rooms (game_slug, code, tournament_id, tournament_round)
+				VALUES ('bust-31', 'CUP01', ${cup}, 1)
+				RETURNING id`;
+		const [{ id: openRoom }] = await sql`
+				INSERT INTO rooms (game_slug, code, created_by_player_id)
+				VALUES ('bust-31', 'OPEN1', ${rina})
+				RETURNING id`;
 		const played = async (id: string, roomId: string) => {
-			await sql`INSERT INTO matches (id, game_slug, room_id, rules_version, started_at, ended_at, body_hash)
-			          VALUES (${id}, 'bust-31', ${roomId}, 1, now() - interval '5 min', now(), ${new Uint8Array(32)})`;
+			await sql`
+				INSERT INTO matches (id, game_slug, room_id, rules_version, started_at, ended_at, body_hash)
+				VALUES (${id}, 'bust-31', ${roomId}, 1, now() - interval '5 min', now(), ${new Uint8Array(32)})`;
 			return matchDetail(sql, id);
 		};
 		expect(await played('01900000-0000-7000-8000-000000000003', cupRoom)).toMatchObject({

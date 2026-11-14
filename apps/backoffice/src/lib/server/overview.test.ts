@@ -13,7 +13,9 @@ beforeAll(async () => {
 		VALUES
 			('Rina', true, now(), now()),
 			('Old timer', false, now() - interval '3 days', now() - interval '3 days')`;
-	await sql`INSERT INTO players (display_name, is_bot) VALUES ('Bot Rain', true)`;
+	await sql`
+		INSERT INTO players (display_name, is_bot)
+		VALUES ('Bot Rain', true)`;
 
 	const roomId = await room(sql, 'bust-31', 'ABCD');
 	const hash = new Uint8Array(32);

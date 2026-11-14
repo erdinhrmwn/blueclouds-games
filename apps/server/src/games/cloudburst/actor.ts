@@ -78,7 +78,9 @@ export const cloudburstRoom = actor({
 	},
 	onBeforeConnect: async (c, params: unknown) => checkConnect(c, params),
 	onConnect: async (c, conn) => {
-		if (!(await identify(c, conn))) return;
+		if (!(await identify(c, conn))) {
+			return;
+		}
 
 		await reportToDirectory(c, SLUG);
 		await armVipRefresh(c);
@@ -88,7 +90,9 @@ export const cloudburstRoom = actor({
 		delete c.vars.who[conn.id];
 
 		await reportToDirectory(c, SLUG, conn.id);
-		if (id) await c.schedule.after(GONE_AFTER_MS, "dropIfGone", id);
+		if (id) {
+			await c.schedule.after(GONE_AFTER_MS, "dropIfGone", id);
+		}
 	},
 	actions: {
 		/** Joins (or rejoins) the room; returns your player id, the current view and your hand. */
@@ -199,7 +203,9 @@ export const cloudburstRoom = actor({
 		play: async (c, input: unknown) => {
 			const me = requirePlayer(c);
 			const parsed = PlayInput.safeParse(input);
-			if (!parsed.success) throw new UserError("Invalid move.", { code: "bad_input" });
+			if (!parsed.success) {
+				throw new UserError("Invalid move.", { code: "bad_input" });
+			}
 
 			c.vars.game = withRng(c, (rng) => playCard(c.vars.game, me, parsed.data, rng));
 			await commit(c);
@@ -227,7 +233,9 @@ export const cloudburstRoom = actor({
 			}
 
 			const dropped = await dropIfGone(c, id, currentTurn(c));
-			if (dropped) await commit(c);
+			if (dropped) {
+				await commit(c);
+			}
 		},
 		/** Internal (scheduler only): shows a VIP grant or revoke on a seated player's tag. */
 		refreshVips: async (c, at: unknown) => {
@@ -236,7 +244,9 @@ export const cloudburstRoom = actor({
 			}
 
 			const changed = await refreshVips(c, at);
-			if (changed) await commit(c);
+			if (changed) {
+				await commit(c);
+			}
 		},
 		/** Internal (scheduler only): a tournament table's start time, or the end of its wait for late players. */
 		tournamentStart: async (c) => {
@@ -259,7 +269,9 @@ export const cloudburstRoom = actor({
 
 			const { game } = c.vars;
 			// A stale or duplicate timer (e.g. after a wake) must not move twice.
-			if (game.phase !== "playing" || key !== game.turnKey) return;
+			if (game.phase !== "playing" || key !== game.turnKey) {
+				return;
+			}
 
 			const player = game.players[game.turn]!;
 			const move = chooseBotMove(game);

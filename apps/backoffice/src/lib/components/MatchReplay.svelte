@@ -60,8 +60,13 @@
 
 	/** How a card label reads on a mini card: minus cards in red, words smaller. */
 	const cardTone = (card: string) => {
-		if (card.startsWith('-')) return 'text-danger';
-		if (Number.isNaN(Number(card))) return 'text-[0.625rem] leading-tight text-felt';
+		if (card.startsWith('-')) {
+			return 'text-danger';
+		}
+
+		if (Number.isNaN(Number(card))) {
+			return 'text-[0.625rem] leading-tight text-felt';
+		}
 
 		return '';
 	};
@@ -74,18 +79,22 @@
 		if (!playing && at === last) {
 			at = 0;
 		}
+
 		playing = !playing;
 	};
 
 	// Autoplay: one step per tick, stopping at the end.
 	$effect(() => {
-		if (!playing) return;
+		if (!playing) {
+			return;
+		}
 
 		const timer = setInterval(() => {
 			if (at >= last) {
 				playing = false;
 				return;
 			}
+
 			at += 1;
 		}, STEP_MS / speed);
 
@@ -100,7 +109,9 @@
 	const onKey = (event: KeyboardEvent) => {
 		const typing =
 			event.target instanceof Element && event.target.closest('input, select, textarea');
-		if (typing) return;
+		if (typing) {
+			return;
+		}
 
 		const actions: Record<string, () => void> = {
 			ArrowLeft: () => goTo(at - 1),
@@ -110,7 +121,9 @@
 			' ': togglePlay
 		};
 		const action = actions[event.key];
-		if (!action) return;
+		if (!action) {
+			return;
+		}
 
 		event.preventDefault();
 		action();

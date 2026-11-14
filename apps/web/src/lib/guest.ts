@@ -17,12 +17,16 @@ type PageUrl = Pick<URL, 'origin' | 'search'> & { searchParams: Pick<URLSearchPa
 /** Where to go once you're in: the page you first asked for (same site only), else home. */
 export function nextPath(url: PageUrl): string {
 	const next = url.searchParams.get('next');
-	if (!next?.startsWith('/')) return '/';
+	if (!next?.startsWith('/')) {
+		return '/';
+	}
 
 	// `//evil.example` also starts with "/": resolving it shows whether it leaves the site.
 	const to = new URL(next, url.origin);
 	const sameSite = to.origin === url.origin;
-	if (!sameSite || to.pathname === WELCOME) return '/';
+	if (!sameSite || to.pathname === WELCOME) {
+		return '/';
+	}
 
 	return to.pathname + to.search;
 }
