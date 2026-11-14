@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Dealer from '#lib/components/Dealer.svelte';
+	import Deck from '#lib/components/Deck.svelte';
 	import DealerLine from '#lib/components/DealerLine.svelte';
 	import Felt from '#lib/components/Felt.svelte';
 	import Seat from '#lib/components/Seat.svelte';
@@ -31,6 +32,7 @@
 	const pileSize = 'pile';
 
 	const view = $derived(room.view!);
+
 	const inSeat = (seat: number) => view.players.find((p) => p.seat === seat) ?? null;
 	const nameOf = (id: string | null | undefined) =>
 		view.players.find((p) => p.id === id)?.name ?? '?';
@@ -311,13 +313,19 @@
 	type RoundEnd = Extract<NonNullable<typeof view.lastEvent>, { type: 'roundEnd' }>;
 	let skipped = $state<string | null>(null);
 
-	/** The line under a seat: skipped this turn, else how many cards it holds. */
+	/** The badge on a seat: skipped this turn, else how many cards it holds (the badge draws a card beside it). */
 	const cardsLabel = (playerId: string, cards: number) => {
 		if (skipped === playerId) {
 			return 'Skipped';
 		}
 
-		return cards === 1 ? '1 card' : `${cards} cards`;
+		return String(cards);
+	};
+	/** A seat's badge and meter in words, for screen readers. */
+	const seatSummary = (player: (typeof view.players)[number]) => {
+		const cards =
+			skipped === player.id ? 'skipped' : player.cards === 1 ? '1 card' : `${player.cards} cards`;
+		return `${cards}, ${player.points} of ${view.burstAt} points`;
 	};
 	let summary = $state<RoundEnd | null>(null);
 	let handled = -1;
@@ -559,62 +567,80 @@
 
 <svelte:window onkeydown={onKey} />
 
-<!-- The felt takes the stage's free height. -->
-<div class="table-back-cloudburst min-h-0 flex-1">
-	<Felt count={MAX_PLAYERS + 1} name="Cloudburst">
+<div class="table-back-cloudburst shrink-0">
+	<Felt count={MAX_PLAYERS + 1} name="Cloudburst" direction={view.direction}>
 		{#snippet seat(spot)}
 			{#if spot === 0}
-				<Dealer deckCount={view.deckCount} direction={view.direction} />
+				<Dealer />
 			{:else}
 				{@const player = inSeat(spot - 1)}
-				{#snippet status()}
+				{#snippet cardsBadge()}
+					{#if player}
+						{@const left = reveal?.left[player.id] ?? []}
+						{@const cards = reveal ? left.length - (reveal.landed[player.id] ?? 0) : player.cards}
+						<span
+							class="flex items-center gap-1 tabular-nums {cards === 1 && skipped !== player.id
+								? 'text-ember'
+								: 'text-paper/90'}"
+						>
+							{#if skipped !== player.id}
+								<!-- a card -->
+								<svg
+									viewBox="0 0 12 16"
+									class="h-3 w-2.5"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="1.6"
+								>
+									<rect x="1" y="1" width="10" height="14" rx="2" />
+								</svg>
+							{/if}
+							{cardsLabel(player.id, cards)}
+						</span>
+					{/if}
+				{/snippet}
+				{#snippet meter()}
 					{#if player}
 						{@const shown = shownPoints(player)}
 						{@const left = reveal?.left[player.id] ?? []}
-						{@const cards = reveal ? left.length - (reveal.landed[player.id] ?? 0) : player.cards}
-						<span class="flex flex-col items-center gap-0.5">
-							<span
-								class="text-[11px] tabular-nums {cards === 1
-									? 'font-semibold text-ember'
-									: 'text-paper/80'}"
+						<span
+							class="relative flex items-center gap-px"
+							class:burst={bursting.includes(player.id)}
+							data-meter
+							role="img"
+							aria-label="{player.points} of {view.burstAt} points"
+						>
+							{#each Array(view.burstAt) as _, i (i)}
+								<span
+									data-seg={i}
+									class="h-1.5 w-1 rounded-[1px] wide:h-2 wide:w-[5px] {segmentClass(i, shown)}"
+								></span>
+							{/each}
+							<span class="ml-1 text-[10px] text-paper/75 tabular-nums wide:text-[11px]"
+								>{shown}</span
 							>
-								{cardsLabel(player.id, cards)}
-							</span>
-							<span
-								class="relative flex items-center gap-px"
-								class:burst={bursting.includes(player.id)}
-								data-meter
-								role="img"
-								aria-label="{player.points} of {view.burstAt} points"
-							>
-								{#each Array(view.burstAt) as _, i (i)}
-									<span data-seg={i} class="h-1.5 w-1 rounded-[1px] {segmentClass(i, shown)}"
-									></span>
-								{/each}
-								<span class="ml-1 text-[10px] text-paper/75 tabular-nums">{shown}</span>
-								{#if left.length}
-									<!-- The hand left at the end of the round, face up; each card drips into the meter. -->
-									<span
-										class="pointer-events-none absolute bottom-full left-1/2 mb-11 flex -translate-x-1/2"
-										aria-hidden="true"
-									>
-										{#each left as card, i (i)}
-											<span
-												class="shrink-0"
-												style={i ? `margin-left: -${overlap(left.length)}px` : ''}
-												use:drip={{
-													playerId: player.id,
-													i,
-													n: left.length,
-													from: player.points - left.length
-												}}
-											>
-												<CloudCard {card} size="xs" />
-											</span>
-										{/each}
-									</span>
-								{/if}
-							</span>
+							{#if left.length}
+								<!-- The hand left at the end of the round, face up; each card drips into the meter. -->
+								<span
+									class="pointer-events-none absolute bottom-full left-1/2 mb-14 flex -translate-x-1/2 wide:mb-16"
+									aria-hidden="true"
+								>
+									{#each left as card, i (i)}
+										<span
+											class="shrink-0"
+											style={i ? `margin-left: -${overlap(left.length)}px` : ''}
+											use:drip={{
+												playerId: player.id,
+												i,
+												n: left.length,
+												from: player.points - left.length
+											}}
+										>
+											<CloudCard {card} size="xs" />
+										</span>
+									{/each}
+								</span>
+							{/if}
 						</span>
 					{/if}
 				{/snippet}
@@ -622,10 +648,11 @@
 					{player}
 					number={spot}
 					isTurn={!!player && (player.id === view.turnPlayerId || player.id === view.winnerId)}
-					isHost={!view.tournament && !!player && player.id === view.hostId}
 					isMe={!!player && player.id === room.playerId}
 					out={!!player && skipped === player.id}
-					{status}
+					badge={player ? cardsBadge : undefined}
+					meter={player ? meter : undefined}
+					summary={player ? seatSummary(player) : undefined}
 					timeLeft={player && player.id === view.turnPlayerId && msLeft !== null
 						? Math.min(1, msLeft / room.turnTotal)
 						: null}
@@ -639,27 +666,39 @@
 		{/if}
 		<!-- The pile stays when the table finishes; the result is a popup. -->
 		{#if summary && view.phase !== 'finished'}
+			<!-- The round's score sheet, in the ring's place until the next deal: who gained what, and where each stands. -->
 			<div
-				class="relative flex flex-col items-center gap-1.5 rounded-lg bg-black/60 px-3 py-3 text-center wide:gap-2 wide:px-5 wide:py-4"
+				class="summary w-full max-w-52 rounded-xl px-3 py-2.5 wide:max-w-[30rem] wide:px-5 wide:py-4"
 				role="status"
 			>
-				<p class="font-display text-lg leading-tight font-bold wide:text-xl">
+				<p class="text-center font-display text-base leading-tight font-bold wide:text-xl">
 					{nameOf(summary.outId)} went out
 				</p>
-				<ul class="text-xs tabular-nums wide:grid wide:grid-cols-2 wide:gap-x-6 wide:text-sm">
+				<ol
+					class="mt-2 grid gap-y-0.5 text-xs tabular-nums wide:mt-3 wide:grid-cols-2 wide:gap-x-8 wide:gap-y-1 wide:text-sm"
+				>
 					{#each standings as p (p.id)}
-						<li class={p.points >= view.burstAt - 2 ? 'text-ember' : 'text-paper/85'}>
-							{p.name}: +{summary.gained[p.id] ?? 0}, {p.points} of {view.burstAt}
+						{@const close = p.points >= view.burstAt - 2}
+						<li class="flex items-baseline gap-2">
+							<span class="min-w-0 flex-1 truncate text-paper/85">{p.name}</span>
+							<span class="text-paper/55">+{summary.gained[p.id] ?? 0}</span>
+							<span class="w-11 text-right font-semibold {close ? 'text-ember' : 'text-paper'}"
+								>{p.points}/{view.burstAt}</span
+							>
 						</li>
 					{/each}
-				</ul>
-				{#if summary.tie}<p class="text-xs text-brass">
+				</ol>
+				{#if summary.tie}<p class="mt-2 text-center text-xs text-brass">
 						Tie for fewest points: one more round.
 					</p>{/if}
 			</div>
 		{:else}
-			<!-- The pile sits dead centre inside the weather vane, which lights the suit to follow. -->
-			<div class="-translate-y-2 wide:translate-y-4">
+			<!-- The weather ring with the pile in it is the hero: on the wide stage between the deck and what to follow,
+				 on the tall one over them. -->
+			<div
+				class="grid grid-cols-2 items-center justify-items-center gap-x-6 gap-y-5 wide:flex wide:gap-10 [&>*:nth-child(2)]:col-span-2 [&>*:nth-child(2)]:row-start-1"
+			>
+				<Deck count={view.deckCount} />
 				<WeatherVane suit={view.suit} top={view.topCard}>
 					<div class="grid h-[3.55rem] w-10 place-items-center wide:h-[4.6rem] wide:w-[3.25rem]">
 						{#each view.pileUnder as u (u.id)}
@@ -693,7 +732,7 @@
 <DealerLine text={dealerLine} moveKey={view.moves} />
 
 {#if view.phase === 'finished'}
-	<div class="flex shrink-0 justify-center pb-2">
+	<div class="flex flex-1 items-center justify-center">
 		<button class="btn-brass" onclick={() => (resultOpen = true)}>See the result</button>
 	</div>
 	<ResultDialog bind:open={resultOpen} title={resultTitle} winner={nameOf(view.winnerId)}>
@@ -732,36 +771,34 @@
 {/if}
 
 {#if view.phase === 'playing' && room.me}
-	<section aria-label="Your hand" class="flex shrink-0 flex-col items-center gap-2">
-		<HandBar active={room.myTurn} label={barLabel} {secondsLeft}>
-			{#snippet actions()}
-				{#if pending?.needs === 'give'}
-					<button class="link-btn" onclick={() => (pending = null)}>Cancel</button>
-				{:else if pending}
-					<!-- A Rainbow can't be taken back: no Cancel while its suit is picked. -->
-				{:else if view.drew}
-					<button class="btn-chip" onclick={room.pass} disabled={!canMove}>
-						Pass <kbd class="key-hint">P</kbd>
-					</button>
-				{:else}
-					<button class="btn-chip" onclick={room.draw} disabled={!canMove}>
-						Draw <kbd class="key-hint">D</kbd>
-					</button>
-				{/if}
-			{/snippet}
-		</HandBar>
+	<SuitPicker
+		open={pending?.needs === 'suit'}
+		nextName={next?.name ?? ''}
+		{secondsLeft}
+		onpick={(suit) => send(pending!.card, { suit })}
+	/>
 
-		<SuitPicker
-			open={pending?.needs === 'suit'}
-			nextName={next?.name ?? ''}
-			{secondsLeft}
-			onpick={(suit) => send(pending!.card, { suit })}
-		/>
+	<HandBar active={room.myTurn} label={barLabel} {secondsLeft}>
+		{#snippet actions()}
+			{#if pending?.needs === 'give'}
+				<button class="link-btn" onclick={() => (pending = null)}>Cancel</button>
+			{:else if pending}
+				<!-- A Rainbow can't be taken back: no Cancel while its suit is picked. -->
+			{:else if view.drew}
+				<button class="btn-chip" onclick={room.pass} disabled={!canMove}>
+					Pass <kbd class="key-hint">P</kbd>
+				</button>
+			{:else}
+				<button class="btn-chip" onclick={room.draw} disabled={!canMove}>
+					Draw <kbd class="key-hint">D</kbd>
+				</button>
+			{/if}
+		{/snippet}
 
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<!-- On the tall stage the row runs edge to edge, past the stage's gutter, so a full hand of seven fits. -->
 		<div
-			class="hand -mx-4 flex w-[calc(100%+2rem)] justify-center-safe overflow-x-auto px-2 pt-4 pb-2 wide:mx-0 wide:w-full wide:px-4"
+			class="hand -mx-4 flex w-[calc(100%+2rem)] justify-center-safe overflow-x-auto px-2 pt-4 pb-2 wide:mx-0 wide:w-full wide:px-4 wide:pt-5"
 			class:pointer-events-none={dealing}
 			bind:clientWidth={handWidth}
 			onkeydown={arrows}
@@ -788,12 +825,16 @@
 				</div>
 			{/each}
 		</div>
-	</section>
+	</HandBar>
 {/if}
 
 <style>
 	.hand {
 		scrollbar-width: thin;
+	}
+	.summary {
+		background: rgb(10 8 6 / 0.72);
+		box-shadow: inset 0 0 0 1px rgb(210 165 76 / 0.3);
 	}
 	.suit-ring {
 		transition: color 400ms ease;

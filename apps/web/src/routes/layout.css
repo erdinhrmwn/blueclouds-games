@@ -27,6 +27,11 @@
 	--color-rain: #2c5f8a;
 	--color-wind: #2f6e4f;
 	--color-storm: #6a3d78;
+	/* The same suits lightened for marks drawn straight on the dark felt (the weather ring) */
+	--color-sun-light: #e8a73c;
+	--color-rain-light: #7fb2de;
+	--color-wind-light: #7cc39b;
+	--color-storm-light: #c08fd1;
 }
 
 @layer base {

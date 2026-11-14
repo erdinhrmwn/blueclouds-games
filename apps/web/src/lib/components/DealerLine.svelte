@@ -12,7 +12,7 @@
 	 */
 	let { text, moveKey }: { text: string; moveKey: number } = $props();
 
-	const HISTORY_SIZE = 3;
+	const HISTORY_SIZE = 2;
 	const MOTION_MS = 220;
 
 	type Entry = { id: number; text: string };
@@ -39,17 +39,15 @@
 	});
 
 	const duration = $derived(prefersReducedMotion.current ? 0 : MOTION_MS);
-
-	/** Older lines fade further the longer ago they happened. */
-	const OLDER_TONE = ['text-paper/55', 'text-paper/35'];
 </script>
 
 <p class="sr-only" aria-live="polite">{entries[0]?.text ?? ''}</p>
 
-<!-- Fixed height, so the log never pushes the hand down as lines come and go. The tall stage shows only the latest
-	 line, under the table; the wide one keeps the last few in the free corner at the top left. -->
+<!-- Nimbus says the latest move. Fixed height, so the log never pushes the hand down as lines come and go. On the tall
+	 stage it sits between the table and your hand; on the wide one it is a speech bubble beside the dealer, at the
+	 head of the table, with the move before it fading under it. -->
 <ol
-	class="mx-auto my-1 flex h-10 w-full max-w-md shrink-0 flex-col items-center gap-1 px-4 wide:absolute wide:top-4 wide:left-6 wide:m-0 wide:h-24 wide:w-80 wide:items-start wide:px-0"
+	class="mx-auto my-1 flex h-9 w-full max-w-md shrink-0 flex-col items-center gap-1 px-4 wide:absolute wide:top-[4.25rem] wide:left-[calc(50%+3.75rem)] wide:m-0 wide:h-16 wide:w-[22rem] wide:items-start wide:px-0"
 	aria-label="Recent moves"
 >
 	{#each entries as entry, index (entry.id)}
@@ -60,14 +58,30 @@
 		>
 			{#if index === 0}
 				<p
-					class="flex items-center gap-2 rounded-xl border border-paper/10 bg-black/35 px-3 py-1 text-center text-xs text-paper/90 wide:px-3.5 wide:py-1.5 wide:text-sm"
+					class="bubble relative flex items-center gap-2 rounded-xl bg-paper px-3 py-1 text-center text-xs font-medium text-ink wide:rounded-2xl wide:rounded-tl-sm wide:px-3.5 wide:py-1.5 wide:text-left wide:text-sm"
 				>
-					<Nimbus head class="size-5 shrink-0 wide:size-6" />
+					<Nimbus head class="size-5 shrink-0 wide:hidden" />
 					<span class="line-clamp-2">{entry.text}</span>
 				</p>
 			{:else}
-				<p class="truncate px-3 text-[11px] wide:text-xs {OLDER_TONE[index - 1]}">{entry.text}</p>
+				<p class="truncate pl-3.5 text-xs text-paper/45">{entry.text}</p>
 			{/if}
 		</li>
 	{/each}
 </ol>
+
+<style>
+	.bubble {
+		box-shadow: 0 4px 10px rgb(0 0 0 / 0.35);
+	}
+	/* The bubble's tail points back at Nimbus on the wide stage. */
+	:global([data-stage='wide']) .bubble::before {
+		content: '';
+		position: absolute;
+		top: 0;
+		left: -0.5rem;
+		border-width: 0 0.6rem 0.6rem 0;
+		border-style: solid;
+		border-color: transparent var(--color-paper) transparent transparent;
+	}
+</style>

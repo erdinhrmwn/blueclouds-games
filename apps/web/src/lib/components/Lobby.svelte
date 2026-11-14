@@ -146,8 +146,8 @@
 		});
 </script>
 
-<!-- Spot 0 is the dealer at the head of the table; chairs 1–6 follow clockwise. The felt takes the stage's free height. -->
-<div class="min-h-0 flex-1">
+<!-- Spot 0 is the dealer at the head of the table; chairs 1–6 follow clockwise. -->
+<div class="shrink-0">
 	<Felt count={seats + 1}>
 		{#snippet seat(spot)}
 			{#if spot === 0}
@@ -167,72 +167,86 @@
 			{/if}
 		{/snippet}
 
-		{#if tournament}
-			<div class="flex flex-col items-center gap-1 text-center">
-				<p class="label">Tournament table</p>
-				<p class="text-sm text-paper/80">{tournament.name}</p>
-			</div>
-		{/if}
+		<!-- The middle of the table: the host's Play button, or the tournament's countdown. -->
+		<div class="flex w-full max-w-sm flex-col items-center gap-3 text-center wide:gap-4">
+			{#if tournament}
+				<div>
+					<p class="text-xs text-paper/65 wide:text-sm">Tournament table</p>
+					<p class="font-display text-lg leading-tight font-bold text-brass wide:text-2xl">
+						{tournament.name}
+					</p>
+				</div>
+				{#if tournament.closed}
+					<p class="text-sm text-ember" role="status">
+						Not enough players showed up, so this table is closed.
+					</p>
+				{:else if (room.startsAt ?? now) > now}
+					<p class="font-display text-4xl font-black tabular-nums wide:text-6xl" aria-hidden="true">
+						{countdown(room.startsAt)}
+					</p>
+					<p class="text-sm text-paper/75" aria-live="off">
+						<span class="sr-only">Starts in {countdown(room.startsAt)}.</span>Starts by itself.
+						{view.players.length} of {tournament.seats} players here.
+					</p>
+				{:else}
+					<p class="font-display text-4xl font-black tabular-nums wide:text-6xl" aria-hidden="true">
+						{countdown(room.waitEndsAt)}
+					</p>
+					<p class="text-sm text-paper/75" aria-live="off">
+						Waiting for {tournament.seats - view.players.length} more.
+						<span class="sr-only">Starts in {countdown(room.waitEndsAt)}</span> Starts with whoever is
+						here.
+					</p>
+				{/if}
+			{:else}
+				{#if room.isHost}
+					<button
+						class="btn-brass w-full max-w-48"
+						onclick={room.start}
+						disabled={room.busy || !canStart}>Play</button
+					>
+					<p class="text-xs text-paper/75 wide:text-sm">
+						{canStart
+							? `${view.players.length} players ready.`
+							: `Needs at least ${minPlayers} players. Invite a friend, or press + on an empty seat to add a bot.`}
+					</p>
+				{:else}
+					<p class="text-sm text-paper/75">
+						Waiting for {view.players.find((p) => p.id === view.hostId)?.name ?? 'the host'} to start…
+					</p>
+				{/if}
+			{/if}
+		</div>
 	</Felt>
 </div>
 
-<div class="flex shrink-0 flex-col items-center gap-3 pt-2">
-	{#if !tournament}
-		<div class="flex w-full max-w-md flex-col items-center gap-2 text-center">
-			<p class="label">Invite friends</p>
-			<!-- Tapping the link selects all of it, to copy by hand. -->
-			<div
-				class="w-full truncate rounded-md border border-paper/20 bg-black/30 px-4 py-2.5 font-mono text-sm select-all"
-				bind:this={linkBox}
-			>
-				{#if inviteLink}
-					{inviteLink}
-				{:else}
-					<span class="text-paper/55">{sharing ? 'Making a link…' : 'No link yet'}</span>
-				{/if}
-			</div>
-			<div class="flex flex-wrap justify-center">
-				<button class="link-btn" onclick={copyLink} disabled={sharing}
-					>{copied ? 'Link copied' : 'Copy link'}</button
-				>
-				{#if room.isHost}
-					<button class="link-btn" onclick={resetLink} disabled={sharing}>Reset link</button>
-				{/if}
-			</div>
-			{#if shareNote}
-				<p class="text-sm text-paper/80" role="status">{shareNote}</p>
+{#if !tournament}
+	<!-- Inviting sits where your hand will be once the game starts, under a table of the same size. -->
+	<div
+		class="my-auto flex w-full max-w-md shrink-0 flex-col items-center gap-1.5 self-center text-center"
+	>
+		<p class="label">Invite friends</p>
+		<!-- Tapping the link selects all of it, to copy by hand. -->
+		<div
+			class="w-full truncate rounded-md border border-paper/20 bg-black/35 px-3 py-2 font-mono text-xs select-all wide:px-4 wide:py-2.5 wide:text-sm"
+			bind:this={linkBox}
+		>
+			{#if inviteLink}
+				{inviteLink}
+			{:else}
+				<span class="text-paper/55">{sharing ? 'Making a link…' : 'No link yet'}</span>
 			{/if}
 		</div>
-	{/if}
-	{#if tournament}
-		{#if tournament.closed}
-			<p class="text-sm text-ember" role="status">
-				Not enough players showed up, so this table is closed.
-			</p>
-		{:else if (room.startsAt ?? now) > now}
-			<p class="text-sm text-paper/75" aria-live="off">
-				Starts by itself in <span class="font-mono tabular-nums text-paper"
-					>{countdown(room.startsAt)}</span
-				>. {view.players.length} of {tournament.seats} players here.
-			</p>
-		{:else}
-			<p class="text-sm text-paper/75" aria-live="off">
-				Waiting for {tournament.seats - view.players.length} more. Starts with whoever is here in
-				<span class="font-mono tabular-nums text-paper">{countdown(room.waitEndsAt)}</span>.
-			</p>
-		{/if}
-	{:else if room.isHost}
-		<div class="flex flex-wrap justify-center gap-3">
-			<button class="btn-brass" onclick={room.start} disabled={room.busy || !canStart}>Play</button>
+		<div class="flex flex-wrap justify-center">
+			<button class="link-btn" onclick={copyLink} disabled={sharing}
+				>{copied ? 'Link copied' : 'Copy link'}</button
+			>
+			{#if room.isHost}
+				<button class="link-btn" onclick={resetLink} disabled={sharing}>Reset link</button>
+			{/if}
 		</div>
-		<p class="text-sm text-paper/75">
-			{canStart
-				? `${view.players.length} players ready.`
-				: `Needs at least ${minPlayers} players. Invite a friend, or press + on an empty seat to add a bot.`}
-		</p>
-	{:else}
-		<p class="text-sm text-paper/75">
-			Waiting for {view.players.find((p) => p.id === view.hostId)?.name ?? 'the host'} to start…
-		</p>
-	{/if}
-</div>
+		{#if shareNote}
+			<p class="text-xs text-paper/80 wide:text-sm" role="status">{shareNote}</p>
+		{/if}
+	</div>
+{/if}

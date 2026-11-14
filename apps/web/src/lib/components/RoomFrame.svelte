@@ -148,27 +148,30 @@
 />
 
 <Stage>
-	<!-- The room's sign: its name on top and one line of what matters below, framed in brass like the table.
-		 The buttons sit beside it; on the wide stage a spacer of their width keeps the sign centred over the dealer. -->
-	<header class="flex shrink-0 items-center gap-2 py-3 wide:py-4">
-		<div class="hidden w-24 shrink-0 wide:block" aria-hidden="true"></div>
+	<!-- The room's sign, a brass-framed plaque: its name, then one line of what matters. On the wide stage it sits in
+		 the top left corner on one line, leaving the head of the table to the dealer; the buttons take the other corner. -->
+	<header class="flex shrink-0 items-center gap-2 py-2">
 		<div
-			class="placard mx-auto w-full max-w-md min-w-0 flex-1 rounded-2xl px-3 py-2 text-center wide:px-6 wide:py-3"
+			class="placard flex min-w-0 flex-1 flex-col rounded-xl px-3 py-1.5 text-center wide:max-w-[32rem] wide:flex-none wide:flex-row wide:items-baseline wide:gap-3 wide:px-4 wide:py-2.5 wide:text-left"
 		>
-			<h1 class="font-display text-lg leading-tight font-bold text-paper wide:text-xl">
+			<h1
+				class="min-w-0 font-display text-base leading-tight font-bold text-paper wide:max-w-56 wide:shrink-0 wide:text-lg"
+			>
 				<span class="sr-only">{game.name},&nbsp;</span><Marquee text={roomName} />
 			</h1>
 			<p
-				class="mt-1 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-xs text-paper/70 wide:mt-1.5 wide:text-sm"
+				class="mt-0.5 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-xs text-paper/70 wide:mt-0 wide:flex-nowrap wide:justify-start wide:text-[13px] wide:whitespace-nowrap"
 			>
 				{#each facts as fact, index (index)}
+					<!-- A tournament's entrant count waits for its Standings on the tall stage, so the sign stays two lines. -->
+					{@const spare = index === 2 && !!room?.view?.tournament}
 					{#if index}
-						<span class="text-paper/30" aria-hidden="true">·</span>
+						<span class="text-paper/30 {spare ? 'tall:hidden' : ''}" aria-hidden="true">·</span>
 					{/if}
 					<span
 						class="tabular-nums {index === 0 && room?.view?.tournament
 							? 'font-semibold text-brass'
-							: ''}">{fact}</span
+							: ''} {spare ? 'tall:hidden' : ''}">{fact}</span
 					>
 				{/each}
 				{#if room?.view?.tournament?.id}
@@ -179,7 +182,7 @@
 				{/if}
 			</p>
 		</div>
-		<div class="flex shrink-0 items-center justify-end gap-2 wide:w-24">
+		<div class="flex shrink-0 items-center justify-end gap-2 wide:ml-auto">
 			{#if room?.view}
 				{#if room.status !== 'refused'}
 					<FairPlay {room} game={game.slug} />
@@ -247,28 +250,13 @@
 </Stage>
 
 <style>
-	/* The sign hangs from a short brass rod, like the one over a casino table. */
 	.placard {
 		position: relative;
 		background: #1c1510;
 		box-shadow:
 			inset 0 0 0 1.5px var(--color-brass),
-			inset 0 0 0 5px #1c1510,
-			inset 0 0 0 6px rgb(210 165 76 / 0.22),
+			inset 0 0 0 4px #1c1510,
+			inset 0 0 0 5px rgb(210 165 76 / 0.22),
 			0 8px 18px rgb(0 0 0 / 0.4);
-	}
-	/* On the tall stage the buttons share the sign's row, so it no longer sits over the dealer: no rod. */
-	:global([data-stage='tall']) .placard::after {
-		display: none;
-	}
-	.placard::after {
-		content: '';
-		position: absolute;
-		top: 100%;
-		left: 50%;
-		width: 2px;
-		height: 1rem;
-		translate: -50% 0;
-		background: rgb(210 165 76 / 0.7);
 	}
 </style>
