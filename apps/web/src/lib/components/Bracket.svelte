@@ -4,8 +4,8 @@
 
 	/**
 	 * A tournament's rounds side by side: one column per round, each table a card with its players and where they
-	 * finished, and lines carrying each table's winner to their seat in the next round. Phones show one round at a
-	 * time, with where each winner went written under their table.
+	 * finished, and lines from every table that sent a winner to the same next table, joining at that table's middle.
+	 * Phones show one round at a time, with where each winner went written under their table.
 	 */
 	let {
 		board,
@@ -105,6 +105,7 @@
 	}
 
 	// Lines between columns, measured from the cards once they are laid out.
+	type Point = { x: number; y: number };
 	let canvas = $state<HTMLDivElement>();
 	let paths = $state<{ d: string; strong: boolean }[]>([]);
 	let size = $state({ width: 0, height: 0 });
@@ -115,13 +116,14 @@
 		}
 
 		const box = canvas.getBoundingClientRect();
-		const point = (element: Element, side: 'left' | 'right') => {
+		const point = (element: Element, side: 'left' | 'right'): Point => {
 			const rect = element.getBoundingClientRect();
 			const x = (side === 'right' ? rect.right : rect.left) - box.left;
 			return { x, y: rect.top + rect.height / 2 - box.top };
 		};
 
-		const lines: { d: string; strong: boolean }[] = [];
+		// Every table that sent a winner to the same next table, so their lines can meet at that table's middle.
+		const joins = new Map<Element, { starts: Point[]; strong: Point | null }>();
 		for (const round of rounds) {
 			for (const table of round.tables) {
 				const winner = table.players.find((seat) => seat.placement === 1);
@@ -129,9 +131,12 @@
 					continue;
 				}
 
-				const from = canvas.querySelector(`[data-seat="${round.round}:${winner.playerId}"]`);
+				const from = canvas.querySelector(`[data-table="${round.round}:${table.code}"]`);
+				const nextTable = canvas
+					.querySelector(`[data-seat="${round.round + 1}:${winner.playerId}"]`)
+					?.closest('[data-table]');
 				const to =
-					canvas.querySelector(`[data-seat="${round.round + 1}:${winner.playerId}"]`) ??
+					nextTable ??
 					(champion?.playerId === winner.playerId && round.round === lastRound
 						? canvas.querySelector('[data-champion]')
 						: null);
@@ -140,11 +145,28 @@
 				}
 
 				const start = point(from, 'right');
-				const end = point(to, 'left');
-				const middle = (start.x + end.x) / 2;
+				const join = joins.get(to) ?? { starts: [], strong: null };
+				join.starts.push(start);
+				if (winner.playerId === champion?.playerId) {
+					join.strong = start;
+				}
+
+				joins.set(to, join);
+			}
+		}
+
+		const lines: { d: string; strong: boolean }[] = [];
+		for (const [to, join] of joins) {
+			const end = point(to, 'left');
+			const middle = (Math.max(...join.starts.map((start) => start.x)) + end.x) / 2;
+			const feeders = join.starts.map((start) => `M${start.x} ${start.y}H${middle}V${end.y}`);
+			lines.push({ d: `${feeders.join('')}M${middle} ${end.y}H${end.x}`, strong: false });
+
+			// The champion's way through the bracket, drawn again on top.
+			if (join.strong) {
 				lines.push({
-					d: `M${start.x} ${start.y}H${middle}V${end.y}H${end.x}`,
-					strong: winner.playerId === champion?.playerId
+					d: `M${join.strong.x} ${join.strong.y}H${middle}V${end.y}H${end.x}`,
+					strong: true
 				});
 			}
 		}
@@ -173,6 +195,7 @@
 
 {#snippet tableCard(table: BoardTable, round: number, startsAt: string)}
 	<article
+		data-table="{round}:{table.code}"
 		class="w-full rounded-xl border border-paper/12 bg-panel sm:w-56"
 		aria-label="Table {table.code}"
 	>
