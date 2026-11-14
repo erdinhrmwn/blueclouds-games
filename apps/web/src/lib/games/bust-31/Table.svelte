@@ -282,9 +282,7 @@
 			}
 			case 'bust': {
 				const auto = event.auto ? ' (auto, time ran out)' : '';
-				const outcome = event.eliminated
-					? 'Out of the game.'
-					: `Loses a life. Hand ${view.round}.`;
+				const outcome = event.eliminated ? 'Out of the game.' : `Loses a life. Hand ${view.round}.`;
 				return `${nameOf(event.playerId)} busted at ${event.total}${auto}. ${outcome}`;
 			}
 			case 'finished':
