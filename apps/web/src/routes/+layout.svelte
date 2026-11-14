@@ -21,10 +21,10 @@
 </svelte:head>
 
 {#if !player.playing}
-	<header class="mx-auto flex max-w-4xl items-center justify-between gap-2 px-4 pt-5 sm:gap-3">
+	<header class="mx-auto flex max-w-[62rem] items-center justify-between gap-2 px-4 pt-5 sm:gap-3">
 		<a
 			href="/"
-			class="inline-flex min-h-11 shrink-0 items-center gap-1.5 font-display text-lg font-black tracking-tight sm:text-xl"
+			class="inline-flex min-h-11 shrink-0 items-center gap-1.5 font-display text-base font-black tracking-tight"
 			>BlueClouds <span class="text-brass">Games</span></a
 		>
 		{#if player.ready && player.name}
@@ -36,10 +36,10 @@
 <NameGate />
 <ConfirmDialog />
 
-{#if outError}<p class="mx-auto max-w-4xl px-4 pt-2 text-right text-sm text-ember" role="alert">
+{#if outError}<p class="mx-auto max-w-[62rem] px-4 pt-2 text-right text-sm text-ember" role="alert">
 		{outError}
 	</p>{/if}
 
-<main class="mx-auto max-w-4xl px-4 pb-12">
+<main class="mx-auto max-w-[62rem] px-4 pb-12">
 	{@render children()}
 </main>

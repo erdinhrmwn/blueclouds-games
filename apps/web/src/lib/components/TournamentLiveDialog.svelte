@@ -2,15 +2,15 @@
 	import { fetchStandings, type LiveTournament, type Standing } from '#lib/platform.ts';
 	import { enterTable } from '#lib/tables.ts';
 	import {
+		avatarTone,
 		coins,
 		FORMATS,
 		ordinal,
 		pointsText,
-		ranFor,
 		ranksByPoints,
 		startsIn
 	} from '#lib/tournament-formats.ts';
-	import { when } from '#lib/when.ts';
+	import { day } from '#lib/when.ts';
 	import StandingsList from './StandingsList.svelte';
 	import TournamentFelt from './TournamentFelt.svelte';
 
@@ -104,7 +104,7 @@
 
 		if (finished) {
 			const winner = standings[0] ?? tournament.top[0];
-			return winner ? `${winner.name} wins` : 'No winner';
+			return winner ? `${winner.name} wins ${tournament.name}` : `${tournament.name} is over`;
 		}
 
 		if (tournament.roundStarted) {
@@ -113,6 +113,26 @@
 
 		return startsIn(tournament.roundStartsAt, now);
 	});
+
+	/** Under the felt's headline: what this tournament is, and once it ended, when. */
+	const sub = $derived.by(() => {
+		if (!tournament) {
+			return '';
+		}
+
+		const formatName = format?.label;
+		if (finished && tournament.endedAt) {
+			const parts = [day(tournament.endedAt), formatName];
+			return parts.filter(Boolean).join(' · ');
+		}
+
+		const parts = [tournament.name, formatName, `${tournament.players} players`];
+		return parts.filter(Boolean).join(' · ');
+	});
+
+	/** The podium shows the top three, so the final places list starts after them. */
+	const PODIUM_SIZE = 3;
+	const listed = $derived(finished ? standings.slice(PODIUM_SIZE) : standings);
 
 	const prizeOf = (place: number) => tournament?.prizes.find((prize) => prize.place === place);
 
@@ -127,9 +147,9 @@
 
 	const me = $derived(tournament?.me ?? null);
 
-	/** "You're 3rd · 9 points", "You're in round 2", "You're out · 6th". */
+	/** "You're 3rd · 9 points", "You're in stage 2", "You're out · 6th". A finished one shows the podium instead. */
 	const meLine = $derived.by(() => {
-		if (!tournament || !me) {
+		if (!tournament || !me || finished) {
 			return null;
 		}
 
@@ -137,11 +157,11 @@
 			return `You’re ${ordinal(me.place)} · ${pointsText(me.points)}`;
 		}
 
-		if (!finished && tournament.table) {
+		if (tournament.table) {
 			return `You’re in stage ${tournament.round}`;
 		}
 
-		return finished ? `You finished ${ordinal(me.place)}` : `You’re out · ${ordinal(me.place)}`;
+		return `You’re out · ${ordinal(me.place)}`;
 	});
 
 	const tableLine = $derived.by(() => {
@@ -176,6 +196,7 @@
 				? (tournament.endedAt ?? tournament.roundStartsAt)
 				: tournament.roundStartsAt}
 			countdown={headline}
+			{sub}
 			{back}
 		>
 			<button
@@ -199,21 +220,8 @@
 		</TournamentFelt>
 
 		<div class="min-h-0 flex-1 space-y-6 overflow-y-auto p-6">
-			<div>
-				<h2 id="live-title" class="modal-title">{tournament.name}</h2>
-				<p class="mt-2 flex flex-wrap items-center gap-2 text-sm text-paper/60">
-					{#if format}
-						<span
-							class="rounded-md border border-brass/55 px-1.5 py-0.5 text-xs font-bold text-brass"
-							>{format.label}</span
-						>
-					{/if}
-					{tournament.players} players
-					{#if finished && tournament.endedAt}
-						· ran {ranFor(tournament.startsAt, tournament.endedAt)}
-					{/if}
-				</p>
-			</div>
+			<!-- The felt already names the tournament; the title is for screen readers. -->
+			<h2 id="live-title" class="sr-only">{tournament.name}</h2>
 
 			{#if meLine}
 				<section
@@ -224,12 +232,12 @@
 						<p class="font-bold">{meLine}</p>
 						{#if tableLine}<p class="mt-0.5 text-sm text-paper/65">{tableLine}</p>{/if}
 					</div>
-					{#if onwithdraw && tournament.table && !tournament.table.started && !finished}
+					{#if onwithdraw && tournament.table && !tournament.table.started}
 						<button class="btn-ghost h-10 rounded-xl" onclick={() => onwithdraw(tournament!)}
 							>Withdraw</button
 						>
 					{/if}
-					{#if tournament.table && !tournament.table.closed && !finished}
+					{#if tournament.table && !tournament.table.closed}
 						<button
 							class="btn-brass h-10 rounded-xl"
 							onclick={() => (error = enterTable(game, tournament.table!.code))}>Go to table</button
@@ -246,33 +254,31 @@
 							{@const prize = prizeOf(place)}
 							<li class="flex flex-col items-center text-center">
 								{#if winner}
-									<span class="max-w-full truncate text-sm font-bold">{winner.name}</span>
+									<span
+										class="grid size-8 place-items-center rounded-full text-sm font-bold text-paper {avatarTone(
+											winner.name
+										)}"
+										aria-hidden="true">{winner.name.charAt(0).toUpperCase()}</span
+									>
+									<span class="mt-1.5 max-w-full truncate text-sm font-bold">{winner.name}</span>
 									<span
 										class="mt-2 grid w-full place-items-center rounded-lg border font-display text-lg font-bold {PODIUM_HEIGHT[
 											place
 										]} {MEDAL_TONE[place]}">{ordinal(place)}</span
 									>
-									{#if prize}
-										<span
-											class="mt-2 text-xs font-bold {place === 1 ? 'text-brass' : 'text-paper/80'}"
-										>
-											{prize.coins > 0 ? coins(prize.coins) : ''}
-										</span>
-										{#if prize.extra}<span class="text-xs text-paper/55">+ {prize.extra}</span>{/if}
-									{/if}
+									<!-- Every podium place shows its coins, 0 when there is no prize for it. -->
+									<span
+										class="mt-2 text-xs font-bold {place === 1 ? 'text-brass' : 'text-paper/80'}"
+									>
+										{coins(prize?.coins ?? 0)}
+									</span>
+									{#if prize?.extra}<span class="text-xs text-paper/55">+ {prize.extra}</span>{/if}
 								{/if}
 							</li>
 						{/each}
 					</ol>
 				</section>
 			{/if}
-
-			<a
-				class="btn-ghost flex h-11 w-full items-center justify-center rounded-xl"
-				href="/{game}/tournaments/{tournament.id}"
-			>
-				{ranksByPoints(tournament.format) ? 'See every stage' : 'See the bracket'}
-			</a>
 
 			<section aria-labelledby="standings-title">
 				<h3 id="standings-title" class="flex items-baseline justify-between gap-3">
@@ -292,9 +298,11 @@
 						<p class="text-sm text-paper/60" aria-live="polite">Loading the standings…</p>
 					{:else if standings.length === 0}
 						<p class="text-sm text-paper/60">Standings show once the first tables finish.</p>
+					{:else if listed.length === 0}
+						<p class="text-sm text-paper/60">Everyone is on the podium.</p>
 					{:else}
 						<StandingsList
-							{standings}
+							standings={listed}
 							{byPoints}
 							round={tournament.round}
 							{finished}
@@ -303,12 +311,13 @@
 					{/if}
 				</div>
 			</section>
+			<a
+				class="btn-ghost flex h-11 w-full items-center justify-center rounded-xl"
+				href="/{game}/tournaments/{tournament.id}"
+			>
+				{ranksByPoints(tournament.format) ? 'See every stage' : 'See the bracket'}
+			</a>
 			{#if error}<p class="text-sm text-ember" role="alert">{error}</p>{/if}
-			<p class="text-xs text-paper/45">
-				{finished
-					? `Ended ${when(tournament.endedAt ?? '')}`
-					: `Stage ${tournament.round} starts ${when(tournament.roundStartsAt)}`}
-			</p>
 		</div>
 
 		<div class="shrink-0 border-t border-paper/10 p-4 sm:px-6">

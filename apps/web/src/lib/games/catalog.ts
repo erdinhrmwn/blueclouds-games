@@ -12,6 +12,10 @@ export type GameEntry = {
 	slug: string;
 	name: string;
 	tagline: string;
+	/** The rule in a few words, for the game's own page. */
+	rule: string;
+	/** One more fact for the game's own page, after the player count. */
+	fact: string;
 	/** What kind of card game, as in "a shedding card game". */
 	kind: string;
 	minPlayers: number;
@@ -33,6 +37,8 @@ export const GAMES: GameEntry[] = [
 		slug: 'bust-31',
 		name: 'Bust 31',
 		tagline: 'Play a card, add to the total, and don’t be the one who goes over 31.',
+		rule: `Add to the total. Don’t go over ${bust31.LIMIT}.`,
+		fact: `${bust31.START_LIVES} lives each`,
 		kind: 'turn-based',
 		minPlayers: bust31.MIN_PLAYERS,
 		maxPlayers: bust31.MAX_PLAYERS,
@@ -45,6 +51,8 @@ export const GAMES: GameEntry[] = [
 		slug: 'cloudburst',
 		name: 'Cloudburst',
 		tagline: 'Match the weather, shed your hand first, and keep your cloud from bursting.',
+		rule: 'Match the weather and shed your hand first.',
+		fact: `bursts at ${cloudburst.BURST_AT} points`,
 		kind: 'shedding',
 		minPlayers: cloudburst.MIN_PLAYERS,
 		maxPlayers: cloudburst.MAX_PLAYERS,

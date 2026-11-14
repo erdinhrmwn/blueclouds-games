@@ -7,8 +7,7 @@
 	/** The header's account menu: your name opens it, with Profile and Log out inside. */
 	let { onError }: { onError: (message: string | null) => void } = $props();
 
-	const GUEST_LOGOUT_WARNING =
-		'Logging out ends this guest for good, including its game history. Make an account on your profile to keep it.';
+	const GUEST_LOGOUT_WARNING = 'Guest names aren’t saved. Make an account to keep yours.';
 
 	let open = $state(false);
 	let root = $state<HTMLDivElement>();
@@ -109,8 +108,7 @@
 			}
 		}}
 	>
-		<!-- The pill hugs its content: the balance (accounts), the avatar always, the name and a Guest mark from
-			 tablet width up. -->
+		<!-- The pill hugs its content: the balance (accounts), the avatar always, and the name from tablet width up. -->
 		{#if !player.guest}
 			<span
 				class="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full bg-brass/16 pr-2.5 pl-1.5 text-[13px] font-extrabold text-brass tabular-nums"
@@ -123,10 +121,9 @@
 			class="grid size-8 shrink-0 place-items-center rounded-full bg-brass font-display text-sm font-bold text-ink"
 			aria-hidden="true">{player.name.trim().charAt(0).toUpperCase()}</span
 		>
-		<span class="hidden min-w-0 items-baseline gap-1.5 sm:flex" aria-hidden="true">
-			<span class="max-w-32 truncate font-semibold">{player.name}</span>
-			{#if player.guest}<span class="text-[11px] text-paper/60">Guest</span>{/if}
-		</span>
+		<span class="hidden max-w-32 min-w-0 truncate font-semibold sm:block" aria-hidden="true"
+			>{player.name}</span
+		>
 		<svg
 			viewBox="0 0 20 20"
 			class="size-4 shrink-0 text-paper/70 transition-transform max-sm:hidden motion-reduce:transition-none {open

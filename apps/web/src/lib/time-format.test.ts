@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { ranFor, startsIn } from './tournament-formats';
+import { startsIn } from './tournament-formats';
 import { clock } from './when';
 
 const at = (ms: number) => new Date(ms).toISOString();
@@ -9,12 +9,6 @@ test('a clock shows minutes and seconds, past an hour too', () => {
 	expect(clock(247)).toBe('4:07');
 	expect(clock(4_500)).toBe('75:00');
 	expect(clock(-3)).toBe('0:00');
-});
-
-test('a tournament ran for seconds, minutes or hours', () => {
-	expect(ranFor(at(0), at(11_000))).toBe('11 sec');
-	expect(ranFor(at(0), at(491_000))).toBe('8 min 11 sec');
-	expect(ranFor(at(0), at(4_320_000))).toBe('1 h 12 min');
 });
 
 test('a tournament starts in minutes, hours, a day or days', () => {

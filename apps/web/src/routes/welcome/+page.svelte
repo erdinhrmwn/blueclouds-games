@@ -108,14 +108,28 @@
 		<form class="mt-8 space-y-5 text-left" onsubmit={guest} aria-label="Play as a guest">
 			<label class="block">
 				<span class="label mb-1.5 block">Your name at the table</span>
-				<input
-					class="field h-12 rounded-xl"
-					bind:value={guestName}
-					maxlength={NAME_MAX}
-					autocomplete="nickname"
-					required
-					aria-invalid={!!guestError}
-				/>
+				<span class="relative block">
+					<input
+						class="field h-12 rounded-xl pr-11"
+						bind:value={guestName}
+						maxlength={NAME_MAX}
+						autocomplete="nickname"
+						required
+						aria-invalid={!!guestError}
+					/>
+					<!-- The pencil says the suggested name can be changed right here. -->
+					<svg
+						viewBox="0 0 20 20"
+						class="pointer-events-none absolute top-1/2 right-4 size-4 -translate-y-1/2 text-paper/55"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="1.6"
+						stroke-linejoin="round"
+						aria-hidden="true"
+					>
+						<path d="M12.5 4.5l3 3L7 16H4v-3z" />
+					</svg>
+				</span>
 			</label>
 			{#if guestError}<p class="text-sm text-ember" role="alert">{guestError}</p>{/if}
 			<button class="btn-brass h-12 w-full rounded-xl text-base" type="submit" disabled={busy}

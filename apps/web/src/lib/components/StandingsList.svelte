@@ -28,21 +28,21 @@
 	/** Gold, silver and bronze for the top three. */
 	const MEDALS = ['bg-brass text-ink', 'bg-paper/75 text-ink', 'bg-rim-light text-paper'];
 
-	/** A knockout row: still in, or the round they went out in ("the final" for the last one). */
+	/** A knockout row: still in, or the stage they went out in ("the final" for the last one). */
 	function knockoutNote(standing: Standing): string {
 		if (standing.place === 1 && finished) {
 			return 'Champion';
 		}
 
 		if (!finished && standing.lastRound >= round) {
-			return 'In';
+			return 'in';
 		}
 
 		if (standing.lastRound >= round) {
-			return 'Out in the final';
+			return 'out in the final';
 		}
 
-		return `Out in stage ${standing.lastRound}`;
+		return `out in stage ${standing.lastRound}`;
 	}
 </script>
 

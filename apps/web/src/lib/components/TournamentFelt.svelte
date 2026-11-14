@@ -13,6 +13,7 @@
 		back,
 		countdown,
 		headline,
+		sub,
 		children
 	}: {
 		label: string;
@@ -25,6 +26,8 @@
 		countdown?: string;
 		/** The small band's line in place of the start time, e.g. "Starts in 3m" for a running tournament. */
 		headline?: string;
+		/** The line under the big countdown in place of the start time, e.g. "Night Owls · Arena · 24 players". */
+		sub?: string;
 		children?: Snippet;
 	} = $props();
 
@@ -43,7 +46,7 @@
 
 <div
 	class="band relative shrink-0 overflow-hidden border-b border-brass/35 {countdown
-		? 'h-36 px-6 pt-5'
+		? 'min-h-36 px-6 pt-5 pb-4'
 		: 'h-[4.75rem] px-4 pt-3.5'}"
 >
 	<span
@@ -53,10 +56,13 @@
 		{label}
 	</span>
 	{#if countdown}
-		<p class="relative mt-3 font-display text-[28px] leading-tight font-bold text-paper">
+		<!-- Right padding keeps a long headline (a winner's name and the tournament's) clear of the card backs. -->
+		<p
+			class="relative mt-3 pr-20 font-display text-[28px] leading-tight font-bold text-balance text-paper"
+		>
 			{countdown}
 		</p>
-		<p class="relative mt-1 text-sm font-semibold text-paper/80">{when(startsAt)}</p>
+		<p class="relative mt-1 text-sm font-semibold text-paper/80">{sub ?? when(startsAt)}</p>
 	{:else}
 		<p class="mt-2 text-sm font-bold text-paper">{headline ?? when(startsAt)}</p>
 	{/if}

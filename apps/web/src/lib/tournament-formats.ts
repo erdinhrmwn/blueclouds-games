@@ -88,24 +88,6 @@ export function ordinal(place: number): string {
 	return `${place}${suffix}`;
 }
 
-/** "42 sec", "3 min 5 sec" or "1 h 12 min": how long a tournament ran. */
-export function ranFor(from: string, to: string): string {
-	const elapsedMs = Math.max(0, dayjs(to).diff(from));
-	const elapsed = dayjs.duration(Math.round(elapsedMs / 1000), 'seconds');
-
-	if (elapsed.asMinutes() < 1) {
-		return elapsed.format('s [sec]');
-	}
-
-	if (elapsed.asHours() < 1) {
-		return elapsed.format('m [min] s [sec]');
-	}
-
-	// Past an hour the seconds are noise. Whole hours, so a long tournament doesn't wrap at a day.
-	const hours = Math.floor(elapsed.asHours());
-	return `${hours} h ${elapsed.minutes()} min`;
-}
-
 /** Arena and Swiss rank by points; a knockout by how far you got. */
 export const ranksByPoints = (format: TournamentFormat | null) =>
 	format === 'arena' || format === 'swiss';

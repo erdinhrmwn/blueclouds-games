@@ -15,11 +15,10 @@
 		FORMATS,
 		ordinal,
 		pointsText,
-		ranFor,
 		ranksByPoints,
 		startsIn
 	} from '#lib/tournament-formats.ts';
-	import { when } from '#lib/when.ts';
+	import { day, when } from '#lib/when.ts';
 	import { prefersReducedMotion } from 'svelte/motion';
 	import PrizeFee from './PrizeFee.svelte';
 	import SignUpBar from './SignUpBar.svelte';
@@ -460,7 +459,7 @@
 						label="Finished"
 						dot="bg-brass"
 						startsAt={t.endedAt ?? t.roundStartsAt}
-						headline="Ran {ranFor(t.startsAt, t.endedAt ?? t.startsAt)}"
+						headline={day(t.endedAt ?? t.startsAt)}
 						{back}
 					/>
 					<div class="flex flex-1 flex-col p-4 pt-3">
@@ -485,13 +484,11 @@
 											: 'bg-paper/15 text-paper'}">{standing.place}</span
 									>
 									<span class="min-w-0 flex-1 truncate font-semibold">{standing.name}</span>
-									{#if prize && prize.coins > 0}
-										<span
-											class="text-xs font-bold tabular-nums {standing.place === 1
-												? 'text-brass'
-												: 'text-paper/80'}">{coins(prize.coins)}</span
-										>
-									{/if}
+									<span
+										class="text-xs font-bold tabular-nums {standing.place === 1
+											? 'text-brass'
+											: 'text-paper/80'}">{coins(prize?.coins ?? 0)}</span
+									>
 								</li>
 							{/each}
 						</ol>

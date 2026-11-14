@@ -15,7 +15,13 @@ const FALLBACK_ERROR = 'Something went wrong. Try again.';
 
 const messageOf = (err: unknown) => (err instanceof Error ? err.message : FALLBACK_ERROR);
 
-type Me = { name: string; username: string | null; guest: boolean; coins?: number };
+type Me = {
+	name: string;
+	username: string | null;
+	guest: boolean;
+	createdAt?: string;
+	coins?: number;
+};
 
 /**
  * Who this browser plays as, shared by every page: `name` is empty for a new visitor. A guest has a generated
@@ -27,6 +33,8 @@ export const player = $state({
 	name: '',
 	username: '',
 	guest: false,
+	/** When the player was made, as ISO text; empty until known. */
+	createdAt: '',
 	/** Coin balance (virtual coins for tournament fees and prizes). */
 	coins: 0,
 	ready: false,
@@ -39,6 +47,7 @@ export function loadPlayer(me: Me | null): void {
 	player.name = me?.name ?? '';
 	player.username = me?.username ?? '';
 	player.guest = me?.guest ?? false;
+	player.createdAt = me?.createdAt ?? '';
 	player.coins = me?.coins ?? player.coins;
 	player.ready = true;
 }

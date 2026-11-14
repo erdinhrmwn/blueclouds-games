@@ -69,19 +69,25 @@
 				{#each list.rooms as r (r.code)}
 					{@const status = statusOf(r.phase, r.players, r.maxPlayers)}
 					<tr>
-						<td class="w-full max-w-0 px-4 py-3.5 sm:w-[40%] sm:px-5">
-							<span class="block truncate font-medium text-paper"
+						<td class="w-full max-w-0 px-4 py-2.5 sm:w-[40%] sm:px-5">
+							<span class="block truncate text-[14.5px] font-semibold text-paper"
 								>{r.name ?? (r.host ? `${r.host}’s table` : 'Table')}</span
 							>
 							<span class="mt-1 flex flex-col items-start gap-1.5 sm:hidden">
-								<span class="font-semibold text-brass">{r.code}</span>
+								<span class="text-[12.5px] font-semibold tracking-[0.15em] text-brass"
+									>{r.code}</span
+								>
 								<span class="rounded-full px-2.5 py-0.5 text-xs font-semibold {status.tone}"
 									>{status.label}</span
 								>
 							</span>
 						</td>
-						<td class="px-4 py-3.5 font-semibold text-brass max-sm:hidden">{r.code}</td>
-						<td class="px-4 py-3.5">
+						<td
+							class="px-4 py-2.5 text-[12.5px] font-semibold tracking-[0.15em] text-brass max-sm:hidden"
+						>
+							{r.code}
+						</td>
+						<td class="px-4 py-2.5">
 							<span
 								class="flex items-center gap-1"
 								role="img"
@@ -89,25 +95,25 @@
 							>
 								{#each Array(r.maxPlayers) as _, seat (seat)}
 									<span
-										class="size-2 rounded-full max-sm:hidden {seat < r.players
+										class="size-[7px] rounded-full max-sm:hidden {seat < r.players
 											? 'bg-paper/85'
 											: 'border border-paper/35'}"
 									></span>
 								{/each}
-								<span class="text-xs text-paper/60 tabular-nums sm:ml-1"
+								<span class="text-xs font-medium text-paper/70 tabular-nums sm:ml-1"
 									>{r.players}/{r.maxPlayers}</span
 								>
 							</span>
 						</td>
-						<td class="px-4 py-3.5 max-sm:hidden">
+						<td class="px-4 py-2.5 max-sm:hidden">
 							<span
 								class="rounded-full px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap {status.tone}"
 								>{status.label}</span
 							>
 						</td>
-						<td class="px-4 py-3.5 text-right sm:pr-5">
+						<td class="px-4 py-2.5 text-right sm:pr-5">
 							<button
-								class="h-9 shrink-0 rounded-lg px-5 text-sm font-semibold {status.open
+								class="h-9 w-[4.75rem] shrink-0 rounded-[10px] text-[13px] font-semibold {status.open
 									? 'bg-brass text-ink hover:brightness-110'
 									: 'border border-paper/15 text-paper/40'}"
 								onclick={() => enterTable(game, r.code)}

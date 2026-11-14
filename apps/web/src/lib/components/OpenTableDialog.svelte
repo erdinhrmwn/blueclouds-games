@@ -47,8 +47,8 @@
 	}
 
 	const OPTIONS: { value: Visibility; title: string; body: string }[] = [
-		{ value: 'public', title: 'Public', body: 'Listed in Open tables. Anyone can sit.' },
-		{ value: 'private', title: 'Private', body: 'Hidden. Only people with the link or code.' }
+		{ value: 'public', title: 'Public', body: 'Listed in Open tables.' },
+		{ value: 'private', title: 'Private', body: 'Only with the link or code.' }
 	];
 </script>
 
@@ -62,7 +62,7 @@
 		<div class="flex items-start justify-between gap-4">
 			<div>
 				<h2 id="open-table-title" class="modal-title">Open a table</h2>
-				<p class="mt-1 text-sm text-paper/60">{gameName}, you’ll be the host</p>
+				<p class="mt-1 text-sm text-paper/60">{gameName} · you’ll be the host</p>
 			</div>
 			<button
 				type="button"

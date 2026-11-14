@@ -56,6 +56,13 @@
 	const thisCode = $derived(page.params.code ?? '');
 	const byPoints = $derived(ranksByPoints(tournament?.format ?? null));
 
+	/** "stage 1 of 3 done" where the stages are counted (Arena, Swiss); a knockout runs until one is left. */
+	const stageDone = $derived(
+		byPoints && tournament?.rounds
+			? `stage ${round} of ${tournament.rounds} done`
+			: `stage ${round} done`
+	);
+
 	type Next =
 		| { kind: 'loading' }
 		| { kind: 'next'; title: string; line: string; code: string }
@@ -119,7 +126,7 @@
 </script>
 
 <div aria-live="polite">
-	<p class="text-sm font-semibold text-brass">{tournamentName} · stage {round} done</p>
+	<p class="text-sm font-semibold text-brass">{tournamentName} · {stageDone}</p>
 	{#if next.kind === 'loading'}
 		<p class="mt-1.5 text-sm text-paper/75">Checking the next stage…</p>
 	{:else}

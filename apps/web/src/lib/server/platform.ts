@@ -124,6 +124,8 @@ export type Me = {
 	name: string;
 	username: string | null;
 	guest: boolean;
+	/** When the player was made, as ISO text. */
+	createdAt?: string;
 	/** Coin balance; left out where an answer doesn't carry it (sign-in, register). */
 	coins?: number;
 };
@@ -143,7 +145,13 @@ export async function whoAmI(event: RequestEvent): Promise<Me | null> {
 			method: 'GET',
 			secret
 		});
-		return { name: player.name, username: player.username, guest: player.guest, coins };
+		return {
+			name: player.name,
+			username: player.username,
+			guest: player.guest,
+			createdAt: player.createdAt,
+			coins
+		};
 	} catch (err) {
 		if (lost(err)) {
 			event.cookies.delete(SECRET_COOKIE, { path: '/' });

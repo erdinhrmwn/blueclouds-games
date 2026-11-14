@@ -13,6 +13,14 @@ export const when = (iso: string) =>
 		minute: '2-digit'
 	}).format(new Date(iso));
 
+/** A date alone in the viewer's own language, e.g. "Sat, 14 Nov". */
+export const day = (iso: string) =>
+	new Intl.DateTimeFormat(undefined, {
+		weekday: 'short',
+		day: 'numeric',
+		month: 'short'
+	}).format(new Date(iso));
+
 /** "4:07" for a number of whole seconds; the minutes keep counting past an hour ("75:00"). */
 export function clock(totalSeconds: number): string {
 	const elapsed = dayjs.duration(Math.max(0, totalSeconds), 'seconds');

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import Bracket from '#lib/components/Bracket.svelte';
 	import StandingsList from '#lib/components/StandingsList.svelte';
-	import { FORMATS, ranFor, ranksByPoints } from '#lib/tournament-formats.ts';
+	import { FORMATS, ranksByPoints } from '#lib/tournament-formats.ts';
 	import type { PageProps } from './$types';
 
 	/** A tournament's own page: its rounds as a bracket, and its standings. */
@@ -57,10 +57,7 @@
 			<span class="flex flex-wrap items-center divide-x divide-paper/20">
 				<span class="pr-3">{format?.label ?? 'Knockout'}</span>
 				<span class="px-3">{tournament.players} players</span>
-				<span class="px-3">{latestRound} {latestRound === 1 ? 'stage' : 'stages'}</span>
-				{#if finished && tournament.endedAt}
-					<span class="pl-3">ran {ranFor(tournament.startsAt, tournament.endedAt)}</span>
-				{/if}
+				<span class="pl-3">{latestRound} {latestRound === 1 ? 'stage' : 'stages'}</span>
 			</span>
 		</p>
 	</div>

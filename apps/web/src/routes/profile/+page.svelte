@@ -11,8 +11,8 @@
 	let { data } = $props();
 
 	/**
-	 * Who you are, how you play each game, and your latest matches. A guest can't rename; linking an account here
-	 * is where it picks a name, games and all.
+	 * Who you are, how you play each game, and your latest matches. Linking an account here is where a guest picks
+	 * a name, games and all.
 	 */
 	// Prefilled once the player loads, then the field owns it.
 	let name = $derived(player.name);
@@ -70,13 +70,26 @@
 		{ label: 'Win rate', value: `${rate(wins, played)}%` }
 	]);
 
+	/** "member since Nov 2026", in the visitor's own language; empty until the date is known. */
+	const memberSince = $derived.by(() => {
+		if (!mounted || !player.createdAt) {
+			return '';
+		}
+
+		const month = new Date(player.createdAt).toLocaleDateString(undefined, {
+			month: 'short',
+			year: 'numeric'
+		});
+		return `member since ${month}`;
+	});
+
 	const SUFFIX: Record<number, string> = { 1: 'st', 2: 'nd', 3: 'rd' };
 	const ordinal = (place: number) => `${place}${SUFFIX[place] ?? 'th'}`;
 </script>
 
 <svelte:head><title>Profile · BlueClouds Games</title></svelte:head>
 
-<section class="mx-auto max-w-3xl pt-10 pb-16 md:pt-16">
+<section class="mx-auto max-w-[50rem] pt-10 pb-16 md:pt-16">
 	{#if player.ready}
 		<header class="flex items-start gap-5">
 			<span
@@ -84,21 +97,41 @@
 				aria-hidden="true">{player.name.trim().charAt(0).toUpperCase()}</span
 			>
 			<div class="min-w-0">
-				<h1 class="font-display text-3xl leading-tight font-black break-words sm:text-4xl">
-					{player.name}
-				</h1>
+				<div class="flex items-center gap-2">
+					<h1
+						class="min-w-0 font-display text-3xl leading-tight font-black break-words sm:text-4xl"
+					>
+						{player.name}
+					</h1>
+					<!-- Guests pick their name when they make an account, so only accounts can rename here. -->
+					{#if !player.guest}
+						<button
+							class="grid size-9 shrink-0 place-items-center rounded-lg text-paper/60 hover:bg-paper/8 hover:text-paper focus-visible:outline-2 focus-visible:outline-brass"
+							onclick={() => (player.editing = true)}
+							aria-label="Change name"
+							title="Change name"
+						>
+							<svg
+								viewBox="0 0 20 20"
+								class="size-[18px]"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="1.6"
+								stroke-linejoin="round"
+								aria-hidden="true"
+							>
+								<path d="M12.5 4.5l3 3L7 16H4v-3z" />
+							</svg>
+						</button>
+					{/if}
+				</div>
 				<p class="mt-1 text-sm text-paper/60">
 					{#if player.guest}
-						Guest. This name lives in this browser only.
+						Guest · this name lives on this device only
 					{:else}
-						@{player.username}. Log in with it on any device.
+						@{player.username}{memberSince ? ` · ${memberSince}` : ''}
 					{/if}
 				</p>
-				{#if !player.guest}
-					<button class="btn-ghost mt-3 min-h-9 px-4 py-1.5" onclick={() => (player.editing = true)}
-						>Change name</button
-					>
-				{/if}
 			</div>
 		</header>
 		{#if linked}<p class="mt-4 text-sm text-brass" role="status">Account linked.</p>{/if}
@@ -107,8 +140,7 @@
 			<div class="mt-8 rounded-2xl border-[1.5px] border-brass bg-panel p-6">
 				<h2 class="font-display text-xl font-bold">Keep your name and history</h2>
 				<p class="mt-1 text-sm text-paper/65">
-					Guest progress stays in this browser. Make an account to keep it, play from anywhere, and
-					get 1,000 coins for tournaments.
+					Guest progress stays on this device. Make an account to keep it.
 				</p>
 				{#if !linking}
 					<button class="btn-brass mt-4" onclick={() => (linking = true)}>Create account</button>
@@ -175,9 +207,11 @@
 
 		<dl class="mt-8 grid grid-cols-3 gap-3">
 			{#each tiles as tile (tile.label)}
-				<div class="rounded-2xl border border-paper/10 bg-panel px-4 py-4 sm:px-5">
-					<dt class="text-xs text-paper/55">{tile.label}</dt>
-					<dd class="mt-1 font-display text-2xl font-black tabular-nums sm:text-3xl">
+				<div
+					class="flex flex-col-reverse rounded-2xl border border-paper/10 bg-panel px-4 py-4 sm:px-5"
+				>
+					<dt class="mt-1 text-xs text-paper/55">{tile.label}</dt>
+					<dd class="font-display text-2xl font-black tabular-nums sm:text-3xl">
 						{tile.value}
 					</dd>
 				</div>
@@ -200,23 +234,28 @@
 					<div class="min-w-0 flex-1">
 						<p class="font-display text-lg font-bold">{row.game.name}</p>
 						<p class="text-sm text-paper/70 tabular-nums">
-							{row.played} played, {row.wins}
+							{row.played} played · {row.wins}
 							{row.wins === 1 ? 'win' : 'wins'}
 						</p>
 						{#if row.bestStreak > 1}
-							<p class="text-xs text-paper/50">Best: {row.bestStreak} wins in a row</p>
+							<p class="mt-0.5 text-xs text-paper/50">Best: {row.bestStreak} wins in a row</p>
 						{/if}
+						<!-- Phones: the bar under the text. From sm up it moves to the right column. -->
 						<div
-							class="mt-2 h-1.5 rounded-full bg-paper/12"
+							class="mt-2.5 h-1.5 rounded-full bg-paper/12 sm:hidden"
 							role="img"
 							aria-label="Win rate {percent}%"
 						>
 							<div class="h-full rounded-full bg-brass" style="width: {percent}%"></div>
 						</div>
 					</div>
-					<p class="shrink-0 font-display text-xl font-bold tabular-nums max-sm:hidden">
-						{percent}%
-					</p>
+					<div class="w-40 shrink-0 text-right max-sm:hidden">
+						<p class="font-display text-xl font-bold tabular-nums">{percent}%</p>
+						<div class="mt-2 h-1.5 rounded-full bg-paper/12" aria-hidden="true">
+							<div class="h-full rounded-full bg-brass" style="width: {percent}%"></div>
+						</div>
+						<p class="mt-2 text-xs text-paper/50">win rate</p>
+					</div>
 				</li>
 			{/each}
 		</ul>
