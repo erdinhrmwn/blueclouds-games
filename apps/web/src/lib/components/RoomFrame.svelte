@@ -3,10 +3,13 @@
 	import type { GameEntry } from '#lib/games/catalog.ts';
 	import { player } from '#lib/player.svelte.ts';
 	import type { BaseView, RoomConnection } from '#lib/rivet/room.svelte.ts';
+	import { fetchTournaments, type LiveTournament } from '#lib/platform.ts';
+	import { FORMATS } from '#lib/tournament-formats.ts';
 	import type { Snippet } from 'svelte';
 	import FairPlay from './FairPlay.svelte';
 	import Lobby from './Lobby.svelte';
 	import Marquee from './Marquee.svelte';
+	import TournamentLiveDialog from './TournamentLiveDialog.svelte';
 
 	/** Everything around a game's table: connecting, the lobby, reconnect and error lines, leaving. */
 	let {
@@ -80,11 +83,84 @@
 		}, COPIED_MS);
 	}
 
+	/** The tournament's standings, opened from the sign; read from the lobby's list when asked for. */
+	const STANDINGS_TICK_MS = 1_000;
+	let standingsOpen = $state(false);
+	let standingsOf = $state<LiveTournament | null>(null);
+	let standingsNow = $state(Date.now());
+
+	async function showStandings() {
+		const id = room?.view?.tournament?.id;
+		if (!id) {
+			return;
+		}
+
+		try {
+			const { live } = await fetchTournaments(game.slug);
+			standingsOf = live.find((entry) => entry.id === id) ?? null;
+		} catch {
+			standingsOf = null;
+		}
+
+		standingsNow = Date.now();
+		standingsOpen = true;
+	}
+
+	$effect(() => {
+		if (!standingsOpen) {
+			return;
+		}
+
+		const tick = setInterval(() => {
+			standingsNow = Date.now();
+		}, STANDINGS_TICK_MS);
+
+		return () => clearInterval(tick);
+	});
+
 	async function leave() {
 		await room?.leave();
 		goto(`/${game.slug}`);
 	}
 </script>
+
+{#snippet roomCode()}
+	<span class="chip">
+		<span class="text-paper/55">Room</span>
+		<span class="font-semibold text-paper/90">{code}</span>
+		<button
+			class="-my-1 -mr-1.5 grid size-6 place-items-center rounded-full text-brass hover:bg-paper/10"
+			onclick={copyCode}
+			aria-label={copied ? 'Room code copied' : 'Copy room code'}
+			title={copied ? 'Copied' : 'Copy room code'}
+		>
+			<svg
+				viewBox="0 0 20 20"
+				class="size-3.5"
+				fill="none"
+				stroke="currentColor"
+				stroke-width="1.6"
+				stroke-linejoin="round"
+				aria-hidden="true"
+			>
+				{#if copied}
+					<path d="M4.5 10.5l3.5 3.5 7.5-8" stroke-linecap="round" />
+				{:else}
+					<rect x="7" y="7" width="9" height="10" rx="2" />
+					<path d="M4 13V5a2 2 0 0 1 2-2h7" />
+				{/if}
+			</svg>
+		</button>
+	</span>
+{/snippet}
+
+<TournamentLiveDialog
+	bind:open={standingsOpen}
+	tournament={standingsOf}
+	game={game.slug}
+	back={game.back}
+	now={standingsNow}
+/>
 
 <!-- The room's sign: its name on top, its code, round and seats below, framed in brass like the table.
 	 Phones put the buttons on their own row so the sign keeps the full width. -->
@@ -129,49 +205,48 @@
 		<p
 			class="mt-2 flex flex-wrap items-center justify-center gap-1 text-[11px] sm:gap-1.5 sm:text-xs"
 		>
-			<span class="chip">
-				<span class="text-paper/55">Room</span>
-				<span class="font-semibold text-paper/90">{code}</span>
-				<button
-					class="-my-1 -mr-1.5 grid size-6 place-items-center rounded-full text-brass hover:bg-paper/10"
-					onclick={copyCode}
-					aria-label={copied ? 'Room code copied' : 'Copy room code'}
-					title={copied ? 'Copied' : 'Copy room code'}
-				>
-					<svg
-						viewBox="0 0 20 20"
-						class="size-3.5"
-						fill="none"
-						stroke="currentColor"
-						stroke-width="1.6"
-						stroke-linejoin="round"
-						aria-hidden="true"
+			{#if room?.view?.tournament}
+				{@const tournament = room.view.tournament}
+				{#if tournament.format}
+					<span class="chip text-brass">{FORMATS[tournament.format].label}</span>
+				{:else}
+					<span class="chip text-brass">Tournament</span>
+				{/if}
+				{#if tournament.round}
+					<span class="chip font-semibold text-paper/90 tabular-nums"
+						>Round {tournament.round}{#if tournament.rounds}&nbsp;of {tournament.rounds}{/if}</span
 					>
-						{#if copied}
-							<path d="M4.5 10.5l3.5 3.5 7.5-8" stroke-linecap="round" />
-						{:else}
-							<rect x="7" y="7" width="9" height="10" rx="2" />
-							<path d="M4 13V5a2 2 0 0 1 2-2h7" />
-						{/if}
-					</svg>
-				</button>
-			</span>
-			{#if room?.view && room.view.phase !== 'lobby'}
-				<span class="chip"
-					><span class="text-paper/55">Round</span>
-					<span class="font-semibold text-paper/90 tabular-nums">#{room.view.round}</span></span
-				>
-			{/if}
-			{#if room?.view}
+				{/if}
 				<span class="chip"
 					><span class="text-paper/55">Players</span>
 					<span class="font-semibold text-paper/90 tabular-nums"
-						>{room.view.players.length}/{game.maxPlayers}</span
+						>{room.view.players.length}/{tournament.seats}{#if tournament.registered}&nbsp;·
+							{tournament.registered} registered{/if}</span
 					></span
 				>
-			{/if}
-			{#if room?.view?.tournament}
-				<span class="chip text-brass">Tournament</span>
+				{#if tournament.id}
+					<button
+						class="chip relative text-brass after:absolute after:-inset-x-1 after:-inset-y-3 hover:bg-paper/10"
+						onclick={showStandings}>Standings</button
+					>
+				{/if}
+				{@render roomCode()}
+			{:else}
+				{@render roomCode()}
+				{#if room?.view && room.view.phase !== 'lobby'}
+					<span class="chip"
+						><span class="text-paper/55">Hand</span>
+						<span class="font-semibold text-paper/90 tabular-nums">{room.view.round}</span></span
+					>
+				{/if}
+				{#if room?.view}
+					<span class="chip"
+						><span class="text-paper/55">Players</span>
+						<span class="font-semibold text-paper/90 tabular-nums"
+							>{room.view.players.length}/{game.maxPlayers}</span
+						></span
+					>
+				{/if}
 			{/if}
 		</p>
 	</div>

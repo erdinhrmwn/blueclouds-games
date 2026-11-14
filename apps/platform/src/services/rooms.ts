@@ -290,8 +290,16 @@ export async function roomSeats(sql: SQL, code: string) {
 			r.tournament_round,
 			t.id AS tournament_id,
 			t.name,
+			t.format,
+			t.rounds,
 			coalesce(tr.starts_at, t.starts_at) AS starts_at,
 			t.cancelled_at,
+			(
+				SELECT count(*)
+				FROM tournament_players tp
+				WHERE tp.tournament_id = t.id
+					AND tp.status = 'registered'
+			) AS registered,
 			g.min_players
 		FROM rooms r
 		JOIN games g ON g.slug = r.game_slug
@@ -322,6 +330,11 @@ export async function roomSeats(sql: SQL, code: string) {
 		? {
 				id: row.tournament_id,
 				name: row.name,
+				format: row.format ?? null,
+				/** Arena and Swiss: how many rounds it plays; null for Knockout (until one is left). */
+				rounds: row.rounds ?? null,
+				/** Everyone still signed up to the tournament, not only this table. */
+				registered: Number(row.registered),
 				round: row.tournament_round,
 				startsAt: toIso(row.starts_at),
 				cancelled: !!row.cancelled_at,

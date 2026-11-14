@@ -491,7 +491,7 @@
 			case 'joined':
 				return `${nameOf(event.playerId)} sat down.`;
 			case 'dealt':
-				return `Round ${event.round}. Seven cards each.`;
+				return `Hand ${event.round}. Seven cards each.`;
 			case 'played': {
 				const nextSuit = event.card.suit === null ? `, ${SUIT_NAME[view.suit]} next` : '';
 				const drawn = event.forced === 1 ? '1 card' : `${event.forced} cards`;

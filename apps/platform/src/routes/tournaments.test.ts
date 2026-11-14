@@ -721,7 +721,7 @@ describe("tournament rooms", () => {
 			visibility: "private",
 			minPlayers: 2,
 			startedAt: null,
-			tournament: { id, cancelled: false },
+			tournament: { id, cancelled: false, registered: 2, format: null, rounds: null },
 		});
 		expect(res.json.data.room.seats.map((s: { seat: number }) => s.seat)).toEqual([0, 1]);
 		expect((await server("GET", "/v1/rooms/ZZZZZ/seats")).status).toBe(404);

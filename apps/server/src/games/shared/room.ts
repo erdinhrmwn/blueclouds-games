@@ -58,6 +58,11 @@ export const VIP_REFRESH_MS = 30_000;
 export type TournamentRoom = {
 	id: string;
 	name: string;
+	format: "arena" | "knockout" | "swiss" | null;
+	/** Arena and Swiss: how many rounds it plays; null for Knockout. */
+	rounds: number | null;
+	/** Everyone still signed up to the tournament, all tables; null from an older platform. */
+	registered: number | null;
 	/** The tournament round this table plays in. */
 	round: number;
 	startsAt: number;
@@ -1140,6 +1145,9 @@ export async function refreshTournament(c: Ctx): Promise<TournamentRoom | null> 
 		bots,
 		id: tournament.id,
 		name: tournament.name,
+		format: tournament.format,
+		rounds: tournament.rounds,
+		registered: tournament.registered,
 		round: tournament.round,
 		startsAt: Date.parse(tournament.startsAt),
 		cancelled: tournament.cancelled,
@@ -1301,6 +1309,9 @@ export function tournamentView(c: Ctx) {
 	return {
 		id: tournament.id,
 		name: tournament.name,
+		format: tournament.format ?? null,
+		rounds: tournament.rounds ?? null,
+		registered: tournament.registered ?? null,
 		round: tournament.round,
 		startsIn: tournament.startsAt - now,
 		waitEndsIn: tournament.startsAt + LATE_GRACE_MS - now,

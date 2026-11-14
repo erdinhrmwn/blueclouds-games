@@ -1,3 +1,4 @@
+import type { TournamentFormat } from '#lib/platform.ts';
 import { playToken } from '#lib/player.svelte.ts';
 import { roomClient, RoomRefused } from '#lib/rivet/client.ts';
 
@@ -49,6 +50,12 @@ export type BaseView = {
 		/** Present from rooms made after tournament rounds; older ones leave it out. */
 		id?: string;
 		name: string;
+		/** Arena, Knockout or Swiss; null or missing from older rooms. */
+		format?: TournamentFormat | null;
+		/** Arena and Swiss: how many rounds it plays; null for Knockout, missing from older rooms. */
+		rounds?: number | null;
+		/** Everyone still signed up to the tournament, all tables; null or missing from older rooms. */
+		registered?: number | null;
 		/** The tournament round this table plays in. */
 		round?: number;
 		startsIn: number;

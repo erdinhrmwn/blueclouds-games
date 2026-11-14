@@ -130,6 +130,11 @@ const TournamentRoom = z.object({
 		.object({
 			id: z.uuid(),
 			name: z.string(),
+			format: z.enum(["arena", "knockout", "swiss"]).nullable().default(null),
+			/** Arena and Swiss: how many rounds it plays; null for Knockout or from an older platform. */
+			rounds: z.number().int().min(1).nullable().default(null),
+			/** Everyone still signed up to the tournament; older platforms don't send it. */
+			registered: z.number().int().min(0).nullable().default(null),
 			/** The tournament round this table plays in; older platforms don't send it. */
 			round: z.number().int().min(1).default(1),
 			startsAt: z.iso.datetime({ offset: true }),

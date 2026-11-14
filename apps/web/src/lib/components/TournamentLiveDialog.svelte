@@ -32,8 +32,8 @@
 		back: string;
 		/** The lobby's clock, for the countdown. */
 		now: number;
-		/** Gives up a seat whose table hasn't started; the lobby asks first. */
-		onwithdraw: (tournament: LiveTournament) => void;
+		/** Gives up a seat whose table hasn't started; the lobby asks first. Left out, there is no Withdraw button. */
+		onwithdraw?: (tournament: LiveTournament) => void;
 	} = $props();
 
 	let dialog = $state<HTMLDialogElement>();
@@ -224,7 +224,7 @@
 						<p class="font-bold">{meLine}</p>
 						{#if tableLine}<p class="mt-0.5 text-sm text-paper/65">{tableLine}</p>{/if}
 					</div>
-					{#if tournament.table && !tournament.table.started && !finished}
+					{#if onwithdraw && tournament.table && !tournament.table.started && !finished}
 						<button class="btn-ghost h-10 rounded-xl" onclick={() => onwithdraw(tournament!)}
 							>Withdraw</button
 						>
