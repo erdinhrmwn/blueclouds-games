@@ -36,7 +36,6 @@ type LiveRow = {
 	round_started: boolean;
 	starts_at: Date;
 	ended_at: Date | null;
-	prizes_paid_at: Date | null;
 	players: number;
 	prizes: { place: number; coins: number; extra: string | null }[];
 	table_code: string | null;
@@ -138,7 +137,6 @@ export async function listLive(sql: SQL, game: string, playerId: string) {
 			) AS round_started,
 			t.starts_at,
 			t.ended_at,
-			t.prizes_paid_at,
 			(
 				SELECT count(DISTINCT ra.player_id)::int FROM room_assignments ra
 				WHERE ra.tournament_id = t.id AND ra.tournament_round = 1
@@ -200,7 +198,6 @@ export async function listLive(sql: SQL, game: string, playerId: string) {
 				roundStarted: row.round_started,
 				startsAt: row.starts_at.toISOString(),
 				endedAt: row.ended_at?.toISOString() ?? null,
-				prizesPaid: !!row.prizes_paid_at,
 				players: row.players,
 				prizes: row.prizes,
 				top: standings.slice(0, CARD_PLACES),

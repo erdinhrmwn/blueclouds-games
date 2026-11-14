@@ -238,14 +238,6 @@
 				</section>
 			{/if}
 
-			{#if finished && tournament.prizes.length > 0}
-				<p class="text-sm {tournament.prizesPaid ? 'text-go' : 'text-brass'}">
-					{tournament.prizesPaid
-						? 'Prizes paid into the winners’ coins.'
-						: 'Prizes pending: the team pays them out soon.'}
-				</p>
-			{/if}
-
 			{#if finished && standings.length > 0}
 				<section aria-label="Winners">
 					<ol class="grid grid-cols-3 items-end gap-3">

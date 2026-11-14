@@ -495,19 +495,6 @@
 								</li>
 							{/each}
 						</ol>
-						{#if t.prizes.length > 0}
-							<p
-								class="mt-3 inline-flex items-center gap-1.5 self-start rounded-full px-2.5 py-1 text-xs font-bold {t.prizesPaid
-									? 'bg-go/15 text-go'
-									: 'bg-brass/15 text-brass'}"
-							>
-								<span
-									class="size-1.5 rounded-full {t.prizesPaid ? 'bg-go' : 'bg-brass'}"
-									aria-hidden="true"
-								></span>
-								{t.prizesPaid ? 'Prizes paid' : 'Prizes pending'}
-							</p>
-						{/if}
 						<div class="mt-auto pt-4">
 							<button
 								class="btn-ghost h-11 w-full rounded-xl"

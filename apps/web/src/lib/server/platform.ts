@@ -384,8 +384,6 @@ export type LiveTournament = {
 	/** When round 1 started; with `endedAt`, how long it ran. */
 	startsAt: string;
 	endedAt: string | null;
-	/** Finished: whether an admin paid the prizes out yet. */
-	prizesPaid: boolean;
 	/** How many sat down in round 1. */
 	players: number;
 	prizes: TournamentPrize[];
