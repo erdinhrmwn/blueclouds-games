@@ -48,8 +48,8 @@
 	});
 </script>
 
-<div class="flex flex-col items-center gap-6 wide:gap-8">
-	<div class="vane relative grid size-28 place-items-center rounded-full wide:size-[9.25rem]">
+<div class="flex flex-col items-center gap-6 wide:gap-5">
+	<div class="vane relative grid size-28 place-items-center rounded-full">
 		{#each SUITS as point (point)}
 			{@const lit = point === suit}
 			<span

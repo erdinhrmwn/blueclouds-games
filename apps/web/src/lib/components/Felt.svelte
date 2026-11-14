@@ -89,7 +89,7 @@
 	 The tall stage gets a taller top gutter so the badge above the dealer clears the room header. The bottom gutter
 	 holds the name, status and button under the lowest chairs. -->
 <div
-	class="relative mx-auto h-full w-full px-10 pt-20 pb-[5.5rem] wide:aspect-[19/10] wide:w-auto wide:max-w-full wide:px-16 wide:pt-16 wide:pb-24"
+	class="relative mx-auto h-full w-full px-10 pt-20 pb-[5.5rem] wide:aspect-[19/10] wide:w-auto wide:max-w-full wide:px-16 wide:pt-12 wide:pb-24"
 >
 	<div class="table-rim u relative h-full w-full p-3 wide:p-4">
 		<div class="felt u relative grid h-full w-full place-items-center">
@@ -108,7 +108,7 @@
 		</div>
 	</div>
 	<div
-		class="pointer-events-none absolute inset-x-12 top-20 bottom-[5.5rem] wide:inset-x-16 wide:top-16 wide:bottom-24"
+		class="pointer-events-none absolute inset-x-12 top-20 bottom-[5.5rem] wide:inset-x-16 wide:top-12 wide:bottom-24"
 		bind:clientWidth={width}
 		bind:clientHeight={height}
 	>

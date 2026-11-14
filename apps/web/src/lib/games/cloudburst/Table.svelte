@@ -646,7 +646,7 @@
 				<p class="font-display text-lg leading-tight font-bold wide:text-xl">
 					{nameOf(summary.outId)} went out
 				</p>
-				<ul class="text-xs tabular-nums wide:text-sm">
+				<ul class="text-xs tabular-nums wide:grid wide:grid-cols-2 wide:gap-x-6 wide:text-sm">
 					{#each standings as p (p.id)}
 						<li class={p.points >= view.burstAt - 2 ? 'text-ember' : 'text-paper/85'}>
 							{p.name}: +{summary.gained[p.id] ?? 0}, {p.points} of {view.burstAt}
@@ -659,7 +659,7 @@
 			</div>
 		{:else}
 			<!-- The pile sits dead centre inside the weather vane, which lights the suit to follow. -->
-			<div class="-translate-y-2">
+			<div class="-translate-y-2 wide:translate-y-4">
 				<WeatherVane suit={view.suit} top={view.topCard}>
 					<div class="grid h-[3.55rem] w-10 place-items-center wide:h-[4.6rem] wide:w-[3.25rem]">
 						{#each view.pileUnder as u (u.id)}
