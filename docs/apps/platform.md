@@ -39,7 +39,9 @@ All keys live in the root `.env` (template: `.env.example`); the package scripts
 | `GET /v1/players/me` | Player secret | Current player |
 | `PATCH /v1/players/me` | Player secret | Rename |
 | `POST /v1/play-tokens` | Player secret | 15-minute token for room actors |
-| `GET /v1/players/me/matches` | Player secret | Own match history, cursor paging |
+| `GET /v1/players/me/matches` | Player secret | Own match history, cursor paging, `?game=` filter |
+| `GET /v1/players/me/stats` | Player secret | Own record per game (wins, streaks, average place, rounds) |
+| `GET /v1/players/me/tournaments` | Player secret | Own tournaments with place and prize, plus the record |
 | `POST /v1/matches` | Server key | Report a finished match with its move log (idempotent by `matchId`, body up to 512 KB) |
 
 Every response uses the `{ ok, data, error }` envelope described in the design.
