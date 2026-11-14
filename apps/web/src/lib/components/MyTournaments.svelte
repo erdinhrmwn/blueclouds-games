@@ -81,12 +81,13 @@
 	}
 </script>
 
-<section class="mt-12" aria-labelledby="tournaments-title">
-	<h2 id="tournaments-title" class="font-display text-xl font-bold">Tournaments</h2>
+<!-- The profile's Tournaments tab names the section, so its heading is for screen readers only. -->
+<section class="mt-6" aria-labelledby="tournaments-title">
+	<h2 id="tournaments-title" class="sr-only">Tournaments</h2>
 
 	<!-- A record of zeros says nothing: it shows once a tournament has finished with them in it. -->
 	{#if record.played > 0}
-		<dl class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+		<dl class="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
 			{#each tiles as tile (tile.label)}
 				<div class="flex flex-col-reverse rounded-2xl border border-paper/10 bg-panel px-4 py-3.5">
 					<dt class="mt-1 text-xs text-paper/55">{tile.label}</dt>
@@ -97,11 +98,11 @@
 	{/if}
 
 	{#if tournaments.length === 0}
-		<p class="mt-4 rounded-2xl border border-dashed border-paper/20 p-6 text-sm text-paper/65">
+		<p class="rounded-2xl border border-dashed border-paper/20 p-6 text-sm text-paper/65">
 			No tournaments yet. Sign up from a game’s lobby.
 		</p>
 	{:else}
-		<ul class="mt-4 space-y-2">
+		<ul class="space-y-2">
 			{#each tournaments as tournament (tournament.id)}
 				{@const game = gameBySlug(tournament.game)}
 				{@const badge = badgeOf(tournament)}

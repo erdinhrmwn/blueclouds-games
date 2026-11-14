@@ -87,9 +87,10 @@
 		`${amount > 0 ? '+' : '−'}${Math.abs(amount).toLocaleString()}`;
 </script>
 
-<section class="mt-12" aria-labelledby="coins-title">
-	<h2 id="coins-title" class="font-display text-xl font-bold">Coins</h2>
-	<div class="mt-4 rounded-2xl border border-paper/10 bg-panel p-5">
+<!-- The profile's Coins tab names the section, so its heading is for screen readers only. -->
+<section class="mt-6" aria-labelledby="coins-title">
+	<h2 id="coins-title" class="sr-only">Coins</h2>
+	<div class="rounded-2xl border border-paper/10 bg-panel p-5">
 		<p class="flex items-center gap-3">
 			<span class="coin size-7 shrink-0 rounded-full" aria-hidden="true"></span>
 			<span class="font-display text-3xl font-black text-brass tabular-nums"
