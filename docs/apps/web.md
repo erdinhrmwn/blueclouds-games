@@ -22,7 +22,7 @@ Production: `bun run build`, then `bun run start` (adapter-node output, run on B
 apps/web/src/
   lib/games/catalog.ts # list of games: slug, name, player counts, Home + Room components
   lib/games/bust-31/   # game UI: Home, Room, Lobby, Table, cards, connection to its actor
-  lib/components/      # shared table pieces: Felt, Seat
+  lib/components/      # shared table pieces: Stage (fixed-ratio screen), Felt, Seat
   lib/rivet/client.ts  # typed Rivet client for one room, with tokens from our server
   lib/platform.ts      # browser side: calls our /api routes
   lib/server/platform.ts # server side: calls the platform, keeps the player secret in an httpOnly cookie

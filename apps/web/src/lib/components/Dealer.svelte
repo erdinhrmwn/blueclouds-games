@@ -21,21 +21,21 @@
 		: `Dealer Nimbus, ${deckCount} cards in the deck`}
 >
 	<div
-		class="pit grid size-[4.25rem] place-items-center rounded-full sm:size-[5.75rem]"
+		class="pit grid size-[4.25rem] place-items-center rounded-full wide:size-[5.75rem]"
 		aria-hidden="true"
 	>
-		<Nimbus class="size-12 sm:size-16" />
+		<Nimbus class="size-12 wide:size-16" />
 	</div>
 	<p
-		class="-mt-2 rounded-[4px] bg-brass px-2 py-px font-display text-[10px] font-bold text-ink sm:text-[11px]"
+		class="-mt-2 rounded-[4px] bg-brass px-2 py-px font-display text-[10px] font-bold text-ink wide:text-[11px]"
 		aria-hidden="true"
 	>
 		Nimbus
 	</p>
 
 	{#if deckCount !== null}
-		<div class="absolute top-1/2 left-full ml-3 flex flex-col items-center gap-1 sm:ml-5">
-			<div class="shoe relative h-11 w-8 sm:h-14 sm:w-10" data-deck aria-hidden="true">
+		<div class="absolute top-1/2 left-full ml-3 flex flex-col items-center gap-1 wide:ml-5">
+			<div class="shoe relative h-11 w-8 wide:h-14 wide:w-10" data-deck aria-hidden="true">
 				<span class="card-back absolute inset-0 translate-x-1 translate-y-1"></span>
 				<span class="card-back absolute inset-0 translate-x-0.5 translate-y-0.5"></span>
 				<span class="card-back absolute inset-0"></span>
@@ -46,7 +46,7 @@
 
 	{#if direction !== null}
 		<p
-			class="absolute top-1/2 right-full mr-3 flex items-center gap-1.5 rounded-full bg-black/40 px-1.5 py-1.5 sm:px-2.5 sm:py-1 text-[11px] whitespace-nowrap text-paper/85 sm:mr-5"
+			class="absolute top-1/2 right-full mr-3 flex items-center gap-1.5 rounded-full bg-black/40 px-1.5 py-1.5 wide:px-2.5 wide:py-1 text-[11px] whitespace-nowrap text-paper/85 wide:mr-5"
 			aria-live="polite"
 		>
 			<span class="direction inline-flex" class:ccw={direction === -1} aria-hidden="true">
@@ -63,7 +63,7 @@
 					<path d="M4 12a6 6 0 1 0 2-6m0 0H2.5m3.5 0V2.5" />
 				</svg>
 			</span>
-			<span class="max-sm:sr-only">{direction === 1 ? 'Clockwise' : 'Counter-clockwise'}</span>
+			<span class="tall:sr-only">{direction === 1 ? 'Clockwise' : 'Counter-clockwise'}</span>
 		</p>
 	{/if}
 </div>

@@ -21,7 +21,7 @@ type Me = { name: string; username: string | null; guest: boolean; coins?: numbe
  * Who this browser plays as, shared by every page: `name` is empty for a new visitor. A guest has a generated
  * `guest_…` username and no password.
  * `ready` turns true once the server's answer is in; until then nothing should ask for it.
- * `playing` is true while a game runs at the open table, so the page can hide everything but the game.
+ * `playing` is true while a table is open (its lobby or game), so the page can hide everything but the table.
  */
 export const player = $state({
 	name: '',

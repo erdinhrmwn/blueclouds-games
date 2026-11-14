@@ -68,7 +68,7 @@
 
 {#if fairness}
 	<button
-		class="btn-ghost size-10 shrink-0 p-0 sm:size-11"
+		class="btn-ghost size-10 shrink-0 p-0 wide:size-11"
 		onclick={open}
 		aria-haspopup="dialog"
 		aria-label="Rounds and fair play"

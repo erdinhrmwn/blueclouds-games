@@ -18,35 +18,20 @@
 		SUITS
 	} from 'server/games/cloudburst/rules';
 	import { prefersReducedMotion } from 'svelte/motion';
-	import { MediaQuery } from 'svelte/reactivity';
 	import CloudCard from './CloudCard.svelte';
 	import type { CloudburstConnection } from './connection.svelte.ts';
 	import WeatherVane from './WeatherVane.svelte';
 	import SuitPicker from './SuitPicker.svelte';
 	import { SUIT_NAME } from './suits.ts';
+	import { stage, unscaled } from '#lib/stage.svelte.ts';
 
 	let { room }: { room: CloudburstConnection } = $props();
 
 	/** Phones get a smaller pile so the middle of the table stays clear of the seats. */
-	const wide = new MediaQuery('min-width: 640px');
 	const pileSize = 'pile';
 
 	const view = $derived(room.view!);
 	const inSeat = (seat: number) => view.players.find((p) => p.seat === seat) ?? null;
-	/**
-	 * Which side a chair fans its card backs: towards the middle of the table, except the two chairs at the
-	 * top of the arms, which fan outward to stay clear of the dealer's shoe and the turn direction.
-	 */
-	const backsSide = (chair: number): 'left' | 'right' => {
-		const right = chair <= MAX_PLAYERS / 2;
-		const topCorner = chair === 1 || chair === MAX_PLAYERS;
-		if (topCorner) {
-			return right ? 'right' : 'left';
-		}
-
-		return right ? 'left' : 'right';
-	};
-
 	const nameOf = (id: string | null | undefined) =>
 		view.players.find((p) => p.id === id)?.name ?? '?';
 
@@ -202,7 +187,7 @@
 	const GIVE_FLIGHT_MS = 550;
 	const CLOCK_TICK_MS = 250;
 
-	/** Width of an `xs` card, and of the whole fan so it stays inside a phone seat. */
+	/** Width of an `xs` card, and of the whole fan so it stays inside a seat on the tall stage. */
 	const FAN = { cardPx: 28, maxPx: 88, stepPx: 14 };
 	const overlap = (count: number) => {
 		const step = Math.min(FAN.stepPx, (FAN.maxPx - FAN.cardPx) / Math.max(1, count - 1));
@@ -214,13 +199,13 @@
 	 * than 44px to tap. A hand too long for that scrolls sideways. Card widths match CloudCard's `lg`.
 	 */
 	const HAND = {
-		phone: { cardPx: 64, mostShownPx: 44, paddingPx: 16 },
+		tall: { cardPx: 64, mostShownPx: 44, paddingPx: 16 },
 		wide: { cardPx: 88, mostShownPx: 60, paddingPx: 32 },
 		leastShownPx: 44
 	};
 	let handWidth = $state(0);
 	const handOverlap = $derived.by(() => {
-		const size = wide.current ? HAND.wide : HAND.phone;
+		const size = stage.wide ? HAND.wide : HAND.tall;
 		const space = handWidth - size.paddingPx - size.cardPx;
 		const fits = hand.length > 1 ? Math.floor(space / (hand.length - 1)) : size.mostShownPx;
 		const shown = Math.max(HAND.leastShownPx, Math.min(size.mostShownPx, fits));
@@ -291,8 +276,9 @@
 
 		const start = node.getBoundingClientRect();
 		const end = segment.getBoundingClientRect();
-		const dx = end.left + end.width / 2 - (start.left + start.width / 2);
-		const dy = end.top + end.height / 2 - (start.top + start.height / 2);
+		// Measured on screen, moved inside the scaled stage.
+		const dx = unscaled(end.left + end.width / 2 - (start.left + start.width / 2));
+		const dy = unscaled(end.top + end.height / 2 - (start.top + start.height / 2));
 
 		const fallAt = REVEAL.holdMs + i * Math.min(REVEAL.stepMs, REVEAL.spreadMs / n);
 		const total = fallAt + REVEAL.fallMs;
@@ -573,8 +559,8 @@
 
 <svelte:window onkeydown={onKey} />
 
-<!-- clip sideways only, so cards flying in mid-animation never add a horizontal scrollbar on phones -->
-<div class="table-back-cloudburst overflow-x-clip">
+<!-- The felt takes the stage's free height. -->
+<div class="table-back-cloudburst min-h-0 flex-1">
 	<Felt count={MAX_PLAYERS + 1} name="Cloudburst">
 		{#snippet seat(spot)}
 			{#if spot === 0}
@@ -635,8 +621,6 @@
 				<Seat
 					{player}
 					number={spot}
-					cards={player ? (reveal ? 0 : player.cards) : 0}
-					cardSide={backsSide(spot)}
 					isTurn={!!player && (player.id === view.turnPlayerId || player.id === view.winnerId)}
 					isHost={!view.tournament && !!player && player.id === view.hostId}
 					isMe={!!player && player.id === room.playerId}
@@ -656,13 +640,13 @@
 		<!-- The pile stays when the table finishes; the result is a popup. -->
 		{#if summary && view.phase !== 'finished'}
 			<div
-				class="relative flex flex-col items-center gap-1.5 rounded-lg bg-black/60 px-3 py-3 text-center sm:gap-2 sm:px-5 sm:py-4"
+				class="relative flex flex-col items-center gap-1.5 rounded-lg bg-black/60 px-3 py-3 text-center wide:gap-2 wide:px-5 wide:py-4"
 				role="status"
 			>
-				<p class="font-display text-lg leading-tight font-bold sm:text-xl">
+				<p class="font-display text-lg leading-tight font-bold wide:text-xl">
 					{nameOf(summary.outId)} went out
 				</p>
-				<ul class="text-xs tabular-nums sm:text-sm">
+				<ul class="text-xs tabular-nums wide:grid wide:grid-cols-2 wide:gap-x-6 wide:text-sm">
 					{#each standings as p (p.id)}
 						<li class={p.points >= view.burstAt - 2 ? 'text-ember' : 'text-paper/85'}>
 							{p.name}: +{summary.gained[p.id] ?? 0}, {p.points} of {view.burstAt}
@@ -675,9 +659,9 @@
 			</div>
 		{:else}
 			<!-- The pile sits dead centre inside the weather vane, which lights the suit to follow. -->
-			<div class="-translate-y-2">
+			<div class="-translate-y-2 wide:translate-y-4">
 				<WeatherVane suit={view.suit} top={view.topCard}>
-					<div class="grid h-[3.55rem] w-10 place-items-center sm:h-[4.6rem] sm:w-[3.25rem]">
+					<div class="grid h-[3.55rem] w-10 place-items-center wide:h-[4.6rem] wide:w-[3.25rem]">
 						{#each view.pileUnder as u (u.id)}
 							<div
 								class="col-start-1 row-start-1"
@@ -709,7 +693,7 @@
 <DealerLine text={dealerLine} moveKey={view.moves} />
 
 {#if view.phase === 'finished'}
-	<div class="flex justify-center">
+	<div class="flex shrink-0 justify-center pb-2">
 		<button class="btn-brass" onclick={() => (resultOpen = true)}>See the result</button>
 	</div>
 	<ResultDialog bind:open={resultOpen} title={resultTitle} winner={nameOf(view.winnerId)}>
@@ -748,7 +732,7 @@
 {/if}
 
 {#if view.phase === 'playing' && room.me}
-	<section aria-label="Your hand" class="flex flex-col items-center gap-3">
+	<section aria-label="Your hand" class="flex shrink-0 flex-col items-center gap-2">
 		<HandBar active={room.myTurn} label={barLabel} {secondsLeft}>
 			{#snippet actions()}
 				{#if pending?.needs === 'give'}
@@ -775,9 +759,9 @@
 		/>
 
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
-		<!-- On a phone the row runs edge to edge, past the page gutter, so a full hand of seven fits. -->
+		<!-- On the tall stage the row runs edge to edge, past the stage's gutter, so a full hand of seven fits. -->
 		<div
-			class="hand -mx-4 flex w-[calc(100%+2rem)] justify-center-safe overflow-x-auto px-2 pt-4 pb-2 sm:mx-0 sm:w-full sm:px-4"
+			class="hand -mx-4 flex w-[calc(100%+2rem)] justify-center-safe overflow-x-auto px-2 pt-4 pb-2 wide:mx-0 wide:w-full wide:px-4"
 			class:pointer-events-none={dealing}
 			bind:clientWidth={handWidth}
 			onkeydown={arrows}

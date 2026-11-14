@@ -64,11 +64,10 @@
 		height: 3.55rem;
 		border-radius: 0.3rem;
 	}
-	@media (min-width: 640px) {
-		.pile {
-			width: 3.25rem;
-			height: 4.6rem;
-		}
+	/* Bigger on the wide stage (pile and hand cards only appear on the table's stage). */
+	:global([data-stage='wide']) .pile {
+		width: 3.25rem;
+		height: 4.6rem;
 	}
 	.sm {
 		width: 3.5rem;
@@ -82,11 +81,10 @@
 		width: 4.5rem;
 		height: 6.5rem;
 	}
-	@media (min-width: 640px) {
-		.lg {
-			width: 5.75rem;
-			height: 8.25rem;
-		}
+	/* Bigger on the wide stage (pile and hand cards only appear on the table's stage). */
+	:global([data-stage='wide']) .lg {
+		width: 5.75rem;
+		height: 8.25rem;
 	}
 	.interactive {
 		cursor: pointer;

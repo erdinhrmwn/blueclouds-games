@@ -77,25 +77,30 @@
 	}
 
 	/**
-	 * The dealer is centred on its spot. A chair is pinned by its avatar's centre (Seat's avatar is 48px on a phone and
-	 * 56px wider up, so 24px or 28px down), with the name and any status or button hanging below, so every avatar sits on the U at the same
+	 * The dealer is centred on its spot. A chair is pinned by its avatar's centre (Seat's avatar is 48px on the tall stage and
+	 * 56px on the wide one, so 24px or 28px down), with the name and any status or button hanging below, so every avatar sits on the U at the same
 	 * height whatever is under it.
 	 */
-	const anchor = (k: number) => (k === 0 ? '-translate-y-1/2' : '-translate-y-6 sm:-translate-y-7');
+	const anchor = (k: number) =>
+		k === 0 ? '-translate-y-1/2' : '-translate-y-6 wide:-translate-y-7';
 </script>
 
-<!-- Phones get a taller top gutter so the badge above the dealer clears the room header. The bottom gutter holds
-	 the name, status and button under the lowest chairs. -->
+<!-- Fills the height its stage leaves for it: the full width of the tall stage, a 19:10 table on the wide one.
+	 The tall stage gets a taller top gutter so the badge above the dealer clears the room header. The bottom gutter
+	 holds the name, status and button under the lowest chairs. -->
 <div
-	class="relative mx-auto aspect-[3/4] w-full max-w-3xl px-10 pt-20 pb-[5.5rem] sm:aspect-[16/10] sm:px-16 sm:pt-16 sm:pb-24"
+	class="relative mx-auto h-full w-full px-10 pt-20 pb-[5.5rem] wide:aspect-[19/10] wide:w-auto wide:max-w-full wide:px-16 wide:pt-12 wide:pb-24"
 >
-	<div class="table-rim u relative h-full w-full p-3 sm:p-4">
+	<div class="table-rim u relative h-full w-full p-3 wide:p-4">
 		<div class="felt u relative grid h-full w-full place-items-center">
-			<div class="inlay u pointer-events-none absolute inset-2 sm:inset-3" aria-hidden="true"></div>
+			<div
+				class="inlay u pointer-events-none absolute inset-2 wide:inset-3"
+				aria-hidden="true"
+			></div>
 			{#if name}
 				<!-- Printed faintly at the foot of the felt, clear of the middle of the table. -->
 				<span
-					class="pointer-events-none absolute inset-x-0 bottom-[2%] text-center font-display text-lg font-bold text-paper/[0.08] italic sm:text-2xl"
+					class="pointer-events-none absolute inset-x-0 bottom-[2%] text-center font-display text-lg font-bold text-paper/[0.08] italic wide:text-2xl"
 					aria-hidden="true">{name}</span
 				>
 			{/if}
@@ -103,7 +108,7 @@
 		</div>
 	</div>
 	<div
-		class="pointer-events-none absolute inset-x-12 top-20 bottom-[5.5rem] sm:inset-x-16 sm:top-16 sm:bottom-24"
+		class="pointer-events-none absolute inset-x-12 top-20 bottom-[5.5rem] wide:inset-x-16 wide:top-12 wide:bottom-24"
 		bind:clientWidth={width}
 		bind:clientHeight={height}
 	>

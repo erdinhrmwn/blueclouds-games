@@ -203,20 +203,6 @@
 		return { ms: Math.max(0, room.turnEndsAt - Date.now()), total: room.turnTotal };
 	});
 
-	/**
-	 * Which side a chair fans its card backs: towards the middle of the table, except the two chairs at the
-	 * top of the arms, which fan outward to stay clear of the dealer's shoe and the turn direction.
-	 */
-	const backsSide = (chair: number): 'left' | 'right' => {
-		const right = chair <= MAX_PLAYERS / 2;
-		const topCorner = chair === 1 || chair === MAX_PLAYERS;
-		if (topCorner) {
-			return right ? 'right' : 'left';
-		}
-
-		return right ? 'left' : 'right';
-	};
-
 	const nameOf = (id: string | null) => view.players.find((p) => p.id === id)?.name ?? '?';
 
 	/** After a Double the player on turn plays 2 cards; older servers send no playsLeft. */
@@ -300,8 +286,8 @@
 	};
 </script>
 
-<!-- clip sideways only, so cards flying in mid-animation never add a horizontal scrollbar on phones -->
-<div bind:this={tableEl} class="table-back-bust-31 overflow-x-clip">
+<!-- The felt takes the stage's free height. -->
+<div bind:this={tableEl} class="table-back-bust-31 min-h-0 flex-1">
 	<Felt count={MAX_PLAYERS + 1} name="Bust 31">
 		{#snippet seat(spot)}
 			{#if spot === 0}
@@ -335,8 +321,6 @@
 				<Seat
 					{player}
 					number={spot}
-					cards={player && player.lives > 0 ? HAND_SIZE : 0}
-					cardSide={backsSide(spot)}
 					isTurn={!!player && (player.id === view.turnPlayerId || player.id === view.winnerId)}
 					isHost={!view.tournament && !!player && player.id === view.hostId}
 					isMe={!!player && player.id === room.playerId}
@@ -354,9 +338,9 @@
 			<WinCascade />
 		{/if}
 		<!-- The pile on top, the total's track under it. It stays when the table finishes; the result is a popup. -->
-		<div class="flex translate-y-2 flex-col items-center gap-4 sm:gap-5">
+		<div class="flex translate-y-2 flex-col items-center gap-4 wide:gap-5">
 			<div
-				class="grid h-[3.55rem] w-10 place-items-center rounded-lg border border-dashed border-paper/40 sm:h-[4.6rem] sm:w-[3.25rem]"
+				class="grid h-[3.55rem] w-10 place-items-center rounded-lg border border-dashed border-paper/40 wide:h-[4.6rem] wide:w-[3.25rem]"
 			>
 				{#each under as u (u.id)}
 					<div class="col-start-1 row-start-1" style="rotate: {tiltOf(u.id)}deg" aria-hidden="true">
@@ -398,7 +382,7 @@
 <DealerLine text={dealerLine} moveKey={view.moves} />
 
 {#if view.phase === 'finished'}
-	<div class="flex justify-center">
+	<div class="flex shrink-0 justify-center pb-2">
 		<button class="btn-brass" onclick={() => (resultOpen = true)}>See the result</button>
 	</div>
 	<ResultDialog bind:open={resultOpen} title={resultTitle} winner={nameOf(view.winnerId)}>
@@ -426,13 +410,13 @@
 
 {#if view.phase === 'playing'}
 	{#if room.me && room.me.lives > 0}
-		<section aria-label="Your hand" class="flex flex-col items-center gap-4">
+		<section aria-label="Your hand" class="flex shrink-0 flex-col items-center gap-2 wide:gap-3">
 			<HandBar active={room.myTurn} label={turnLabel} {secondsLeft} />
 			<div class="flex justify-center px-4 pt-2" class:pointer-events-none={dealing}>
 				{#each room.hand as card, i (card.id)}
 					{@const landed = !dealing || i < dealtCount}
 					<div
-						class="-mx-1.5 sm:mx-0.5 {dealing && landed ? 'dealt-in' : ''}"
+						class="-mx-1.5 wide:mx-0.5 {dealing && landed ? 'dealt-in' : ''}"
 						class:invisible={placing?.id === card.id || !landed}
 						style={fan(i, room.hand.length)}
 						data-card={card.id}
@@ -443,6 +427,8 @@
 			</div>
 		</section>
 	{:else}
-		<p class="text-center text-sm text-paper/75">You are out. Watch until the table finishes.</p>
+		<p class="shrink-0 pb-4 text-center text-sm text-paper/75">
+			You are out. Watch until the table finishes.
+		</p>
 	{/if}
 {/if}

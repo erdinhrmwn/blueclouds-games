@@ -17,9 +17,7 @@
 		action,
 		number,
 		onSit,
-		onAddBot,
-		cards = 0,
-		cardSide = 'right'
+		onAddBot
 	}: {
 		player: SeatPlayer | null;
 		isTurn?: boolean;
@@ -41,15 +39,7 @@
 		onSit?: () => void;
 		/** Empty chair only (host): put a bot here. */
 		onAddBot?: () => void;
-		/** Cards this player holds, drawn as backs beside the avatar (count stays in the status line). */
-		cards?: number;
-		/** Which side of the avatar the backs fan out on: towards the middle of the table. */
-		cardSide?: 'left' | 'right';
 	} = $props();
-
-	/** Fan at most this many backs; more would only crowd the next chair. */
-	const MAX_BACKS = 5;
-	const backs = $derived(Math.min(cards, MAX_BACKS));
 
 	const initial = $derived(player?.name.trim().charAt(0).toUpperCase() ?? '');
 
@@ -104,14 +94,14 @@
 {#if player}
 	<div
 		data-seat={player.id}
-		class="flex w-20 flex-col items-center gap-1 text-center sm:w-28 {outClass}"
+		class="flex w-20 flex-col items-center gap-1 text-center wide:w-28 {outClass}"
 		role="group"
 		aria-label={seatLabel}
 	>
 		<!-- Room below for the Away tag, kept on every seat so all their lines stay level. -->
 		<div class="relative mb-1.5">
 			<div
-				class="relative grid size-12 place-items-center rounded-xl border-2 font-display text-lg font-bold sm:size-14 sm:rounded-[14px] sm:text-xl
+				class="relative grid size-12 place-items-center rounded-xl border-2 font-display text-lg font-bold wide:size-14 wide:rounded-[14px] wide:text-xl
 					{avatarLook}"
 				aria-hidden="true"
 			>
@@ -119,7 +109,7 @@
 					<!-- robot head: bots get an icon instead of a monogram -->
 					<svg
 						viewBox="0 0 24 24"
-						class="size-6 sm:size-7"
+						class="size-6 wide:size-7"
 						fill="none"
 						stroke="currentColor"
 						stroke-width="1.8"
@@ -141,7 +131,7 @@
 					<!-- The timer runs on the avatar's own edge, so the seat on turn is no bigger than the others.
 						 It follows the rounded square clockwise from the top middle: its 14px corners are 10 of the 40 units here. -->
 					<svg
-						class="pointer-events-none absolute -inset-0.5 size-12 sm:size-14"
+						class="pointer-events-none absolute -inset-0.5 size-12 wide:size-14"
 						viewBox="0 0 40 40"
 						aria-hidden="true"
 					>
@@ -180,26 +170,9 @@
 			{#if action}
 				{@render cornerButton(`${action.label} ${player.name}`, action.run, 'remove')}
 			{/if}
-			{#if backs > 0}
-				<div
-					class="backs pointer-events-none absolute top-1/2 -translate-y-1/2 {cardSide === 'right'
-						? 'left-full ml-1'
-						: 'right-full mr-1'}"
-					aria-hidden="true"
-				>
-					{#each Array(backs) as _, index (index)}
-						{@const step = cardSide === 'right' ? 1 : -1}
-						<span
-							class="card-back absolute top-0 h-[1.375rem] w-4 sm:h-7 sm:w-5"
-							style="{cardSide === 'right' ? 'left' : 'right'}: {index * 4}px; rotate: {step *
-								(6 + index * 6)}deg"
-						></span>
-					{/each}
-				</div>
-			{/if}
 		</div>
 		<div
-			class="flex max-w-full items-center gap-1 rounded-sm bg-black/45 px-1.5 py-0.5 text-[11px] font-medium sm:px-2 sm:text-xs
+			class="flex max-w-full items-center gap-1 rounded-sm bg-black/45 px-1.5 py-0.5 text-[11px] font-medium wide:px-2 wide:text-xs
 				{player.away ? 'text-paper/70' : ''}"
 			aria-hidden="true"
 		>
@@ -221,7 +194,7 @@
 	</div>
 {:else}
 	<div
-		class="flex w-20 flex-col items-center gap-1 sm:w-28"
+		class="flex w-20 flex-col items-center gap-1 wide:w-28"
 		role="group"
 		aria-label="Seat {number ?? ''}, empty"
 	>
@@ -229,23 +202,23 @@
 		<div class="relative mb-1.5">
 			{#if onSit}
 				<button
-					class="grid size-12 place-items-center rounded-xl border-2 border-dashed sm:size-14 sm:rounded-[14px] border-paper/40 text-paper/60 transition hover:border-solid hover:border-brass/70 hover:bg-brass/10 hover:text-brass"
+					class="grid size-12 place-items-center rounded-xl border-2 border-dashed wide:size-14 wide:rounded-[14px] border-paper/40 text-paper/60 transition hover:border-solid hover:border-brass/70 hover:bg-brass/10 hover:text-brass"
 					onclick={onSit}
 					aria-label="Sit in seat {number ?? ''}"
 					title="Sit here"
 				>
-					{@render sitIcon('size-5 sm:size-6')}
+					{@render sitIcon('size-5 wide:size-6')}
 				</button>
 			{:else}
 				<div
-					class="size-12 rounded-xl border-2 border-dashed border-paper/40 sm:size-14 sm:rounded-[14px]"
+					class="size-12 rounded-xl border-2 border-dashed border-paper/40 wide:size-14 wide:rounded-[14px]"
 				></div>
 			{/if}
 			{#if onAddBot}
 				{@render cornerButton(`Add a bot to seat ${number ?? ''}`, onAddBot, 'add')}
 			{/if}
 		</div>
-		<div class="text-[11px] text-paper/70 sm:text-xs">Seat {number ?? ''}</div>
+		<div class="text-[11px] text-paper/70 wide:text-xs">Seat {number ?? ''}</div>
 	</div>
 {/if}
 
@@ -342,10 +315,6 @@
 	}
 	.ring {
 		transition: stroke 300ms;
-	}
-	.backs {
-		width: 2.5rem;
-		height: 1.75rem;
 	}
 	@media (prefers-reduced-motion: reduce) {
 		.turn {
