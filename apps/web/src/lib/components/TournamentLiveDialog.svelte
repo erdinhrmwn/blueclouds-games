@@ -5,6 +5,7 @@
 		coins,
 		FORMATS,
 		ordinal,
+		pointsText,
 		ranFor,
 		ranksByPoints,
 		startsIn
@@ -133,7 +134,7 @@
 		}
 
 		if (byPoints) {
-			return `You’re ${ordinal(me.place)} · ${me.points} points`;
+			return `You’re ${ordinal(me.place)} · ${pointsText(me.points)}`;
 		}
 
 		if (!finished && tournament.table) {

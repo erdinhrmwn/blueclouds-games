@@ -2,7 +2,7 @@
 	import { page } from '$app/state';
 	import { fetchTournaments, type LiveTournament } from '#lib/platform.ts';
 	import { enterTable } from '#lib/tables.ts';
-	import { ordinal, ranksByPoints, startsIn } from '#lib/tournament-formats.ts';
+	import { ordinal, pointsText, ranksByPoints, startsIn } from '#lib/tournament-formats.ts';
 
 	/**
 	 * At a tournament table once its match is over: what happens to this player next. The next round's table only
@@ -79,7 +79,7 @@
 		if (moved) {
 			const title =
 				byPoints && me
-					? `${me.points} points · ${ordinal(me.place)} overall`
+					? `${pointsText(me.points)} · ${ordinal(me.place)} overall`
 					: `You go on to round ${tournament.round}`;
 			const when = tournament.roundStarted
 				? 'is in play'
@@ -99,8 +99,9 @@
 	});
 </script>
 
+<!-- z-10: the chairs are drawn after the felt's middle, and on phones they would cover this card and its button. -->
 <div
-	class="w-full max-w-xs rounded-2xl border border-brass/60 bg-room/90 px-5 py-4 text-center"
+	class="relative z-10 w-full max-w-xs rounded-2xl border border-brass/60 bg-room/90 px-5 py-4 text-center"
 	aria-live="polite"
 >
 	<p class="text-xs font-semibold text-brass">{tournamentName} · round {round} done</p>

@@ -4,6 +4,11 @@ import type { TournamentFormat } from '#lib/platform.ts';
 
 dayjs.extend(durationPlugin);
 
+/** "1 point", "3 points". */
+export function pointsText(points: number): string {
+	return points === 1 ? '1 point' : `${points} points`;
+}
+
 type Format = {
 	label: string;
 	note: string;

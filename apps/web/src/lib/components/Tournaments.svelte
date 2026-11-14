@@ -14,6 +14,7 @@
 		coins,
 		FORMATS,
 		ordinal,
+		pointsText,
 		ranFor,
 		ranksByPoints,
 		startsIn
@@ -244,7 +245,7 @@
 		}
 
 		if (ranksByPoints(tournament.format)) {
-			return `You’re ${ordinal(me.place)} with ${me.points} points`;
+			return `You’re ${ordinal(me.place)} with ${pointsText(me.points)}`;
 		}
 
 		if (tournament.table) {
@@ -257,7 +258,7 @@
 	/** A card row's right side: points, or how far a knockout player got. */
 	function rowNote(tournament: LiveTournament, standing: LiveTournament['top'][number]): string {
 		if (ranksByPoints(tournament.format)) {
-			return `${standing.points} pts`;
+			return `${standing.points} ${standing.points === 1 ? 'pt' : 'pts'}`;
 		}
 
 		return standing.lastRound >= tournament.round ? 'in' : `out in round ${standing.lastRound}`;
