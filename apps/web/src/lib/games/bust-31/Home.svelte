@@ -1,12 +1,12 @@
 <script lang="ts">
 	import type { GameEntry } from '#lib/games/catalog.ts';
-	import GameLobby from '#lib/components/GameLobby.svelte';
+	import GamePage from '#lib/components/GamePage.svelte';
 	import { LIMIT } from 'server/games/bust-31/rules';
 
 	let { game, maintenance }: { game: GameEntry; maintenance: boolean } = $props();
 </script>
 
-<GameLobby {game} {maintenance}>
+<GamePage {game} {maintenance}>
 	{#snippet rules()}
 		<h2 id="rules-title" class="font-display text-2xl font-bold">
 			There is only one rule: don’t go over {LIMIT}.
@@ -25,4 +25,4 @@
 			next player play two cards in a row.
 		</p>
 	{/snippet}
-</GameLobby>
+</GamePage>

@@ -447,11 +447,14 @@ export async function tournamentsFor(
 	}
 }
 
-/** Whether a game is under maintenance (no new tables). False when it can't be asked, e.g. before a name. */
-export async function underMaintenance(event: RequestEvent, game: string): Promise<boolean> {
+/**
+ * The games under maintenance (no new tables), as `{ slug: true }`. Empty when it can't be asked, e.g. before a
+ * name.
+ */
+export async function pausedGames(event: RequestEvent): Promise<Record<string, boolean>> {
 	const secret = secretOf(event.cookies);
 	if (!secret) {
-		return false;
+		return {};
 	}
 
 	try {
@@ -461,14 +464,28 @@ export async function underMaintenance(event: RequestEvent, game: string): Promi
 			{ method: 'GET', secret }
 		);
 
-		return games.some((entry) => entry.slug === game && entry.maintenance);
+		const paused: Record<string, boolean> = {};
+		for (const entry of games) {
+			if (entry.maintenance) {
+				paused[entry.slug] = true;
+			}
+		}
+
+		return paused;
 	} catch (err) {
 		if (lost(err)) {
-			return false;
+			return {};
 		}
 
 		throw err;
 	}
+}
+
+/** Whether a game is under maintenance (no new tables). False when it can't be asked, e.g. before a name. */
+export async function underMaintenance(event: RequestEvent, game: string): Promise<boolean> {
+	const paused = await pausedGames(event);
+
+	return paused[game] === true;
 }
 
 /** Signs the player up for a tournament. */

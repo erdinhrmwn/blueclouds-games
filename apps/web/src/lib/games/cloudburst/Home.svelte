@@ -1,12 +1,12 @@
 <script lang="ts">
 	import type { GameEntry } from '#lib/games/catalog.ts';
-	import GameLobby from '#lib/components/GameLobby.svelte';
+	import GamePage from '#lib/components/GamePage.svelte';
 	import { BURST_AT, HAND_SIZE } from 'server/games/cloudburst/rules';
 
 	let { game, maintenance }: { game: GameEntry; maintenance: boolean } = $props();
 </script>
 
-<GameLobby {game} {maintenance}>
+<GamePage {game} {maintenance}>
 	{#snippet rules()}
 		<h2 id="rules-title" class="font-display text-2xl font-bold">
 			Play a card that fits, and be first to run out.
@@ -29,4 +29,4 @@
 			draws four and loses their turn. Draw cards don’t stack.
 		</p>
 	{/snippet}
-</GameLobby>
+</GamePage>

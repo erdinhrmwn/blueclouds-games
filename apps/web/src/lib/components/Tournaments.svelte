@@ -27,18 +27,36 @@
 	import TournamentLiveDialog from './TournamentLiveDialog.svelte';
 
 	/**
-	 * A game's tournaments as a row of cards that scrolls sideways: the ones playing (with the player's place and
-	 * table), the ones open for sign-up, then the ones that finished in the last day. `count` reports how many.
+	 * The tournaments of every game in `games` as a row of cards that scrolls sideways: the ones playing (with the
+	 * player's place and table), the ones open for sign-up, then the ones that finished in the last day. `game` shows
+	 * only that game's; `counts` reports how many each game has, whatever is shown.
 	 */
-	let { game, count = $bindable(0) }: { game: string; count?: number } = $props();
+	let {
+		games,
+		game = null,
+		counts = $bindable({})
+	}: {
+		games: string[];
+		game?: string | null;
+		counts?: Record<string, number>;
+	} = $props();
 
-	/** The game's own card back, shown on the felt at the top of each card. */
-	const back = $derived(gameBySlug(game)?.back ?? '');
+	/** A tournament with the game it is played in. */
+	type OfGame<T> = T & { game: string };
 
-	let live = $state<LiveTournament[]>([]);
-	let open = $state<Tournament[]>([]);
-	const running = $derived(live.filter((tournament) => !tournament.endedAt));
-	const finished = $derived(live.filter((tournament) => tournament.endedAt));
+	/** A game's own card back, shown on the felt at the top of its tournaments' cards. */
+	const backOf = (slug: string) => gameBySlug(slug)?.back ?? '';
+	const nameOf = (slug: string) => gameBySlug(slug)?.name ?? slug;
+
+	let live = $state<OfGame<LiveTournament>[]>([]);
+	let open = $state<OfGame<Tournament>[]>([]);
+	const picked = <T extends { game: string }>(list: T[]) =>
+		game ? list.filter((tournament) => tournament.game === game) : list;
+	const shownLive = $derived(picked(live));
+	const shownOpen = $derived(picked(open));
+	const running = $derived(shownLive.filter((tournament) => !tournament.endedAt));
+	const finished = $derived(shownLive.filter((tournament) => tournament.endedAt));
+	const gameName = $derived(game ? nameOf(game) : '');
 
 	/** The countdowns on running cards tick while any is waiting for its round. */
 	const TICK_MS = 15_000;
@@ -86,26 +104,55 @@
 		scroller.scrollBy({ left: direction * scroller.clientWidth * PAGE_SHARE, behavior });
 	}
 
-	// The cards change when the lists reload; the arrows follow.
+	// The cards change when the lists reload or another game is picked; the arrows follow.
 	$effect(() => {
-		void live.length;
-		void open.length;
+		void shownLive.length;
+		void shownOpen.length;
 		updateArrows();
 	});
 
+	/** One game's tournaments, each marked with the game. */
+	async function loadGame(slug: string) {
+		const result = await fetchTournaments(slug);
+		const tag = <T,>(tournament: T) => ({ ...tournament, game: slug });
+
+		return { open: result.tournaments.map(tag), live: result.live.map(tag) };
+	}
+
 	async function load() {
-		try {
-			const result = await fetchTournaments(game);
-			open = result.tournaments;
-			live = result.live;
-			now = Date.now();
-		} catch {
-			// Tournaments are extra: the rest of the page works without them.
+		const results = await Promise.allSettled(games.map((slug) => loadGame(slug)));
+
+		// Nothing answered (a network blip): keep the cards already shown until the next reload.
+		if (results.every((result) => result.status === 'rejected')) {
+			return;
 		}
+
+		const nextOpen: OfGame<Tournament>[] = [];
+		const nextLive: OfGame<LiveTournament>[] = [];
+
+		for (const result of results) {
+			// Tournaments are extra: a game that fails to answer is left out, the rest of the page works on.
+			if (result.status === 'rejected') {
+				continue;
+			}
+
+			nextOpen.push(...result.value.open);
+			nextLive.push(...result.value.live);
+		}
+
+		open = nextOpen;
+		live = nextLive;
+		now = Date.now();
 	}
 
 	$effect(() => {
-		count = live.length + open.length;
+		const perGame: Record<string, number> = {};
+
+		for (const tournament of [...live, ...open]) {
+			perGame[tournament.game] = (perGame[tournament.game] ?? 0) + 1;
+		}
+
+		counts = perGame;
 	});
 
 	/** `dot`: the colour of the dot beside the label. The chip itself is always dark, so it reads on any felt. */
@@ -326,9 +373,9 @@
 	}
 </script>
 
-{#if live.length === 0 && open.length === 0}
+{#if shownLive.length === 0 && shownOpen.length === 0}
 	<p class="rounded-xl border border-dashed border-paper/20 p-6 text-sm text-paper/70">
-		No tournaments open for sign-up right now.
+		No {gameName} tournaments open for sign-up right now.
 	</p>
 {:else}
 	<div class="relative">
@@ -347,11 +394,12 @@
 						dot="bg-paper"
 						startsAt={t.roundStartsAt}
 						headline={roundLine(t)}
-						{back}
+						back={backOf(t.game)}
 					/>
 					<div class="flex flex-1 flex-col p-4 pt-3">
 						<h3 class="font-display text-lg font-bold text-paper">{t.name}</h3>
 						<p class="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+							<span class="font-semibold text-paper/85">{nameOf(t.game)}</span>
 							{#if t.format}
 								<span class="rounded-md border border-brass/55 px-1.5 py-0.5 font-bold text-brass"
 									>{FORMATS[t.format].label}</span
@@ -392,23 +440,29 @@
 							{#if t.table && !t.table.closed}
 								<button
 									class="btn-brass h-11 rounded-xl"
-									onclick={() => (error = enterTable(game, t.table!.code))}>Go to table</button
+									onclick={() => (error = enterTable(t.game, t.table!.code))}>Go to table</button
 								>
 							{/if}
 						</div>
 					</div>
 				</li>
 			{/each}
-			{#each open as t (t.id)}
+			{#each shownOpen as t (t.id)}
 				{@const status = openStatus(t)}
 				{@const action = actionOf(t, status)}
 				<li
 					class="tournament {t.joined ? 'border-[1.5px] border-brass' : 'border border-paper/10'}"
 				>
-					<TournamentFelt label={status.label} dot={status.dot} startsAt={t.startsAt} {back} />
+					<TournamentFelt
+						label={status.label}
+						dot={status.dot}
+						startsAt={t.startsAt}
+						back={backOf(t.game)}
+					/>
 					<div class="flex flex-1 flex-col p-4 pt-3">
 						<h3 class="font-display text-lg font-bold text-paper">{t.name}</h3>
 						<p class="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-paper/55">
+							<span class="font-semibold text-paper/85">{nameOf(t.game)}</span>
 							{#if t.format}
 								<span class="rounded-md border border-brass/55 px-1.5 py-0.5 font-bold text-brass"
 									>{FORMATS[t.format].label}</span
@@ -460,11 +514,12 @@
 						dot="bg-brass"
 						startsAt={t.endedAt ?? t.roundStartsAt}
 						headline={day(t.endedAt ?? t.startsAt)}
-						{back}
+						back={backOf(t.game)}
 					/>
 					<div class="flex flex-1 flex-col p-4 pt-3">
 						<h3 class="font-display text-lg font-bold text-paper">{t.name}</h3>
 						<p class="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-paper/55">
+							<span class="font-semibold text-paper/85">{nameOf(t.game)}</span>
 							{#if t.format}
 								<span class="rounded-md border border-brass/55 px-1.5 py-0.5 font-bold text-brass"
 									>{FORMATS[t.format].label}</span
@@ -532,8 +587,8 @@
 <TournamentLiveDialog
 	bind:open={liveOpen}
 	tournament={liveDetail}
-	{game}
-	{back}
+	game={liveDetail?.game ?? ''}
+	back={backOf(liveDetail?.game ?? '')}
 	{now}
 	onwithdraw={withdraw}
 />
@@ -542,7 +597,7 @@
 	bind:open={detailOpen}
 	tournament={detail}
 	status={detailStatus}
-	{back}
+	back={backOf(detail?.game ?? '')}
 	full={detailStatus === FULL}
 	action={detail
 		? actionOf(detail, detailStatus)
@@ -564,6 +619,12 @@
 	@media (min-width: 40rem) {
 		.tournament {
 			width: 20rem;
+		}
+	}
+	/* Three cards fill the row; the arrow brings in the rest. */
+	@media (min-width: 64rem) {
+		.tournament {
+			width: calc((100% - 2rem) / 3);
 		}
 	}
 	.carousel {
