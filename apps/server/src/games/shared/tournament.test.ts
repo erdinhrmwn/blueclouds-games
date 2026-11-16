@@ -115,22 +115,16 @@ test("only a public open room goes on the room list", async () => {
 	expect((c.vars as { listed?: boolean }).listed).toBe(false);
 });
 
-test("nothing happens before the start time, even with everyone in", async () => {
+test("with everyone in, nothing happens before the start time, then it starts", async () => {
 	const c = room();
 	await loadTournament(c);
 	sit(c, ANN, BEN, CY);
-	setSystemTime(START - 1000);
 	const { calls, game } = runner(c);
+	setSystemTime(START - 1000);
 	await tournamentTick(c, game);
 	expect(calls.started).toBe(0);
-});
 
-test("starts at the start time once every assigned player is in", async () => {
-	const c = room();
-	await loadTournament(c);
-	sit(c, ANN, BEN, CY);
 	setSystemTime(START + 1000);
-	const { calls, game } = runner(c);
 	await tournamentTick(c, game);
 	expect(calls.started).toBe(1);
 	expect(marked).toEqual(["CUP01:start"]);
@@ -186,7 +180,7 @@ test("a player who lost their seat since sitting down (withdrew, disqualified) l
 	);
 });
 
-test("a bot account the platform signed up sits by itself, and the table starts once the people are in", async () => {
+test("bot accounts the platform signed up sit by themselves; the table starts once the people are in, or with bots only", async () => {
 	seats = {
 		...(seats as object),
 		seats: [
@@ -204,9 +198,8 @@ test("a bot account the platform signed up sits by itself, and the table starts 
 	expect(calls.started).toBe(1);
 	const bot = c.vars.game.players.find((player) => player.id === BEN);
 	expect(bot).toMatchObject({ name: "Bot Ash", bot: true, seat: 1 });
-});
 
-test("a table whose people never came still plays with its bots", async () => {
+	// A table whose people never came still plays with its bots.
 	seats = {
 		...(seats as object),
 		seats: [
@@ -214,12 +207,12 @@ test("a table whose people never came still plays with its bots", async () => {
 			{ playerId: BEN, seat: 1, bot: true, name: "Bot Bree" },
 		],
 	};
-	const c = room();
-	await loadTournament(c);
+	const botsOnly = room();
+	await loadTournament(botsOnly);
 	setSystemTime(START + LATE_GRACE_MS);
-	const { calls, game } = runner(c);
-	await tournamentTick(c, game);
+	const botsOnlyRun = runner(botsOnly);
+	await tournamentTick(botsOnly, botsOnlyRun.game);
 
-	expect(calls.started).toBe(1);
-	expect(c.vars.game.players.every((player) => player.bot)).toBe(true);
+	expect(botsOnlyRun.calls.started).toBe(1);
+	expect(botsOnly.vars.game.players.every((player) => player.bot)).toBe(true);
 });

@@ -37,7 +37,7 @@ describe("round history", () => {
 		expect(closedRounds(log.slice(10), null, true)).toEqual([]);
 	});
 
-	test("a closed round holds its seed, its shuffles with their client seeds, its result and times", () => {
+	test("a closed round holds its seed, its shuffles with their client seeds, its result and times; an open one is not reported", () => {
 		expect(roundReport(log, 1, match, bustOf)).toEqual({
 			roundId: "r1",
 			game: "bust-31",
@@ -54,9 +54,7 @@ describe("round history", () => {
 			startedAt: "2026-11-13T08:00:00.000Z",
 			endedAt: "2026-11-13T08:00:09.000Z",
 		});
-	});
-
-	test("a round without its reveal or its deal is not reported", () => {
+		// A round without its reveal or its deal is not reported.
 		expect(roundReport(log, 2, match, bustOf)).toBeNull();
 		expect(roundReport(log, 3, match, bustOf)).toBeNull();
 	});

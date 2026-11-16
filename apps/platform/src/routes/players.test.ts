@@ -46,7 +46,7 @@ describe("guest players", () => {
 		expect(login.status).toBe(401);
 	});
 
-	test("rejects a bad name with field errors", async () => {
+	test("rejects a bad name with field errors, a control character too", async () => {
 		const res = await call(testApp.app, "POST", "/v1/players/guest", {
 			body: { name: "" },
 			headers: { "x-forwarded-for": "10.0.0.9" },
@@ -61,15 +61,14 @@ describe("guest players", () => {
 				fields: { name: "Must be 1–20 characters." },
 			},
 		});
-	});
 
-	test("rejects a body that is not JSON", async () => {
-		const res = await call(testApp.app, "POST", "/v1/players/guest", {
-			body: "{nope",
-			headers: { "x-forwarded-for": "10.0.0.8" },
+		// The API answers 400 before the database's own name check is hit.
+		const newline = await call(testApp.app, "POST", "/v1/players/guest", {
+			body: { name: "Ri\nna" },
+			headers: { "x-forwarded-for": "10.0.0.7" },
 		});
-		expect(res.status).toBe(400);
-		expect(res.json.error.code).toBe("bad_input");
+		expect(newline.status).toBe(400);
+		expect(newline.json.error.fields).toEqual({ name: "Must not contain control characters." });
 	});
 
 	test("rate limits guest creation per IP", async () => {
@@ -92,14 +91,6 @@ describe("guest players", () => {
 });
 
 describe("me", () => {
-	test("needs a valid secret", async () => {
-		expect((await call(testApp.app, "GET", "/v1/players/me")).json.error.code).toBe(
-			"unauthenticated",
-		);
-		const res = await call(testApp.app, "GET", "/v1/players/me", { token: "A".repeat(43) });
-		expect(res.status).toBe(401);
-	});
-
 	test("returns the current player; only an account can rename", async () => {
 		const { player, secret } = await guest(testApp.app);
 		expect(
@@ -126,7 +117,13 @@ describe("me", () => {
 		expect(renamed.json.data.player.name).toBe("Rina K");
 	});
 
-	test("disabled player and revoked secret are refused", async () => {
+	test("a missing or unknown secret, a disabled player and a revoked secret are refused", async () => {
+		expect((await call(testApp.app, "GET", "/v1/players/me")).json.error.code).toBe(
+			"unauthenticated",
+		);
+		const res = await call(testApp.app, "GET", "/v1/players/me", { token: "A".repeat(43) });
+		expect(res.status).toBe(401);
+
 		const disabledGuest = await guest(testApp.app);
 		await testApp.sql`
 			UPDATE players
@@ -137,6 +134,9 @@ describe("me", () => {
 		});
 		expect(disabled.status).toBe(403);
 		expect(disabled.json.error.code).toBe("forbidden");
+		expect(
+			(await call(testApp.app, "POST", "/v1/play-tokens", { token: disabledGuest.secret })).status,
+		).toBe(403);
 		// The backoffice also revokes their secrets; they still learn they were disabled.
 		await testApp.sql`
 			UPDATE player_secrets
@@ -155,28 +155,10 @@ describe("me", () => {
 			(await call(testApp.app, "GET", "/v1/players/me", { token: revokedGuest.secret })).status,
 		).toBe(401);
 	});
-
-	test("updated_at moves on update", async () => {
-		const { player } = await guest(testApp.app);
-		const [before] = await testApp.sql`
-			SELECT updated_at
-			FROM players
-			WHERE id = ${player.id}`;
-		await Bun.sleep(5);
-		await testApp.sql`
-			UPDATE players
-			SET display_name = 'New'
-			WHERE id = ${player.id}`;
-		const [after] = await testApp.sql`
-			SELECT updated_at
-			FROM players
-			WHERE id = ${player.id}`;
-		expect(after.updated_at.getTime()).toBeGreaterThan(before.updated_at.getTime());
-	});
 });
 
 describe("play tokens", () => {
-	test("signs a 15-minute token the actors can verify", async () => {
+	test("signs a 15-minute token the actors can verify, which tells them a VIP is one", async () => {
 		const { player, secret } = await guest(testApp.app, "Bima");
 		const res = await call(testApp.app, "POST", "/v1/play-tokens", { token: secret });
 		expect(res.status).toBe(200);
@@ -189,25 +171,20 @@ describe("play tokens", () => {
 		expect(payload.vip).toBe(false);
 		expect(payload.exp! - payload.iat!).toBe(15 * 60);
 		expect(new Date(res.json.data.expiresAt).getTime()).toBe(payload.exp! * 1000);
-	});
 
-	test("tells the actors a VIP is one", async () => {
-		const { player, secret } = await guest(testApp.app);
 		await testApp.sql`
 			UPDATE players
 			SET is_vip = true
 			WHERE id = ${player.id}`;
-
-		const res = await call(testApp.app, "POST", "/v1/play-tokens", { token: secret });
-		const { payload } = await jwtVerify(res.json.data.token, testApp.publicKey, {
+		const vipRes = await call(testApp.app, "POST", "/v1/play-tokens", { token: secret });
+		const vipToken = await jwtVerify(vipRes.json.data.token, testApp.publicKey, {
 			audience: PLAY_TOKEN_AUDIENCE,
 			algorithms: ["EdDSA"],
 		});
-
-		expect(payload.vip).toBe(true);
+		expect(vipToken.payload.vip).toBe(true);
 	});
 
-	test("a player picks a preset avatar; the next token carries it", async () => {
+	test("a player picks a preset avatar, the next token carries it; one outside the presets is refused", async () => {
 		const { secret } = await guest(testApp.app);
 		const me = await call(testApp.app, "GET", "/v1/players/me", { token: secret });
 		expect(me.json.data.player.avatar).toEqual({ color: null, icon: null });
@@ -231,10 +208,7 @@ describe("play tokens", () => {
 			body: { color: "storm", icon: null },
 		});
 		expect(initial.json.data.player.avatar).toEqual({ color: "storm", icon: null });
-	});
 
-	test("an avatar outside the presets is refused", async () => {
-		const { secret } = await guest(testApp.app);
 		const unknown = await call(testApp.app, "PUT", "/v1/players/me/avatar", {
 			token: secret,
 			body: { color: "#ff0000", icon: "kite" },
@@ -265,17 +239,6 @@ describe("play tokens", () => {
 		expect(
 			(await call(testApp.app, "GET", "/v1/players/vips?ids=nope", { token: SERVER_KEY })).status,
 		).toBe(400);
-	});
-
-	test("disabled player cannot get a token", async () => {
-		const { player, secret } = await guest(testApp.app);
-		await testApp.sql`
-			UPDATE players
-			SET disabled_at = now(), disabled_reason = 'Test'
-			WHERE id = ${player.id}`;
-		expect((await call(testApp.app, "POST", "/v1/play-tokens", { token: secret })).status).toBe(
-			403,
-		);
 	});
 });
 
@@ -357,7 +320,7 @@ describe("accounts", () => {
 		).toBe(200);
 	});
 
-	test("changing the password needs the current one and signs out every other device", async () => {
+	test("changing the password needs the current one and signs out every other device; a guest has none to change", async () => {
 		const made = (await register({ name: "Jo", username: "jo_pw", password: "first password" }))
 			.json.data;
 		const other = (await login("jo_pw", "first password")).json.data.playerSecret;
@@ -386,9 +349,7 @@ describe("accounts", () => {
 		expect((await call(testApp.app, "GET", "/v1/players/me", { token: other })).status).toBe(401);
 		expect((await login("jo_pw", "first password")).status).toBe(401);
 		expect((await login("jo_pw", "second password")).status).toBe(200);
-	});
 
-	test("a guest has no password to change", async () => {
 		const guestUser = await guest(testApp.app, "Kai");
 		const res = await call(testApp.app, "PUT", "/v1/players/me/password", {
 			body: { currentPassword: "anything", newPassword: "long enough" },

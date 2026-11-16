@@ -47,7 +47,7 @@ beforeEach(() => {
 	platformDown = false;
 });
 
-test("a grant and a revoke both reach the seated tags; bots are left alone", async () => {
+test("a grant and a revoke both reach the seated tags, bots are left alone; no change sends nothing", async () => {
 	const c = room(1);
 	c.vars.game = markVip(c.vars.game, "ben");
 	vipIds = new Set(["ann"]);
@@ -55,18 +55,14 @@ test("a grant and a revoke both reach the seated tags; bots are left alone", asy
 	expect(await refreshVips(c, DUE)).toBe(true);
 	expect(vipsOf(c)).toEqual(["ann"]);
 	expect(c.vars.game.players.find((player) => player.id === "bot")?.vip).toBeUndefined();
+
+	const unchanged = room(1);
+	unchanged.vars.game = markVip(unchanged.vars.game, "ann");
+	expect(await refreshVips(unchanged, DUE)).toBe(false);
+	expect(showVips(unchanged.vars.game, vipIds)).toBe(unchanged.vars.game);
 });
 
-test("nothing to send when no tag changes", async () => {
-	const c = room(1);
-	c.vars.game = markVip(c.vars.game, "ann");
-	vipIds = new Set(["ann"]);
-
-	expect(await refreshVips(c, DUE)).toBe(false);
-	expect(showVips(c.vars.game, vipIds)).toBe(c.vars.game);
-});
-
-test("keeps checking while someone is connected, and stops when the room is empty", async () => {
+test("keeps checking while someone is connected or the platform is down; stops when empty; ignores a stale timer", async () => {
 	const open = room(2);
 	await refreshVips(open, DUE);
 	expect(open.scheduled).toHaveLength(1);
@@ -76,23 +72,18 @@ test("keeps checking while someone is connected, and stops when the room is empt
 	await refreshVips(empty, DUE);
 	expect(empty.scheduled).toHaveLength(0);
 	expect(empty.vars.vipCheckAt).toBeNull();
-});
 
-test("a timer from before a sleep is ignored", async () => {
-	const c = room(1);
+	// A timer from before a sleep is ignored.
+	const stale = room(1);
 	vipIds = new Set(["ann"]);
+	expect(await refreshVips(stale, DUE - 1)).toBe(false);
+	expect(vipsOf(stale)).toEqual([]);
+	expect(stale.scheduled).toHaveLength(0);
 
-	expect(await refreshVips(c, DUE - 1)).toBe(false);
-	expect(vipsOf(c)).toEqual([]);
-	expect(c.scheduled).toHaveLength(0);
-});
-
-test("the platform being down changes nothing and the check runs again", async () => {
-	const c = room(1);
+	const down = room(1);
 	platformDown = true;
-
-	expect(await refreshVips(c, DUE)).toBe(false);
-	expect(c.scheduled).toHaveLength(1);
+	expect(await refreshVips(down, DUE)).toBe(false);
+	expect(down.scheduled).toHaveLength(1);
 });
 
 test("a player's avatar is shown, and an unchanged one keeps the same game", () => {

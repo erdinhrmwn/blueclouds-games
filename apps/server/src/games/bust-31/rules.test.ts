@@ -58,27 +58,21 @@ function withHand(game: Game, hand: Card[], total = game.total): Game {
 }
 
 describe("lobby", () => {
-	test("first player becomes host, joining twice is a no-op", () => {
+	test("first player hosts, joining twice is a no-op, start needs the host and two players, no joining after", () => {
 		let game = addPlayer(createGame(), "a", "Ann");
 		game = addPlayer(game, "a", "Ann");
 		expect(game.hostId).toBe("a");
 		expect(game.players).toHaveLength(1);
-	});
+		expect(() => startGame(game, "a", rng)).toThrow(RuleError);
 
-	test("start needs host and two players", () => {
-		const one = addPlayer(createGame(), "a", "Ann");
-		expect(() => startGame(one, "a", rng)).toThrow(RuleError);
-		const two = addPlayer(one, "b", "Bob");
+		const two = addPlayer(game, "b", "Bob");
 		expect(() => startGame(two, "b", rng)).toThrow("host");
-	});
-
-	test("no joining once the game started", () => {
 		expect(() => addPlayer(twoPlayerGame(), "c", "Cleo")).toThrow(RuleError);
 	});
 });
 
 describe("seats", () => {
-	test("players fill the first free seat, a bot can take a chosen one", () => {
+	test("players fill the first free seat, a bot can take a chosen one, a full table has none", () => {
 		let game = addPlayer(createGame(), "a", "Ann");
 		game = addPlayer(game, "bot", "Bot", true, 4);
 		game = addPlayer(game, "b", "Bob");
@@ -89,6 +83,12 @@ describe("seats", () => {
 		]);
 		expect(() => addPlayer(game, "c", "Cleo", false, 4)).toThrow("taken");
 		expect(() => addPlayer(game, "c", "Cleo", false, 6)).toThrow("does not exist");
+
+		for (const id of ["c", "d", "e"]) {
+			game = addPlayer(game, id, id);
+		}
+
+		expect(() => addPlayer(game, "g", "g")).toThrow("full");
 	});
 
 	test("moving seats keeps players in seat order, so turns follow the table", () => {
@@ -98,15 +98,6 @@ describe("seats", () => {
 		const started = startGame(game, "a", rng);
 		expect(started.players[started.turn]!.id).toBe("b");
 		expect(() => takeSeat(started, "b", 3)).toThrow("locked");
-	});
-
-	test("a full table has no free seat", () => {
-		let game = createGame();
-		for (const id of ["a", "b", "c", "d", "e", "f"]) {
-			game = addPlayer(game, id, id);
-		}
-
-		expect(() => addPlayer(game, "g", "g")).toThrow("full");
 	});
 });
 
@@ -146,22 +137,19 @@ describe("playing", () => {
 		expect(next.players[next.turn]!.id).not.toBe(me);
 	});
 
-	test("minus card never drops the total below zero", () => {
-		const game = withHand(twoPlayerGame(), [card("minus", -5)], 3);
-		expect(playCard(game, game.players[game.turn]!.id, "minus-5", rng).total).toBe(0);
-	});
+	test("a minus never drops the total below zero, a Ten sets it to 10 up or down, reverse flips", () => {
+		const cases: { played: Card; before: number; total: number; direction: number }[] = [
+			{ played: card("minus", -5), before: 3, total: 0, direction: 1 },
+			{ played: card("ten", 0), before: 28, total: TEN_TOTAL, direction: 1 },
+			{ played: card("ten", 0), before: 3, total: TEN_TOTAL, direction: 1 },
+			{ played: card("reverse", 0), before: 12, total: 12, direction: -1 },
+		];
 
-	test("reverse flips direction", () => {
-		const game = withHand(twoPlayerGame(), [card("reverse", 0)]);
-		expect(playCard(game, game.players[game.turn]!.id, "reverse0", rng).direction).toBe(-1);
-	});
-
-	test("a Ten sets the total to 10, up or down", () => {
-		const high = withHand(twoPlayerGame(), [card("ten", 0)], 28);
-		expect(playCard(high, high.players[high.turn]!.id, "ten0", rng).total).toBe(TEN_TOTAL);
-
-		const low = withHand(twoPlayerGame(), [card("ten", 0)], 3);
-		expect(playCard(low, low.players[low.turn]!.id, "ten0", rng).total).toBe(TEN_TOTAL);
+		for (const { played, before, total, direction } of cases) {
+			const game = withHand(twoPlayerGame(), [played], before);
+			const next = playCard(game, game.players[game.turn]!.id, played.id, rng);
+			expect([played.id, next.total, next.direction]).toEqual([played.id, total, direction]);
+		}
 	});
 
 	test("a Swap trades hands with the next player and passes the turn to them", () => {
@@ -271,21 +259,18 @@ describe("playing", () => {
 	});
 });
 
-describe("away players", () => {
-	test("a player who left mid-game keeps the seat, then is not taken back to the lobby", () => {
+describe("away and VIP players", () => {
+	test("a player who left mid-game keeps the seat and isn't taken back to the lobby; only the marked one is VIP", () => {
 		const game = markAway(twoPlayerGame(), "b");
 		expect(game.players.find((player) => player.id === "b")?.away).toBe(true);
 		const done = { ...game, phase: "finished" as const };
 		expect(resetToLobby(done, "a").players.map((player) => player.id)).toEqual(["a"]);
 		expect(markBack(game, "b").players.find((player) => player.id === "b")?.away).toBe(false);
-	});
-});
 
-describe("VIP players", () => {
-	test("only the marked player shows as a VIP", () => {
-		const game = markVip(twoPlayerGame(), "b");
-		const shown = publicView(game).players.map((player) => [player.id, player.vip]);
-
+		const shown = publicView(markVip(twoPlayerGame(), "b")).players.map((player) => [
+			player.id,
+			player.vip,
+		]);
 		expect(shown).toEqual([
 			["a", false],
 			["b", true],
@@ -344,19 +329,21 @@ describe("bot", () => {
 		expect(removePlayer(game, "a").hostId).toBe("b");
 	});
 
-	test("plays the biggest safe number", () => {
-		const hand = [card("number", 3), card("number", 8), card("minus", -5)];
-		expect(chooseBotCard(hand, 20)?.id).toBe("number8");
-	});
+	test("plays the biggest safe number, saves the Ten and -5 for emergencies, else the smallest card", () => {
+		const cases: { hand: Card[]; total: number; picks: string }[] = [
+			{
+				hand: [card("number", 3), card("number", 8), card("minus", -5)],
+				total: 20,
+				picks: "number8",
+			},
+			{ hand: [card("number", 9), card("minus", -5)], total: 30, picks: "minus-5" },
+			{ hand: [card("number", 9), card("number", 4)], total: 30, picks: "number4" },
+			{ hand: [card("ten", 0), card("minus", -5), card("swap", 0)], total: 30, picks: "swap0" },
+			{ hand: [card("number", 9), card("ten", 0)], total: 30, picks: "ten0" },
+		];
 
-	test("falls back to a safe special card, then to the smallest card", () => {
-		expect(chooseBotCard([card("number", 9), card("minus", -5)], 30)?.kind).toBe("minus");
-		expect(chooseBotCard([card("number", 9), card("number", 4)], 30)?.id).toBe("number4");
-	});
-
-	test("keeps the Ten and the -5 for emergencies, and plays the Ten when nothing else is safe", () => {
-		const hand = [card("ten", 0), card("minus", -5), card("swap", 0)];
-		expect(chooseBotCard(hand, 30)?.kind).toBe("swap");
-		expect(chooseBotCard([card("number", 9), card("ten", 0)], 30)?.kind).toBe("ten");
+		for (const { hand, total, picks } of cases) {
+			expect(chooseBotCard(hand, total)?.id).toBe(picks);
+		}
 	});
 });

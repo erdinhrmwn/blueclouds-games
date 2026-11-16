@@ -24,8 +24,11 @@ const start: MatchState = { id: "m1", startedAt: "2026-11-11T10:00:00.000Z", out
 
 test("placements follow the elimination order, winner first", () => {
 	// Cy goes out first; the bot goes out on the final move, which also ends the game.
-	let match = noteMove(start, table({ a: 2, "bot-1": 1, c: 0 }, null));
+	const cyOut = table({ a: 2, "bot-1": 1, c: 0 }, null);
+	let match = noteMove(start, cyOut);
 	expect(match.out).toEqual(["c"]);
+	// noteMove counts a player out once.
+	expect(noteMove(match, cyOut).out).toEqual(["c"]);
 	const report = buildReport(
 		match,
 		table({ a: 2, "bot-1": 0, c: 0 }, "a"),
@@ -78,11 +81,6 @@ test("a kick in the lobby empties the chair; mid-game it is played for them and 
 	expect(kicked.players.find((player) => player.id === "a")).toMatchObject({ away: true });
 	expect(kicked.hostId).toBe("c");
 	expect(kicked.players).toHaveLength(2);
-});
-
-test("noteMove does not count a player twice", () => {
-	const game = table({ a: 2, "bot-1": 1, c: 0 }, null);
-	expect(noteMove(noteMove(start, game), game).out).toEqual(["c"]);
 });
 
 test("match and round ids are UUIDv7, as the platform wants", () => {
