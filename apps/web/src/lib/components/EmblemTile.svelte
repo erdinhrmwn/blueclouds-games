@@ -17,6 +17,7 @@
 
 			return `${50 + radius * Math.cos(rad)} ${50 + radius * Math.sin(rad)}`;
 		};
+
 		const large = end - start > 180 ? 1 : 0;
 
 		return `M${toPoint(start)} A${radius} ${radius} 0 ${large} 1 ${toPoint(end)}`;

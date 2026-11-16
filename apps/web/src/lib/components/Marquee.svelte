@@ -24,6 +24,7 @@
 		const measure = () => {
 			overflow = Math.max(0, line!.scrollWidth - box!.clientWidth);
 		};
+
 		measure();
 
 		const observer = new ResizeObserver(measure);

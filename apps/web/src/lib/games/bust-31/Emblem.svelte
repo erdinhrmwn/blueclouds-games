@@ -17,9 +17,9 @@
 </script>
 
 <EmblemTile back="#5e1a1f" deep="#3f1014" pattern="dots" {small} {label} class={cls}>
-	{#snippet motif(d: number)}
-		{@const radius = d * 0.42}
-		{@const weight = d * 0.075}
+	{#snippet motif(size: number)}
+		{@const radius = size * 0.42}
+		{@const weight = size * 0.075}
 		<path
 			d={arc(radius, START, START + SWEEP)}
 			fill="none"
@@ -44,11 +44,11 @@
 		/>
 		<text
 			x="50"
-			y={50 + d * 0.16}
+			y={50 + size * 0.16}
 			text-anchor="middle"
 			font-family="var(--font-display)"
 			font-weight="900"
-			font-size={d * 0.44}
+			font-size={size * 0.44}
 			fill="var(--color-paper)">{LIMIT}</text
 		>
 	{/snippet}

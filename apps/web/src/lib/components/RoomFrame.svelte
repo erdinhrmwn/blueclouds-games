@@ -63,7 +63,7 @@
 			return view.roomName;
 		}
 
-		const host = view.players.find((p) => p.id === view.hostId);
+		const host = view.players.find((player) => player.id === view.hostId);
 		return host ? `${host.name}’s table` : 'Table';
 	});
 
