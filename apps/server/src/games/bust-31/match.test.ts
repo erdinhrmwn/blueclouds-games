@@ -8,15 +8,15 @@ import { addPlayer, type Card, createGame, type Game, playCard, startGame } from
 import { kickPlayer, markAway, markBack, randomRng } from "../shared/table";
 
 function table(lives: Record<string, number>, winnerId: string | null): Game {
-	let g = createGame();
-	g = addPlayer(g, "a", "Ann");
-	g = addPlayer(g, "bot-1", "Bot Rain", true);
-	g = addPlayer(g, "c", "Cy");
+	let game = createGame();
+	game = addPlayer(game, "a", "Ann");
+	game = addPlayer(game, "bot-1", "Bot Rain", true);
+	game = addPlayer(game, "c", "Cy");
 	return {
-		...g,
+		...game,
 		phase: winnerId ? "finished" : "playing",
 		winnerId,
-		players: g.players.map((p) => ({ ...p, lives: lives[p.id]! })),
+		players: game.players.map((player) => ({ ...player, lives: lives[player.id]! })),
 	};
 }
 
@@ -33,7 +33,9 @@ test("placements follow the elimination order, winner first", () => {
 		"2026-11-11T10:05:00.000Z",
 		[],
 	);
-	const byWho = Object.fromEntries(report.players.map((p) => [p.playerId ?? p.botName, p]));
+	const byWho = Object.fromEntries(
+		report.players.map((player) => [player.playerId ?? player.botName, player]),
+	);
 	expect(byWho.a).toMatchObject({ placement: 1, score: 2, bot: false });
 	expect(byWho["Bot Rain"]).toMatchObject({ placement: 2, playerId: null, bot: true });
 	expect(byWho.c).toMatchObject({ placement: 3, score: 0 });
@@ -50,7 +52,9 @@ test("a terminated match places by lives, then the players out, last out first, 
 		[],
 		"terminated",
 	);
-	const byWho = Object.fromEntries(report.players.map((p) => [p.playerId ?? p.botName, p]));
+	const byWho = Object.fromEntries(
+		report.players.map((player) => [player.playerId ?? player.botName, player]),
+	);
 
 	expect(report.endReason).toBe("terminated");
 	expect(byWho.a!.placement).toBe(1);
@@ -67,18 +71,18 @@ test("a kick in the lobby empties the chair; mid-game it is played for them and 
 	let lobby = createGame();
 	lobby = addPlayer(lobby, "a", "Ann");
 	lobby = addPlayer(lobby, "c", "Cy");
-	expect(kickPlayer(lobby, "c").players.map((p) => p.id)).toEqual(["a"]);
+	expect(kickPlayer(lobby, "c").players.map((player) => player.id)).toEqual(["a"]);
 
 	const playing = startGame(lobby, "a", rng);
 	const kicked = kickPlayer(playing, "a");
-	expect(kicked.players.find((p) => p.id === "a")).toMatchObject({ away: true });
+	expect(kicked.players.find((player) => player.id === "a")).toMatchObject({ away: true });
 	expect(kicked.hostId).toBe("c");
 	expect(kicked.players).toHaveLength(2);
 });
 
 test("noteMove does not count a player twice", () => {
-	const g = table({ a: 2, "bot-1": 1, c: 0 }, null);
-	expect(noteMove(noteMove(start, g), g).out).toEqual(["c"]);
+	const game = table({ a: 2, "bot-1": 1, c: 0 }, null);
+	expect(noteMove(noteMove(start, game), game).out).toEqual(["c"]);
 });
 
 test("match and round ids are UUIDv7, as the platform wants", () => {
@@ -92,81 +96,88 @@ const card = (kind: Card["kind"], value: number, id: string): Card => ({ id, kin
 
 /** Two players, Ann to move with a fixed hand. */
 function started(): Game {
-	let g = createGame();
-	g = addPlayer(g, "a", "Ann");
-	g = addPlayer(g, "bot-1", "Bot Rain", true);
-	return startGame(g, "a", rng);
+	let game = createGame();
+	game = addPlayer(game, "a", "Ann");
+	game = addPlayer(game, "bot-1", "Bot Rain", true);
+	return startGame(game, "a", rng);
 }
-const withHand = (g: Game, hand: Card[], total = g.total): Game => ({
-	...g,
+
+const withHand = (game: Game, hand: Card[], total = game.total): Game => ({
+	...game,
 	total,
-	players: g.players.map((p, i) => (i === g.turn ? { ...p, hand } : p)),
+	players: game.players.map((player, i) => (i === game.turn ? { ...player, hand } : player)),
 });
 
 describe("logEvents", () => {
 	test("start deals: every alive hand and the deck order", () => {
 		const lobby = addPlayer(addPlayer(createGame(), "a", "Ann"), "bot-1", "Bot Rain", true);
-		const g = startGame(lobby, "a", rng);
-		const [deal] = logEvents(lobby, g);
+		const game = startGame(lobby, "a", rng);
+		const [deal] = logEvents(lobby, game);
 		expect(deal).toEqual({
 			type: "deal",
 			data: {
 				round: 1,
 				starter: 0,
-				hands: { 0: g.players[0]!.hand.map((c) => c.id), 1: g.players[1]!.hand.map((c) => c.id) },
-				deck: g.deck.map((c) => c.id),
+				hands: {
+					0: game.players[0]!.hand.map((card) => card.id),
+					1: game.players[1]!.hand.map((card) => card.id),
+				},
+				deck: game.deck.map((card) => card.id),
 			},
 		});
 	});
 
 	test("a play records the card, the new total and the card drawn", () => {
-		const g = withHand(started(), [card("number", 7, "n7-0")], 10);
-		const next = playCard(g, "a", "n7-0", rng);
-		expect(logEvents(g, next)).toEqual([
+		const game = withHand(started(), [card("number", 7, "n7-0")], 10);
+		const next = playCard(game, "a", "n7-0", rng);
+		expect(logEvents(game, next)).toEqual([
 			{
 				type: "play",
 				seat: 0,
-				data: { card: "n7-0", total: 17, drew: g.deck[0]!.id, by: "player" },
+				data: { card: "n7-0", total: 17, drew: game.deck[0]!.id, by: "player" },
 			},
 		]);
-		expect(logEvents(g, next, true)[0]!.data!.by).toBe("timeout");
+		expect(logEvents(game, next, true)[0]!.data!.by).toBe("timeout");
 	});
 
 	test("a Swap records the seat it traded with, and the drawn card that went to that seat", () => {
-		const g = withHand(started(), [card("swap", 0, "s-0")], 10);
-		const next = playCard(g, "a", "s-0", rng);
-		const [play] = logEvents(g, next);
+		const game = withHand(started(), [card("swap", 0, "s-0")], 10);
+		const next = playCard(game, "a", "s-0", rng);
+		const [play] = logEvents(game, next);
 
 		expect(play).toEqual({
 			type: "play",
 			seat: 0,
-			data: { card: "s-0", total: 10, drew: g.deck[0]!.id, swapped: 1, by: "player" },
+			data: { card: "s-0", total: 10, drew: game.deck[0]!.id, swapped: 1, by: "player" },
 		});
 	});
 
 	test("an empty deck logs the reshuffle before the play", () => {
-		const g = {
+		const game = {
 			...withHand(started(), [card("number", 2, "n2-0")]),
 			deck: [],
 			discard: [card("number", 5, "n5-0"), card("number", 6, "n6-0")],
 		};
-		const entries = logEvents(g, playCard(g, "a", "n2-0", rng));
-		expect(entries.map((e) => e.type)).toEqual(["reshuffle", "play"]);
+		const entries = logEvents(game, playCard(game, "a", "n2-0", rng));
+		expect(entries.map((entry) => entry.type)).toEqual(["reshuffle", "play"]);
 		expect([...(entries[0]!.data!.deck as string[])].sort()).toEqual(["n5-0", "n6-0"]);
 		expect(entries[1]!.data!.drew).toBe((entries[0]!.data!.deck as string[])[0]);
 	});
 
 	test("a bust is followed by the new deal; the last bust ends the match", () => {
-		const g = withHand(started(), [card("number", 9, "n9-0")], 30);
-		const next = playCard(g, "a", "n9-0", rng);
-		expect(logEvents(g, next).map((e) => e.type)).toEqual(["bust", "deal"]);
-		expect(logEvents(g, next)[0]).toEqual({
+		const game = withHand(started(), [card("number", 9, "n9-0")], 30);
+		const next = playCard(game, "a", "n9-0", rng);
+		expect(logEvents(game, next).map((event) => event.type)).toEqual(["bust", "deal"]);
+		expect(logEvents(game, next)[0]).toEqual({
 			type: "bust",
 			seat: 0,
 			data: { card: "n9-0", total: 39, lives: 2, eliminated: false, by: "player" },
 		});
 
-		const last = { ...g, players: g.players.map((p) => (p.id === "a" ? { ...p, lives: 1 } : p)) };
+		const last = {
+			...game,
+			players: game.players.map((player) => (player.id === "a" ? { ...player, lives: 1 } : player)),
+		};
 		const end = playCard(last, "a", "n9-0", rng);
 		expect(logEvents(last, end, true)).toEqual([
 			{
@@ -179,11 +190,11 @@ describe("logEvents", () => {
 	});
 
 	test("bots, away players and lobby changes", () => {
-		const g = started();
-		const away = markAway(g, "a");
-		expect(logEvents(g, away)).toEqual([{ type: "away", seat: 0 }]);
+		const game = started();
+		const away = markAway(game, "a");
+		expect(logEvents(game, away)).toEqual([{ type: "away", seat: 0 }]);
 		expect(logEvents(away, markBack(away, "a"))).toEqual([{ type: "back", seat: 0 }]);
-		const botTurn = { ...g, turn: 1 };
+		const botTurn = { ...game, turn: 1 };
 		const bot = botTurn.players[1]!;
 		const played = playCard(botTurn, bot.id, chooseBotCard(bot.hand, 0)!.id, rng);
 		expect(logEvents(botTurn, played, true)[0]!.data!.by).toBe("bot");
@@ -191,29 +202,32 @@ describe("logEvents", () => {
 	});
 
 	test("a whole bot game logs every move in order", () => {
-		let g = createGame();
-		g = addPlayer(g, "a", "Ann");
+		let game = createGame();
+		game = addPlayer(game, "a", "Ann");
 		for (let i = 1; i < 6; i++) {
-			g = addPlayer(g, `bot-${i}`, `Bot ${i}`, true);
+			game = addPlayer(game, `bot-${i}`, `Bot ${i}`, true);
 		}
 
 		const entries: LogEntry[] = [];
 		const step = (next: Game) => {
-			entries.push(...logEvents(g, next, true));
-			g = next;
+			entries.push(...logEvents(game, next, true));
+			game = next;
 		};
-		step(startGame(g, "a", randomRng()));
-		while (g.phase === "playing") {
-			const p = g.players[g.turn]!;
-			step(playCard(g, p.id, chooseBotCard(p.hand, g.total)!.id, randomRng()));
+
+		step(startGame(game, "a", randomRng()));
+		while (game.phase === "playing") {
+			const player = game.players[game.turn]!;
+			step(playCard(game, player.id, chooseBotCard(player.hand, game.total)!.id, randomRng()));
 		}
 
-		const count = (type: string) => entries.filter((e) => e.type === type).length;
-		expect(count("deal")).toBe(g.round);
-		expect(count("bust")).toBe(g.players.reduce((n, p) => n + 3 - Math.max(0, p.lives), 0));
+		const count = (type: string) => entries.filter((entry) => entry.type === type).length;
+		expect(count("deal")).toBe(game.round);
+		expect(count("bust")).toBe(
+			game.players.reduce((busts, player) => busts + 3 - Math.max(0, player.lives), 0),
+		);
 		expect(entries.at(-1)).toEqual({
 			type: "finished",
-			data: { winner: g.players.find((p) => p.id === g.winnerId)!.seat },
+			data: { winner: game.players.find((player) => player.id === game.winnerId)!.seat },
 		});
 		expect(JSON.stringify(entries).length).toBeLessThan(100_000);
 	});

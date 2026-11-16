@@ -98,7 +98,7 @@ export const cloudburstRoom = actor({
 		/** Joins (or rejoins) the room; returns your player id, the current view and your hand. */
 		join: async (c) => {
 			const who = caller(c);
-			const seated = c.vars.game.players.find((p) => p.id === who.id);
+			const seated = c.vars.game.players.find((player) => player.id === who.id);
 
 			if (!seated) {
 				const seat = await seatFor(c, who);
@@ -152,7 +152,7 @@ export const cloudburstRoom = actor({
 			requireOpenTable(c);
 			requireHost(c);
 			const id = BotIdInput.parse(botId);
-			const bot = c.vars.game.players.find((p) => p.id === id);
+			const bot = c.vars.game.players.find((player) => player.id === id);
 			if (!bot?.bot) {
 				throw new UserError("Bot not found.", { code: "rule" });
 			}

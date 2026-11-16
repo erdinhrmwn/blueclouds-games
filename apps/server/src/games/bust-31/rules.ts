@@ -132,7 +132,7 @@ export function totalAfter(total: number, card: Card): number {
 
 /** Sits a new player in `seat`, or in the first free one when no seat is given. */
 export function addPlayer(game: Game, id: string, name: string, bot = false, seat?: number): Game {
-	if (game.players.some((p) => p.id === id)) {
+	if (game.players.some((player) => player.id === id)) {
 		return game;
 	}
 
@@ -155,7 +155,7 @@ export function startGame(game: Game, byId: string, rng: Rng): Game {
 		throw new RuleError(`Needs at least ${MIN_PLAYERS} players.`);
 	}
 
-	const players = game.players.map((p) => ({ ...p, lives: START_LIVES, hand: [] }));
+	const players = game.players.map((player) => ({ ...player, lives: START_LIVES, hand: [] }));
 	const dealt = dealRound({ ...game, players, round: 0, winnerId: null }, 0, rng);
 
 	return { ...dealt, phase: "playing", lastEvent: { type: "started" }, moves: game.moves + 1 };
@@ -193,7 +193,9 @@ export function playCard(game: Game, playerId: string, cardId: string, rng: Rng)
 
 	const [drawn, ...rest] = deck;
 	const newHand = drawn ? [...hand, drawn] : hand;
-	let players = game.players.map((p) => (p.id === playerId ? { ...p, hand: newHand } : p));
+	let players = game.players.map((player) =>
+		player.id === playerId ? { ...player, hand: newHand } : player,
+	);
 	const direction = card.kind === "reverse" ? (-game.direction as 1 | -1) : game.direction;
 	const next = nextAlive(players, game.turn, direction);
 
@@ -230,16 +232,16 @@ export function playCard(game: Game, playerId: string, cardId: string, rng: Rng)
 }
 
 /** The players at `a` and `b` trade hands. */
-function swapHands(players: Player[], a: number, b: number): Player[] {
-	const handA = players[a]!.hand;
-	const handB = players[b]!.hand;
+function swapHands(players: Player[], seatA: number, seatB: number): Player[] {
+	const handA = players[seatA]!.hand;
+	const handB = players[seatB]!.hand;
 
 	return players.map((player, index) => {
-		if (index === a) {
+		if (index === seatA) {
 			return { ...player, hand: handB };
 		}
 
-		if (index === b) {
+		if (index === seatB) {
 			return { ...player, hand: handA };
 		}
 
@@ -257,8 +259,10 @@ function bust(
 	rng: Rng,
 ): Game {
 	const lives = current.lives - 1;
-	const players = game.players.map((p) => (p.id === current.id ? { ...p, lives, hand } : p));
-	const alive = players.filter((p) => p.lives > 0);
+	const players = game.players.map((player) =>
+		player.id === current.id ? { ...player, lives, hand } : player,
+	);
+	const alive = players.filter((player) => player.lives > 0);
 
 	if (alive.length === 1) {
 		const winnerId = alive[0]!.id;
@@ -340,7 +344,7 @@ function dealRound(game: Game, starter: number, rng: Rng): Game {
 }
 
 const nextAlive = (players: Player[], from: number, direction: 1 | -1) =>
-	nextIndex(players, from, direction, (p) => p.lives > 0);
+	nextIndex(players, from, direction, (player) => player.lives > 0);
 
 /**
  * What every player may see: no hands, no deck order.
@@ -350,15 +354,15 @@ export function publicView(game: Game, turn: { left: number; total: number } | n
 	return {
 		phase: game.phase,
 		hostId: game.hostId,
-		players: game.players.map((p) => ({
-			id: p.id,
-			name: p.name,
-			lives: p.lives,
-			bot: p.bot,
-			seat: p.seat,
-			away: !!p.away,
-			vip: !!p.vip,
-			avatar: p.avatar ?? NO_AVATAR,
+		players: game.players.map((player) => ({
+			id: player.id,
+			name: player.name,
+			lives: player.lives,
+			bot: player.bot,
+			seat: player.seat,
+			away: !!player.away,
+			vip: !!player.vip,
+			avatar: player.avatar ?? NO_AVATAR,
 		})),
 		deckCount: game.deck.length,
 		topCard: game.discard.at(-1) ?? null,
@@ -402,5 +406,5 @@ export function dealPauseMs(game: Game): number {
 }
 
 export function handOf(game: Game, playerId: string): Card[] {
-	return game.players.find((p) => p.id === playerId)?.hand ?? [];
+	return game.players.find((player) => player.id === playerId)?.hand ?? [];
 }
