@@ -144,11 +144,13 @@ const COLUMNS = (sql: SQL) => sql`
 	t.ended_at AS "endedAt",
 	t.prizes_paid_at AS "prizesPaidAt",
 	(
-		SELECT coalesce(sum(tp.fee_paid), 0)::bigint FROM tournament_players tp
+		SELECT coalesce(sum(tp.fee_paid), 0)::bigint
+		FROM tournament_players tp
 		WHERE tp.tournament_id = t.id
 	) AS "feesHeld",
 	(
-		SELECT count(*)::int FROM tournament_players tp
+		SELECT count(*)::int
+		FROM tournament_players tp
 		WHERE tp.tournament_id = t.id AND tp.status = 'registered'
 	) AS registered,
 	(

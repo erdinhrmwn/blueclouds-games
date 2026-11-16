@@ -47,6 +47,7 @@ export function fairnessText(event: LogEvent): string | null {
 
 			return `Shuffle #${String(data.nonce)} of round ${String(data.round)}: ${cards} cards.`;
 		}
+
 		case 'reveal':
 			return `Round ${String(data.round)} server seed revealed: ${String(data.serverSeed)}.`;
 		default:
@@ -66,7 +67,7 @@ export function replay(game: string, log: MatchLog, seats: ReplaySeat[]): Step[]
 			return '';
 		}
 
-		const name = seats.find((s) => s.seat === seat)?.name ?? `Seat ${seat + 1}`;
+		const name = seats.find((entry) => entry.seat === seat)?.name ?? `Seat ${seat + 1}`;
 		return `${name}: `;
 	};
 

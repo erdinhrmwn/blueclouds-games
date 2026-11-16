@@ -65,9 +65,9 @@ const BY: Record<string, string> = {
  * (totals, lives, cards drawn) are compared with the replay; any difference is flagged.
  */
 export function replayBust31(log: MatchLog, seats: ReplaySeat[]): Step[] {
-	const order = [...seats].sort((a, b) => a.seat - b.seat).map((s) => s.seat);
+	const order = [...seats].sort((a, b) => a.seat - b.seat).map((seat) => seat.seat);
 	const name = (seat: number | undefined) =>
-		seats.find((s) => s.seat === seat)?.name ?? `Seat ${(seat ?? 0) + 1}`;
+		seats.find((entry) => entry.seat === seat)?.name ?? `Seat ${(seat ?? 0) + 1}`;
 
 	const table = new Map<number, { lives: number; hand: string[]; away: boolean }>(
 		order.map((seat) => [seat, { lives: START_LIVES, hand: [], away: false }])
@@ -145,6 +145,7 @@ export function replayBust31(log: MatchLog, seats: ReplaySeat[]): Step[] {
 				text = `Round ${round} dealt. ${name(data.starter)} starts.`;
 				break;
 			}
+
 			case 'reshuffle':
 				deck = [...data.deck];
 				pile = [];
@@ -218,6 +219,7 @@ export function replayBust31(log: MatchLog, seats: ReplaySeat[]): Step[] {
 				text = `${who} went over ${LIMIT} with ${card.label}. Total ${total}, ${left}.${playedBy}`;
 				break;
 			}
+
 			case 'away':
 				if (player) {
 					player.away = true;
@@ -242,6 +244,7 @@ export function replayBust31(log: MatchLog, seats: ReplaySeat[]): Step[] {
 				text = `${who} was kicked by ${by}. Their turns are played for them.${reason}`;
 				break;
 			}
+
 			case 'terminated':
 				turn = null;
 				text = `An admin terminated the table. Reason: ${data.reason}`;

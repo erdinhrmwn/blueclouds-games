@@ -20,13 +20,13 @@ import {
 
 let sql: SQL;
 let admin: Admin;
-const inMinutes = (m: number) => new Date(Date.now() + m * 60_000);
-const players = async (n: number) =>
+const inMinutes = (minutes: number) => new Date(Date.now() + minutes * 60_000);
+const players = async (count: number) =>
 	(
 		await sql`
-			INSERT INTO players ${sql(Array.from({ length: n }, (_, i) => ({ display_name: `P${i}` })))}
+			INSERT INTO players ${sql(Array.from({ length: count }, (_, i) => ({ display_name: `P${i}` })))}
 			RETURNING id`
-	).map((r: { id: string }) => r.id);
+	).map((row: { id: string }) => row.id);
 const newCup = (perRoom = 6, maxPlayers = 36, minPlayers = 2) =>
 	createTournament(
 		sql,
@@ -193,7 +193,7 @@ describe('tournaments', () => {
 			{ playerId: ids[0], seat: 0 },
 			{ playerId: ids[1], seat: 1 }
 		]);
-		expect(detail.players.find((p) => p.playerId === ids[0])!.roomCode).toBe('FINAL1');
+		expect(detail.players.find((player) => player.playerId === ids[0])!.roomCode).toBe('FINAL1');
 		expect(detail.results.map((result) => [result.place, result.playerId])).toEqual([
 			[1, ids[0]],
 			[2, ids[1]]
@@ -241,9 +241,9 @@ describe('tournaments', () => {
 
 		const { tournament, rooms } = (await tournamentDetail(sql, id))!;
 		expect(tournament.registrationClosesAt.getTime()).toBeLessThanOrEqual(Date.now());
-		expect(rooms.map((r) => r.players).sort()).toEqual([3, 4]);
+		expect(rooms.map((room) => room.players).sort()).toEqual([3, 4]);
 
-		const small = rooms.find((r) => r.players === 3)!;
+		const small = rooms.find((room) => room.players === 3)!;
 		expect(await assignPlayer(sql, admin, id, small.code, ids[7]!, null)).toBe(3);
 		await expect(assignPlayer(sql, admin, id, small.code, ids[0]!, null)).rejects.toThrow(
 			'already sit at table'
@@ -255,7 +255,7 @@ describe('tournaments', () => {
 			SET started_at = now()
 			WHERE code = ${small.code}`;
 		const seated = (await tournamentDetail(sql, id))!.players.find(
-			(p) => p.roomCode === small.code
+			(player) => player.roomCode === small.code
 		)!;
 		await expect(unregisterPlayer(sql, admin, id, seated.playerId, null)).rejects.toThrow(
 			'already started'
@@ -266,7 +266,7 @@ describe('tournaments', () => {
 				FROM admin_audit_events
 				WHERE tournament_id = ${id}
 				ORDER BY id`;
-		expect(actions.map((a: { action: string }) => a.action)).toEqual([
+		expect(actions.map((row: { action: string }) => row.action)).toEqual([
 			'tournament.create',
 			'tournament.register',
 			'tournament.distribute',
@@ -287,7 +287,7 @@ describe('tournaments', () => {
 			UPDATE rooms
 			SET started_at = now()
 			WHERE code = ${runningRoom!.code}`;
-		const at = (code: string) => before.players.filter((p) => p.roomCode === code);
+		const at = (code: string) => before.players.filter((player) => player.roomCode === code);
 		const waiter = at(waitingRoom!.code)[0]!.playerId;
 		const runner = at(runningRoom!.code)[0]!.playerId;
 
@@ -305,7 +305,7 @@ describe('tournaments', () => {
 		).rejects.toThrow('already were disqualified');
 
 		const after = (await tournamentDetail(sql, id))!;
-		const byId = new Map(after.players.map((p) => [p.playerId, p]));
+		const byId = new Map(after.players.map((player) => [player.playerId, player]));
 		expect(byId.get(waiter)).toMatchObject({
 			status: 'disqualified',
 			statusReason: 'Cheating',

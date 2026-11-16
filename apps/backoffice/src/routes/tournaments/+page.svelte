@@ -21,7 +21,7 @@
 	const values = $derived(form?.values ?? {});
 	let game = $state('');
 	const picked = $derived(
-		data.games.find((g) => g.slug === (game || values.game)) ?? data.games[0]
+		data.games.find((option) => option.slug === (game || values.game)) ?? data.games[0]
 	);
 	let busy = $state(false);
 	/** The picked format: a knockout has no round count, it plays until one player is left. */
@@ -143,9 +143,11 @@
 						id="game"
 						name="game"
 						value={values.game ?? data.games[0]?.slug}
-						onchange={(e) => (game = e.currentTarget.value)}
+						onchange={(event) => (game = event.currentTarget.value)}
 					>
-						{#each data.games as g (g.slug)}<option value={g.slug}>{g.name}</option>{/each}
+						{#each data.games as option (option.slug)}<option value={option.slug}
+								>{option.name}</option
+							>{/each}
 					</select>
 				</div>
 				<div>
@@ -219,7 +221,7 @@
 						id="format"
 						name="format"
 						value={values.format ?? 'arena'}
-						onchange={(e) => (format = e.currentTarget.value)}
+						onchange={(event) => (format = event.currentTarget.value)}
 					>
 						{#each TOURNAMENT_FORMATS as format (format.value)}
 							<option value={format.value}>{format.label}: {format.note}</option>

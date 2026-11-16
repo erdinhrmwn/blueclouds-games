@@ -74,7 +74,8 @@ function matchConditions(sql: SQL, filter: MatchFilter) {
 	if (isUuid(filter.player)) {
 		conditions.push(sql`
 			EXISTS (
-				SELECT 1 FROM match_players x
+				SELECT 1
+				FROM match_players x
 				WHERE x.match_id = m.id AND x.player_id = ${filter.player}
 			)`);
 	}
