@@ -1,15 +1,15 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { call, guest, room, SERVER_KEY, setupTestApp } from "../test-helpers";
 
-let t: Awaited<ReturnType<typeof setupTestApp>>;
+let testApp: Awaited<ReturnType<typeof setupTestApp>>;
 let ann: Awaited<ReturnType<typeof guest>>;
 beforeAll(async () => {
-	t = await setupTestApp();
-	ann = await guest(t.app, "Ann");
-	await room(t.sql, "bust-31", "R0UND");
+	testApp = await setupTestApp();
+	ann = await guest(testApp.app, "Ann");
+	await room(testApp.sql, "bust-31", "R0UND");
 });
 afterAll(async () => {
-	await t.sql.close();
+	await testApp.sql.close();
 });
 
 let roundSeedCount = 0;
@@ -38,10 +38,10 @@ const roundBody = (matchId: string, round: number, over: Record<string, unknown>
 });
 
 const postRound = (matchId: string, body: unknown, token = SERVER_KEY) =>
-	call(t.app, "POST", `/v1/matches/${matchId}/rounds`, { body, token });
+	call(testApp.app, "POST", `/v1/matches/${matchId}/rounds`, { body, token });
 
 const getRounds = (matchId: string, token = ann.secret) =>
-	call(t.app, "GET", `/v1/matches/${matchId}/rounds`, { token });
+	call(testApp.app, "GET", `/v1/matches/${matchId}/rounds`, { token });
 
 /** A finished match report for the rounds above. */
 const finishedReport = (matchId: string) => ({
@@ -81,7 +81,7 @@ describe("round reports", () => {
 			(await postRound(matchId, { ...roundBody(matchId, 2), roundId: body.roundId })).status,
 		).toBe(409);
 
-		const [{ n }] = await t.sql`
+		const [{ n }] = await testApp.sql`
 				SELECT count(*)::int AS n
 				FROM round_fairness
 				WHERE round_id = ${body.roundId}`;
@@ -107,7 +107,7 @@ describe("round reports", () => {
 		});
 		expect((await postRound(matchId, skipped)).status).toBe(400);
 
-		await room(t.sql, "bust-31", "OTHER1");
+		await room(testApp.sql, "bust-31", "OTHER1");
 		const otherRoom = roundBody(matchId, 2, { roomCode: "OTHER1" });
 		expect((await postRound(matchId, otherRoom)).status).toBe(409);
 	});
@@ -133,7 +133,7 @@ describe("a match's rounds", () => {
 	test("need a signed-in player; an unknown match is 404", async () => {
 		const matchId = Bun.randomUUIDv7();
 
-		expect((await call(t.app, "GET", `/v1/matches/${matchId}/rounds`)).status).toBe(401);
+		expect((await call(testApp.app, "GET", `/v1/matches/${matchId}/rounds`)).status).toBe(401);
 		expect((await getRounds(matchId)).status).toBe(404);
 	});
 
@@ -175,7 +175,7 @@ describe("a match's rounds", () => {
 			`${matchId}:2:1`,
 		]);
 
-		const reported = await call(t.app, "POST", "/v1/matches", {
+		const reported = await call(testApp.app, "POST", "/v1/matches", {
 			body: finishedReport(matchId),
 			token: SERVER_KEY,
 		});

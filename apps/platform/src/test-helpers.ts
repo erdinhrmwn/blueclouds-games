@@ -94,6 +94,19 @@ export async function setupTestApp() {
 
 type App = Awaited<ReturnType<typeof setupTestApp>>["app"];
 
+/** A JSON body as the request sends it: strings go as they are, anything else as JSON. */
+function requestBody(body: unknown): string | undefined {
+	if (body === undefined) {
+		return undefined;
+	}
+
+	if (typeof body === "string") {
+		return body;
+	}
+
+	return JSON.stringify(body);
+}
+
 /** Sends a JSON request and returns the status plus the parsed envelope. */
 export async function call(
 	app: App,
@@ -113,12 +126,7 @@ export async function call(
 	const res = await app.request(path, {
 		method,
 		headers,
-		body:
-			opts.body === undefined
-				? undefined
-				: typeof opts.body === "string"
-					? opts.body
-					: JSON.stringify(opts.body),
+		body: requestBody(opts.body),
 	});
 	return { status: res.status, headers: res.headers, json: (await res.json()) as any };
 }

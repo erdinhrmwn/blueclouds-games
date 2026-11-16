@@ -11,16 +11,16 @@ const env = {
 
 describe("config", () => {
 	test("builds the database options from DATABASE_* with defaults", () => {
-		const c = loadConfig(env);
-		expect(c.db).toEqual({
+		const config = loadConfig(env);
+		expect(config.db).toEqual({
 			hostname: "127.0.0.1",
 			port: 5432,
 			username: "platform",
 			password: "",
 			database: "platform",
 		});
-		expect(c.host).toBe("127.0.0.1");
-		expect(c.port).toBe(3000);
+		expect(config.host).toBe("127.0.0.1");
+		expect(config.port).toBe(3000);
 	});
 
 	test("names every missing or bad key", () => {

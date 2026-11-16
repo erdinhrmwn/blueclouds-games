@@ -3,23 +3,25 @@ import { jwtVerify } from "jose";
 import { PLAY_TOKEN_AUDIENCE } from "../lib/play-tokens";
 import { call, guest, SERVER_KEY, setupTestApp } from "../test-helpers";
 
-let t: Awaited<ReturnType<typeof setupTestApp>>;
+let testApp: Awaited<ReturnType<typeof setupTestApp>>;
 beforeAll(async () => {
-	t = await setupTestApp();
+	testApp = await setupTestApp();
 });
 afterAll(async () => {
-	await t.sql.close();
+	await testApp.sql.close();
 });
 
 describe("guest players", () => {
 	test("creates a player and returns its secret once", async () => {
-		const res = await call(t.app, "POST", "/v1/players/guest", { body: { name: "  Rina  " } });
+		const res = await call(testApp.app, "POST", "/v1/players/guest", {
+			body: { name: "  Rina  " },
+		});
 		expect(res.status).toBe(201);
 		expect(res.json.ok).toBe(true);
 		expect(res.json.data.player.name).toBe("Rina");
 		expect(res.json.data.player.id).toMatch(/^[0-9a-f-]{36}$/);
 		expect(res.json.data.playerSecret).toMatch(/^[A-Za-z0-9_-]{43}$/);
-		const [row] = await t.sql`
+		const [row] = await testApp.sql`
 				SELECT count(*)::int AS n
 				FROM player_secrets
 				WHERE player_id = ${res.json.data.player.id}`;
@@ -27,7 +29,7 @@ describe("guest players", () => {
 	});
 
 	test('without a name, makes up "Guest 123456" with username guest_123456', async () => {
-		const res = await call(t.app, "POST", "/v1/players/guest", {
+		const res = await call(testApp.app, "POST", "/v1/players/guest", {
 			body: {},
 			headers: { "x-forwarded-for": "10.0.0.10" },
 		});
@@ -37,7 +39,7 @@ describe("guest players", () => {
 		expect(username).toBe(`guest_${name.slice(6)}`);
 		expect(guest).toBe(true);
 		// a guest has no password, so its username can't be used to log in
-		const login = await call(t.app, "POST", "/v1/players/login", {
+		const login = await call(testApp.app, "POST", "/v1/players/login", {
 			body: { username, password: "anything1" },
 			headers: { "x-forwarded-for": "10.0.0.10" },
 		});
@@ -45,7 +47,7 @@ describe("guest players", () => {
 	});
 
 	test("rejects a bad name with field errors", async () => {
-		const res = await call(t.app, "POST", "/v1/players/guest", {
+		const res = await call(testApp.app, "POST", "/v1/players/guest", {
 			body: { name: "" },
 			headers: { "x-forwarded-for": "10.0.0.9" },
 		});
@@ -62,7 +64,7 @@ describe("guest players", () => {
 	});
 
 	test("rejects a body that is not JSON", async () => {
-		const res = await call(t.app, "POST", "/v1/players/guest", {
+		const res = await call(testApp.app, "POST", "/v1/players/guest", {
 			body: "{nope",
 			headers: { "x-forwarded-for": "10.0.0.8" },
 		});
@@ -74,12 +76,12 @@ describe("guest players", () => {
 		const ip = { "x-forwarded-for": "10.0.0.1" };
 		for (let i = 0; i < 5; i++) {
 			expect(
-				(await call(t.app, "POST", "/v1/players/guest", { body: { name: "A" }, headers: ip }))
+				(await call(testApp.app, "POST", "/v1/players/guest", { body: { name: "A" }, headers: ip }))
 					.status,
 			).toBe(201);
 		}
 
-		const res = await call(t.app, "POST", "/v1/players/guest", {
+		const res = await call(testApp.app, "POST", "/v1/players/guest", {
 			body: { name: "A" },
 			headers: ip,
 		});
@@ -91,17 +93,19 @@ describe("guest players", () => {
 
 describe("me", () => {
 	test("needs a valid secret", async () => {
-		expect((await call(t.app, "GET", "/v1/players/me")).json.error.code).toBe("unauthenticated");
-		const res = await call(t.app, "GET", "/v1/players/me", { token: "A".repeat(43) });
+		expect((await call(testApp.app, "GET", "/v1/players/me")).json.error.code).toBe(
+			"unauthenticated",
+		);
+		const res = await call(testApp.app, "GET", "/v1/players/me", { token: "A".repeat(43) });
 		expect(res.status).toBe(401);
 	});
 
 	test("returns the current player; only an account can rename", async () => {
-		const { player, secret } = await guest(t.app);
+		const { player, secret } = await guest(testApp.app);
 		expect(
-			(await call(t.app, "GET", "/v1/players/me", { token: secret })).json.data.player,
+			(await call(testApp.app, "GET", "/v1/players/me", { token: secret })).json.data.player,
 		).toEqual(expect.objectContaining({ id: player.id, name: "Rina" }));
-		const refused = await call(t.app, "PATCH", "/v1/players/me", {
+		const refused = await call(testApp.app, "PATCH", "/v1/players/me", {
 			token: secret,
 			body: { name: "Rina K" },
 		});
@@ -111,9 +115,10 @@ describe("me", () => {
 		const body = { name: "Rina", username: `rina_${player.id.slice(-8)}`, password: "long enough" };
 		const headers = { "x-forwarded-for": crypto.randomUUID() };
 		expect(
-			(await call(t.app, "POST", "/v1/players/register", { token: secret, body, headers })).status,
+			(await call(testApp.app, "POST", "/v1/players/register", { token: secret, body, headers }))
+				.status,
 		).toBe(200);
-		const renamed = await call(t.app, "PATCH", "/v1/players/me", {
+		const renamed = await call(testApp.app, "PATCH", "/v1/players/me", {
 			token: secret,
 			body: { name: "Rina K" },
 		});
@@ -122,41 +127,47 @@ describe("me", () => {
 	});
 
 	test("disabled player and revoked secret are refused", async () => {
-		const a = await guest(t.app);
-		await t.sql`
+		const disabledGuest = await guest(testApp.app);
+		await testApp.sql`
 			UPDATE players
 			SET disabled_at = now(), disabled_reason = 'Test'
-			WHERE id = ${a.player.id}`;
-		const disabled = await call(t.app, "GET", "/v1/players/me", { token: a.secret });
+			WHERE id = ${disabledGuest.player.id}`;
+		const disabled = await call(testApp.app, "GET", "/v1/players/me", {
+			token: disabledGuest.secret,
+		});
 		expect(disabled.status).toBe(403);
 		expect(disabled.json.error.code).toBe("forbidden");
 		// The backoffice also revokes their secrets; they still learn they were disabled.
-		await t.sql`
+		await testApp.sql`
 			UPDATE player_secrets
 			SET revoked_at = now()
-			WHERE player_id = ${a.player.id}`;
-		expect((await call(t.app, "GET", "/v1/players/me", { token: a.secret })).status).toBe(403);
+			WHERE player_id = ${disabledGuest.player.id}`;
+		expect(
+			(await call(testApp.app, "GET", "/v1/players/me", { token: disabledGuest.secret })).status,
+		).toBe(403);
 
-		const b = await guest(t.app);
-		await t.sql`
+		const revokedGuest = await guest(testApp.app);
+		await testApp.sql`
 			UPDATE player_secrets
 			SET revoked_at = now()
-			WHERE player_id = ${b.player.id}`;
-		expect((await call(t.app, "GET", "/v1/players/me", { token: b.secret })).status).toBe(401);
+			WHERE player_id = ${revokedGuest.player.id}`;
+		expect(
+			(await call(testApp.app, "GET", "/v1/players/me", { token: revokedGuest.secret })).status,
+		).toBe(401);
 	});
 
 	test("updated_at moves on update", async () => {
-		const { player } = await guest(t.app);
-		const [before] = await t.sql`
+		const { player } = await guest(testApp.app);
+		const [before] = await testApp.sql`
 			SELECT updated_at
 			FROM players
 			WHERE id = ${player.id}`;
 		await Bun.sleep(5);
-		await t.sql`
+		await testApp.sql`
 			UPDATE players
 			SET display_name = 'New'
 			WHERE id = ${player.id}`;
-		const [after] = await t.sql`
+		const [after] = await testApp.sql`
 			SELECT updated_at
 			FROM players
 			WHERE id = ${player.id}`;
@@ -166,10 +177,10 @@ describe("me", () => {
 
 describe("play tokens", () => {
 	test("signs a 15-minute token the actors can verify", async () => {
-		const { player, secret } = await guest(t.app, "Bima");
-		const res = await call(t.app, "POST", "/v1/play-tokens", { token: secret });
+		const { player, secret } = await guest(testApp.app, "Bima");
+		const res = await call(testApp.app, "POST", "/v1/play-tokens", { token: secret });
 		expect(res.status).toBe(200);
-		const { payload } = await jwtVerify(res.json.data.token, t.publicKey, {
+		const { payload } = await jwtVerify(res.json.data.token, testApp.publicKey, {
 			audience: PLAY_TOKEN_AUDIENCE,
 			algorithms: ["EdDSA"],
 		});
@@ -181,14 +192,14 @@ describe("play tokens", () => {
 	});
 
 	test("tells the actors a VIP is one", async () => {
-		const { player, secret } = await guest(t.app);
-		await t.sql`
+		const { player, secret } = await guest(testApp.app);
+		await testApp.sql`
 			UPDATE players
 			SET is_vip = true
 			WHERE id = ${player.id}`;
 
-		const res = await call(t.app, "POST", "/v1/play-tokens", { token: secret });
-		const { payload } = await jwtVerify(res.json.data.token, t.publicKey, {
+		const res = await call(testApp.app, "POST", "/v1/play-tokens", { token: secret });
+		const { payload } = await jwtVerify(res.json.data.token, testApp.publicKey, {
 			audience: PLAY_TOKEN_AUDIENCE,
 			algorithms: ["EdDSA"],
 		});
@@ -197,25 +208,25 @@ describe("play tokens", () => {
 	});
 
 	test("a player picks a preset avatar; the next token carries it", async () => {
-		const { secret } = await guest(t.app);
-		const me = await call(t.app, "GET", "/v1/players/me", { token: secret });
+		const { secret } = await guest(testApp.app);
+		const me = await call(testApp.app, "GET", "/v1/players/me", { token: secret });
 		expect(me.json.data.player.avatar).toEqual({ color: null, icon: null });
 
-		const picked = await call(t.app, "PUT", "/v1/players/me/avatar", {
+		const picked = await call(testApp.app, "PUT", "/v1/players/me/avatar", {
 			token: secret,
 			body: { color: "storm", icon: "kite" },
 		});
 		expect(picked.status).toBe(200);
 		expect(picked.json.data.player.avatar).toEqual({ color: "storm", icon: "kite" });
 
-		const res = await call(t.app, "POST", "/v1/play-tokens", { token: secret });
-		const { payload } = await jwtVerify(res.json.data.token, t.publicKey, {
+		const res = await call(testApp.app, "POST", "/v1/play-tokens", { token: secret });
+		const { payload } = await jwtVerify(res.json.data.token, testApp.publicKey, {
 			audience: PLAY_TOKEN_AUDIENCE,
 			algorithms: ["EdDSA"],
 		});
 		expect(payload.avatar).toEqual({ color: "storm", icon: "kite" });
 
-		const initial = await call(t.app, "PUT", "/v1/players/me/avatar", {
+		const initial = await call(testApp.app, "PUT", "/v1/players/me/avatar", {
 			token: secret,
 			body: { color: "storm", icon: null },
 		});
@@ -223,14 +234,14 @@ describe("play tokens", () => {
 	});
 
 	test("an avatar outside the presets is refused", async () => {
-		const { secret } = await guest(t.app);
-		const unknown = await call(t.app, "PUT", "/v1/players/me/avatar", {
+		const { secret } = await guest(testApp.app);
+		const unknown = await call(testApp.app, "PUT", "/v1/players/me/avatar", {
 			token: secret,
 			body: { color: "#ff0000", icon: "kite" },
 		});
 		expect(unknown.status).toBe(400);
 
-		const partial = await call(t.app, "PUT", "/v1/players/me/avatar", {
+		const partial = await call(testApp.app, "PUT", "/v1/players/me/avatar", {
 			token: secret,
 			body: { icon: "kite" },
 		});
@@ -238,65 +249,72 @@ describe("play tokens", () => {
 	});
 
 	test("tells a room which of its players are VIP, with the server key only", async () => {
-		const vip = await guest(t.app);
-		const plain = await guest(t.app);
-		await t.sql`
+		const vip = await guest(testApp.app);
+		const plain = await guest(testApp.app);
+		await testApp.sql`
 			UPDATE players
 			SET is_vip = true
 			WHERE id = ${vip.player.id}`;
 
 		const path = `/v1/players/vips?ids=${vip.player.id},${plain.player.id}`;
-		const res = await call(t.app, "GET", path, { token: SERVER_KEY });
+		const res = await call(testApp.app, "GET", path, { token: SERVER_KEY });
 
 		expect(res.status).toBe(200);
 		expect(res.json.data.vipIds).toEqual([vip.player.id]);
-		expect((await call(t.app, "GET", path, { token: vip.secret })).status).toBe(401);
+		expect((await call(testApp.app, "GET", path, { token: vip.secret })).status).toBe(401);
 		expect(
-			(await call(t.app, "GET", "/v1/players/vips?ids=nope", { token: SERVER_KEY })).status,
+			(await call(testApp.app, "GET", "/v1/players/vips?ids=nope", { token: SERVER_KEY })).status,
 		).toBe(400);
 	});
 
 	test("disabled player cannot get a token", async () => {
-		const { player, secret } = await guest(t.app);
-		await t.sql`
+		const { player, secret } = await guest(testApp.app);
+		await testApp.sql`
 			UPDATE players
 			SET disabled_at = now(), disabled_reason = 'Test'
 			WHERE id = ${player.id}`;
-		expect((await call(t.app, "POST", "/v1/play-tokens", { token: secret })).status).toBe(403);
+		expect((await call(testApp.app, "POST", "/v1/play-tokens", { token: secret })).status).toBe(
+			403,
+		);
 	});
 });
 
 describe("accounts", () => {
 	const ip = () => ({ "x-forwarded-for": crypto.randomUUID() });
 	const register = (body: unknown, token?: string) =>
-		call(t.app, "POST", "/v1/players/register", { body, token, headers: ip() });
+		call(testApp.app, "POST", "/v1/players/register", { body, token, headers: ip() });
 	const login = (username: string, password: string) =>
-		call(t.app, "POST", "/v1/players/login", { body: { username, password }, headers: ip() });
+		call(testApp.app, "POST", "/v1/players/login", { body: { username, password }, headers: ip() });
 
 	test("a guest registers in place: same id, same secret, history kept", async () => {
-		const g = await guest(t.app, "Gina");
+		const guestUser = await guest(testApp.app, "Gina");
 		const res = await register(
 			{ name: "Gina", username: "Gina_01", password: "long enough" },
-			g.secret,
+			guestUser.secret,
 		);
 		expect(res.status).toBe(200);
 		expect(res.json.data.player).toMatchObject({
-			id: g.player.id,
+			id: guestUser.player.id,
 			username: "gina_01",
 			guest: false,
 		});
 		expect(res.json.data.playerSecret).toBeUndefined();
 		expect(
-			(await call(t.app, "GET", "/v1/players/me", { token: g.secret })).json.data.player.username,
+			(await call(testApp.app, "GET", "/v1/players/me", { token: guestUser.secret })).json.data
+				.player.username,
 		).toBe("gina_01");
 		expect(
-			(await register({ name: "Gina", username: "gina_02", password: "long enough" }, g.secret))
-				.status,
+			(
+				await register(
+					{ name: "Gina", username: "gina_02", password: "long enough" },
+					guestUser.secret,
+				)
+			).status,
 		).toBe(409);
-		const [row] = await t.sql`
+		const [row] = await testApp.sql`
 				SELECT password_hash, is_active, is_bot, is_vip
 				FROM players
-				WHERE id = ${g.player.id}`;
+				WHERE id = ${guestUser.player.id}`;
 		expect(row.password_hash).toStartWith("$argon2id$");
 		expect([row.is_active, row.is_bot, row.is_vip]).toEqual([true, false, false]);
 	});
@@ -330,11 +348,13 @@ describe("accounts", () => {
 		});
 		const second = res.json.data.playerSecret;
 		expect(second).not.toBe(first.playerSecret);
-		expect((await call(t.app, "POST", "/v1/players/logout", { token: second })).status).toBe(200);
-		expect((await call(t.app, "GET", "/v1/players/me", { token: second })).status).toBe(401);
-		expect((await call(t.app, "GET", "/v1/players/me", { token: first.playerSecret })).status).toBe(
+		expect((await call(testApp.app, "POST", "/v1/players/logout", { token: second })).status).toBe(
 			200,
 		);
+		expect((await call(testApp.app, "GET", "/v1/players/me", { token: second })).status).toBe(401);
+		expect(
+			(await call(testApp.app, "GET", "/v1/players/me", { token: first.playerSecret })).status,
+		).toBe(200);
 	});
 
 	test("changing the password needs the current one and signs out every other device", async () => {
@@ -342,7 +362,7 @@ describe("accounts", () => {
 			.json.data;
 		const other = (await login("jo_pw", "first password")).json.data.playerSecret;
 		const change = (body: unknown, token: string) =>
-			call(t.app, "PUT", "/v1/players/me/password", { body, token });
+			call(testApp.app, "PUT", "/v1/players/me/password", { body, token });
 
 		const wrong = await change(
 			{ currentPassword: "not it", newPassword: "second password" },
@@ -360,19 +380,19 @@ describe("accounts", () => {
 			made.playerSecret,
 		);
 		expect(ok.status).toBe(200);
-		expect((await call(t.app, "GET", "/v1/players/me", { token: made.playerSecret })).status).toBe(
-			200,
-		);
-		expect((await call(t.app, "GET", "/v1/players/me", { token: other })).status).toBe(401);
+		expect(
+			(await call(testApp.app, "GET", "/v1/players/me", { token: made.playerSecret })).status,
+		).toBe(200);
+		expect((await call(testApp.app, "GET", "/v1/players/me", { token: other })).status).toBe(401);
 		expect((await login("jo_pw", "first password")).status).toBe(401);
 		expect((await login("jo_pw", "second password")).status).toBe(200);
 	});
 
 	test("a guest has no password to change", async () => {
-		const g = await guest(t.app, "Kai");
-		const res = await call(t.app, "PUT", "/v1/players/me/password", {
+		const guestUser = await guest(testApp.app, "Kai");
+		const res = await call(testApp.app, "PUT", "/v1/players/me/password", {
 			body: { currentPassword: "anything", newPassword: "long enough" },
-			token: g.secret,
+			token: guestUser.secret,
 		});
 		expect(res.status).toBe(403);
 	});
@@ -397,14 +417,14 @@ describe("accounts", () => {
 		const { player } = (
 			await register({ name: "Kai", username: "kai", password: "right password" })
 		).json.data;
-		await t.sql`
+		await testApp.sql`
 			UPDATE players
 			SET disabled_at = now(), disabled_reason = 'Test'
 			WHERE id = ${player.id}`;
 		expect((await login("kai", "right password")).status).toBe(403);
 		expect(
 			(
-				await t.sql`
+				await testApp.sql`
 			SELECT is_active
 			FROM players
 			WHERE id = ${player.id}`

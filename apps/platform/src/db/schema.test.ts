@@ -42,7 +42,12 @@ const refused = (query: Promise<unknown>, message: RegExp) =>
 describe("append-only history", () => {
 	for (const table of ["matches", "match_players", "match_logs", "admin_audit_events"]) {
 		test(`${table}: UPDATE and DELETE are refused`, async () => {
-			await refused(sql.unsafe(`UPDATE ${table} SET created_at = now()`), /append-only/);
+			await refused(
+				sql.unsafe(`
+					UPDATE ${table}
+					SET created_at = now()`),
+				/append-only/,
+			);
 			await refused(sql.unsafe(`DELETE FROM ${table}`), /append-only/);
 		});
 	}
@@ -65,10 +70,10 @@ describe("match rules", () => {
 	});
 
 	test("a non-v7 id, a short hash or a wrong event count is refused", async () => {
-		const insert = (id: string, h: Uint8Array) =>
+		const insert = (id: string, bodyHash: Uint8Array) =>
 			sql`
 				INSERT INTO matches (id, game_slug, room_id, rules_version, started_at, ended_at, body_hash)
-				VALUES (${id}, 'bust-31', ${roomId}, 1, now(), now(), ${h})`;
+				VALUES (${id}, 'bust-31', ${roomId}, 1, now(), now(), ${bodyHash})`;
 		await refused(insert("01900000-0000-4000-8000-000000000002", hash()), /matches_id_check/);
 		await refused(
 			insert("01900000-0000-7000-8000-000000000002", new Uint8Array(1)),
@@ -268,11 +273,11 @@ describe("player names", () => {
 				VALUES ('Lu', 'guest_lu', '$argon2id$x')`,
 			/players_guest_username_check/,
 		);
-		const [g] = await sql`
+		const [guestRow] = await sql`
 				INSERT INTO players (display_name, username)
 				VALUES ('Guest 1', 'guest_000001')
 				RETURNING is_guest`;
-		expect(g.is_guest).toBe(true);
+		expect(guestRow.is_guest).toBe(true);
 		await refused(
 			sql`
 			UPDATE players
@@ -296,16 +301,16 @@ describe("player names", () => {
 	});
 
 	test("the API answers 400 for the same name instead of hitting the constraint", async () => {
-		const t = await setupTestApp();
+		const testApp = await setupTestApp();
 		try {
-			const res = await call(t.app, "POST", "/v1/players/guest", {
+			const res = await call(testApp.app, "POST", "/v1/players/guest", {
 				body: { name: "Ri\nna" },
 				headers: { "x-forwarded-for": "10.0.0.7" },
 			});
 			expect(res.status).toBe(400);
 			expect(res.json.error.fields).toEqual({ name: "Must not contain control characters." });
 		} finally {
-			await t.sql.close();
+			await testApp.sql.close();
 		}
 	});
 });

@@ -2,29 +2,29 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { HTTPException } from "hono/http-exception";
 import { call, setupTestApp } from "./test-helpers";
 
-let t: Awaited<ReturnType<typeof setupTestApp>>;
+let testApp: Awaited<ReturnType<typeof setupTestApp>>;
 beforeAll(async () => {
-	t = await setupTestApp();
+	testApp = await setupTestApp();
 
 	// Stands in for a Hono middleware that throws, e.g. a timeout or a validator.
-	t.app.get("/v1/test/http-exception", () => {
+	testApp.app.get("/v1/test/http-exception", () => {
 		throw new HTTPException(401, { message: "No entry." });
 	});
 });
 afterAll(async () => {
-	await t.sql.close();
+	await testApp.sql.close();
 });
 
 describe("envelope", () => {
 	test("health returns ok envelope with a request id", async () => {
-		const res = await call(t.app, "GET", "/v1/health");
+		const res = await call(testApp.app, "GET", "/v1/health");
 		expect(res.status).toBe(200);
 		expect(res.json).toEqual({ ok: true, data: { status: "ok" }, error: null });
 		expect(res.headers.get("x-request-id")).toBeTruthy();
 	});
 
 	test("unknown route is a not_found envelope", async () => {
-		const res = await call(t.app, "GET", "/v1/nope");
+		const res = await call(testApp.app, "GET", "/v1/nope");
 		expect(res.status).toBe(404);
 		expect(res.json).toEqual({
 			ok: false,
@@ -34,7 +34,7 @@ describe("envelope", () => {
 	});
 
 	test("oversized body is rejected with the envelope", async () => {
-		const res = await call(t.app, "POST", "/v1/players/guest", {
+		const res = await call(testApp.app, "POST", "/v1/players/guest", {
 			body: JSON.stringify({ name: "x".repeat(20_000) }),
 		});
 		expect(res.status).toBe(413);
@@ -42,7 +42,7 @@ describe("envelope", () => {
 	});
 
 	test("an HTTPException from Hono keeps its status inside the envelope", async () => {
-		const res = await call(t.app, "GET", "/v1/test/http-exception");
+		const res = await call(testApp.app, "GET", "/v1/test/http-exception");
 		expect(res.status).toBe(401);
 		expect(res.json).toEqual({
 			ok: false,
@@ -52,7 +52,7 @@ describe("envelope", () => {
 	});
 
 	test("malformed JSON is a bad_input envelope", async () => {
-		const res = await call(t.app, "POST", "/v1/players/guest", {
+		const res = await call(testApp.app, "POST", "/v1/players/guest", {
 			body: "{not json",
 			headers: { "x-forwarded-for": crypto.randomUUID() },
 		});
@@ -61,7 +61,9 @@ describe("envelope", () => {
 	});
 
 	test("sends no CORS headers: browsers never call the platform", async () => {
-		const res = await call(t.app, "GET", "/v1/health", { headers: { origin: "http://evil.test" } });
+		const res = await call(testApp.app, "GET", "/v1/health", {
+			headers: { origin: "http://evil.test" },
+		});
 		expect(res.headers.get("access-control-allow-origin")).toBeNull();
 	});
 });
