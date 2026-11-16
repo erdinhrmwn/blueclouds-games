@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
+import type { LogEntry } from "../shared/match";
+import { RuleError, randomRng } from "../shared/table";
 import { chooseBotMove } from "./bots";
 import { buildReport, logEvents } from "./match";
-import type { LogEntry } from "../shared/match";
 import {
 	addPlayer,
 	BURST_AT,
@@ -20,7 +21,6 @@ import {
 	resetToLobby,
 	startGame,
 } from "./rules";
-import { randomRng, RuleError } from "../shared/table";
 
 const rng = randomRng(() => 0.42);
 const num = (suit: Card["suit"], value: number, copy = 0): Card => ({

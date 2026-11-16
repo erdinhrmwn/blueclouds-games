@@ -1,12 +1,21 @@
 import { describe, expect, test } from "bun:test";
+import {
+	markAway,
+	markBack,
+	markVip,
+	RuleError,
+	randomRng,
+	removePlayer,
+	takeSeat,
+} from "../shared/table";
 import { chooseBotCard } from "./bots";
 import {
 	addPlayer,
 	buildDeck,
+	type Card,
 	createGame,
 	DEAL,
 	dealPauseMs,
-	type Card,
 	type Game,
 	LIMIT,
 	playCard,
@@ -16,15 +25,6 @@ import {
 	startGame,
 	TEN_TOTAL,
 } from "./rules";
-import {
-	markAway,
-	markBack,
-	markVip,
-	randomRng,
-	removePlayer,
-	RuleError,
-	takeSeat,
-} from "../shared/table";
 
 const rng = randomRng(() => 0.42);
 const card = (kind: Card["kind"], value: number, id = `${kind}${value}`): Card => ({

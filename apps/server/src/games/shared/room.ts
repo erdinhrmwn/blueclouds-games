@@ -11,9 +11,8 @@ import {
 	reportRound,
 	verifyPlayToken,
 } from "../../platform";
-import { fairRng, matchSeeds, newCommitment, type NextMatch, seedsForRound } from "./fair-rng";
+import { fairRng, matchSeeds, type NextMatch, newCommitment, seedsForRound } from "./fair-rng";
 import { clientSeedOf, type MatchSeeds } from "./fairness";
-import { closedRounds, type RoundReport, type RoundResult, roundReport } from "./rounds";
 import {
 	type LogEntry,
 	type LogEvent,
@@ -22,14 +21,15 @@ import {
 	type MatchState,
 	stamp,
 } from "./match";
+import { closedRounds, type RoundReport, type RoundResult, roundReport } from "./rounds";
 import { AdminParams, PlayerParams, SeatInput, tournamentListKey } from "./schema";
 import {
 	kickPlayer,
 	markAway,
-	removePlayer,
-	randomRng,
 	type Rng,
 	RuleError,
+	randomRng,
+	removePlayer,
 	SEATS,
 	showVips,
 	type Table,

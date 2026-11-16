@@ -1,32 +1,18 @@
 import { actor, UserError } from "rivetkit";
 import { db } from "rivetkit/db";
-import { chooseBotCard } from "./bots";
-import {
-	addPlayer,
-	createGame,
-	dealPauseMs,
-	type Game,
-	handOf,
-	playCard,
-	publicView,
-	resetToLobby,
-	startGame,
-	TURN_MS,
-} from "./rules";
-import { buildReport, logEvents, roundResult, type MatchState, noteMove } from "./match";
-import { PlayInput } from "./schema";
+import type { LogEntry } from "../shared/match";
 import {
 	apply,
 	armTurn,
 	armVipRefresh,
+	beginMatch,
 	botName,
+	type Ctx,
 	caller,
 	checkConnect,
 	closeKicked,
 	closeTerminated,
-	beginMatch,
 	commitRoom,
-	type Ctx,
 	dropIfGone,
 	fairnessView,
 	GONE_AFTER_MS,
@@ -55,9 +41,23 @@ import {
 	wakeTournament,
 	withRng,
 } from "../shared/room";
-import type { LogEntry } from "../shared/match";
 import { AdminKickInput, AdminTerminateInput, BotIdInput } from "../shared/schema";
 import { markBack, markVip, removePlayer, showAvatar, takeSeat } from "../shared/table";
+import { chooseBotCard } from "./bots";
+import { buildReport, logEvents, type MatchState, noteMove, roundResult } from "./match";
+import {
+	addPlayer,
+	createGame,
+	dealPauseMs,
+	type Game,
+	handOf,
+	playCard,
+	publicView,
+	resetToLobby,
+	startGame,
+	TURN_MS,
+} from "./rules";
+import { PlayInput } from "./schema";
 
 const SLUG = "bust-31";
 

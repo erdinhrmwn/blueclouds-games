@@ -1,6 +1,6 @@
 import type { TournamentFormat } from '#lib/platform.ts';
 import { playToken } from '#lib/player.svelte.ts';
-import { roomClient, RoomRefused } from '#lib/rivet/client.ts';
+import { RoomRefused, roomClient } from '#lib/rivet/client.ts';
 
 type Status = 'connecting' | 'connected' | 'reconnecting' | 'error' | 'refused';
 type RoomClient = Awaited<ReturnType<typeof roomClient>>['client'];
@@ -253,7 +253,10 @@ export class RoomConnection<View extends BaseView, Hand> {
 
 	async dispose(): Promise<void> {
 		this.#disposed = true;
-		this.#stop.forEach((off) => off());
+		for (const off of this.#stop) {
+			off();
+		}
+
 		this.#stop = [];
 		await this.#conn?.dispose();
 		await this.#client?.dispose();

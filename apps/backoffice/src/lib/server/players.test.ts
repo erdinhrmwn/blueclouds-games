@@ -6,8 +6,8 @@ import {
 	disablePlayer,
 	enablePlayer,
 	grantVip,
-	playerDetail,
 	type PlayerFilter,
+	playerDetail,
 	revokeVip,
 	searchPlayers
 } from './players';

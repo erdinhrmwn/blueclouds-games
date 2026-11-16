@@ -3,16 +3,16 @@ import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { except } from "hono/combine";
 import { HTTPException } from "hono/http-exception";
-import { requestId, type RequestIdVariables } from "hono/request-id";
+import { type RequestIdVariables, requestId } from "hono/request-id";
 import { secureHeaders } from "hono/secure-headers";
 import type { Config } from "./config";
 import { ApiError, type ErrorCode, fail, ok } from "./lib/http";
 import { log } from "./lib/log";
+import type { Signer } from "./lib/play-tokens";
 import { gameRoutes } from "./routes/games";
 import { matchRoutes } from "./routes/matches";
 import { playerRoutes } from "./routes/players";
 import { roomRoutes } from "./routes/rooms";
-import type { Signer } from "./lib/play-tokens";
 import { tournamentRoutes } from "./routes/tournaments";
 
 export type Deps = { sql: SQL; config: Config; signer: Signer };

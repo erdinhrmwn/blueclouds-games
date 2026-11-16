@@ -1,9 +1,9 @@
 import type { SQL } from 'bun';
-import { RIVET_ENDPOINT, RIVET_TOKEN } from '$app/env/private';
 import { ActorError, createClient } from 'rivetkit/client';
 import type { registry } from 'server';
 import type { KickResult, TerminateResult } from 'server/games/shared/room';
 import { type RoomSummary, tournamentListKey } from 'server/games/shared/schema';
+import { RIVET_ENDPOINT, RIVET_TOKEN } from '$app/env/private';
 import { type Admin, audit } from './auth.ts';
 import { log } from './log.ts';
 import { isUuid } from './players.ts';

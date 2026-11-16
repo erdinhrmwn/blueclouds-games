@@ -9,11 +9,11 @@ import {
 	disqualifyPlayer,
 	distributeNow,
 	NewTournament,
-	prizeRows,
-	tournamentTables,
 	parseIds,
+	prizeRows,
 	registerPlayers,
 	tournamentDetail,
+	tournamentTables,
 	unassignPlayer,
 	unregisterPlayer
 } from './tournaments';

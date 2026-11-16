@@ -1,3 +1,4 @@
+import { sql } from '#lib/server/db.ts';
 import {
 	PAGE_SIZE,
 	PLAYER_STATUSES,
@@ -5,7 +6,6 @@ import {
 	type PlayerFilter,
 	searchPlayers
 } from '#lib/server/players.ts';
-import { sql } from '#lib/server/db.ts';
 import type { PageServerLoad } from './$types';
 
 const MAX_QUERY_LENGTH = 64;

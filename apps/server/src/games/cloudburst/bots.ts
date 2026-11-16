@@ -1,5 +1,5 @@
 import { nextIndex } from "../shared/table";
-import { type Card, fits, type Game, isWild, type PlayInput, type Suit, SUITS } from "./rules";
+import { type Card, fits, type Game, isWild, type PlayInput, SUITS, type Suit } from "./rules";
 
 export type BotMove = { type: "play"; input: PlayInput } | { type: "draw" } | { type: "pass" };
 

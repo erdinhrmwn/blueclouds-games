@@ -1,5 +1,5 @@
-import { prefersReducedMotion } from 'svelte/motion';
 import { cubicOut } from 'svelte/easing';
+import { prefersReducedMotion } from 'svelte/motion';
 import type { TransitionConfig } from 'svelte/transition';
 import { stage, unscaled } from './stage.svelte.ts';
 

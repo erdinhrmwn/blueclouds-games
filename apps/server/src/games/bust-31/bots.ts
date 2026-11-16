@@ -1,4 +1,4 @@
-import { LIMIT, totalAfter, type Card } from "./rules";
+import { type Card, LIMIT, totalAfter } from "./rules";
 
 /**
  * Rule-based bot: play the biggest number that stays under the limit,

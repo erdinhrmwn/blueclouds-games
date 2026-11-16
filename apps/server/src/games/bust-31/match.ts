@@ -1,15 +1,15 @@
-import type { Card, Game, Player } from "./rules";
 import {
-	reportedSeat,
 	type LogEntry,
 	type LogEvent,
 	type MatchEnd,
 	type MatchReport,
-	type MatchState as SharedMatch,
 	moveBy,
 	placementsInOrder,
+	reportedSeat,
+	type MatchState as SharedMatch,
 } from "../shared/match";
 import type { RoundResult } from "../shared/rounds";
+import type { Card, Game, Player } from "./rules";
 
 /** Bump when a rule change makes old results incomparable to new ones. */
 /** 2: Swap, Ten and Double joined the deck. */

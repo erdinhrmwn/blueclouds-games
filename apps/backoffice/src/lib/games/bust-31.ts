@@ -155,7 +155,7 @@ export function replayBust31(log: MatchLog, seats: ReplaySeat[]): Step[] {
 			case 'bust': {
 				const card = cardOf(data.card);
 
-				if (!player || !player.hand.includes(data.card)) {
+				if (!player?.hand.includes(data.card)) {
 					mismatches.push(`${data.card} was not in ${who}'s hand`);
 				}
 

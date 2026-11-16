@@ -1,6 +1,6 @@
-import { PUBLIC_RIVET_ENDPOINT } from '$app/env/public';
 import { createClient } from 'rivetkit/client';
 import type { registry } from 'server';
+import { PUBLIC_RIVET_ENDPOINT } from '$app/env/public';
 
 type RoomAccess = { actorId: string; token: string };
 

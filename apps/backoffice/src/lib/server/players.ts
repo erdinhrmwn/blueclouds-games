@@ -1,8 +1,8 @@
 import type { SQL } from 'bun';
 import { moveCoins, NotEnoughCoins } from '../../../../platform/src/services/coins.ts';
+import { REASON_MAX } from '../limits.ts';
 import type { Admin } from './auth.ts';
 import { audit } from './auth.ts';
-import { REASON_MAX } from '../limits.ts';
 
 export { REASON_MAX };
 

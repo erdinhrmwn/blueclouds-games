@@ -1,4 +1,4 @@
-import { animate, type AnimationPlaybackControls, inView, scroll, stagger } from 'motion';
+import { type AnimationPlaybackControls, animate, inView, scroll, stagger } from 'motion';
 
 /**
  * The landing page's motion, driven by the Motion library and marked up with data attributes:

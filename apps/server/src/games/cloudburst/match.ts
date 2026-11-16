@@ -1,5 +1,4 @@
 import {
-	reportedSeat,
 	type LogEntry,
 	type LogEvent,
 	type MatchEnd,
@@ -7,6 +6,7 @@ import {
 	type MatchState,
 	moveBy,
 	placementsInOrder,
+	reportedSeat,
 } from "../shared/match";
 import type { RoundResult } from "../shared/rounds";
 import { type Card, type Game, placements } from "./rules";

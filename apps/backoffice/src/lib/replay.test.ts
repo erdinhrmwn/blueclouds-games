@@ -3,6 +3,13 @@ import { describe, expect, test } from 'bun:test';
 import { chooseBotCard } from '../../../server/src/games/bust-31/bots';
 import { logEvents, type MatchState } from '../../../server/src/games/bust-31/match';
 import {
+	addPlayer,
+	createGame,
+	type Game,
+	playCard,
+	startGame
+} from '../../../server/src/games/bust-31/rules';
+import {
 	fairRng,
 	matchSeeds,
 	newCommitment,
@@ -13,15 +20,8 @@ import {
 	type MatchSeeds,
 	proofsFromLog
 } from '../../../server/src/games/shared/fairness';
-import { closedRounds } from '../../../server/src/games/shared/rounds';
 import { type LogEntry, stamp } from '../../../server/src/games/shared/match';
-import {
-	addPlayer,
-	createGame,
-	type Game,
-	playCard,
-	startGame
-} from '../../../server/src/games/bust-31/rules';
+import { closedRounds } from '../../../server/src/games/shared/rounds';
 import { type LogEvent, replay } from './replay.ts';
 
 /** A full 4-player bot game, shuffled and logged the way the room does it (fairness events included). */

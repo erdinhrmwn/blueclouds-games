@@ -1,6 +1,6 @@
+import { timingSafeEqual } from "node:crypto";
 import type { SQL } from "bun";
 import { createMiddleware } from "hono/factory";
-import { timingSafeEqual } from "node:crypto";
 import { ApiError } from "../lib/http";
 import { hashSecret } from "../lib/secrets";
 import { findBySecret, type Player, toPlayer } from "../services/players";

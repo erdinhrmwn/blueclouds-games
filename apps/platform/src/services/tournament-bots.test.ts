@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
-	botAccountName,
 	type BotInput,
+	botAccountName,
 	botTarget,
 	perfectBracket,
 	spreadBots,

@@ -1,5 +1,5 @@
-import type { Context, MiddlewareHandler } from "hono";
 import { getConnInfo } from "@hono/bun";
+import type { Context, MiddlewareHandler } from "hono";
 import { ApiError } from "../lib/http";
 
 /** Above this many tracked keys, expired windows are swept so the map cannot grow forever. */

@@ -1,6 +1,6 @@
-import { goto } from '$app/navigation';
 import { isRoomCode } from '#lib/guest.ts';
 import { findRoom, openRoom, type Visibility } from '#lib/platform.ts';
+import { goto } from '$app/navigation';
 
 const problem = (err: unknown) =>
 	err instanceof Error ? err.message : 'Something went wrong. Try again.';

@@ -8,11 +8,11 @@ import {
 	disqualifyPlayer,
 	distributeNow,
 	parseIds,
+	payPrizes,
 	REASON_MAX,
 	registerPlayers,
-	tournamentDetail,
-	payPrizes,
 	TournamentError,
+	tournamentDetail,
 	unassignPlayer,
 	unregisterPlayer
 } from '#lib/server/tournaments.ts';

@@ -1,7 +1,7 @@
 import { fail, redirect } from '@sveltejs/kit';
-import { dev } from '$app/env';
 import { auditIp, login, SESSION_COOKIE, SESSION_HOURS } from '#lib/server/auth.ts';
 import { sql } from '#lib/server/db.ts';
+import { dev } from '$app/env';
 import type { Actions, PageServerLoad } from './$types';
 
 const MAX_USERNAME_LENGTH = 64;

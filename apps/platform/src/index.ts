@@ -1,9 +1,9 @@
 import { SQL } from "bun";
 import { createApp } from "./app";
 import { loadConfig } from "./config";
+import { startJobs } from "./jobs";
 import { log } from "./lib/log";
 import { createSigner } from "./lib/play-tokens";
-import { startJobs } from "./jobs";
 
 const config = loadConfig();
 const sql = new SQL(config.db);

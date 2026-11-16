@@ -1,6 +1,6 @@
-import type { SQL } from "bun";
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
+import type { SQL } from "bun";
 
 export const MIGRATIONS_DIR = join(import.meta.dir, "..", "..", "migrations");
 const MIGRATION_FILE = /^\d{3}_[a-z0-9_]+\.sql$/;

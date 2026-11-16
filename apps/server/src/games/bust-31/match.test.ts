@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { z } from "zod";
-import { chooseBotCard } from "./bots";
-import { buildReport, logEvents, type MatchState, noteMove } from "./match";
 import { newCommitment } from "../shared/fair-rng";
 import { type LogEntry, stamp } from "../shared/match";
-import { addPlayer, type Card, createGame, type Game, playCard, startGame } from "./rules";
 import { kickPlayer, markAway, markBack, randomRng } from "../shared/table";
+import { chooseBotCard } from "./bots";
+import { buildReport, logEvents, type MatchState, noteMove } from "./match";
+import { addPlayer, type Card, createGame, type Game, playCard, startGame } from "./rules";
 
 function table(lives: Record<string, number>, winnerId: string | null): Game {
 	let game = createGame();
@@ -25,7 +25,7 @@ const start: MatchState = { id: "m1", startedAt: "2026-11-11T10:00:00.000Z", out
 test("placements follow the elimination order, winner first", () => {
 	// Cy goes out first; the bot goes out on the final move, which also ends the game.
 	const cyOut = table({ a: 2, "bot-1": 1, c: 0 }, null);
-	let match = noteMove(start, cyOut);
+	const match = noteMove(start, cyOut);
 	expect(match.out).toEqual(["c"]);
 	// noteMove counts a player out once.
 	expect(noteMove(match, cyOut).out).toEqual(["c"]);

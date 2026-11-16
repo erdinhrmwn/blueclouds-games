@@ -1,8 +1,8 @@
-import { PUBLIC_RIVET_ENDPOINT } from '$app/env/public';
-import { RIVET_ENDPOINT, RIVET_TOKEN } from '$app/env/private';
 import { createClient } from 'rivetkit/client';
 import type { registry } from 'server';
 import type { RoomSummary } from 'server/games/shared/schema';
+import { RIVET_ENDPOINT, RIVET_TOKEN } from '$app/env/private';
+import { PUBLIC_RIVET_ENDPOINT } from '$app/env/public';
 
 /** How long a browser's engine token lasts; the Rivet client asks for a new one when it expires. */
 const TOKEN_SECONDS = 15 * 60;

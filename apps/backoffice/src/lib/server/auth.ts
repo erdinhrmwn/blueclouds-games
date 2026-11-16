@@ -1,5 +1,5 @@
-import type { SQL } from 'bun';
 import { isIP } from 'node:net';
+import type { SQL } from 'bun';
 
 export const ADMIN_ROLES = ['owner', 'admin', 'viewer'] as const;
 

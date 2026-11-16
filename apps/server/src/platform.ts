@@ -1,6 +1,6 @@
 import { importJWK, jwtVerify } from "jose";
-import { AVATAR_COLORS, AVATAR_ICONS, type Avatar, NO_AVATAR } from "./games/shared/avatars";
 import { z } from "zod";
+import { AVATAR_COLORS, AVATAR_ICONS, type Avatar, NO_AVATAR } from "./games/shared/avatars";
 
 /**
  * Everything the actor server needs from the BlueClouds Platform, in one place, so another
