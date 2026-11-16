@@ -16,8 +16,9 @@ mock.module("../../platform", () => ({
 		return { ok: true };
 	},
 }));
-const { LATE_GRACE_MS, loadTournament, requireOpenTable, seatFor, tournamentTick } =
-	await import("./room");
+const { LATE_GRACE_MS, loadTournament, requireOpenTable, seatFor, tournamentTick } = await import(
+	"./room"
+);
 const { addPlayer, createGame } = await import("../bust-31/rules");
 
 const START = Date.parse("2026-11-11T20:00:00Z");

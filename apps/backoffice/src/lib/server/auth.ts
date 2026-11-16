@@ -110,7 +110,8 @@ async function isLockedOut(sql: SQL, username: string): Promise<boolean> {
 }
 
 export type LoginResult =
-	{ ok: true; token: string; admin: Admin } | { ok: false; reason: 'invalid' | 'locked' };
+	| { ok: true; token: string; admin: Admin }
+	| { ok: false; reason: 'invalid' | 'locked' };
 
 export async function login(
 	sql: SQL,

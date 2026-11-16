@@ -62,7 +62,8 @@ function newPassword(): string {
 const changeable = (owner: Admin, id: string) => isUuid(id) && id !== owner.id;
 
 export type AddAdminResult =
-	{ ok: true; password: string } | { ok: false; reason: 'invalid' | 'taken' };
+	| { ok: true; password: string }
+	| { ok: false; reason: 'invalid' | 'taken' };
 
 /** Adds an admin with a generated password, which is returned once and stored only as a hash. */
 export async function addAdmin(

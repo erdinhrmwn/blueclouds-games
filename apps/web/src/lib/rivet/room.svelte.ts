@@ -253,7 +253,10 @@ export class RoomConnection<View extends BaseView, Hand> {
 
 	async dispose(): Promise<void> {
 		this.#disposed = true;
-		this.#stop.forEach((off) => off());
+		for (const off of this.#stop) {
+			off();
+		}
+
 		this.#stop = [];
 		await this.#conn?.dispose();
 		await this.#client?.dispose();

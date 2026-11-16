@@ -24,7 +24,7 @@ const start: MatchState = { id: "m1", startedAt: "2026-11-11T10:00:00.000Z", out
 
 test("placements follow the elimination order, winner first", () => {
 	// Cy goes out first; the bot goes out on the final move, which also ends the game.
-	let match = noteMove(start, table({ a: 2, "bot-1": 1, c: 0 }, null));
+	const match = noteMove(start, table({ a: 2, "bot-1": 1, c: 0 }, null));
 	expect(match.out).toEqual(["c"]);
 	const report = buildReport(
 		match,

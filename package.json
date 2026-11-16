@@ -1,20 +1,23 @@
 {
-  "name": "card-game",
-  "private": true,
-  "type": "module",
-  "workspaces": ["apps/*"],
-  "scripts": {
-    "dev": "bun run --parallel --no-exit-on-error dev:server dev:web dev:platform",
-    "dev:server": "bun run --filter server dev",
-    "dev:web": "bun run --filter web dev",
-    "dev:platform": "bun run --filter platform dev",
-    "dev:backoffice": "bun run --filter backoffice dev",
-    "test": "bun run --filter server test && bun run --filter platform test && bun run --filter backoffice test",
-    "check": "prettier --check \"apps/**/*.{ts,js,svelte}\" && bun run --filter '*' check",
-    "format": "prettier --write \"apps/**/*.{ts,js,svelte}\""
-  },
-  "devDependencies": {
-    "prettier": "^3.10.0",
-    "prettier-plugin-svelte": "^4.1.1"
-  }
+	"name": "card-game",
+	"private": true,
+	"type": "module",
+	"workspaces": [
+		"apps/*"
+	],
+	"scripts": {
+		"dev": "bun run --parallel --no-exit-on-error dev:server dev:web dev:platform",
+		"dev:server": "bun run --filter server dev",
+		"dev:web": "bun run --filter web dev",
+		"dev:platform": "bun run --filter platform dev",
+		"dev:backoffice": "bun run --filter backoffice dev",
+		"test": "bun run --filter server test && bun run --filter platform test && bun run --filter backoffice test",
+		"check": "biome check . && prettier --check \"apps/**/*.svelte\" && bun run --filter '*' check",
+		"format": "biome format --write . && prettier --write \"apps/**/*.svelte\""
+	},
+	"devDependencies": {
+		"@biomejs/biome": "2.6.7",
+		"prettier": "^3.10.0",
+		"prettier-plugin-svelte": "^4.1.1"
+	}
 }
