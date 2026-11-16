@@ -59,7 +59,7 @@
 	/** One row per game in the catalog, played or not, so a new game shows up here by itself. */
 	const byGame = $derived(
 		GAMES.map((game) => {
-			const record = data.stats.find((s) => s.game === game.slug);
+			const record = data.stats.find((stat) => stat.game === game.slug);
 			return {
 				game,
 				played: record?.played ?? 0,

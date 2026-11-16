@@ -16,15 +16,16 @@ let sql: SQL;
 const everyone: PlayerFilter = { q: '', type: '', status: '' };
 let admin: Admin;
 const newPlayer = async (name: string) => {
-	const [p] = await sql`
+	const [player] = await sql`
 		INSERT INTO players (display_name)
 		VALUES (${name})
 		RETURNING id`;
 	await sql`
 		INSERT INTO player_secrets (secret_hash, player_id)
-		VALUES (${crypto.getRandomValues(new Uint8Array(32))}, ${p.id})`;
-	return p.id as string;
+		VALUES (${crypto.getRandomValues(new Uint8Array(32))}, ${player.id})`;
+	return player.id as string;
 };
+
 beforeAll(async () => {
 	sql = (await resetTestDatabase()).sql;
 	admin = {
@@ -41,14 +42,16 @@ describe('players', () => {
 		await newPlayer('Marina');
 		await newPlayer('100%_win');
 		expect(
-			(await searchPlayers(sql, { ...everyone, q: 'rin' }, null)).map((p) => p.name).sort()
+			(await searchPlayers(sql, { ...everyone, q: 'rin' }, null))
+				.map((player) => player.name)
+				.sort()
 		).toEqual(['Marina', 'Rina']);
-		expect((await searchPlayers(sql, { ...everyone, q: rina }, null)).map((p) => p.name)).toEqual([
-			'Rina'
-		]);
-		expect((await searchPlayers(sql, { ...everyone, q: '%_' }, null)).map((p) => p.name)).toEqual([
-			'100%_win'
-		]);
+		expect(
+			(await searchPlayers(sql, { ...everyone, q: rina }, null)).map((player) => player.name)
+		).toEqual(['Rina']);
+		expect(
+			(await searchPlayers(sql, { ...everyone, q: '%_' }, null)).map((player) => player.name)
+		).toEqual(['100%_win']);
 		expect(await playerDetail(sql, 'not-a-uuid')).toBeNull();
 	});
 
@@ -68,7 +71,7 @@ describe('players', () => {
 
 		const names = async (filter: Partial<PlayerFilter>) => {
 			const rows = await searchPlayers(sql, { ...everyone, q: 'Filter', ...filter }, null);
-			return rows.map((p) => p.name).sort();
+			return rows.map((row) => row.name).sort();
 		};
 
 		expect(await names({ type: 'bot' })).toEqual(['Filter bot']);
@@ -122,9 +125,9 @@ describe('accounts and VIP', () => {
 			UPDATE players
 			SET username = 'nia_plays', password_hash = '$argon2id$v=19$test'
 			WHERE id = ${id}`;
-		expect((await searchPlayers(sql, { ...everyone, q: 'PLAYS' }, null)).map((p) => p.id)).toEqual([
-			id
-		]);
+		expect(
+			(await searchPlayers(sql, { ...everyone, q: 'PLAYS' }, null)).map((player) => player.id)
+		).toEqual([id]);
 		expect(await grantVip(sql, admin, id, null)).toBe(true);
 		expect(await grantVip(sql, admin, id, null)).toBe(false);
 		expect((await playerDetail(sql, id))!.player).toMatchObject({
@@ -139,7 +142,7 @@ describe('accounts and VIP', () => {
 				FROM admin_audit_events
 				WHERE player_id = ${id}
 				ORDER BY id`;
-		expect(actions.map((a: { action: string }) => a.action)).toEqual([
+		expect(actions.map((row: { action: string }) => row.action)).toEqual([
 			'player.vip_grant',
 			'player.vip_revoke'
 		]);

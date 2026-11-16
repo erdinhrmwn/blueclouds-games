@@ -2,30 +2,31 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { newRoomCode } from "../services/rooms";
 import { call, guest, setupTestApp } from "../test-helpers";
 
-let t: Awaited<ReturnType<typeof setupTestApp>>;
+let testApp: Awaited<ReturnType<typeof setupTestApp>>;
 let ann: Awaited<ReturnType<typeof guest>>;
 let bob: Awaited<ReturnType<typeof guest>>;
 beforeAll(async () => {
-	t = await setupTestApp();
-	ann = await guest(t.app, "Ann");
-	bob = await guest(t.app, "Bob");
+	testApp = await setupTestApp();
+	ann = await guest(testApp.app, "Ann");
+	bob = await guest(testApp.app, "Bob");
 });
-afterAll(() => t.sql.close());
+afterAll(() => testApp.sql.close());
 
 const open = (game: string, token = ann.secret, visibility?: string) =>
-	call(t.app, "POST", "/v1/rooms", {
+	call(testApp.app, "POST", "/v1/rooms", {
 		body: { game, visibility },
 		token,
 		headers: { "x-forwarded-for": "10.1.0.1" },
 	});
-const enter = (code: string, token: string) => call(t.app, "GET", `/v1/rooms/${code}`, { token });
+const enter = (code: string, token: string) =>
+	call(testApp.app, "GET", `/v1/rooms/${code}`, { token });
 const invite = (code: string, token = ann.secret) =>
-	call(t.app, "POST", `/v1/rooms/${code}/invites`, {
+	call(testApp.app, "POST", `/v1/rooms/${code}/invites`, {
 		token,
 		headers: { "x-forwarded-for": "10.1.0.2" },
 	});
 const redeem = (secret: string, token = bob.secret, ip = "10.1.0.3") =>
-	call(t.app, "POST", "/v1/invites/redeem", {
+	call(testApp.app, "POST", "/v1/invites/redeem", {
 		body: { invite: secret },
 		token,
 		headers: { "x-forwarded-for": ip },
@@ -39,28 +40,28 @@ describe("rooms", () => {
 	});
 
 	test("a player opens a table and the platform picks a unique code", async () => {
-		const a = await open("bust-31");
-		const b = await open("cloudburst");
-		expect(a.status).toBe(201);
-		expect(a.json.data.room).toMatchObject({ game: "bust-31" });
-		expect(a.json.data.room.code).not.toBe(b.json.data.room.code);
-		const [row] = await t.sql`
+		const bustRoom = await open("bust-31");
+		const cloudRoom = await open("cloudburst");
+		expect(bustRoom.status).toBe(201);
+		expect(bustRoom.json.data.room).toMatchObject({ game: "bust-31" });
+		expect(bustRoom.json.data.room.code).not.toBe(cloudRoom.json.data.room.code);
+		const [row] = await testApp.sql`
 				SELECT created_by_player_id
 				FROM rooms
-				WHERE code = ${a.json.data.room.code}`;
+				WHERE code = ${bustRoom.json.data.room.code}`;
 		expect(row.created_by_player_id).toBe(ann.player.id);
 	});
 
 	test("needs a player and a known game", async () => {
-		expect((await call(t.app, "POST", "/v1/rooms", { body: { game: "bust-31" } })).status).toBe(
-			401,
-		);
+		expect(
+			(await call(testApp.app, "POST", "/v1/rooms", { body: { game: "bust-31" } })).status,
+		).toBe(401);
 		expect((await open("chess")).json.error.fields).toEqual({ game: "Unknown game." });
 	});
 
 	test("a game under maintenance opens no new tables, and the catalog says so", async () => {
 		const { code } = (await open("cloudburst")).json.data.room;
-		await t.sql`
+		await testApp.sql`
 			UPDATE games
 			SET maintenance_at = now()
 			WHERE slug = 'cloudburst'`;
@@ -72,17 +73,18 @@ describe("rooms", () => {
 			expect((await open("bust-31")).status).toBe(201);
 
 			// A table opened before still lets players in.
-			expect((await call(t.app, "GET", `/v1/rooms/${code}`, { token: ann.secret })).status).toBe(
-				200,
-			);
+			expect(
+				(await call(testApp.app, "GET", `/v1/rooms/${code}`, { token: ann.secret })).status,
+			).toBe(200);
 
-			const { games } = (await call(t.app, "GET", "/v1/games", { token: ann.secret })).json.data;
+			const { games } = (await call(testApp.app, "GET", "/v1/games", { token: ann.secret })).json
+				.data;
 			const maintenance = Object.fromEntries(
 				games.map((game: { slug: string; maintenance: boolean }) => [game.slug, game.maintenance]),
 			);
 			expect(maintenance).toMatchObject({ "bust-31": false, cloudburst: true });
 		} finally {
-			await t.sql`
+			await testApp.sql`
 				UPDATE games
 				SET maintenance_at = NULL
 				WHERE slug = 'cloudburst'`;
@@ -91,10 +93,14 @@ describe("rooms", () => {
 
 	test("join by code: a known code answers with its game, an unknown one is 404", async () => {
 		const { code } = (await open("bust-31")).json.data.room;
-		const found = await call(t.app, "GET", `/v1/rooms/${code}`, { token: ann.secret });
+		const found = await call(testApp.app, "GET", `/v1/rooms/${code}`, { token: ann.secret });
 		expect(found.json.data.room).toMatchObject({ code, game: "bust-31" });
-		expect((await call(t.app, "GET", "/v1/rooms/ZZZZZ", { token: ann.secret })).status).toBe(404);
-		expect((await call(t.app, "GET", "/v1/rooms/bad!", { token: ann.secret })).status).toBe(400);
+		expect((await call(testApp.app, "GET", "/v1/rooms/ZZZZZ", { token: ann.secret })).status).toBe(
+			404,
+		);
+		expect((await call(testApp.app, "GET", "/v1/rooms/bad!", { token: ann.secret })).status).toBe(
+			400,
+		);
 	});
 
 	test("a new table is private: only its opener may enter; a public one lets anyone in", async () => {
@@ -125,12 +131,14 @@ describe("rooms", () => {
 		expect((await redeem(first)).status).toBe(200); // redeeming twice is fine
 
 		expect(
-			(await call(t.app, "DELETE", `/v1/rooms/${code}/invites/link`, { token: bob.secret })).status,
+			(await call(testApp.app, "DELETE", `/v1/rooms/${code}/invites/link`, { token: bob.secret }))
+				.status,
 		).toBe(403);
 		expect(
-			(await call(t.app, "DELETE", `/v1/rooms/${code}/invites/link`, { token: ann.secret })).status,
+			(await call(testApp.app, "DELETE", `/v1/rooms/${code}/invites/link`, { token: ann.secret }))
+				.status,
 		).toBe(200);
-		const cy = await guest(t.app, "Cy");
+		const cy = await guest(testApp.app, "Cy");
 		expect((await redeem(first, cy.secret)).status).toBe(404);
 		const second = (await invite(code)).json.data.invite.token;
 		expect(second).not.toBe(first);

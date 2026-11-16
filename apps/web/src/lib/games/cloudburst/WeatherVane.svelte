@@ -66,7 +66,9 @@
 			return `or any ${ACTION[top.kind]}`;
 		}
 
-		const steps = [top.value - 1, top.value + 1].filter((v) => v >= LOWEST && v <= HIGHEST);
+		const steps = [top.value - 1, top.value + 1].filter(
+			(value) => value >= LOWEST && value <= HIGHEST
+		);
 		return `or any ${steps.join(' or ')}`;
 	});
 </script>

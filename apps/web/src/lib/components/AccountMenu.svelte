@@ -47,6 +47,7 @@
 				close(false);
 			}
 		};
+
 		document.addEventListener('pointerdown', outside);
 
 		return () => document.removeEventListener('pointerdown', outside);

@@ -26,9 +26,9 @@ import { type LogEvent, replay } from './replay.ts';
 
 /** A full 4-player bot game, shuffled and logged the way the room does it (fairness events included). */
 function playedGame() {
-	let g = createGame();
+	let game = createGame();
 	for (let i = 0; i < 4; i++) {
-		g = addPlayer(g, `bot-${i}`, `Bot ${i}`, true);
+		game = addPlayer(game, `bot-${i}`, `Bot ${i}`, true);
 	}
 
 	let match: MatchState = { id: 'm', startedAt: new Date(0).toISOString(), out: [], seq: 0 };
@@ -58,36 +58,39 @@ function playedGame() {
 			return { type: 'reveal', data: { round, serverSeed: seed.serverSeed } };
 		});
 	const step = (next: Game) => {
-		const moves = logEvents(g, next, true);
+		const moves = logEvents(game, next, true);
 		const entries = [...pending, ...moves, ...revealsOf(moves, next.phase === 'finished')];
 		pending = [];
 		const stamped = stamp(match, entries, events.length * 1000);
 		match = stamped.match;
 		events.push(...stamped.events);
-		g = next;
+		game = next;
 	};
-	g = { ...g, hostId: 'bot-0' };
-	step(startGame(g, 'bot-0', rng));
-	while (g.phase === 'playing') {
-		const p = g.players[g.turn]!;
-		step(playCard(g, p.id, chooseBotCard(p.hand, g.total)!.id, rng));
+
+	game = { ...game, hostId: 'bot-0' };
+	step(startGame(game, 'bot-0', rng));
+	while (game.phase === 'playing') {
+		const player = game.players[game.turn]!;
+		step(playCard(game, player.id, chooseBotCard(player.hand, game.total)!.id, rng));
 	}
 
-	const seats = g.players.map((p) => ({ seat: p.seat, name: p.name }));
-	return { game: g, log: { logVersion: 1, events }, seats };
+	const seats = game.players.map((player) => ({ seat: player.seat, name: player.name }));
+	return { game: game, log: { logVersion: 1, events }, seats };
 }
 
 describe('Bust 31 replay', () => {
 	test('a whole game replays without a single mismatch and ends like the real one', () => {
-		for (let n = 0; n < 20; n++) {
+		for (let run = 0; run < 20; run++) {
 			const { game, log, seats } = playedGame();
 			const steps = replay('bust-31', log, seats);
-			expect(steps.filter((s) => s.mismatch)).toEqual([]);
-			const last = steps.findLast((s) => s.event.type === 'finished')!;
-			expect(last.text).toBe(`${game.players.find((p) => p.id === game.winnerId)!.name} wins.`);
+			expect(steps.filter((step) => step.mismatch)).toEqual([]);
+			const last = steps.findLast((step) => step.event.type === 'finished')!;
+			expect(last.text).toBe(
+				`${game.players.find((player) => player.id === game.winnerId)!.name} wins.`
+			);
 			expect(steps.at(-1)!.text).toMatch(/^Round \d+ server seed revealed: /);
-			expect(last.state!.seats.map((s) => s.lives)).toEqual(
-				game.players.map((p) => Math.max(0, p.lives))
+			expect(last.state!.seats.map((seat) => seat.lives)).toEqual(
+				game.players.map((player) => Math.max(0, player.lives))
 			);
 		}
 	});
@@ -103,9 +106,9 @@ describe('Bust 31 replay', () => {
 
 	test('a tampered log is flagged', () => {
 		const { log, seats } = playedGame();
-		const i = log.events.findIndex((e) => e.type === 'play');
-		const tampered = log.events.map((e, j) =>
-			j === i ? { ...e, data: { ...e.data, total: 99 } } : e
+		const i = log.events.findIndex((event) => event.type === 'play');
+		const tampered = log.events.map((event, j) =>
+			j === i ? { ...event, data: { ...event.data, total: 99 } } : event
 		);
 		const steps = replay('bust-31', { ...log, events: tampered }, seats);
 		expect(steps[i]!.mismatch).toContain('Total: logged 99');
@@ -139,7 +142,7 @@ describe('Bust 31 replay', () => {
 			},
 			seats
 		);
-		expect(steps.map((s) => s.text)).toEqual([
+		expect(steps.map((step) => step.text)).toEqual([
 			'Round 1 dealt. Ann starts.',
 			'Ann played 7. Total 7. (time ran out, played for them)',
 			'Bob closed the game. Their turns are played for them.'

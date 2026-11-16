@@ -59,7 +59,7 @@ export const bySeat = <P extends Seated>(players: P[]) =>
 	[...players].sort((a, b) => a.seat - b.seat);
 
 export function freeSeats(players: Seated[]): number[] {
-	const taken = new Set(players.map((p) => p.seat));
+	const taken = new Set(players.map((player) => player.seat));
 	const allSeats = Array.from({ length: SEATS }, (_, seat) => seat);
 
 	return allSeats.filter((seat) => !taken.has(seat));
@@ -70,7 +70,7 @@ function assertFreeSeat(players: Seated[], seat: number) {
 		throw new RuleError("That seat does not exist.");
 	}
 
-	if (players.some((p) => p.seat === seat)) {
+	if (players.some((player) => player.seat === seat)) {
 		throw new RuleError("That seat is taken.");
 	}
 }
@@ -107,13 +107,13 @@ export function takeSeat<G extends Table>(game: G, id: string, seat: number): G 
 		throw new RuleError("Seats are locked while a game is running.");
 	}
 
-	if (!game.players.some((p) => p.id === id)) {
+	if (!game.players.some((player) => player.id === id)) {
 		throw new RuleError("Join the table first.");
 	}
 
 	assertFreeSeat(game.players, seat);
 
-	const moved = game.players.map((p) => (p.id === id ? { ...p, seat } : p));
+	const moved = game.players.map((player) => (player.id === id ? { ...player, seat } : player));
 	return { ...game, players: bySeat(moved) };
 }
 
@@ -123,12 +123,12 @@ export function removePlayer<G extends Table>(game: G, id: string): G {
 		return game;
 	}
 
-	const players = game.players.filter((p) => p.id !== id);
+	const players = game.players.filter((player) => player.id !== id);
 
 	// The host leaving hands the table to the next human.
 	let hostId = game.hostId;
 	if (hostId === id) {
-		hostId = players.find((p) => !p.bot)?.id ?? null;
+		hostId = players.find((player) => !player.bot)?.id ?? null;
 	}
 
 	return { ...game, players, hostId };
@@ -148,7 +148,7 @@ export function kickPlayer<G extends Table>(game: G, id: string): G {
 		return kicked;
 	}
 
-	const nextHost = kicked.players.find((p) => !p.bot && !p.away)?.id ?? null;
+	const nextHost = kicked.players.find((player) => !player.bot && !player.away)?.id ?? null;
 
 	return { ...kicked, hostId: nextHost };
 }
@@ -162,7 +162,9 @@ export const markBack = <G extends Table>(game: G, id: string): G => withAway(ga
 function withAway<G extends Table>(game: G, id: string, away: boolean): G {
 	return {
 		...game,
-		players: game.players.map((p) => (p.id === id && !p.bot ? { ...p, away } : p)),
+		players: game.players.map((player) =>
+			player.id === id && !player.bot ? { ...player, away } : player,
+		),
 	};
 }
 
@@ -170,13 +172,13 @@ function withAway<G extends Table>(game: G, id: string, away: boolean): G {
 export function markVip<G extends Table>(game: G, id: string): G {
 	return {
 		...game,
-		players: game.players.map((p) => (p.id === id ? { ...p, vip: true } : p)),
+		players: game.players.map((player) => (player.id === id ? { ...player, vip: true } : player)),
 	};
 }
 
 /** Shows the player's avatar. Returns the same game when it is already shown. */
 export function showAvatar<G extends Table>(game: G, id: string, avatar: Avatar): G {
-	const current = game.players.find((p) => p.id === id);
+	const current = game.players.find((player) => player.id === id);
 	if (!current) {
 		return game;
 	}
@@ -188,20 +190,24 @@ export function showAvatar<G extends Table>(game: G, id: string, avatar: Avatar)
 
 	return {
 		...game,
-		players: game.players.map((p) => (p.id === id ? { ...p, avatar } : p)),
+		players: game.players.map((player) => (player.id === id ? { ...player, avatar } : player)),
 	};
 }
 
 /** Shows exactly the humans in `vipIds` as VIPs. Returns the same game when no tag changes. */
 export function showVips<G extends Table>(game: G, vipIds: Set<string>): G {
-	const changed = game.players.some((p) => !p.bot && !!p.vip !== vipIds.has(p.id));
+	const changed = game.players.some(
+		(player) => !player.bot && !!player.vip !== vipIds.has(player.id),
+	);
 	if (!changed) {
 		return game;
 	}
 
 	return {
 		...game,
-		players: game.players.map((p) => (p.bot ? p : { ...p, vip: vipIds.has(p.id) })),
+		players: game.players.map((player) =>
+			player.bot ? player : { ...player, vip: vipIds.has(player.id) },
+		),
 	};
 }
 

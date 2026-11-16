@@ -51,7 +51,7 @@
 	});
 
 	/** "1:05" since the deal. */
-	const sinceDeal = (t: number) => clock(Math.round((t - dealtAt) / 1000));
+	const sinceDeal = (timestamp: number) => clock(Math.round((timestamp - dealtAt) / 1000));
 
 	/** Bust 31: the total after the card. Cloudburst: what the card did, or how many cards are left. */
 	function playNote(data: Record<string, unknown>): string {

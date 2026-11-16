@@ -25,10 +25,13 @@
 	const last = $derived(steps.length - 1);
 	const step = $derived(steps[Math.min(at, last)]!);
 	const table = $derived(step.state);
-	const flagged = $derived(steps.filter((s) => s.mismatch).length);
+	const flagged = $derived(steps.filter((step) => step.mismatch).length);
 	/** Lives a seat starts with: the most anyone has at the first state, for the pips. */
 	const startLives = $derived(
-		Math.max(1, ...(steps.find((s) => s.state)?.state?.seats.map((seat) => seat.lives) ?? [1]))
+		Math.max(
+			1,
+			...(steps.find((step) => step.state)?.state?.seats.map((seat) => seat.lives) ?? [1])
+		)
 	);
 
 	/** The timeline cut into rounds; steps before the first deal sit under round 0 ("Setup"). */

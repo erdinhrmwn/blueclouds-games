@@ -38,17 +38,20 @@ const act = (suit: Card["suit"], kind: "calm" | "swirl" | "gust" | "downpour", c
 const rainbow: Card = { id: "rainbow-0", kind: "rainbow", suit: null, value: 0 };
 const tempest: Card = { id: "tempest-0", kind: "tempest", suit: null, value: 0 };
 
-function table(n = 3): Game {
-	let g = createGame();
-	["a", "b", "c", "d"].slice(0, n).forEach((id) => (g = addPlayer(g, id, id.toUpperCase())));
-	return startGame(g, "a", rng);
+function table(playerCount = 3): Game {
+	let game = createGame();
+	for (const id of ["a", "b", "c", "d"].slice(0, playerCount)) {
+		game = addPlayer(game, id, id.toUpperCase());
+	}
+
+	return startGame(game, "a", rng);
 }
 
 /** Sets hands (by player index), the pile top and the suit, so a test controls the play. */
-function setup(g: Game, hands: Card[][], top: Card, suit = top.suit!): Game {
+function setup(game: Game, hands: Card[][], top: Card, suit = top.suit!): Game {
 	return {
-		...g,
-		players: g.players.map((p, i) => ({ ...p, hand: hands[i] ?? p.hand })),
+		...game,
+		players: game.players.map((player, i) => ({ ...player, hand: hands[i] ?? player.hand })),
 		discard: [top],
 		suit,
 	};
@@ -58,10 +61,10 @@ describe("deck and fitting", () => {
 	test("104 cards with unique ids", () => {
 		const deck = buildDeck();
 		expect(deck).toHaveLength(104);
-		expect(new Set(deck.map((c) => c.id)).size).toBe(104);
-		expect(deck.filter((c) => c.kind === "rainbow")).toHaveLength(4);
-		expect(deck.filter((c) => c.kind === "tempest")).toHaveLength(4);
-		expect(deck.filter((c) => c.kind === "downpour")).toHaveLength(8);
+		expect(new Set(deck.map((card) => card.id)).size).toBe(104);
+		expect(deck.filter((card) => card.kind === "rainbow")).toHaveLength(4);
+		expect(deck.filter((card) => card.kind === "tempest")).toHaveLength(4);
+		expect(deck.filter((card) => card.kind === "downpour")).toHaveLength(8);
 	});
 
 	test("same suit, one step, same action or Rainbow fit; a same number alone does not", () => {
@@ -85,175 +88,178 @@ describe("deck and fitting", () => {
 
 describe("a round", () => {
 	test("start deals 7 each, turns a non-Rainbow card up, first seat starts", () => {
-		const g = table();
-		expect(g.players.every((p) => p.hand.length === HAND_SIZE)).toBe(true);
-		expect(g.discard).toHaveLength(1);
-		expect(g.discard[0]!.kind).not.toBe("rainbow");
-		expect(g.suit).toBe(g.discard[0]!.suit!);
-		expect(g.turn).toBe(0);
-		expect(g.round).toBe(1);
+		const game = table();
+		expect(game.players.every((player) => player.hand.length === HAND_SIZE)).toBe(true);
+		expect(game.discard).toHaveLength(1);
+		expect(game.discard[0]!.kind).not.toBe("rainbow");
+		expect(game.suit).toBe(game.discard[0]!.suit!);
+		expect(game.turn).toBe(0);
+		expect(game.round).toBe(1);
 	});
 
 	test("playing a fitting card moves the turn on; a wrong card or turn is refused", () => {
-		let g = setup(
+		let game = setup(
 			table(),
 			[[num("sun", 6), num("rain", 1)], [num("wind", 2)], [num("wind", 3)]],
 			num("sun", 5),
 		);
-		expect(() => playCard(g, "a", { cardId: "rain-1-0" }, rng)).toThrow(RuleError);
-		expect(() => playCard(g, "b", { cardId: "wind-2-0" }, rng)).toThrow(RuleError);
-		g = playCard(g, "a", { cardId: "sun-6-0" }, rng);
-		expect(g.turn).toBe(1);
-		expect(g.suit).toBe("sun");
-		expect(g.players[0]!.hand).toHaveLength(1);
+		expect(() => playCard(game, "a", { cardId: "rain-1-0" }, rng)).toThrow(RuleError);
+		expect(() => playCard(game, "b", { cardId: "wind-2-0" }, rng)).toThrow(RuleError);
+		game = playCard(game, "a", { cardId: "sun-6-0" }, rng);
+		expect(game.turn).toBe(1);
+		expect(game.suit).toBe("sun");
+		expect(game.players[0]!.hand).toHaveLength(1);
 	});
 
 	test("Calm skips the next player; with two players you go again", () => {
-		let g = setup(table(), [[act("sun", "calm"), num("sun", 1)]], num("sun", 5));
-		g = playCard(g, "a", { cardId: "sun-calm-0" }, rng);
-		expect(g.turn).toBe(2);
-		expect(g.lastEvent).toMatchObject({ type: "played", skipped: "b" });
+		let game = setup(table(), [[act("sun", "calm"), num("sun", 1)]], num("sun", 5));
+		game = playCard(game, "a", { cardId: "sun-calm-0" }, rng);
+		expect(game.turn).toBe(2);
+		expect(game.lastEvent).toMatchObject({ type: "played", skipped: "b" });
 		let two = setup(table(2), [[act("sun", "calm"), num("sun", 1)]], num("sun", 5));
 		two = playCard(two, "a", { cardId: "sun-calm-0" }, rng);
 		expect(two.turn).toBe(0);
 	});
 
 	test("Swirl reverses the order", () => {
-		let g = setup(table(), [[act("sun", "swirl"), num("sun", 1)]], num("sun", 5));
-		g = playCard(g, "a", { cardId: "sun-swirl-0" }, rng);
-		expect(g.direction).toBe(-1);
-		expect(g.turn).toBe(2);
+		let game = setup(table(), [[act("sun", "swirl"), num("sun", 1)]], num("sun", 5));
+		game = playCard(game, "a", { cardId: "sun-swirl-0" }, rng);
+		expect(game.direction).toBe(-1);
+		expect(game.turn).toBe(2);
 	});
 
 	test("Gust hands a chosen card to the next player, and needs one", () => {
-		let g = setup(
+		let game = setup(
 			table(),
 			[[act("sun", "gust"), num("rain", 1), num("wind", 8)], [num("storm", 3)]],
 			num("sun", 5),
 		);
-		expect(() => playCard(g, "a", { cardId: "sun-gust-0" }, rng)).toThrow(RuleError);
-		g = playCard(g, "a", { cardId: "sun-gust-0", giveId: "wind-8-0" }, rng);
-		expect(g.players[0]!.hand.map((c) => c.id)).toEqual(["rain-1-0"]);
-		expect(g.players[1]!.hand.map((c) => c.id)).toEqual(["storm-3-0", "wind-8-0"]);
-		expect(g.lastEvent).toMatchObject({ type: "played", gaveTo: "b" });
+		expect(() => playCard(game, "a", { cardId: "sun-gust-0" }, rng)).toThrow(RuleError);
+		game = playCard(game, "a", { cardId: "sun-gust-0", giveId: "wind-8-0" }, rng);
+		expect(game.players[0]!.hand.map((card) => card.id)).toEqual(["rain-1-0"]);
+		expect(game.players[1]!.hand.map((card) => card.id)).toEqual(["storm-3-0", "wind-8-0"]);
+		expect(game.lastEvent).toMatchObject({ type: "played", gaveTo: "b" });
 		// The view says who got a card, never which one.
-		expect(JSON.stringify(publicView(g))).not.toContain("wind-8-0");
+		expect(JSON.stringify(publicView(game))).not.toContain("wind-8-0");
 	});
 
 	test("Rainbow needs a suit, and the next player must follow it", () => {
-		let g = setup(table(), [[rainbow, num("sun", 1)]], num("sun", 5));
-		expect(() => playCard(g, "a", { cardId: "rainbow-0" }, rng)).toThrow(RuleError);
-		g = playCard(g, "a", { cardId: "rainbow-0", suit: "storm" }, rng);
-		expect(g.suit).toBe("storm");
+		let game = setup(table(), [[rainbow, num("sun", 1)]], num("sun", 5));
+		expect(() => playCard(game, "a", { cardId: "rainbow-0" }, rng)).toThrow(RuleError);
+		game = playCard(game, "a", { cardId: "rainbow-0", suit: "storm" }, rng);
+		expect(game.suit).toBe("storm");
 	});
 
 	test("Downpour makes the next player draw 2 and lose their turn; no stacking", () => {
-		let g = setup(
+		let game = setup(
 			table(),
 			[[act("sun", "downpour"), num("sun", 1)], [act("rain", "downpour")]],
 			num("sun", 5),
 		);
-		const drawn = g.deck.slice(0, 2).map((c) => c.id);
-		g = playCard(g, "a", { cardId: "sun-downpour-0" }, rng);
-		expect(g.players[1]!.hand.map((c) => c.id)).toEqual(["rain-downpour-0", ...drawn]);
-		expect(g.turn).toBe(2);
-		expect(g.lastEvent).toMatchObject({ type: "played", skipped: "b", forced: 2 });
+		const drawn = game.deck.slice(0, 2).map((card) => card.id);
+		game = playCard(game, "a", { cardId: "sun-downpour-0" }, rng);
+		expect(game.players[1]!.hand.map((card) => card.id)).toEqual(["rain-downpour-0", ...drawn]);
+		expect(game.turn).toBe(2);
+		expect(game.lastEvent).toMatchObject({ type: "played", skipped: "b", forced: 2 });
 		// The view says how many, never which cards.
-		expect(JSON.stringify(publicView(g))).not.toContain(drawn[0]!);
+		expect(JSON.stringify(publicView(game))).not.toContain(drawn[0]!);
 	});
 
 	test("Tempest needs a suit, then the next player draws 4 and loses their turn", () => {
-		let g = setup(table(), [[tempest, num("sun", 1)], [num("rain", 2)]], num("sun", 5));
-		expect(() => playCard(g, "a", { cardId: "tempest-0" }, rng)).toThrow(RuleError);
-		g = playCard(g, "a", { cardId: "tempest-0", suit: "wind" }, rng);
-		expect(g.suit).toBe("wind");
-		expect(g.players[1]!.hand).toHaveLength(5);
-		expect(g.turn).toBe(2);
-		expect(g.lastEvent).toMatchObject({ skipped: "b", forced: 4 });
+		let game = setup(table(), [[tempest, num("sun", 1)], [num("rain", 2)]], num("sun", 5));
+		expect(() => playCard(game, "a", { cardId: "tempest-0" }, rng)).toThrow(RuleError);
+		game = playCard(game, "a", { cardId: "tempest-0", suit: "wind" }, rng);
+		expect(game.suit).toBe("wind");
+		expect(game.players[1]!.hand).toHaveLength(5);
+		expect(game.turn).toBe(2);
+		expect(game.lastEvent).toMatchObject({ skipped: "b", forced: 4 });
 	});
 
 	test("a forced draw refills an empty deck from under the top card, and logs it", () => {
 		const base = setup(table(), [[act("sun", "downpour"), num("sun", 1)]], num("sun", 5));
-		const g = {
+		const game = {
 			...base,
 			deck: [num("wind", 3, 1)],
 			discard: [num("rain", 4, 1), num("storm", 6, 1), num("sun", 5)],
 		};
-		const after = playCard(g, "a", { cardId: "sun-downpour-0" }, rng);
-		expect(after.players[1]!.hand.slice(-2).map((c) => c.id)[0]).toBe("wind-3-1");
+		const after = playCard(game, "a", { cardId: "sun-downpour-0" }, rng);
+		expect(after.players[1]!.hand.slice(-2).map((card) => card.id)[0]).toBe("wind-3-1");
 		expect(after.lastEvent).toMatchObject({ forced: 2 });
-		expect(after.discard.map((c) => c.id)).toEqual(["sun-downpour-0"]);
-		const entries = logEvents(g, after);
-		expect(entries.map((e) => e.type)).toEqual(["reshuffle", "play"]);
+		expect(after.discard.map((card) => card.id)).toEqual(["sun-downpour-0"]);
+		const entries = logEvents(game, after);
+		expect(entries.map((entry) => entry.type)).toEqual(["reshuffle", "play"]);
 		expect((entries[1]!.data as { forced: { cards: string[] } }).forced.cards).toHaveLength(2);
 	});
 
 	test("draw, then play only the drawn card or pass; the turn key stays during the draw", () => {
-		let g = setup(table(), [[num("rain", 1)]], num("sun", 5));
-		g = { ...g, deck: [num("sun", 2), ...g.deck] };
-		const key = g.turnKey;
-		g = drawCard(g, "a", rng);
-		expect(g.turnKey).toBe(key);
-		expect(handOf(g, "a").drawnId).toBe("sun-2-0");
-		expect(() => drawCard(g, "a", rng)).toThrow(RuleError);
-		expect(() => playCard(g, "a", { cardId: "rain-1-0" }, rng)).toThrow(RuleError);
-		const played = playCard(g, "a", { cardId: "sun-2-0" }, rng);
+		let game = setup(table(), [[num("rain", 1)]], num("sun", 5));
+		game = { ...game, deck: [num("sun", 2), ...game.deck] };
+		const key = game.turnKey;
+		game = drawCard(game, "a", rng);
+		expect(game.turnKey).toBe(key);
+		expect(handOf(game, "a").drawnId).toBe("sun-2-0");
+		expect(() => drawCard(game, "a", rng)).toThrow(RuleError);
+		expect(() => playCard(game, "a", { cardId: "rain-1-0" }, rng)).toThrow(RuleError);
+		const played = playCard(game, "a", { cardId: "sun-2-0" }, rng);
 		expect(played.turn).toBe(1);
-		const passed = pass(g, "a");
+		const passed = pass(game, "a");
 		expect(passed.turn).toBe(1);
 		expect(passed.turnKey).toBe(key + 1);
 		expect(() => pass(passed, "b")).toThrow(RuleError);
 	});
 
 	test("an empty deck reshuffles everything under the top card", () => {
-		let g = setup(table(), [[num("rain", 1)]], num("sun", 5));
-		g = { ...g, deck: [], discard: [num("wind", 1), num("wind", 2), num("sun", 5)] };
-		g = drawCard(g, "a", rng);
-		expect(g.discard.map((c) => c.id)).toEqual(["sun-5-0"]);
-		expect(g.players[0]!.hand).toHaveLength(2);
-		expect(g.deck).toHaveLength(1);
+		let game = setup(table(), [[num("rain", 1)]], num("sun", 5));
+		game = { ...game, deck: [], discard: [num("wind", 1), num("wind", 2), num("sun", 5)] };
+		game = drawCard(game, "a", rng);
+		expect(game.discard.map((card) => card.id)).toEqual(["sun-5-0"]);
+		expect(game.players[0]!.hand).toHaveLength(2);
+		expect(game.deck).toHaveLength(1);
 	});
 });
 
 describe("rounds and points", () => {
 	test("going out scores a point per card left for the others, then deals the next round", () => {
-		let g = setup(
+		let game = setup(
 			table(),
 			[[num("sun", 6)], [num("rain", 1), num("rain", 2)], [num("wind", 3)]],
 			num("sun", 5),
 		);
-		g = playCard(g, "a", { cardId: "sun-6-0" }, rng);
-		expect(g.players.map((p) => p.points)).toEqual([0, 2, 1]);
-		expect(g.lastEvent).toMatchObject({
+		game = playCard(game, "a", { cardId: "sun-6-0" }, rng);
+		expect(game.players.map((player) => player.points)).toEqual([0, 2, 1]);
+		expect(game.lastEvent).toMatchObject({
 			type: "roundEnd",
 			outId: "a",
 			gained: { a: 0, b: 2, c: 1 },
 			next: "round",
 		});
 		// The leftover hands are revealed with the event, not the freshly dealt ones.
-		expect(g.lastEvent).toMatchObject({
+		expect(game.lastEvent).toMatchObject({
 			left: { a: [], b: [num("rain", 1), num("rain", 2)], c: [num("wind", 3)] },
 		});
-		expect(g.round).toBe(2);
-		expect(g.turn).toBe(1); // the first turn moves one seat each round
-		expect(g.players.every((p) => p.hand.length === HAND_SIZE)).toBe(true);
+		expect(game.round).toBe(2);
+		expect(game.turn).toBe(1); // the first turn moves one seat each round
+		expect(game.players.every((player) => player.hand.length === HAND_SIZE)).toBe(true);
 	});
 
 	test("reaching the limit ends the match; fewest points wins, ties share a place", () => {
-		let g = setup(table(), [[num("sun", 6)], [num("rain", 1)], [num("wind", 3)]], num("sun", 5));
-		g = { ...g, players: g.players.map((p, i) => ({ ...p, points: [3, BURST_AT - 1, 3][i]! })) };
-		g = playCard(g, "a", { cardId: "sun-6-0" }, rng);
-		expect(g.phase).toBe("finished");
-		expect(g.winnerId).toBe("a");
-		expect([...placements(g).values()]).toEqual([1, 3, 2]);
+		let game = setup(table(), [[num("sun", 6)], [num("rain", 1)], [num("wind", 3)]], num("sun", 5));
+		game = {
+			...game,
+			players: game.players.map((player, i) => ({ ...player, points: [3, BURST_AT - 1, 3][i]! })),
+		};
+		game = playCard(game, "a", { cardId: "sun-6-0" }, rng);
+		expect(game.phase).toBe("finished");
+		expect(game.winnerId).toBe("a");
+		expect([...placements(game).values()]).toEqual([1, 3, 2]);
 		const report = buildReport(
 			{ id: "m", startedAt: "2026-11-11T00:00:00.000Z", seq: 0 },
-			g,
+			game,
 			"ABCD",
 			"2026-11-11T00:10:00.000Z",
 			[],
 		);
-		expect(report.players.map((p) => [p.placement, p.score])).toEqual([
+		expect(report.players.map((player) => [player.placement, player.score])).toEqual([
 			[1, 3],
 			[3, BURST_AT],
 			[2, 4],
@@ -261,44 +267,53 @@ describe("rounds and points", () => {
 	});
 
 	test("a tie for fewest at the limit plays one more round", () => {
-		let g = setup(table(), [[num("sun", 6)], [num("rain", 1)], [num("wind", 3)]], num("sun", 5));
-		g = { ...g, players: g.players.map((p, i) => ({ ...p, points: [4, BURST_AT - 1, 3][i]! })) };
-		g = playCard(g, "a", { cardId: "sun-6-0" }, rng);
-		expect(g.phase).toBe("playing");
-		expect(g.lastEvent).toMatchObject({ type: "roundEnd", tie: true });
+		let game = setup(table(), [[num("sun", 6)], [num("rain", 1)], [num("wind", 3)]], num("sun", 5));
+		game = {
+			...game,
+			players: game.players.map((player, i) => ({ ...player, points: [4, BURST_AT - 1, 3][i]! })),
+		};
+		game = playCard(game, "a", { cardId: "sun-6-0" }, rng);
+		expect(game.phase).toBe("playing");
+		expect(game.lastEvent).toMatchObject({ type: "roundEnd", tie: true });
 	});
 
 	test("reset keeps the table and clears points", () => {
-		let g = setup(table(), [[num("sun", 6)], [num("rain", 1)], [num("wind", 3)]], num("sun", 5));
-		g = { ...g, players: g.players.map((p) => ({ ...p, points: p.id === "a" ? 0 : BURST_AT })) };
-		g = resetToLobby(playCard(g, "a", { cardId: "sun-6-0" }, rng), "a");
-		expect(g.phase).toBe("lobby");
-		expect(g.players.map((p) => p.points)).toEqual([0, 0, 0]);
+		let game = setup(table(), [[num("sun", 6)], [num("rain", 1)], [num("wind", 3)]], num("sun", 5));
+		game = {
+			...game,
+			players: game.players.map((player) => ({
+				...player,
+				points: player.id === "a" ? 0 : BURST_AT,
+			})),
+		};
+		game = resetToLobby(playCard(game, "a", { cardId: "sun-6-0" }, rng), "a");
+		expect(game.phase).toBe("lobby");
+		expect(game.players.map((player) => player.points)).toEqual([0, 0, 0]);
 	});
 });
 
 describe("bots", () => {
 	test("slow down a player about to go out with a Calm", () => {
-		const g = setup(
+		const game = setup(
 			table(),
 			[[num("sun", 1), act("sun", "calm")], [num("rain", 1)]],
 			num("sun", 5),
 		);
-		expect(chooseBotMove(g)).toEqual({ type: "play", input: { cardId: "sun-calm-0" } });
+		expect(chooseBotMove(game)).toEqual({ type: "play", input: { cardId: "sun-calm-0" } });
 	});
 
 	test("keep the Rainbow, draw when nothing fits, then play the drawn card or pass", () => {
-		let g = setup(table(), [[rainbow, num("rain", 4)]], num("sun", 5));
-		expect(chooseBotMove(g)).toEqual({ type: "play", input: { cardId: "rain-4-0" } });
-		g = setup(table(), [[num("rain", 1)]], num("sun", 5));
-		expect(chooseBotMove(g)).toEqual({ type: "draw" });
-		expect(chooseBotMove(drawCard({ ...g, deck: [num("wind", 8)] }, "a", rng))).toEqual({
+		let game = setup(table(), [[rainbow, num("rain", 4)]], num("sun", 5));
+		expect(chooseBotMove(game)).toEqual({ type: "play", input: { cardId: "rain-4-0" } });
+		game = setup(table(), [[num("rain", 1)]], num("sun", 5));
+		expect(chooseBotMove(game)).toEqual({ type: "draw" });
+		expect(chooseBotMove(drawCard({ ...game, deck: [num("wind", 8)] }, "a", rng))).toEqual({
 			type: "pass",
 		});
 	});
 
 	test("Gust gives away a card of the suit held fewest of, never a Rainbow", () => {
-		const g = setup(
+		const game = setup(
 			table(),
 			[
 				[act("sun", "gust"), rainbow, num("rain", 1), num("rain", 2), num("wind", 7)],
@@ -306,7 +321,7 @@ describe("bots", () => {
 			],
 			num("sun", 5),
 		);
-		expect(chooseBotMove(g)).toEqual({
+		expect(chooseBotMove(game)).toEqual({
 			type: "play",
 			input: { cardId: "sun-gust-0", giveId: "wind-7-0" },
 		});
@@ -314,52 +329,65 @@ describe("bots", () => {
 
 	test("bots finish whole matches with valid results and a complete move log", () => {
 		let seed = 7;
-		const random = randomRng(() => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646);
+		const random = randomRng(() => {
+			seed = (seed * 16807) % 2147483647;
+
+			return (seed - 1) / 2147483646;
+		});
 		for (let run = 0; run < 50; run++) {
-			let g = createGame();
-			const n = 2 + (run % 5);
-			for (let i = 0; i < n; i++) {
-				g = addPlayer(g, `p${i}`, `P${i}`, i > 0);
+			let game = createGame();
+			const playerCount = 2 + (run % 5);
+			for (let i = 0; i < playerCount; i++) {
+				game = addPlayer(game, `p${i}`, `P${i}`, i > 0);
 			}
 
-			const lobby = g;
-			g = startGame(g, "p0", random);
-			const log: LogEntry[] = logEvents(lobby, g);
+			const lobby = game;
+			game = startGame(game, "p0", random);
+			const log: LogEntry[] = logEvents(lobby, game);
 			let steps = 0;
-			while (g.phase === "playing" && steps < 5000) {
+			while (game.phase === "playing" && steps < 5000) {
 				steps += 1;
-				const id = g.players[g.turn]!.id;
-				const move = chooseBotMove(g);
-				const next =
-					move.type === "play"
-						? playCard(g, id, move.input, random)
-						: move.type === "draw"
-							? drawCard(g, id, random)
-							: pass(g, id);
-				log.push(...logEvents(g, next, true));
-				g = next;
+				const id = game.players[game.turn]!.id;
+				const move = chooseBotMove(game);
+				let next: Game;
+				if (move.type === "play") {
+					next = playCard(game, id, move.input, random);
+				} else if (move.type === "draw") {
+					next = drawCard(game, id, random);
+				} else {
+					next = pass(game, id);
+				}
+
+				log.push(...logEvents(game, next, true));
+				game = next;
 			}
 
-			expect(g.phase).toBe("finished");
+			expect(game.phase).toBe("finished");
 			// Every move is logged once, rounds open with a deal, and the log ends with the final points.
 			expect(log[0]!.type).toBe("deal");
-			expect(log.filter((e) => e.type === "deal")).toHaveLength(g.round);
-			expect(log.filter((e) => e.type === "round_end")).toHaveLength(g.round);
-			expect(log.filter((e) => ["play", "draw", "pass"].includes(e.type))).toHaveLength(steps);
+			expect(log.filter((event) => event.type === "deal")).toHaveLength(game.round);
+			expect(log.filter((event) => event.type === "round_end")).toHaveLength(game.round);
+			expect(log.filter((event) => ["play", "draw", "pass"].includes(event.type))).toHaveLength(
+				steps,
+			);
 			expect(
 				log.every(
-					(e) => !("by" in (e.data ?? {})) || e.data!.by === (e.seat === 0 ? "timeout" : "bot"),
+					(event) =>
+						!("by" in (event.data ?? {})) ||
+						event.data!.by === (event.seat === 0 ? "timeout" : "bot"),
 				),
 			).toBe(true);
 			expect(log.at(-1)).toEqual({
 				type: "finished",
 				data: {
-					winner: g.players.find((p) => p.id === g.winnerId)!.seat,
-					points: Object.fromEntries(g.players.map((p) => [p.seat, p.points])),
+					winner: game.players.find((player) => player.id === game.winnerId)!.seat,
+					points: Object.fromEntries(game.players.map((player) => [player.seat, player.points])),
 				},
 			});
-			expect([...placements(g).values()].filter((p) => p === 1)).toHaveLength(1);
-			expect(Math.max(...g.players.map((p) => p.points))).toBeGreaterThanOrEqual(BURST_AT);
+			expect([...placements(game).values()].filter((place) => place === 1)).toHaveLength(1);
+			expect(Math.max(...game.players.map((player) => player.points))).toBeGreaterThanOrEqual(
+				BURST_AT,
+			);
 		}
 	});
 });

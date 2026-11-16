@@ -12,19 +12,19 @@
 	const played = $derived(duration(new Date(match.startedAt), new Date(match.endedAt)));
 
 	const steps = $derived(data.log ? replay(match.game, data.log, match.seats) : []);
-	const flagged = $derived(steps.filter((s) => s.mismatch).length);
+	const flagged = $derived(steps.filter((step) => step.mismatch).length);
 
 	const terminated = $derived(match.endReason === 'terminated');
 	/** Why an admin stopped the match, from its last log event. */
 	const terminatedReason = $derived.by(() => {
-		const event = data.log?.events.findLast((e) => e.type === 'terminated');
+		const event = data.log?.events.findLast((entry) => entry.type === 'terminated');
 		const reason = event?.data?.reason;
 
 		return typeof reason === 'string' ? reason : null;
 	});
 
 	const nameOf = (seat: number) =>
-		match.seats.find((s) => s.seat === seat)?.name ?? `Seat ${seat + 1}`;
+		match.seats.find((entry) => entry.seat === seat)?.name ?? `Seat ${seat + 1}`;
 </script>
 
 <svelte:head><title>Match {match.roomCode} · Backoffice</title></svelte:head>

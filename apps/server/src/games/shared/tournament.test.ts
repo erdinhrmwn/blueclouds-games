@@ -10,10 +10,11 @@ mock.module("../../platform", () => ({
 	reportRound: async () => ({ result: "sent" }),
 	fetchRoomSeats: async () => seats,
 	fetchVipIds: async () => new Set(),
-	markRoom: async (code: string, change: string) => (
-		marked.push(`${code}:${change}`),
-		{ ok: true }
-	),
+	markRoom: async (code: string, change: string) => {
+		marked.push(`${code}:${change}`);
+
+		return { ok: true };
+	},
 }));
 const { LATE_GRACE_MS, loadTournament, requireOpenTable, seatFor, tournamentTick } =
 	await import("./room");
@@ -32,6 +33,7 @@ function room() {
 		schedule: { at: async () => {} },
 	};
 }
+
 type Room = ReturnType<typeof room>;
 
 /** Counts starts and commits instead of running a real match. */
@@ -52,8 +54,11 @@ function runner(c: Room) {
 	};
 }
 
-const sit = (c: Room, ...ids: string[]) =>
-	ids.forEach((id, i) => (c.vars.game = addPlayer(c.vars.game, id, `P${i}`, false, i)));
+const sit = (c: Room, ...ids: string[]) => {
+	ids.forEach((id, i) => {
+		c.vars.game = addPlayer(c.vars.game, id, `P${i}`, false, i);
+	});
+};
 
 beforeEach(() => {
 	marked.length = 0;
@@ -142,7 +147,7 @@ test("waits for late players, then starts with those present", async () => {
 	setSystemTime(START + LATE_GRACE_MS);
 	await tournamentTick(c, game);
 	expect(calls.started).toBe(1);
-	expect(c.vars.game.players.map((p) => p.id)).toEqual([ANN, BEN]);
+	expect(c.vars.game.players.map((player) => player.id)).toEqual([ANN, BEN]);
 });
 
 test("closes the table when fewer than the game's minimum came", async () => {
@@ -175,7 +180,7 @@ test("a player who lost their seat since sitting down (withdrew, disqualified) l
 	const { calls, game } = runner(c);
 	await tournamentTick(c, game);
 	expect(calls.started).toBe(1);
-	expect(c.vars.game.players.map((p) => p.id)).toEqual([ANN, CY]);
+	expect(c.vars.game.players.map((player) => player.id)).toEqual([ANN, CY]);
 	expect(seatFor(c, { id: BEN, name: "Ben", vip: false, avatar: NO_AVATAR })).rejects.toThrow(
 		"This table is for players of Friday Cup.",
 	);
@@ -197,7 +202,7 @@ test("a bot account the platform signed up sits by itself, and the table starts 
 	await tournamentTick(c, game);
 
 	expect(calls.started).toBe(1);
-	const bot = c.vars.game.players.find((p) => p.id === BEN);
+	const bot = c.vars.game.players.find((player) => player.id === BEN);
 	expect(bot).toMatchObject({ name: "Bot Ash", bot: true, seat: 1 });
 });
 
@@ -216,5 +221,5 @@ test("a table whose people never came still plays with its bots", async () => {
 	await tournamentTick(c, game);
 
 	expect(calls.started).toBe(1);
-	expect(c.vars.game.players.every((p) => p.bot)).toBe(true);
+	expect(c.vars.game.players.every((player) => player.bot)).toBe(true);
 });

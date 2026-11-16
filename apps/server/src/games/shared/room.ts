@@ -123,17 +123,17 @@ export const roomVars = <G extends Table, M extends MatchState>(game: G): RoomVa
 });
 
 /** The room's tables: one JSON row for the whole room (a few KB), the result outbox, and the move log. */
-export async function migrateRoom(d: {
+export async function migrateRoom(database: {
 	execute: (sql: string) => Promise<unknown>;
 }): Promise<void> {
-	await d.execute(`
+	await database.execute(`
 		CREATE TABLE IF NOT EXISTS room (
 			id INTEGER PRIMARY KEY CHECK (id = 1),
 			data TEXT NOT NULL
 		)`);
 
 	// Outbox: finished match results waiting to reach the platform.
-	await d.execute(`
+	await database.execute(`
 		CREATE TABLE IF NOT EXISTS match_reports (
 			match_id TEXT PRIMARY KEY,
 			body TEXT NOT NULL,
@@ -141,7 +141,7 @@ export async function migrateRoom(d: {
 		)`);
 
 	// Outbox: closed rounds waiting to reach the platform (rounds.ts), sent before their match's report.
-	await d.execute(`
+	await database.execute(`
 		CREATE TABLE IF NOT EXISTS round_reports (
 			match_id TEXT NOT NULL,
 			round INTEGER NOT NULL,
@@ -151,7 +151,7 @@ export async function migrateRoom(d: {
 		)`);
 
 	// Move log of the match being played; moved into its report when the match ends.
-	await d.execute(`
+	await database.execute(`
 		CREATE TABLE IF NOT EXISTS match_events (
 			match_id TEXT NOT NULL,
 			seq INTEGER NOT NULL,
@@ -689,7 +689,7 @@ export async function dropIfGone(
 	turn: { playerId: string | null; key: number },
 ): Promise<boolean> {
 	const game = c.vars.game as Table;
-	const player = game.players.find((p) => p.id === id);
+	const player = game.players.find((player) => player.id === id);
 	if (!player) {
 		return false;
 	}
@@ -738,7 +738,7 @@ export function kickFromTable(
 	}
 
 	const game = c.vars.game as Table;
-	const target = game.players.find((p) => p.seat === seat);
+	const target = game.players.find((player) => player.seat === seat);
 	if (!target) {
 		throw new UserError("Nobody sits in that seat.", { code: "rule" });
 	}
@@ -949,7 +949,7 @@ export async function reportToDirectory(c: Ctx, slug: string, leaving?: string):
 			return;
 		}
 
-		const host = game.players.find((p) => p.id === game.hostId)?.name ?? null;
+		const host = game.players.find((player) => player.id === game.hostId)?.name ?? null;
 		await directory.report({
 			code,
 			name: c.vars.roomName ?? null,
@@ -957,7 +957,11 @@ export async function reportToDirectory(c: Ctx, slug: string, leaving?: string):
 			players: game.players.length,
 			maxPlayers: SEATS,
 			phase: game.phase,
-			seats: game.players.map((p) => ({ seat: p.seat, name: p.name, bot: p.bot })),
+			seats: game.players.map((player) => ({
+				seat: player.seat,
+				name: player.name,
+				bot: player.bot,
+			})),
 			round: game.round ?? 0,
 		});
 	} catch (err) {

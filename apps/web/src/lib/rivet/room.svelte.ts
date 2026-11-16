@@ -178,7 +178,7 @@ export class RoomConnection<View extends BaseView, Hand> {
 	}
 
 	get me(): View['players'][number] | null {
-		return this.view?.players.find((p) => p.id === this.playerId) ?? null;
+		return this.view?.players.find((player) => player.id === this.playerId) ?? null;
 	}
 
 	get isHost() {
@@ -192,7 +192,7 @@ export class RoomConnection<View extends BaseView, Hand> {
 	// Rejoining as the same player is idempotent, so it is safe on every reconnect.
 	#join = () =>
 		this.#run(async () => {
-			const res = await this.#c.join();
+			const res = await this.#connection.join();
 			this.playerId = res.playerId;
 			this.#setView(res.view as View);
 			this.hand = res.hand as Hand;
@@ -212,18 +212,21 @@ export class RoomConnection<View extends BaseView, Hand> {
 		this.waitEndsAt = view.tournament ? now + view.tournament.waitEndsIn : null;
 	}
 
-	start = () => this.#run(() => this.#c.start());
-	addBot = (seat: number) => this.#run(() => this.#c.addBot(seat));
-	takeSeat = (seat: number) => this.#run(() => this.#c.takeSeat(seat));
-	removeBot = (id: string) => this.#run(() => this.#c.removeBot(id));
-	kick = (seat: number) => this.#run(() => this.#c.kick(seat));
-	reset = () => this.#run(() => this.#c.reset());
-	leave = () => this.#run(() => this.#c.leave());
+	start = () => this.#run(() => this.#connection.start());
+	addBot = (seat: number) => this.#run(() => this.#connection.addBot(seat));
+	takeSeat = (seat: number) => this.#run(() => this.#connection.takeSeat(seat));
+	removeBot = (id: string) => this.#run(() => this.#connection.removeBot(id));
+	kick = (seat: number) => this.#run(() => this.#connection.kick(seat));
+	reset = () => this.#run(() => this.#connection.reset());
+	leave = () => this.#run(() => this.#connection.leave());
 
 	/** Calls a game-specific action, with the same busy and error handling as the shared ones. */
 	protected call(action: string, ...args: unknown[]): Promise<void> {
 		return this.#run(() => {
-			const actions = this.#c as unknown as Record<string, (...a: unknown[]) => Promise<unknown>>;
+			const actions = this.#connection as unknown as Record<
+				string,
+				(...args: unknown[]) => Promise<unknown>
+			>;
 			return actions[action]!(...args);
 		});
 	}
@@ -240,7 +243,7 @@ export class RoomConnection<View extends BaseView, Hand> {
 		}
 	}
 
-	get #c(): Conn {
+	get #connection(): Conn {
 		if (!this.#conn) {
 			throw new Error('Still connecting. Try again in a moment.');
 		}

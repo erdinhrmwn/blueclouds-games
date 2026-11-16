@@ -44,7 +44,7 @@
 	/** "4:07" until a time, counting down with `now`. */
 	const countdown = (until: number | null) => clock(Math.ceil(((until ?? now) - now) / 1000));
 
-	const inSeat = (seat: number) => view.players.find((p) => p.seat === seat) ?? null;
+	const inSeat = (seat: number) => view.players.find((player) => player.seat === seat) ?? null;
 
 	/** What the host can do to a seated player: remove a bot, or kick someone else (who can't come back). */
 	const hostAction = (player: BaseView['players'][number] | null) => {
@@ -212,7 +212,8 @@
 					</p>
 				{:else}
 					<p class="text-sm text-paper/75">
-						Waiting for {view.players.find((p) => p.id === view.hostId)?.name ?? 'the host'} to start…
+						Waiting for {view.players.find((player) => player.id === view.hostId)?.name ??
+							'the host'} to start…
 					</p>
 				{/if}
 			{/if}

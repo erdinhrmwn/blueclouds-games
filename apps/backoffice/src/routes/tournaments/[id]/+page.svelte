@@ -13,12 +13,14 @@
 		!tournament.cancelledAt && !tournament.endedAt && data.admin?.role !== 'viewer'
 	);
 	/** Still in: not withdrawn or disqualified. */
-	const signedUp = $derived(data.players.filter((p) => p.status === 'registered'));
-	const out = $derived(data.players.filter((p) => p.status !== 'registered'));
-	const waiting = $derived(signedUp.filter((p) => !p.roomCode));
+	const signedUp = $derived(data.players.filter((player) => player.status === 'registered'));
+	const out = $derived(data.players.filter((player) => player.status !== 'registered'));
+	const waiting = $derived(signedUp.filter((player) => !player.roomCode));
 	/** Tables that haven't started and still have a free seat. */
 	const seatable = $derived(
-		data.rooms.filter((r) => !r.startedAt && !r.closedAt && r.players < tournament.playersPerRoom)
+		data.rooms.filter(
+			(room) => !room.startedAt && !room.closedAt && room.players < tournament.playersPerRoom
+		)
 	);
 	let busy = $state(false);
 
@@ -30,7 +32,7 @@
 		};
 	};
 
-	const playersById = $derived(new Map(data.players.map((p) => [p.playerId, p])));
+	const playersById = $derived(new Map(data.players.map((player) => [player.playerId, player])));
 	/** The players at a table, with their seat there (a past round's table too). */
 	const seatedAt = (room: (typeof data.rooms)[number]) =>
 		room.seats.flatMap((taken) => {
@@ -383,7 +385,7 @@
 			action="?/disqualify"
 			class="mt-3 grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end"
 			use:enhance={({ cancel, formData }) => {
-				const name = signedUp.find((p) => p.playerId === formData.get('playerId'))?.name;
+				const name = signedUp.find((player) => player.playerId === formData.get('playerId'))?.name;
 				if (!confirm(`Disqualify ${name}? This can't be undone.`)) {
 					return cancel();
 				}

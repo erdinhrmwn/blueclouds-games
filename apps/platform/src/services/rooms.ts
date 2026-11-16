@@ -116,15 +116,18 @@ export async function enterable(sql: SQL, code: string, playerId: string): Promi
 			coalesce(tr.starts_at, t.starts_at) AS starts_at,
 			t.cancelled_at,
 			EXISTS (
-				SELECT 1 FROM room_assignments ra
+				SELECT 1
+				FROM room_assignments ra
 				WHERE ra.room_id = r.id AND ra.player_id = ${playerId}
 			) AS assigned,
 			(
-				SELECT tp.status FROM tournament_players tp
+				SELECT tp.status
+				FROM tournament_players tp
 				WHERE tp.tournament_id = r.tournament_id AND tp.player_id = ${playerId}
 			) AS status,
 			EXISTS (
-				SELECT 1 FROM room_members rm
+				SELECT 1
+				FROM room_members rm
 				WHERE rm.room_id = r.id AND rm.player_id = ${playerId}
 			) AS member
 		FROM rooms r

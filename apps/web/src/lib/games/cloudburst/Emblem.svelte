@@ -19,12 +19,12 @@
 </script>
 
 <EmblemTile back="#1f3f5f" deep="#142a40" pattern="clouds" {small} {label} class={cls}>
-	{#snippet motif(d: number)}
-		<path d={CLOUD} transform={cloudAt(50, 50 - d * 0.1, d * 0.8)} fill="#b7d2ec" />
+	{#snippet motif(size: number)}
+		<path d={CLOUD} transform={cloudAt(50, 50 - size * 0.1, size * 0.8)} fill="#b7d2ec" />
 		{#each SUIT_COLOURS as colour, index (colour)}
-			{@const scale = (d * 0.19) / DROP_GRID}
-			{@const x = 50 + (index - 1.5) * d * 0.19 - 12 * scale}
-			{@const y = 50 + d * 0.17 + (index % 2) * d * 0.07 - 3 * scale}
+			{@const scale = (size * 0.19) / DROP_GRID}
+			{@const x = 50 + (index - 1.5) * size * 0.19 - 12 * scale}
+			{@const y = 50 + size * 0.17 + (index % 2) * size * 0.07 - 3 * scale}
 			<path d={DROP} transform="translate({x} {y}) scale({scale})" fill={colour} />
 		{/each}
 	{/snippet}

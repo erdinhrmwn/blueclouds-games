@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { closedRounds, roundReport } from "./rounds";
 
-const event = (seq: number, t: number, type: string, data?: Record<string, unknown>) => ({
+const event = (seq: number, time: number, type: string, data?: Record<string, unknown>) => ({
 	seq,
-	t,
+	t: time,
 	type,
 	data,
 });
@@ -26,7 +26,7 @@ const log = [
 
 const match = { id: "m", game: "bust-31", roomCode: "R1", startedAt: "2026-11-13T08:00:00.000Z" };
 const bustOf = (events: { type: string; seat?: number }[]) => ({
-	seat: events.find((e) => e.type === "bust")?.seat ?? null,
+	seat: events.find((event) => event.type === "bust")?.seat ?? null,
 });
 
 describe("round history", () => {

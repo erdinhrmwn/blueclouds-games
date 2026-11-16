@@ -33,9 +33,9 @@
 
 	const view = $derived(room.view!);
 
-	const inSeat = (seat: number) => view.players.find((p) => p.seat === seat) ?? null;
+	const inSeat = (seat: number) => view.players.find((player) => player.seat === seat) ?? null;
 	const nameOf = (id: string | null | undefined) =>
-		view.players.find((p) => p.id === id)?.name ?? '?';
+		view.players.find((player) => player.id === id)?.name ?? '?';
 
 	// Your hand, sorted by suit, then numbers before actions; wild cards last.
 	const ORDER = {
@@ -73,7 +73,7 @@
 
 	/** The player after you, in the current direction. */
 	const next = $derived.by(() => {
-		const mine = view.players.findIndex((p) => p.id === room.playerId);
+		const mine = view.players.findIndex((player) => player.id === room.playerId);
 		const count = view.players.length;
 		const index = (((mine + view.direction) % count) + count) % count;
 
@@ -166,7 +166,7 @@
 
 	/** A steady tilt of -6..6 degrees per card, from a hash of its id. */
 	const tiltOf = (id: string) => {
-		const hash = [...id].reduce((h, ch) => h * 31 + ch.charCodeAt(0), 7);
+		const hash = [...id].reduce((sum, ch) => sum * 31 + ch.charCodeAt(0), 7);
 		return (hash % 13) - 6;
 	};
 
@@ -242,7 +242,7 @@
 		reveal.landed[playerId] = landed;
 
 		// Shake the seat once its last card landed and it reached the burst limit.
-		const player = view.players.find((p) => p.id === playerId);
+		const player = view.players.find((entry) => entry.id === playerId);
 		if (!player) {
 			return;
 		}
@@ -321,12 +321,33 @@
 
 		return String(cards);
 	};
+
+	/** "1 card" or "n cards". */
+	const cardCount = (cards: number) => (cards === 1 ? '1 card' : `${cards} cards`);
+
+	/** The end of a play's line when it skips someone, with the cards they draw if any. */
+	const skippedNote = (skippedId: string | undefined, forced: number | undefined) => {
+		if (!skippedId) {
+			return '';
+		}
+
+		if (forced === undefined) {
+			return `. ${nameOf(skippedId)} is skipped`;
+		}
+
+		return `. ${nameOf(skippedId)} draws ${cardCount(forced)} and is skipped`;
+	};
+
 	/** A seat's badge and meter in words, for screen readers. */
 	const seatSummary = (player: (typeof view.players)[number]) => {
-		const cards =
-			skipped === player.id ? 'skipped' : player.cards === 1 ? '1 card' : `${player.cards} cards`;
-		return `${cards}, ${player.points} of ${view.burstAt} points`;
+		const points = `${player.points} of ${view.burstAt} points`;
+		if (skipped === player.id) {
+			return `skipped, ${points}`;
+		}
+
+		return `${cardCount(player.cards)}, ${points}`;
 	};
+
 	let summary = $state<RoundEnd | null>(null);
 	let handled = -1;
 
@@ -353,7 +374,7 @@
 		const newRound = event.type === 'dealt' || event.type === 'roundEnd';
 		if (view.phase === 'playing' && newRound) {
 			const wait = event.type === 'roundEnd' ? DEAL.roundEndMs : 0;
-			const seats = view.players.map((p) => p.id);
+			const seats = view.players.map((player) => player.id);
 			const dealMs = seats.length * HAND_SIZE * DEAL.stepMs + DEAL.flightMs;
 
 			dealing = true;
@@ -488,15 +509,11 @@
 				return `Round ${event.round}. Seven cards each.`;
 			case 'played': {
 				const nextSuit = event.card.suit === null ? `, ${SUIT_NAME[view.suit]} next` : '';
-				const drawn = event.forced === 1 ? '1 card' : `${event.forced} cards`;
-				const skip = !event.skipped
-					? ''
-					: event.forced !== undefined
-						? `. ${nameOf(event.skipped)} draws ${drawn} and is skipped`
-						: `. ${nameOf(event.skipped)} is skipped`;
+				const skip = skippedNote(event.skipped, event.forced);
 				const gift = event.gaveTo ? ` and handed ${nameOf(event.gaveTo)} a card` : '';
 				return `${nameOf(event.playerId)} played ${cardName(event.card)}${nextSuit}${skip}${gift}${auto}.`;
 			}
+
 			case 'drew':
 				if (!event.got) {
 					return `The deck is empty. ${nameOf(event.playerId)} can only pass.`;
@@ -677,13 +694,13 @@
 				<ol
 					class="mt-2 grid gap-y-0.5 text-xs tabular-nums wide:mt-3 wide:grid-cols-2 wide:gap-x-8 wide:gap-y-1 wide:text-sm"
 				>
-					{#each standings as p (p.id)}
-						{@const close = p.points >= view.burstAt - 2}
+					{#each standings as player (player.id)}
+						{@const close = player.points >= view.burstAt - 2}
 						<li class="flex items-baseline gap-2">
-							<span class="min-w-0 flex-1 truncate text-paper/85">{p.name}</span>
-							<span class="text-paper/55">+{summary.gained[p.id] ?? 0}</span>
+							<span class="min-w-0 flex-1 truncate text-paper/85">{player.name}</span>
+							<span class="text-paper/55">+{summary.gained[player.id] ?? 0}</span>
 							<span class="w-11 text-right font-semibold {close ? 'text-ember' : 'text-paper'}"
-								>{p.points}/{view.burstAt}</span
+								>{player.points}/{view.burstAt}</span
 							>
 						</li>
 					{/each}
@@ -701,13 +718,13 @@
 				<Deck count={view.deckCount} />
 				<WeatherVane suit={view.suit} top={view.topCard}>
 					<div class="grid h-[3.55rem] w-10 place-items-center wide:h-[4.6rem] wide:w-[3.25rem]">
-						{#each view.pileUnder as u (u.id)}
+						{#each view.pileUnder as card (card.id)}
 							<div
 								class="col-start-1 row-start-1"
-								style="rotate: {tiltOf(u.id)}deg"
+								style="rotate: {tiltOf(card.id)}deg"
 								aria-hidden="true"
 							>
-								<CloudCard card={u} size={pileSize} />
+								<CloudCard {card} size={pileSize} />
 							</div>
 						{/each}
 						{#key view.topCard?.id}
@@ -741,9 +758,9 @@
 				class="mx-auto grid max-w-xs grid-cols-2 gap-x-4 text-sm tabular-nums"
 				aria-label="Final points"
 			>
-				{#each standings as p (p.id)}
-					<li class={p.id === view.winnerId ? 'text-brass' : 'text-paper/80'}>
-						{p.name}: {p.points}
+				{#each standings as player (player.id)}
+					<li class={player.id === view.winnerId ? 'text-brass' : 'text-paper/80'}>
+						{player.name}: {player.points}
 					</li>
 				{/each}
 			</ol>

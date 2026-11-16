@@ -132,13 +132,15 @@ export async function listLive(sql: SQL, game: string, playerId: string) {
 			tr.round,
 			tr.starts_at AS round_starts_at,
 			EXISTS (
-				SELECT 1 FROM rooms r
+				SELECT 1
+				FROM rooms r
 				WHERE r.tournament_id = t.id AND r.tournament_round = tr.round AND r.started_at IS NOT NULL
 			) AS round_started,
 			t.starts_at,
 			t.ended_at,
 			(
-				SELECT count(DISTINCT ra.player_id)::int FROM room_assignments ra
+				SELECT count(DISTINCT ra.player_id)::int
+				FROM room_assignments ra
 				WHERE ra.tournament_id = t.id AND ra.tournament_round = 1
 			) AS players,
 			coalesce(

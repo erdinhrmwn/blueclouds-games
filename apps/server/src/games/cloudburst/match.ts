@@ -43,11 +43,11 @@ export function buildReport(
 		startedAt: match.startedAt,
 		endedAt,
 		endReason: end,
-		players: game.players.map((p) => ({
-			seat: p.seat,
-			...reportedSeat(p),
-			placement: place.get(p.id)!,
-			score: p.points,
+		players: game.players.map((player) => ({
+			seat: player.seat,
+			...reportedSeat(player),
+			placement: place.get(player.id)!,
+			score: player.points,
 		})),
 		log: { logVersion: LOG_VERSION, events },
 	};
@@ -72,7 +72,7 @@ export function logEvents(before: Game, after: Game, auto = false): LogEntry[] {
 	}
 
 	const event = after.lastEvent;
-	const seatOf = (id: string) => after.players.find((p) => p.id === id)!.seat;
+	const seatOf = (id: string) => after.players.find((player) => player.id === id)!.seat;
 	const mover = before.phase === "playing" ? before.players[before.turn] : undefined;
 	const by = mover ? moveBy(mover, auto) : "player";
 
@@ -86,8 +86,8 @@ export function logEvents(before: Game, after: Game, auto = false): LogEntry[] {
 		}
 
 		if (event.type === "played" && event.forced !== undefined && event.skipped) {
-			const victim = before.players.find((p) => p.id === event.skipped)!;
-			const now = after.players.find((p) => p.id === event.skipped)!;
+			const victim = before.players.find((player) => player.id === event.skipped)!;
+			const now = after.players.find((player) => player.id === event.skipped)!;
 			// The drawn cards are appended in draw order.
 			const forcedCards = ids(now.hand.slice(victim.hand.length));
 			const fromOldDeck = Math.min(before.deck.length, forcedCards.length);
@@ -101,8 +101,8 @@ export function logEvents(before: Game, after: Game, auto = false): LogEntry[] {
 		}
 
 		if (event.type === "played" && event.gaveTo) {
-			const receiver = after.players.find((p) => p.id === event.gaveTo)!;
-			const had = before.players.find((p) => p.id === event.gaveTo)!.hand;
+			const receiver = after.players.find((player) => player.id === event.gaveTo)!;
+			const had = before.players.find((player) => player.id === event.gaveTo)!.hand;
 			const given = receiver.hand.find((held) => !had.some((old) => old.id === held.id));
 			data.gave = given?.id ?? null;
 		}
@@ -126,13 +126,15 @@ export function logEvents(before: Game, after: Game, auto = false): LogEntry[] {
 	if (event?.type === "roundEnd") {
 		const gainedBySeat = Object.entries(event.gained).map(([id, count]) => [seatOf(id), count]);
 		const left = Object.fromEntries(gainedBySeat);
-		const points = Object.fromEntries(after.players.map((p) => [p.seat, p.points]));
+		const points = Object.fromEntries(after.players.map((player) => [player.seat, player.points]));
 		entries.push({ type: "round_end", data: { out: seatOf(event.outId), left, points } });
 	}
 
 	const newRound = event?.type === "dealt" || event?.type === "roundEnd";
 	if (after.phase === "playing" && newRound) {
-		const hands = Object.fromEntries(after.players.map((p) => [p.seat, ids(p.hand)]));
+		const hands = Object.fromEntries(
+			after.players.map((player) => [player.seat, ids(player.hand)]),
+		);
 		const start = after.discard[0]!.id;
 		entries.push({
 			type: "deal",
@@ -147,7 +149,7 @@ export function logEvents(before: Game, after: Game, auto = false): LogEntry[] {
 	}
 
 	if (after.phase === "finished") {
-		const points = Object.fromEntries(after.players.map((p) => [p.seat, p.points]));
+		const points = Object.fromEntries(after.players.map((player) => [player.seat, player.points]));
 		entries.push({ type: "finished", data: { winner: seatOf(after.winnerId!), points } });
 	}
 
@@ -162,7 +164,7 @@ function awayChanges(before: Game, after: Game): LogEntry[] {
 
 	const entries: LogEntry[] = [];
 	for (const player of after.players) {
-		const was = before.players.find((p) => p.id === player.id);
+		const was = before.players.find((previous) => previous.id === player.id);
 		if (was && !!was.away !== !!player.away) {
 			entries.push({ type: player.away ? "away" : "back", seat: player.seat });
 		}

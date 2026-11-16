@@ -75,4 +75,4 @@ export const GAMES: GameEntry[] = [
 	}
 ];
 
-export const gameBySlug = (slug: string) => GAMES.find((g) => g.slug === slug);
+export const gameBySlug = (slug: string) => GAMES.find((game) => game.slug === slug);

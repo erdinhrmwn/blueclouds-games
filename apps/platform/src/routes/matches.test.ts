@@ -1,17 +1,17 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { call, guest, room, SERVER_KEY, setupTestApp } from "../test-helpers";
 
-let t: Awaited<ReturnType<typeof setupTestApp>>;
+let testApp: Awaited<ReturnType<typeof setupTestApp>>;
 let ann: Awaited<ReturnType<typeof guest>>;
 let bob: Awaited<ReturnType<typeof guest>>;
 beforeAll(async () => {
-	t = await setupTestApp();
-	ann = await guest(t.app, "Ann");
-	bob = await guest(t.app, "Bob");
-	await room(t.sql, "bust-31", "K7PQX");
+	testApp = await setupTestApp();
+	ann = await guest(testApp.app, "Ann");
+	bob = await guest(testApp.app, "Bob");
+	await room(testApp.sql, "bust-31", "K7PQX");
 });
 afterAll(async () => {
-	await t.sql.close();
+	await testApp.sql.close();
 });
 
 const report = (over: Record<string, unknown> = {}) => ({
@@ -35,14 +35,14 @@ const events = () => [
 	{ seq: 2, t: 4120, type: "finished", data: { winner: 0 } },
 ];
 const post = (body: unknown, token = SERVER_KEY) =>
-	call(t.app, "POST", "/v1/matches", { body, token });
+	call(testApp.app, "POST", "/v1/matches", { body, token });
 
 describe("match reports", () => {
 	test("needs the server key", async () => {
 		expect((await post(report(), "wrong-key")).status).toBe(401);
-		expect((await call(t.app, "POST", "/v1/matches", { body: report() })).json.error.code).toBe(
-			"unauthenticated",
-		);
+		expect(
+			(await call(testApp.app, "POST", "/v1/matches", { body: report() })).json.error.code,
+		).toBe("unauthenticated");
 	});
 
 	test("new → 201, same retry → 200, changed body → 409", async () => {
@@ -60,7 +60,7 @@ describe("match reports", () => {
 		expect(changed.status).toBe(409);
 		expect(changed.json.error.code).toBe("conflict");
 
-		const [{ n }] = await t.sql`
+		const [{ n }] = await testApp.sql`
 				SELECT count(*)::int AS n
 				FROM match_players
 				WHERE match_id = ${body.matchId}`;
@@ -75,7 +75,7 @@ describe("match reports", () => {
 		const finished = report();
 		expect((await post(finished)).status).toBe(201);
 
-		const rows = await t.sql`
+		const rows = await testApp.sql`
 			SELECT id, end_reason
 			FROM matches
 			WHERE id IN (${terminated.matchId}, ${finished.matchId})`;
@@ -103,7 +103,7 @@ describe("match reports", () => {
 		const res = await post(body);
 		expect(res.status).toBe(422);
 		expect(res.json.error.code).toBe("unknown_player");
-		const [{ n }] = await t.sql`
+		const [{ n }] = await testApp.sql`
 			SELECT count(*)::int AS n
 			FROM matches
 			WHERE id = ${body.matchId}`;
@@ -143,11 +143,11 @@ describe("match reports", () => {
 
 describe("any game in the catalog", () => {
 	test("a new game only needs its row in games; score means what the game says", async () => {
-		const seat = (s: number, placement: number, score: number) => ({
-			seat: s,
+		const seat = (seatIndex: number, placement: number, score: number) => ({
+			seat: seatIndex,
 			playerId: null,
 			bot: true,
-			botName: `Bot ${s}`,
+			botName: `Bot ${seatIndex}`,
 			placement,
 			score,
 		});
@@ -158,10 +158,10 @@ describe("any game in the catalog", () => {
 		});
 		expect((await post(twoSeats)).json.error.fields.game).toBe("Unknown game.");
 
-		await t.sql`
+		await testApp.sql`
 			INSERT INTO games (slug, name, min_players, max_players, score_label)
 			VALUES ('test-game', 'Test Game', 3, 4, 'Points')`;
-		await room(t.sql, "test-game", "TGAME");
+		await room(testApp.sql, "test-game", "TGAME");
 		expect((await post(twoSeats)).json.error.fields.players).toBe("Needs 3–4 players.");
 		// Lower is better here, places 2 and 3 tie, and a score may be negative: all up to the game.
 		const body = report({
@@ -170,12 +170,12 @@ describe("any game in the catalog", () => {
 			players: [seat(0, 1, -2), seat(1, 2, 12), seat(2, 2, 12)],
 		});
 		expect((await post(body)).status).toBe(201);
-		const rows = await t.sql`
+		const rows = await testApp.sql`
 				SELECT seat, placement, score
 				FROM match_players
 				WHERE match_id = ${body.matchId}
 				ORDER BY seat`;
-		expect(rows.map((r: { score: number }) => r.score)).toEqual([-2, 12, 12]);
+		expect(rows.map((row: { score: number }) => row.score)).toEqual([-2, 12, 12]);
 	});
 });
 
@@ -183,7 +183,7 @@ describe("match logs", () => {
 	test("are stored with the match, as sent", async () => {
 		const body = report();
 		expect((await post(body)).status).toBe(201);
-		const [row] = await t.sql`
+		const [row] = await testApp.sql`
 				SELECT log_version, event_count, events
 				FROM match_logs
 				WHERE match_id = ${body.matchId}`;
@@ -203,21 +203,23 @@ describe("match logs", () => {
 			(await post(report(over))).json.error?.fields;
 		const { log: _, ...noLog } = report();
 		expect((await post(noLog)).status).toBe(400);
-		const [a, b, c] = events();
-		expect((await field({ log: { logVersion: 1, events: [a, c] } })).log).toBe(
+		const [first, second, third] = events();
+		expect((await field({ log: { logVersion: 1, events: [first, third] } })).log).toBe(
 			"Event 1 must have seq 1 and a seat from players.",
 		);
 		expect(
-			(await field({ log: { logVersion: 1, events: [a, { ...b, seat: 5 }, c] } })).log,
+			(await field({ log: { logVersion: 1, events: [first, { ...second, seat: 5 }, third] } })).log,
 		).toBeTruthy();
 		expect(
-			await field({ log: { logVersion: 1, events: [{ ...a, type: "Deal!" }] } }),
+			await field({ log: { logVersion: 1, events: [{ ...first, type: "Deal!" }] } }),
 		).toHaveProperty(["log.events.0.type"]);
-		expect(await field({ log: { logVersion: 1, events: [{ ...a, t: -1 }] } })).toHaveProperty([
+		expect(await field({ log: { logVersion: 1, events: [{ ...first, t: -1 }] } })).toHaveProperty([
 			"log.events.0.t",
 		]);
 		expect(
-			await field({ log: { logVersion: 1, events: [{ ...a, data: { pad: "x".repeat(5000) } }] } }),
+			await field({
+				log: { logVersion: 1, events: [{ ...first, data: { pad: "x".repeat(5000) } }] },
+			}),
 		).toHaveProperty(["log.events.0.data"]);
 	});
 
@@ -233,12 +235,12 @@ describe("match logs", () => {
 		const body = report({ log: { logVersion: 1, events: big } });
 		expect(JSON.stringify(body).length).toBeGreaterThan(100_000);
 		expect((await post(body)).status).toBe(201);
-		const huge = await call(t.app, "POST", "/v1/matches", {
+		const huge = await call(testApp.app, "POST", "/v1/matches", {
 			body: "x".repeat(600 * 1024),
 			token: SERVER_KEY,
 		});
 		expect(huge.status).toBe(413);
-		const guestBody = await call(t.app, "POST", "/v1/players/guest", {
+		const guestBody = await call(testApp.app, "POST", "/v1/players/guest", {
 			body: "x".repeat(20 * 1024),
 		});
 		expect(guestBody.status).toBe(413);
@@ -247,7 +249,7 @@ describe("match logs", () => {
 
 describe("my match history", () => {
 	test("lists my matches newest first with paging", async () => {
-		const carl = await guest(t.app, "Carl");
+		const carl = await guest(testApp.app, "Carl");
 		const ids: string[] = [];
 		for (let i = 0; i < 22; i++) {
 			const body = report({
@@ -267,7 +269,7 @@ describe("my match history", () => {
 			expect((await post(body)).status).toBe(201);
 		}
 
-		const first = await call(t.app, "GET", "/v1/players/me/matches", { token: carl.secret });
+		const first = await call(testApp.app, "GET", "/v1/players/me/matches", { token: carl.secret });
 		expect(first.status).toBe(200);
 		expect(first.json.data.matches).toHaveLength(20);
 		expect(first.json.data.matches[0].id).toBe(ids.at(-1));
@@ -275,17 +277,20 @@ describe("my match history", () => {
 			expect.objectContaining({ game: "bust-31", players: 2, seat: 0 }),
 		);
 		const second = await call(
-			t.app,
+			testApp.app,
 			"GET",
 			`/v1/players/me/matches?cursor=${first.json.data.nextCursor}`,
 			{ token: carl.secret },
 		);
-		expect(second.json.data.matches.map((m: { id: string }) => m.id)).toEqual([ids[1], ids[0]]);
+		expect(second.json.data.matches.map((match: { id: string }) => match.id)).toEqual([
+			ids[1],
+			ids[0],
+		]);
 		expect(second.json.data.nextCursor).toBeNull();
 	});
 
 	test("stats count finished matches, wins and the best run of wins per game, not terminated ones", async () => {
-		const dana = await guest(t.app, "Dana");
+		const dana = await guest(testApp.app, "Dana");
 		const seats = (placement: number) => [
 			{ seat: 0, playerId: dana.player.id, bot: false, placement, score: 1 },
 			{
@@ -308,7 +313,7 @@ describe("my match history", () => {
 		const stopped = report({ players: seats(1), endReason: "terminated", endedAt: at(20) });
 		expect((await post(stopped)).status).toBe(201);
 
-		const res = await call(t.app, "GET", "/v1/players/me/stats", { token: dana.secret });
+		const res = await call(testApp.app, "GET", "/v1/players/me/stats", { token: dana.secret });
 		expect(res.status).toBe(200);
 		expect(res.json.data).toEqual({
 			games: [
@@ -326,8 +331,8 @@ describe("my match history", () => {
 	});
 
 	test("stats count the rounds a seat was dealt into and how each game counts a round won", async () => {
-		const eve = await guest(t.app, "Eve");
-		await room(t.sql, "cloudburst", "CLD9X");
+		const eve = await guest(testApp.app, "Eve");
+		await room(testApp.sql, "cloudburst", "CLD9X");
 		const seats = [
 			{ seat: 0, playerId: eve.player.id, bot: false, placement: 2, score: 1 },
 			{ seat: 1, playerId: null, bot: true, botName: "Bot Rain", placement: 1, score: 2 },
@@ -348,7 +353,7 @@ describe("my match history", () => {
 		];
 		for (const row of rounds) {
 			const events = [{ seq: 0, t: 0, type: "deal", data: { round: row.round, hands: row.hands } }];
-			await t.sql`
+			await testApp.sql`
 				INSERT INTO match_rounds (id, match_id, round, game_slug, room_id, result, events, started_at, ended_at, body_hash)
 				SELECT
 					${Bun.randomUUIDv7()},
@@ -365,7 +370,7 @@ describe("my match history", () => {
 				WHERE m.id = ${row.match.matchId}`;
 		}
 
-		const res = await call(t.app, "GET", "/v1/players/me/stats", { token: eve.secret });
+		const res = await call(testApp.app, "GET", "/v1/players/me/stats", { token: eve.secret });
 		const rounds_ = Object.fromEntries(
 			res.json.data.games.map((game: { game: string; rounds: unknown }) => [
 				game.game,
@@ -379,8 +384,8 @@ describe("my match history", () => {
 	});
 
 	test("history keeps one game with ?game=", async () => {
-		const finn = await guest(t.app, "Finn");
-		await room(t.sql, "cloudburst", "CLD8Y");
+		const finn = await guest(testApp.app, "Finn");
+		await room(testApp.sql, "cloudburst", "CLD8Y");
 		const seats = [
 			{ seat: 0, playerId: finn.player.id, bot: false, placement: 1, score: 1 },
 			{ seat: 1, playerId: null, bot: true, botName: "Bot Rain", placement: 2, score: 0 },
@@ -391,17 +396,17 @@ describe("my match history", () => {
 		expect((await post(cloud)).status).toBe(201);
 
 		const path = "/v1/players/me/matches?game=cloudburst";
-		const res = await call(t.app, "GET", path, { token: finn.secret });
+		const res = await call(testApp.app, "GET", path, { token: finn.secret });
 		expect(res.json.data.matches.map((match: { id: string }) => match.id)).toEqual([cloud.matchId]);
 
-		const bad = await call(t.app, "GET", "/v1/players/me/matches?game=NOPE!", {
+		const bad = await call(testApp.app, "GET", "/v1/players/me/matches?game=NOPE!", {
 			token: finn.secret,
 		});
 		expect(bad.status).toBe(400);
 	});
 
 	test("bad cursor is bad_input", async () => {
-		const res = await call(t.app, "GET", "/v1/players/me/matches?cursor=nope", {
+		const res = await call(testApp.app, "GET", "/v1/players/me/matches?cursor=nope", {
 			token: ann.secret,
 		});
 		expect(res.status).toBe(400);

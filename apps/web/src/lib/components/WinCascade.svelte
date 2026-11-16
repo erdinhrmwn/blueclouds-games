@@ -20,10 +20,10 @@
 {#if !prefersReducedMotion.current}
 	<!-- fixed + clipped so flying cards never cause page scroll on small screens -->
 	<div class="pointer-events-none fixed inset-0 z-0 overflow-hidden" aria-hidden="true">
-		{#each pieces as p, i (i)}
+		{#each pieces as piece, i (i)}
 			<span
-				class="piece {p.face ? 'face' : 'card-back'}"
-				style="--x: {p.x}px; --y: {p.y}px; --fall: {p.fall}px; --spin: {p.spin}deg; animation-delay: {p.delay}s"
+				class="piece {piece.face ? 'face' : 'card-back'}"
+				style="--x: {piece.x}px; --y: {piece.y}px; --fall: {piece.fall}px; --spin: {piece.spin}deg; animation-delay: {piece.delay}s"
 			></span>
 		{/each}
 	</div>

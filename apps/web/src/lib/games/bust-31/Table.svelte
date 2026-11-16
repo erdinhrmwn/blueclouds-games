@@ -30,7 +30,7 @@
 	const view = $derived(room.view!);
 
 	// Fixed chairs: everyone sees the same table, dealer at the head.
-	const inSeat = (seat: number) => view.players.find((p) => p.seat === seat) ?? null;
+	const inSeat = (seat: number) => view.players.find((player) => player.seat === seat) ?? null;
 
 	// The dealer deals every new round (game start, or after a bust once its stamp has shown).
 	// The server holds the first turn until this ends; your cards turn up one by one as they land.
@@ -57,7 +57,7 @@
 			return;
 		}
 
-		const seats = view.players.filter((p) => p.lives > 0).map((p) => p.id);
+		const seats = view.players.filter((player) => player.lives > 0).map((player) => player.id);
 		const wait = event.type === 'bust' ? DEAL.afterBustMs : 0;
 		const dealMs = seats.length * HAND_SIZE * DEAL.stepMs + DEAL.flightMs;
 		dealing = true;
@@ -122,7 +122,7 @@
 
 	// Cards played earlier stay visible under the top one, each at its own slight angle (-6..6).
 	const tiltOf = (id: string) => {
-		const hash = [...id].reduce((h, ch) => h * 31 + ch.charCodeAt(0), 7);
+		const hash = [...id].reduce((sum, ch) => sum * 31 + ch.charCodeAt(0), 7);
 		return (hash % 13) - 6;
 	};
 
@@ -204,7 +204,8 @@
 		return { ms: Math.max(0, room.turnEndsAt - Date.now()), total: room.turnTotal };
 	});
 
-	const nameOf = (id: string | null) => view.players.find((p) => p.id === id)?.name ?? '?';
+	const nameOf = (id: string | null) =>
+		view.players.find((player) => player.id === id)?.name ?? '?';
 
 	/** After a Double the player on turn plays 2 cards; older servers send no playsLeft. */
 	const playsLeft = $derived(view.playsLeft ?? 1);
@@ -267,6 +268,7 @@
 				const auto = event.auto ? ' (auto, time ran out)' : '';
 				return `${nameOf(event.playerId)} played ${spokenCard(event.card)}${cardOutcome(event)}${auto}.`;
 			}
+
 			case 'bust': {
 				const auto = event.auto ? ' (auto, time ran out)' : '';
 				const outcome = event.eliminated
@@ -274,6 +276,7 @@
 					: `Loses a life. Round ${view.round}.`;
 				return `${nameOf(event.playerId)} busted at ${event.total}${auto}. ${outcome}`;
 			}
+
 			case 'finished':
 				return `${nameOf(event.winnerId)} wins the table.`;
 		}
@@ -349,9 +352,13 @@
 			<div
 				class="grid h-[3.55rem] w-10 place-items-center rounded-lg border border-dashed border-paper/30 wide:h-[4.6rem] wide:w-[3.25rem]"
 			>
-				{#each under as u (u.id)}
-					<div class="col-start-1 row-start-1" style="rotate: {tiltOf(u.id)}deg" aria-hidden="true">
-						<PlayingCard card={u} size={pileSize} />
+				{#each under as card (card.id)}
+					<div
+						class="col-start-1 row-start-1"
+						style="rotate: {tiltOf(card.id)}deg"
+						aria-hidden="true"
+					>
+						<PlayingCard {card} size={pileSize} />
 					</div>
 				{/each}
 				{#key view.topCard?.id}

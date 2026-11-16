@@ -15,8 +15,8 @@ export const roomList = actor({
 	// Shown in the Rivet dashboard.
 	options: { name: "Room List", icon: "list" },
 	db: db({
-		onMigrate: async (d) => {
-			await d.execute(`
+		onMigrate: async (database) => {
+			await database.execute(`
 				CREATE TABLE IF NOT EXISTS rooms (
 					code TEXT PRIMARY KEY,
 					data TEXT NOT NULL,

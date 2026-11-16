@@ -3,16 +3,16 @@ import { moveCoins, SIGNUP_BONUS } from "../services/coins";
 import { runTournamentJob } from "../services/tournaments";
 import { call, guest, setupTestApp } from "../test-helpers";
 
-let t: Awaited<ReturnType<typeof setupTestApp>>;
+let testApp: Awaited<ReturnType<typeof setupTestApp>>;
 let admin: string;
 beforeAll(async () => {
-	t = await setupTestApp();
-	[{ id: admin }] = await t.sql`
+	testApp = await setupTestApp();
+	[{ id: admin }] = await testApp.sql`
 			INSERT INTO admins (username, password_hash, role)
 			VALUES ('root', '$argon2id$v=19$test', 'owner')
 			RETURNING id`;
 });
-afterAll(() => t.sql.close());
+afterAll(() => testApp.sql.close());
 
 const ip = () => ({ "x-forwarded-for": crypto.randomUUID() });
 let accountNumber = 0;
@@ -25,20 +25,20 @@ async function account() {
 		username: `acc_${accountNumber}`,
 		password: "long enough",
 	};
-	const res = await call(t.app, "POST", "/v1/players/register", { body, headers: ip() });
+	const res = await call(testApp.app, "POST", "/v1/players/register", { body, headers: ip() });
 	return { id: res.json.data.player.id as string, secret: res.json.data.playerSecret as string };
 }
 
 const coinsOf = async (secret: string) =>
-	(await call(t.app, "GET", "/v1/players/me", { token: secret })).json.data.coins as number;
+	(await call(testApp.app, "GET", "/v1/players/me", { token: secret })).json.data.coins as number;
 
 /** The balance always equals the sum of the player's ledger. */
 async function ledgerMatches(playerId: string) {
-	const [{ sum }] = await t.sql`
+	const [{ sum }] = await testApp.sql`
 			SELECT coalesce(sum(amount), 0)::bigint AS sum
 			FROM coin_ledger
 			WHERE player_id = ${playerId}`;
-	const [wallet] = await t.sql`
+	const [wallet] = await testApp.sql`
 		SELECT balance
 		FROM wallets
 		WHERE player_id = ${playerId}`;
@@ -47,7 +47,7 @@ async function ledgerMatches(playerId: string) {
 
 async function tournament(fee: number, opts: { closes?: number; min?: number } = {}) {
 	const at = (min: number) => new Date(Date.now() + min * 60_000);
-	const [row] = await t.sql`
+	const [row] = await testApp.sql`
 		INSERT INTO tournaments (game_slug, name, players_per_room, min_players, fee, bots_added_at, starts_at, registration_opens_at, registration_closes_at, created_by_admin_id)
 		VALUES ('bust-31', 'Fee Cup', 2, ${opts.min ?? null}, ${fee}, now(), ${at(30)}, ${at(-60)}, ${at(opts.closes ?? 20)}, ${admin})
 		RETURNING id`;
@@ -55,34 +55,38 @@ async function tournament(fee: number, opts: { closes?: number; min?: number } =
 }
 
 const join = (id: string, secret: string) =>
-	call(t.app, "POST", `/v1/tournaments/${id}/registration`, { token: secret });
+	call(testApp.app, "POST", `/v1/tournaments/${id}/registration`, { token: secret });
 const leave = (id: string, secret: string) =>
-	call(t.app, "DELETE", `/v1/tournaments/${id}/registration`, { token: secret });
+	call(testApp.app, "DELETE", `/v1/tournaments/${id}/registration`, { token: secret });
 
 describe("the wallet", () => {
 	test("a new account gets its bonus once; a guest gets none until it becomes an account", async () => {
 		const acc = await account();
 		expect(await coinsOf(acc.secret)).toBe(SIGNUP_BONUS);
 
-		const g = await guest(t.app, "Gus");
-		expect(await coinsOf(g.secret)).toBe(0);
+		const guestUser = await guest(testApp.app, "Gus");
+		expect(await coinsOf(guestUser.secret)).toBe(0);
 		const body = { name: "Gus", username: "gus_99", password: "long enough" };
-		await call(t.app, "POST", "/v1/players/register", { body, token: g.secret, headers: ip() });
-		expect(await coinsOf(g.secret)).toBe(SIGNUP_BONUS);
+		await call(testApp.app, "POST", "/v1/players/register", {
+			body,
+			token: guestUser.secret,
+			headers: ip(),
+		});
+		expect(await coinsOf(guestUser.secret)).toBe(SIGNUP_BONUS);
 
 		// A retry can't pay the bonus twice.
-		await t.sql.begin(async (tx) => {
+		await testApp.sql.begin(async (tx) => {
 			const { grantSignupBonus } = await import("../services/coins");
-			await grantSignupBonus(tx, g.player.id);
+			await grantSignupBonus(tx, guestUser.player.id);
 		});
-		expect(await coinsOf(g.secret)).toBe(SIGNUP_BONUS);
-		await ledgerMatches(g.player.id);
+		expect(await coinsOf(guestUser.secret)).toBe(SIGNUP_BONUS);
+		await ledgerMatches(guestUser.player.id);
 	});
 
 	test("a balance never goes below zero, and the ledger is history", async () => {
 		const acc = await account();
 		await expect(
-			t.sql.begin((tx) =>
+			testApp.sql.begin((tx) =>
 				moveCoins(tx, {
 					playerId: acc.id,
 					amount: -SIGNUP_BONUS - 1,
@@ -92,7 +96,7 @@ describe("the wallet", () => {
 			),
 		).rejects.toThrow("Not enough coins");
 		await expect(
-			t.sql`
+			testApp.sql`
 				UPDATE coin_ledger
 				SET amount = 5
 				WHERE player_id = ${acc.id}`,
@@ -106,7 +110,7 @@ describe("the wallet", () => {
 		await join(cup, acc.secret);
 		await leave(cup, acc.secret);
 
-		const res = await call(t.app, "GET", "/v1/players/me/coins", { token: acc.secret });
+		const res = await call(testApp.app, "GET", "/v1/players/me/coins", { token: acc.secret });
 		expect(res.json.data.balance).toBe(SIGNUP_BONUS);
 		expect(
 			res.json.data.history.map((row: { reason: string; amount: number }) => [
@@ -138,7 +142,7 @@ describe("tournament fees", () => {
 		const refused = await join(dear, acc.secret);
 		expect(refused.status).toBe(409);
 		expect(refused.json.error.message).toBe("Not enough coins: you have 700, this needs 1,000.");
-		const [{ n }] = await t.sql`
+		const [{ n }] = await testApp.sql`
 				SELECT count(*)::int AS n
 				FROM tournament_players
 				WHERE tournament_id = ${dear}`;
@@ -157,11 +161,11 @@ describe("tournament fees", () => {
 
 		await join(cup, ann.secret);
 		await join(cup, bob.secret);
-		await t.sql`
+		await testApp.sql`
 			UPDATE tournaments
 			SET registration_closes_at = now() - interval '1 minute'
 			WHERE id = ${cup}`;
-		await runTournamentJob(t.sql);
+		await runTournamentJob(testApp.sql);
 
 		expect((await leave(cup, bob.secret)).status).toBe(200);
 		expect(await coinsOf(bob.secret)).toBe(SIGNUP_BONUS);
@@ -176,7 +180,7 @@ describe("tournament fees", () => {
 		await join(cup, ann.secret);
 		await join(cup, bob.secret);
 
-		const disqualify = (playerId: string) => t.sql`
+		const disqualify = (playerId: string) => testApp.sql`
 			UPDATE tournament_players
 			SET status = 'disqualified', status_reason = 'Cheating', status_changed_at = now()
 			WHERE tournament_id = ${cup} AND player_id = ${playerId}`;
@@ -185,11 +189,11 @@ describe("tournament fees", () => {
 		expect((await leave(cup, ann.secret)).status).toBe(200);
 		expect(await coinsOf(ann.secret)).toBe(SIGNUP_BONUS - 200);
 
-		await t.sql`
+		await testApp.sql`
 			UPDATE tournaments
 			SET registration_closes_at = now() - interval '1 minute'
 			WHERE id = ${cup}`;
-		await runTournamentJob(t.sql);
+		await runTournamentJob(testApp.sql);
 		await disqualify(bob.id);
 		expect((await leave(cup, bob.secret)).status).toBe(200);
 		expect(await coinsOf(bob.secret)).toBe(SIGNUP_BONUS - 200);
@@ -201,14 +205,14 @@ describe("tournament fees", () => {
 		await join(cup, ann.secret);
 		expect(await coinsOf(ann.secret)).toBe(SIGNUP_BONUS - 150);
 
-		await t.sql`
+		await testApp.sql`
 			UPDATE tournaments
 			SET registration_closes_at = now() - interval '1 minute'
 			WHERE id = ${cup}`;
-		expect((await runTournamentJob(t.sql)).cancelled).toBeGreaterThanOrEqual(1);
+		expect((await runTournamentJob(testApp.sql)).cancelled).toBeGreaterThanOrEqual(1);
 		expect(await coinsOf(ann.secret)).toBe(SIGNUP_BONUS);
 
-		const [signUp] = await t.sql`
+		const [signUp] = await testApp.sql`
 				SELECT fee_paid
 				FROM tournament_players
 				WHERE tournament_id = ${cup} AND player_id = ${ann.id}`;

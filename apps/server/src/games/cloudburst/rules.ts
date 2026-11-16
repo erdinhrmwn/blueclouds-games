@@ -162,7 +162,7 @@ export function fits(card: Card, top: Card, suit: Suit): boolean {
 
 /** Sits a new player in `seat`, or in the first free one when no seat is given. */
 export function addPlayer(game: Game, id: string, name: string, bot = false, seat?: number): Game {
-	if (game.players.some((p) => p.id === id)) {
+	if (game.players.some((player) => player.id === id)) {
 		return game;
 	}
 
@@ -183,7 +183,7 @@ export function startGame(game: Game, byId: string, rng: Rng): Game {
 		throw new RuleError(`Needs at least ${MIN_PLAYERS} players.`);
 	}
 
-	const players = game.players.map((p) => ({ ...p, points: 0, hand: [] }));
+	const players = game.players.map((player) => ({ ...player, points: 0, hand: [] }));
 	const dealt = dealRound({ ...game, players, round: 0, winnerId: null }, rng);
 
 	return {
@@ -395,9 +395,9 @@ function endRound(game: Game, outId: string, card: Card, rng: Rng): Game {
 		return { ...player, points: player.points + player.hand.length };
 	});
 
-	const fewest = Math.min(...players.map((p) => p.points));
-	const leaders = players.filter((p) => p.points === fewest);
-	const burst = players.some((p) => p.points >= BURST_AT);
+	const fewest = Math.min(...players.map((player) => player.points));
+	const leaders = players.filter((player) => player.points === fewest);
+	const burst = players.some((player) => player.points >= BURST_AT);
 	const finished = burst && leaders.length === 1;
 
 	const roundEnd: GameEvent = {
@@ -497,16 +497,16 @@ export function publicView(game: Game, turn: { left: number; total: number } | n
 	return {
 		phase: game.phase,
 		hostId: game.hostId,
-		players: game.players.map((p) => ({
-			id: p.id,
-			name: p.name,
-			bot: p.bot,
-			seat: p.seat,
-			away: !!p.away,
-			vip: !!p.vip,
-			avatar: p.avatar ?? NO_AVATAR,
-			cards: p.hand.length,
-			points: p.points,
+		players: game.players.map((player) => ({
+			id: player.id,
+			name: player.name,
+			bot: player.bot,
+			seat: player.seat,
+			away: !!player.away,
+			vip: !!player.vip,
+			avatar: player.avatar ?? NO_AVATAR,
+			cards: player.hand.length,
+			points: player.points,
 		})),
 		deckCount: game.deck.length,
 		topCard: game.discard.at(-1) ?? null,

@@ -40,14 +40,14 @@ export function placeCard(
 	return {
 		duration: PLACE_MS,
 		easing: cubicOut,
-		// t runs 0 → 1, u = 1 - t. sin(πt) peaks mid-flight: the arc height and the slight lift.
-		css: (t, u) => {
-			const lift = Math.sin(Math.PI * t);
-			const x = dx * u;
-			const y = dy * u - arc * lift;
-			const scale = (startScale * u + t) * (1 + 0.08 * lift);
+		// progress runs 0 → 1 and remaining = 1 - progress. sin(π·progress) peaks mid-flight: the arc and lift.
+		css: (progress, remaining) => {
+			const lift = Math.sin(Math.PI * progress);
+			const x = dx * remaining;
+			const y = dy * remaining - arc * lift;
+			const scale = (startScale * remaining + progress) * (1 + 0.08 * lift);
 
-			return `transform: translate(${x}px, ${y}px) rotate(${tilt * u}deg) scale(${scale}); z-index: 5`;
+			return `transform: translate(${x}px, ${y}px) rotate(${tilt * remaining}deg) scale(${scale}); z-index: 5`;
 		}
 	};
 }
@@ -65,7 +65,7 @@ export function shake(node: HTMLElement | undefined): void {
 	}
 
 	const offsets = [0, -10, 9, -7, 5, -3, 0];
-	const frames = offsets.map((x) => ({ transform: `translateX(${x}px)` }));
+	const frames = offsets.map((offset) => ({ transform: `translateX(${offset}px)` }));
 	node.animate(frames, { duration: SHAKE_MS, easing: 'ease-out' });
 }
 

@@ -24,7 +24,8 @@
 	const listedMatchId = $derived(fairness?.matchId ?? fairness?.lastMatchId ?? null);
 	const short = (hash: string) => `${hash.slice(0, 4)}…${hash.slice(-4)}`;
 
-	const nameOf = (seat: number) => room.view?.players.find((p) => p.seat === seat)?.name ?? null;
+	const nameOf = (seat: number) =>
+		room.view?.players.find((player) => player.seat === seat)?.name ?? null;
 
 	/** Opens the dialog, then reads the match's closed rounds and checks each one. */
 	async function open() {

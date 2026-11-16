@@ -102,7 +102,7 @@ export const bust31Room = actor({
 		/** Joins (or rejoins) the room; returns your player id and the current view. */
 		join: async (c) => {
 			const who = caller(c);
-			const seated = c.vars.game.players.find((p) => p.id === who.id);
+			const seated = c.vars.game.players.find((player) => player.id === who.id);
 
 			if (!seated) {
 				const seat = await seatFor(c, who);
@@ -156,7 +156,7 @@ export const bust31Room = actor({
 			requireOpenTable(c);
 			requireHost(c);
 			const id = BotIdInput.parse(botId);
-			const bot = c.vars.game.players.find((p) => p.id === id);
+			const bot = c.vars.game.players.find((player) => player.id === id);
 			if (!bot?.bot) {
 				throw new UserError("Bot not found.", { code: "rule" });
 			}

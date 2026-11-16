@@ -23,8 +23,8 @@ export type MatchState = SharedMatch & { out: string[] };
 /** Notes who lost their last life on the move that produced `game`. Call after every move. */
 export function noteMove(match: MatchState, game: Game): MatchState {
 	const out = game.players
-		.filter((p) => p.lives <= 0 && !match.out.includes(p.id))
-		.map((p) => p.id);
+		.filter((player) => player.lives <= 0 && !match.out.includes(player.id))
+		.map((player) => player.id);
 
 	return out.length ? { ...match, out: [...match.out, ...out] } : match;
 }
@@ -56,12 +56,12 @@ export function buildReport(
 		startedAt: match.startedAt,
 		endedAt,
 		endReason: end,
-		players: game.players.map((p) => ({
-			seat: p.seat,
-			...reportedSeat(p),
-			placement: placement.get(p.id)!,
+		players: game.players.map((player) => ({
+			seat: player.seat,
+			...reportedSeat(player),
+			placement: placement.get(player.id)!,
 			// Bust 31 scores lives left.
-			score: Math.max(0, p.lives),
+			score: Math.max(0, player.lives),
 		})),
 		log: { logVersion: LOG_VERSION, events },
 	};
@@ -77,13 +77,13 @@ function finishedPlacements(game: Game, out: string[]): Map<string, number> {
 		return out.length - out.indexOf(id) + 1;
 	};
 
-	return new Map(game.players.map((p) => [p.id, placeOf(p.id)]));
+	return new Map(game.players.map((player) => [player.id, placeOf(player.id)]));
 }
 
 /** Where everyone stands mid-game: players still in by lives (then seat), then the players out, last out first. */
 function standings(game: Game, out: string[]): Map<string, number> {
 	const stillIn = game.players
-		.filter((p) => !out.includes(p.id))
+		.filter((player) => !out.includes(player.id))
 		.sort((a, b) => b.lives - a.lives || a.seat - b.seat);
 	const lastOutFirst = [...out].reverse().map((id) => ({ id }));
 
@@ -105,7 +105,7 @@ export function logEvents(before: Game, after: Game, auto = false): LogEntry[] {
 	const mover = before.phase === "playing" ? before.players[before.turn] : undefined;
 
 	if (mover && event?.type !== "started") {
-		const now = after.players.find((p) => p.id === mover.id)!;
+		const now = after.players.find((player) => player.id === mover.id)!;
 		const by = moveBy(mover, auto);
 
 		// "finished" replaces the bust in lastEvent; the card is then the one that left the hand.
@@ -116,7 +116,7 @@ export function logEvents(before: Game, after: Game, auto = false): LogEntry[] {
 
 		if (event?.type === "played") {
 			// Swap: the drawn card went to the seat that traded hands with the mover.
-			const swappedWith = after.players.find((p) => p.id === event.swappedWith);
+			const swappedWith = after.players.find((player) => player.id === event.swappedWith);
 			const holder = swappedWith ?? now;
 			const drew = drawn(mover, holder);
 
@@ -156,8 +156,8 @@ export function logEvents(before: Game, after: Game, auto = false): LogEntry[] {
 
 	const newRound = event?.type === "started" || event?.type === "bust";
 	if (after.phase === "playing" && newRound) {
-		const alive = after.players.filter((p) => p.lives > 0);
-		const hands = Object.fromEntries(alive.map((p) => [p.seat, ids(p.hand)]));
+		const alive = after.players.filter((player) => player.lives > 0);
+		const hands = Object.fromEntries(alive.map((player) => [player.seat, ids(player.hand)]));
 
 		entries.push({
 			type: "deal",
@@ -171,7 +171,7 @@ export function logEvents(before: Game, after: Game, auto = false): LogEntry[] {
 	}
 
 	if (after.phase === "finished") {
-		const winner = after.players.find((p) => p.id === after.winnerId)!;
+		const winner = after.players.find((player) => player.id === after.winnerId)!;
 		entries.push({ type: "finished", data: { winner: winner.seat } });
 	}
 
@@ -186,7 +186,7 @@ function awayChanges(before: Game, after: Game): LogEntry[] {
 
 	const entries: LogEntry[] = [];
 	for (const player of after.players) {
-		const was = before.players.find((p) => p.id === player.id);
+		const was = before.players.find((previous) => previous.id === player.id);
 		if (was && !!was.away !== !!player.away) {
 			entries.push({ type: player.away ? "away" : "back", seat: player.seat });
 		}

@@ -721,11 +721,13 @@ export async function listOpen(sql: SQL, game: string, playerId: string) {
 			) AS players,
 			t.fee,
 			(
-				SELECT count(*)::int FROM tournament_players x
+				SELECT count(*)::int
+				FROM tournament_players x
 				WHERE x.tournament_id = t.id AND x.status = 'registered'
 			) AS registered,
 			EXISTS (
-				SELECT 1 FROM tournament_players x
+				SELECT 1
+				FROM tournament_players x
 				WHERE x.tournament_id = t.id
 					AND x.player_id = ${playerId}
 					AND x.status = 'registered'

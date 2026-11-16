@@ -59,16 +59,20 @@
 
 	/** The point that far along the path (in % of the table), and the path's on-screen heading there in degrees. */
 	function pointAt(target: number): { x: number; y: number; angle: number } {
-		const i = Math.max(
+		const segment = Math.max(
 			1,
 			along.findIndex((distance) => distance >= target)
 		);
-		const t = (target - along[i - 1]) / (along[i] - along[i - 1] || 1);
-		const [x0, y0] = path[i - 1];
-		const [x1, y1] = path[i];
+		const fraction = (target - along[segment - 1]) / (along[segment] - along[segment - 1] || 1);
+		const [x0, y0] = path[segment - 1];
+		const [x1, y1] = path[segment];
 		const heading = Math.atan2(((y1 - y0) * height) / 100, ((x1 - x0) * width) / 100);
 
-		return { x: x0 + (x1 - x0) * t, y: y0 + (y1 - y0) * t, angle: (heading * 180) / Math.PI };
+		return {
+			x: x0 + (x1 - x0) * fraction,
+			y: y0 + (y1 - y0) * fraction,
+			angle: (heading * 180) / Math.PI
+		};
 	}
 
 	/** How far along the path chair `chair` sits: spaced evenly, so a tall phone table doesn't bunch them. */
@@ -91,8 +95,8 @@
 		)
 	);
 
-	function position(k: number) {
-		const { x, y } = k === 0 ? { x: 50, y: 0 } : chairs[k - 1];
+	function position(spot: number) {
+		const { x, y } = spot === 0 ? { x: 50, y: 0 } : chairs[spot - 1];
 		return `left: ${x}%; top: ${y}%;`;
 	}
 
@@ -101,8 +105,8 @@
 	 * stage and 56px on the wide one, so 24px or 28px down), with the name plate and any meter hanging below, so every
 	 * avatar sits on the rail at the same height whatever is under it.
 	 */
-	const anchor = (k: number) =>
-		k === 0 ? '-translate-y-1/2' : '-translate-y-6 wide:-translate-y-7';
+	const anchor = (spot: number) =>
+		spot === 0 ? '-translate-y-1/2' : '-translate-y-6 wide:-translate-y-7';
 </script>
 
 <!-- The same size in every phase (lobby, play, finished), so the table never jumps: a fixed height on each stage, the
@@ -164,9 +168,12 @@
 				</svg>
 			{/each}
 		{/if}
-		{#each Array(count) as _, k (k)}
-			<div class="pointer-events-auto absolute -translate-x-1/2 {anchor(k)}" style={position(k)}>
-				{@render seat(k)}
+		{#each Array(count) as _, spot (spot)}
+			<div
+				class="pointer-events-auto absolute -translate-x-1/2 {anchor(spot)}"
+				style={position(spot)}
+			>
+				{@render seat(spot)}
 			</div>
 		{/each}
 	</div>
