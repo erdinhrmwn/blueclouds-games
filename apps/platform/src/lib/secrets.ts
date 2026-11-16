@@ -1,13 +1,12 @@
 /** A player secret: 32 random bytes, base64url (43 chars). */
-export const SECRET_PATTERN = /^[A-Za-z0-9_-]{43}$/;
+export const SECRET_PATTERN = /^[A-Za-z0-9_-]{43}$/
 
-const SECRET_BYTES = 32;
+const SECRET_BYTES = 32
 
 export function newSecret(): string {
-	const bytes = crypto.getRandomValues(new Uint8Array(SECRET_BYTES));
-	return Buffer.from(bytes).toString("base64url");
+  const bytes = crypto.getRandomValues(new Uint8Array(SECRET_BYTES))
+  return Buffer.from(bytes).toString('base64url')
 }
 
 /** SHA-256 of a secret: what the database stores, and what the server key check compares. */
-export const hashSecret = (secret: string) =>
-	new Bun.CryptoHasher("sha256").update(secret).digest();
+export const hashSecret = (secret: string) => new Bun.CryptoHasher('sha256').update(secret).digest()

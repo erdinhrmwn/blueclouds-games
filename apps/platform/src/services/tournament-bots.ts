@@ -1,6 +1,6 @@
-import type { SQL, TransactionSQL } from "bun";
-import { log } from "../lib/log";
-import { balanceOf, moveCoins } from "./coins";
+import type { SQL, TransactionSQL } from 'bun'
+import { log } from '../lib/log'
+import { balanceOf, moveCoins } from './coins'
 
 /**
  * Bots that fill a tournament's tables (Erdin, 2026-11-13). In sign-up's last minute, when its people already
@@ -10,68 +10,68 @@ import { balanceOf, moveCoins } from "./coins";
  */
 
 /** How long before sign-up closes the bots come in. */
-export const BOTS_BEFORE_CLOSE = "1 minute";
+export const BOTS_BEFORE_CLOSE = '1 minute'
 
 /** Names for new bot accounts, used in turn; a number is added once they run out. */
 const BOT_NAMES = [
-	"Ash",
-	"Bree",
-	"Cove",
-	"Dune",
-	"Ember",
-	"Fern",
-	"Gale",
-	"Haze",
-	"Iris",
-	"Jade",
-	"Kite",
-	"Lark",
-	"Mist",
-	"Nova",
-	"Opal",
-	"Pike",
-	"Quill",
-	"Reed",
-	"Sage",
-	"Tide",
-	"Umber",
-	"Vale",
-	"Wren",
-	"Yarrow",
-];
+  'Ash',
+  'Bree',
+  'Cove',
+  'Dune',
+  'Ember',
+  'Fern',
+  'Gale',
+  'Haze',
+  'Iris',
+  'Jade',
+  'Kite',
+  'Lark',
+  'Mist',
+  'Nova',
+  'Opal',
+  'Pike',
+  'Quill',
+  'Reed',
+  'Sage',
+  'Tide',
+  'Umber',
+  'Vale',
+  'Wren',
+  'Yarrow',
+]
 
 /** Most bots one tournament takes (Erdin, 2026-11-14): past this, the tables stay as the people left them. */
-export const MAX_BOTS = 5;
+export const MAX_BOTS = 5
 
 /** Bots only top up a tournament whose people already fill this share of it (Erdin, 2026-11-14). */
-export const BOTS_FROM_SHARE = 0.8;
+export const BOTS_FROM_SHARE = 0.8
 
 export type BotInput = {
-	/** Everyone signed up so far, bots included. */
-	registered: number;
-	/** Those who aren't bots. */
-	people: number;
-	perTable: number;
-	minPlayers: number | null;
-	maxPlayers: number | null;
-	format: "arena" | "knockout" | "swiss" | null;
-};
+  /** Everyone signed up so far, bots included. */
+  registered: number
+  /** Those who aren't bots. */
+  people: number
+  perTable: number
+  minPlayers: number | null
+  maxPlayers: number | null
+  format: 'arena' | 'knockout' | 'swiss' | null
+}
 
 /**
  * The smallest "perfect bracket" holding these players: tables of `perTable`, raised to a power (4 a table: 4, 16,
  * 64; 2 a table: 2, 4, 8, 16), so in a knockout every round's tables are full down to the final.
  */
 export function perfectBracket(players: number, perTable: number): number {
-	if (perTable < 2) {
-		return players;
-	}
+  if (perTable < 2) {
+    return players
+  }
 
-	let size = perTable;
-	while (size < players) {
-		size *= perTable;
-	}
+  let size = perTable
+  while (size < players) {
+    size *= perTable
+  }
 
-	return size;
+  return size
 }
 
 /**
@@ -84,45 +84,45 @@ export function perfectBracket(players: number, perTable: number): number {
  * - at most MAX_BOTS bots, stopping at whole tables when that limit falls short.
  */
 export function botTarget(input: BotInput): number | null {
-	const { registered, people, perTable, minPlayers, maxPlayers, format } = input;
+  const { registered, people, perTable, minPlayers, maxPlayers, format } = input
 
-	if (people === 0) {
-		return null;
-	}
+  if (people === 0) {
+    return null
+  }
 
-	if (minPlayers !== null && people < minPlayers) {
-		return null;
-	}
+  if (minPlayers !== null && people < minPlayers) {
+    return null
+  }
 
-	const fullTables = Math.ceil(registered / perTable) * perTable;
-	const isKnockout = format === null || format === "knockout";
+  const fullTables = Math.ceil(registered / perTable) * perTable
+  const isKnockout = format === null || format === 'knockout'
 
-	let size: number;
-	let target: number;
+  let size: number
+  let target: number
 
-	if (isKnockout) {
-		const perfect = perfectBracket(people, perTable);
-		const fits = maxPlayers === null || perfect <= maxPlayers;
-		size = fits ? perfect : Math.min(fullTables, maxPlayers);
-		target = size;
-	} else {
-		size = maxPlayers ?? Math.ceil(people / perTable) * perTable;
-		const atLeast = Math.max(fullTables, minPlayers ?? 0);
-		target = Math.min(atLeast, maxPlayers ?? atLeast);
-	}
+  if (isKnockout) {
+    const perfect = perfectBracket(people, perTable)
+    const fits = maxPlayers === null || perfect <= maxPlayers
+    size = fits ? perfect : Math.min(fullTables, maxPlayers)
+    target = size
+  } else {
+    size = maxPlayers ?? Math.ceil(people / perTable) * perTable
+    const atLeast = Math.max(fullTables, minPlayers ?? 0)
+    target = Math.min(atLeast, maxPlayers ?? atLeast)
+  }
 
-	if (people < size * BOTS_FROM_SHARE) {
-		return null;
-	}
+  if (people < size * BOTS_FROM_SHARE) {
+    return null
+  }
 
-	const capped = Math.min(target, people * perTable, registered + MAX_BOTS);
-	if (capped <= registered) {
-		return registered;
-	}
+  const capped = Math.min(target, people * perTable, registered + MAX_BOTS)
+  if (capped <= registered) {
+    return registered
+  }
 
-	// When the bot limit stops short of the target, stop at whole tables, so no table is left too thin to play.
-	const wholeTables = Math.floor(capped / perTable) * perTable;
-	return wholeTables > registered ? wholeTables : capped;
+  // When the bot limit stops short of the target, stop at whole tables, so no table is left too thin to play.
+  const wholeTables = Math.floor(capped / perTable) * perTable
+  return wholeTables > registered ? wholeTables : capped
 }
 
 /**
@@ -131,68 +131,68 @@ export function botTarget(input: BotInput): number | null {
  * the seats left, in the order they came; so every table also gets a person while there are enough.
  */
 export function spreadBots(tables: string[][], isBot: (playerId: string) => boolean): string[][] {
-	const everyone = tables.flat();
-	const bots = everyone.filter((playerId) => isBot(playerId));
-	const people = everyone.filter((playerId) => !isBot(playerId));
-	const sizes = tables.map((table) => table.length);
-	const botsAt = sizes.map(() => 0);
+  const everyone = tables.flat()
+  const bots = everyone.filter((playerId) => isBot(playerId))
+  const people = everyone.filter((playerId) => !isBot(playerId))
+  const sizes = tables.map((table) => table.length)
+  const botsAt = sizes.map(() => 0)
 
-	// Deal bots round the tables; a table keeps a seat for a person while people remain to take it.
-	let dealt = 0;
-	while (dealt < bots.length) {
-		let placedThisPass = false;
+  // Deal bots round the tables; a table keeps a seat for a person while people remain to take it.
+  let dealt = 0
+  while (dealt < bots.length) {
+    let placedThisPass = false
 
-		for (let index = 0; index < sizes.length && dealt < bots.length; index += 1) {
-			const room = botsAt[index]! < sizes[index]! - (people.length > 0 ? 1 : 0);
-			if (room) {
-				botsAt[index]! += 1;
-				dealt += 1;
-				placedThisPass = true;
-			}
-		}
+    for (let index = 0; index < sizes.length && dealt < bots.length; index += 1) {
+      const room = botsAt[index]! < sizes[index]! - (people.length > 0 ? 1 : 0)
+      if (room) {
+        botsAt[index]! += 1
+        dealt += 1
+        placedThisPass = true
+      }
+    }
 
-		// Every table kept its last seat for a person: those seats go to bots too.
-		if (!placedThisPass) {
-			for (let index = 0; index < sizes.length && dealt < bots.length; index += 1) {
-				if (botsAt[index]! < sizes[index]!) {
-					botsAt[index]! += 1;
-					dealt += 1;
-				}
-			}
-		}
-	}
+    // Every table kept its last seat for a person: those seats go to bots too.
+    if (!placedThisPass) {
+      for (let index = 0; index < sizes.length && dealt < bots.length; index += 1) {
+        if (botsAt[index]! < sizes[index]!) {
+          botsAt[index]! += 1
+          dealt += 1
+        }
+      }
+    }
+  }
 
-	let nextBot = 0;
-	let nextPerson = 0;
+  let nextBot = 0
+  let nextPerson = 0
 
-	return sizes.map((size, index) => {
-		const table: string[] = [];
+  return sizes.map((size, index) => {
+    const table: string[] = []
 
-		for (let seat = 0; seat < botsAt[index]!; seat += 1) {
-			table.push(bots[nextBot]!);
-			nextBot += 1;
-		}
+    for (let seat = 0; seat < botsAt[index]!; seat += 1) {
+      table.push(bots[nextBot]!)
+      nextBot += 1
+    }
 
-		while (table.length < size && nextPerson < people.length) {
-			table.push(people[nextPerson]!);
-			nextPerson += 1;
-		}
+    while (table.length < size && nextPerson < people.length) {
+      table.push(people[nextPerson]!)
+      nextPerson += 1
+    }
 
-		while (table.length < size) {
-			table.push(bots[nextBot]!);
-			nextBot += 1;
-		}
+    while (table.length < size) {
+      table.push(bots[nextBot]!)
+      nextBot += 1
+    }
 
-		return table;
-	});
+    return table
+  })
 }
 
 /** Name for the n-th new bot account (0-based). */
 export function botAccountName(index: number): string {
-	const name = BOT_NAMES[index % BOT_NAMES.length]!;
-	const round = Math.floor(index / BOT_NAMES.length);
+  const name = BOT_NAMES[index % BOT_NAMES.length]!
+  const round = Math.floor(index / BOT_NAMES.length)
 
-	return round === 0 ? `Bot ${name}` : `Bot ${name} ${round + 1}`;
+  return round === 0 ? `Bot ${name}` : `Bot ${name} ${round + 1}`
 }
 
 /**
@@ -200,7 +200,7 @@ export function botAccountName(index: number): string {
  * it waits (nobody but bots signed up yet).
  */
 export async function fillWithBots(tx: SQL, tournamentId: string): Promise<number | null> {
-	const [tournament] = await tx`
+  const [tournament] = await tx`
 		SELECT
 			t.players_per_room,
 			t.min_players,
@@ -223,43 +223,43 @@ export async function fillWithBots(tx: SQL, tournamentId: string): Promise<numbe
 			AND t.bots_added_at IS NULL
 			AND t.distributed_at IS NULL
 			AND t.cancelled_at IS NULL
-		FOR UPDATE OF t`;
+		FOR UPDATE OF t`
 
-	if (!tournament) {
-		return 0;
-	}
+  if (!tournament) {
+    return 0
+  }
 
-	// Bots only top up a tournament its people nearly filled; until then, wait (more may still sign up).
-	const target = botTarget({
-		registered: tournament.registered,
-		people: tournament.people,
-		perTable: tournament.players_per_room,
-		minPlayers: tournament.min_players,
-		maxPlayers: tournament.max_players,
-		format: tournament.format,
-	});
-	if (target === null) {
-		return null;
-	}
+  // Bots only top up a tournament its people nearly filled; until then, wait (more may still sign up).
+  const target = botTarget({
+    registered: tournament.registered,
+    people: tournament.people,
+    perTable: tournament.players_per_room,
+    minPlayers: tournament.min_players,
+    maxPlayers: tournament.max_players,
+    format: tournament.format,
+  })
+  if (target === null) {
+    return null
+  }
 
-	const needed = Math.max(target - tournament.registered, 0);
-	const bots = needed > 0 ? await botsFor(tx, tournamentId, needed) : [];
-	const fee = Number(tournament.fee);
+  const needed = Math.max(target - tournament.registered, 0)
+  const bots = needed > 0 ? await botsFor(tx, tournamentId, needed) : []
+  const fee = Number(tournament.fee)
 
-	for (const botId of bots) {
-		await signBotUp(tx, tournamentId, botId, fee);
-	}
+  for (const botId of bots) {
+    await signBotUp(tx, tournamentId, botId, fee)
+  }
 
-	await tx`
+  await tx`
 		UPDATE tournaments
 		SET bots_added_at = now()
-		WHERE id = ${tournamentId}`;
-	return bots.length;
+		WHERE id = ${tournamentId}`
+  return bots.length
 }
 
 /** Bot accounts free for this tournament, richest first, with new ones made when there aren't enough. */
 async function botsFor(tx: SQL, tournamentId: string, needed: number): Promise<string[]> {
-	const rows = await tx`
+  const rows = await tx`
 		SELECT p.id
 		FROM players p
 		LEFT JOIN wallets w ON w.player_id = p.id
@@ -270,50 +270,50 @@ async function botsFor(tx: SQL, tournamentId: string, needed: number): Promise<s
 				WHERE tp.tournament_id = ${tournamentId} AND tp.player_id = p.id
 			)
 		ORDER BY coalesce(w.balance, 0) DESC, p.id
-		LIMIT ${needed}`;
+		LIMIT ${needed}`
 
-	const found = rows.map((row: { id: string }) => row.id);
-	const missing = needed - found.length;
-	if (missing === 0) {
-		return found;
-	}
+  const found = rows.map((row: { id: string }) => row.id)
+  const missing = needed - found.length
+  if (missing === 0) {
+    return found
+  }
 
-	const [{ existing }] = await tx`
+  const [{ existing }] = await tx`
 		SELECT count(*)::int AS existing
 		FROM players
-		WHERE is_bot`;
-	const accounts = Array.from({ length: missing }, (_, index) => ({
-		display_name: botAccountName(existing + index),
-		is_bot: true,
-	}));
-	const made = await tx`
+		WHERE is_bot`
+  const accounts = Array.from({ length: missing }, (_, index) => ({
+    display_name: botAccountName(existing + index),
+    is_bot: true,
+  }))
+  const made = await tx`
 		INSERT INTO players ${tx(accounts)}
-		RETURNING id`;
+		RETURNING id`
 
-	return [...found, ...made.map((row: { id: string }) => row.id)];
+  return [...found, ...made.map((row: { id: string }) => row.id)]
 }
 
 /** Signs one bot up and takes its fee, topping its coins up first when they don't cover it. */
 async function signBotUp(tx: SQL, tournamentId: string, botId: string, fee: number): Promise<void> {
-	if (fee > 0) {
-		const balance = await balanceOf(tx, botId);
-		if (balance < fee) {
-			await moveCoins(tx, { playerId: botId, amount: fee - balance, reason: "bot_funding" });
-		}
-	}
+  if (fee > 0) {
+    const balance = await balanceOf(tx, botId)
+    if (balance < fee) {
+      await moveCoins(tx, { playerId: botId, amount: fee - balance, reason: 'bot_funding' })
+    }
+  }
 
-	await tx`
+  await tx`
 		INSERT INTO tournament_players (tournament_id, player_id, fee_paid)
-		VALUES (${tournamentId}, ${botId}, ${fee})`;
+		VALUES (${tournamentId}, ${botId}, ${fee})`
 
-	if (fee > 0) {
-		await moveCoins(tx, { playerId: botId, amount: -fee, reason: "tournament_fee", tournamentId });
-	}
+  if (fee > 0) {
+    await moveCoins(tx, { playerId: botId, amount: -fee, reason: 'tournament_fee', tournamentId })
+  }
 }
 
 /** One job step: every tournament in sign-up's last minute that hasn't had its bots yet. */
 export async function fillDueWithBots(tx: TransactionSQL): Promise<number> {
-	const due = await tx`
+  const due = await tx`
 		SELECT id
 		FROM tournaments
 		WHERE bots_added_at IS NULL
@@ -322,20 +322,20 @@ export async function fillDueWithBots(tx: TransactionSQL): Promise<number> {
 			AND registration_closes_at <= now() + ${BOTS_BEFORE_CLOSE}::interval
 		ORDER BY registration_closes_at
 		FOR UPDATE SKIP LOCKED
-		LIMIT 10`;
+		LIMIT 10`
 
-	let filled = 0;
-	for (const { id } of due) {
-		try {
-			const joined = await tx.savepoint((sp) => fillWithBots(sp, id));
-			if (joined) {
-				filled += 1;
-				log.info({ msg: "tournament filled with bots", tournamentId: id, bots: joined });
-			}
-		} catch (err) {
-			log.error({ msg: "tournament bots failed", tournamentId: id, err });
-		}
-	}
+  let filled = 0
+  for (const { id } of due) {
+    try {
+      const joined = await tx.savepoint((sp) => fillWithBots(sp, id))
+      if (joined) {
+        filled += 1
+        log.info({ msg: 'tournament filled with bots', tournamentId: id, bots: joined })
+      }
+    } catch (err) {
+      log.error({ msg: 'tournament bots failed', tournamentId: id, err })
+    }
+  }
 
-	return filled;
+  return filled
 }

@@ -1,80 +1,80 @@
-import type { SQL } from "bun";
-import { Hono } from "hono";
-import { z } from "zod";
-import type { AppEnv } from "../app";
-import { ok, validate } from "../lib/http";
-import { playerAuth } from "../middleware/auth";
-import { listLive, standingsOf, tournamentBoard } from "../services/tournament-live";
+import type { SQL } from 'bun'
+import { Hono } from 'hono'
+import { z } from 'zod'
+import type { AppEnv } from '../app'
+import { ok, validate } from '../lib/http'
+import { playerAuth } from '../middleware/auth'
+import { listLive, standingsOf, tournamentBoard } from '../services/tournament-live'
 import {
-	joinTournament,
-	leaveTournament,
-	listOpen,
-	myTournaments,
-	seatedRooms,
-} from "../services/tournaments";
+  joinTournament,
+  leaveTournament,
+  listOpen,
+  myTournaments,
+  seatedRooms,
+} from '../services/tournaments'
 
-const GameQuery = z.object({ game: z.string().regex(/^[a-z0-9-]{2,32}$/, "Unknown game.") });
-const OptionalGame = z.object({ game: GameQuery.shape.game.optional() });
-const TournamentParam = z.object({ id: z.uuid("Not a tournament id.") });
+const GameQuery = z.object({ game: z.string().regex(/^[a-z0-9-]{2,32}$/, 'Unknown game.') })
+const OptionalGame = z.object({ game: GameQuery.shape.game.optional() })
+const TournamentParam = z.object({ id: z.uuid('Not a tournament id.') })
 
 export function tournamentRoutes(sql: SQL) {
-	const app = new Hono<AppEnv>();
-	const auth = playerAuth(sql);
+  const app = new Hono<AppEnv>()
+  const auth = playerAuth(sql)
 
-	app.get("/tournaments", auth, validate("query", GameQuery), async (c) => {
-		const { game } = c.req.valid("query");
-		const playerId = c.get("player").id;
-		const [tournaments, live] = await Promise.all([
-			listOpen(sql, game, playerId),
-			listLive(sql, game, playerId),
-		]);
+  app.get('/tournaments', auth, validate('query', GameQuery), async (c) => {
+    const { game } = c.req.valid('query')
+    const playerId = c.get('player').id
+    const [tournaments, live] = await Promise.all([
+      listOpen(sql, game, playerId),
+      listLive(sql, game, playerId),
+    ])
 
-		return ok(c, { tournaments, live });
-	});
+    return ok(c, { tournaments, live })
+  })
 
-	const tournamentParam = validate("param", TournamentParam);
+  const tournamentParam = validate('param', TournamentParam)
 
-	app.get("/tournaments/:id", auth, tournamentParam, async (c) => {
-		const { id } = c.req.valid("param");
-		const board = await tournamentBoard(sql, id, c.get("player").id);
+  app.get('/tournaments/:id', auth, tournamentParam, async (c) => {
+    const { id } = c.req.valid('param')
+    const board = await tournamentBoard(sql, id, c.get('player').id)
 
-		return ok(c, board);
-	});
+    return ok(c, board)
+  })
 
-	app.get("/tournaments/:id/standings", auth, tournamentParam, async (c) => {
-		const { id } = c.req.valid("param");
-		const standings = await standingsOf(sql, id);
+  app.get('/tournaments/:id/standings', auth, tournamentParam, async (c) => {
+    const { id } = c.req.valid('param')
+    const standings = await standingsOf(sql, id)
 
-		return ok(c, { standings });
-	});
+    return ok(c, { standings })
+  })
 
-	app.post("/tournaments/:id/registration", auth, tournamentParam, async (c) => {
-		const { id: tournamentId } = c.req.valid("param");
-		await joinTournament(sql, tournamentId, c.get("player").id);
+  app.post('/tournaments/:id/registration', auth, tournamentParam, async (c) => {
+    const { id: tournamentId } = c.req.valid('param')
+    await joinTournament(sql, tournamentId, c.get('player').id)
 
-		return ok(c, { registered: true });
-	});
+    return ok(c, { registered: true })
+  })
 
-	app.delete("/tournaments/:id/registration", auth, tournamentParam, async (c) => {
-		const { id: tournamentId } = c.req.valid("param");
-		await leaveTournament(sql, tournamentId, c.get("player").id);
+  app.delete('/tournaments/:id/registration', auth, tournamentParam, async (c) => {
+    const { id: tournamentId } = c.req.valid('param')
+    await leaveTournament(sql, tournamentId, c.get('player').id)
 
-		return ok(c, { registered: false });
-	});
+    return ok(c, { registered: false })
+  })
 
-	/** The tournaments the signed-in player is or was in, with their record, for their profile. */
-	app.get("/players/me/tournaments", auth, async (c) => {
-		const mine = await myTournaments(sql, c.get("player").id);
+  /** The tournaments the signed-in player is or was in, with their record, for their profile. */
+  app.get('/players/me/tournaments', auth, async (c) => {
+    const mine = await myTournaments(sql, c.get('player').id)
 
-		return ok(c, mine);
-	});
+    return ok(c, mine)
+  })
 
-	app.get("/players/me/rooms", auth, validate("query", OptionalGame), async (c) => {
-		const { game } = c.req.valid("query");
-		const rooms = await seatedRooms(sql, c.get("player").id, game);
+  app.get('/players/me/rooms', auth, validate('query', OptionalGame), async (c) => {
+    const { game } = c.req.valid('query')
+    const rooms = await seatedRooms(sql, c.get('player').id, game)
 
-		return ok(c, { rooms });
-	});
+    return ok(c, { rooms })
+  })
 
-	return app;
+  return app
 }

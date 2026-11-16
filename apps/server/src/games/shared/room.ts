@@ -1,81 +1,81 @@
 // Actor-side helpers every game room shares: who is connected, the turn clock, leaving,
 // the room list and the match result outbox. Each game keeps its own actor and actions.
-import { createHash, timingSafeEqual } from "node:crypto";
-import { UserError } from "rivetkit";
+import { createHash, timingSafeEqual } from 'node:crypto'
+import { UserError } from 'rivetkit'
 import {
-	fetchRoomSeats,
-	fetchVipIds,
-	type Identity,
-	markRoom,
-	reportMatch,
-	reportRound,
-	verifyPlayToken,
-} from "../../platform";
-import { fairRng, matchSeeds, type NextMatch, newCommitment, seedsForRound } from "./fair-rng";
-import { clientSeedOf, type MatchSeeds } from "./fairness";
+  fetchRoomSeats,
+  fetchVipIds,
+  type Identity,
+  markRoom,
+  reportMatch,
+  reportRound,
+  verifyPlayToken,
+} from '../../platform'
+import { fairRng, matchSeeds, type NextMatch, newCommitment, seedsForRound } from './fair-rng'
+import { clientSeedOf, type MatchSeeds } from './fairness'
 import {
-	type LogEntry,
-	type LogEvent,
-	type MatchEnd,
-	type MatchReport,
-	type MatchState,
-	stamp,
-} from "./match";
-import { closedRounds, type RoundReport, type RoundResult, roundReport } from "./rounds";
-import { AdminParams, PlayerParams, SeatInput, tournamentListKey } from "./schema";
+  type LogEntry,
+  type LogEvent,
+  type MatchEnd,
+  type MatchReport,
+  type MatchState,
+  stamp,
+} from './match'
+import { closedRounds, type RoundReport, type RoundResult, roundReport } from './rounds'
+import { AdminParams, PlayerParams, SeatInput, tournamentListKey } from './schema'
 import {
-	kickPlayer,
-	markAway,
-	type Rng,
-	RuleError,
-	randomRng,
-	removePlayer,
-	SEATS,
-	showVips,
-	type Table,
-} from "./table";
+  kickPlayer,
+  markAway,
+  type Rng,
+  RuleError,
+  randomRng,
+  removePlayer,
+  SEATS,
+  showVips,
+  type Table,
+} from './table'
 
 /** How long a closed tab has to come back (a refresh) before its player leaves the table. */
-export const GONE_AFTER_MS = 15_000;
+export const GONE_AFTER_MS = 15_000
 /** A bot gets the same turn clock as a human; it just decides within this range (random). */
-export const BOT_THINK_MS = [1500, 4000] as const;
+export const BOT_THINK_MS = [1500, 4000] as const
 
-const BOT_NAMES = ["Bot Cloud", "Bot Rain", "Bot Thunder", "Bot Rainbow", "Bot Wind"];
+const BOT_NAMES = ['Bot Cloud', 'Bot Rain', 'Bot Thunder', 'Bot Rainbow', 'Bot Wind']
 
 /** Wait before each retry of an unsent match result; the last one repeats forever. */
-const REPORT_RETRY_MS = [10_000, 60_000, 5 * 60_000, 30 * 60_000, 6 * 60 * 60_000];
+const REPORT_RETRY_MS = [10_000, 60_000, 5 * 60_000, 30 * 60_000, 6 * 60 * 60_000]
 
 /** The turn the timer belongs to (`moves` = the turn key), when it runs out (epoch ms), and its full length. */
-export type TurnTimer = { moves: number; endsAt: number; total: number } | null;
+export type TurnTimer = { moves: number; endsAt: number; total: number } | null
 
 /** How long a tournament room waits past its start time for late players (Erdin, 2026-11-11). */
-export const LATE_GRACE_MS = 3 * 60_000;
+export const LATE_GRACE_MS = 3 * 60_000
 
 /** How often a room with someone connected asks the platform who is VIP, so a grant or revoke reaches seated tags. */
-export const VIP_REFRESH_MS = 30_000;
+export const VIP_REFRESH_MS = 30_000
 
 /** A tournament room as the actor knows it from the platform. `seats` maps each assigned player to their seat (null = any). */
 export type TournamentRoom = {
-	id: string;
-	name: string;
-	format: "arena" | "knockout" | "swiss" | null;
-	/** Arena and Swiss: how many rounds it plays; null for Knockout. */
-	rounds: number | null;
-	/** Everyone still signed up to the tournament, all tables; null from an older platform. */
-	registered: number | null;
-	/** The tournament round this table plays in. */
-	round: number;
-	startsAt: number;
-	cancelled: boolean;
-	minPlayers: number;
-	seats: Record<string, number | null>;
-	/** Bot accounts among the seats, by id, with the name they play under; the room plays their seats. */
-	bots?: Record<string, string>;
-	closed: boolean;
-};
+  id: string
+  name: string
+  format: 'arena' | 'knockout' | 'swiss' | null
+  /** Arena and Swiss: how many rounds it plays; null for Knockout. */
+  rounds: number | null
+  /** Everyone still signed up to the tournament, all tables; null from an older platform. */
+  registered: number | null
+  /** The tournament round this table plays in. */
+  round: number
+  startsAt: number
+  cancelled: boolean
+  minPlayers: number
+  seats: Record<string, number | null>
+  /** Bot accounts among the seats, by id, with the name they play under; the room plays their seats. */
+  bots?: Record<string, string>
+  closed: boolean
+}
 
 /** An admin terminated the table: nobody plays or joins here again. */
-export type Termination = { at: number; reason: string };
+export type Termination = { at: number; reason: string }
 
 /**
  * What a room saves: the game, its turn timer, the match being played (null in the lobby), its
@@ -84,19 +84,19 @@ export type Termination = { at: number; reason: string };
  * next match is committed to, and the last match played.
  */
 export type Saved<G extends Table, M extends MatchState = MatchState> = {
-	game: G;
-	timer: TurnTimer;
-	match: M | null;
-	tournament?: TournamentRoom | null;
-	listed?: boolean;
-	kicked?: string[];
-	terminated?: Termination | null;
-	next?: NextMatch;
-	/** The last match played here, so the table can still show its rounds once it ended. */
-	lastMatchId?: string | null;
-	/** The table's own name, from the platform (null: none was picked). */
-	roomName?: string | null;
-};
+  game: G
+  timer: TurnTimer
+  match: M | null
+  tournament?: TournamentRoom | null
+  listed?: boolean
+  kicked?: string[]
+  terminated?: Termination | null
+  next?: NextMatch
+  /** The last match played here, so the table can still show its rounds once it ended. */
+  lastMatchId?: string | null
+  /** The table's own name, from the platform (null: none was picked). */
+  roomName?: string | null
+}
 
 /**
  * What every room keeps in `c.vars`. Not saved: who each open connection is (connections close when
@@ -105,89 +105,89 @@ export type Saved<G extends Table, M extends MatchState = MatchState> = {
  * waiting for the next commit to log them.
  */
 export type RoomVars<G extends Table, M extends MatchState = MatchState> = Saved<G, M> & {
-	who: Record<string, Identity>;
-	logged: G;
-	vipCheckAt: number | null;
-	fairLog: LogEntry[];
-};
+  who: Record<string, Identity>
+  logged: G
+  vipCheckAt: number | null
+  fairLog: LogEntry[]
+}
 
 export const roomVars = <G extends Table, M extends MatchState>(game: G): RoomVars<G, M> => ({
-	game,
-	logged: game,
-	who: {},
-	vipCheckAt: null,
-	timer: null,
-	match: null,
-	next: newCommitment(),
-	fairLog: [],
-});
+  game,
+  logged: game,
+  who: {},
+  vipCheckAt: null,
+  timer: null,
+  match: null,
+  next: newCommitment(),
+  fairLog: [],
+})
 
 /** The room's tables: one JSON row for the whole room (a few KB), the result outbox, and the move log. */
 export async function migrateRoom(database: {
-	execute: (sql: string) => Promise<unknown>;
+  execute: (sql: string) => Promise<unknown>
 }): Promise<void> {
-	await database.execute(`
+  await database.execute(`
 		CREATE TABLE IF NOT EXISTS room (
 			id INTEGER PRIMARY KEY CHECK (id = 1),
 			data TEXT NOT NULL
-		)`);
+		)`)
 
-	// Outbox: finished match results waiting to reach the platform.
-	await database.execute(`
+  // Outbox: finished match results waiting to reach the platform.
+  await database.execute(`
 		CREATE TABLE IF NOT EXISTS match_reports (
 			match_id TEXT PRIMARY KEY,
 			body TEXT NOT NULL,
 			attempts INTEGER NOT NULL DEFAULT 0
-		)`);
+		)`)
 
-	// Outbox: closed rounds waiting to reach the platform (rounds.ts), sent before their match's report.
-	await database.execute(`
+  // Outbox: closed rounds waiting to reach the platform (rounds.ts), sent before their match's report.
+  await database.execute(`
 		CREATE TABLE IF NOT EXISTS round_reports (
 			match_id TEXT NOT NULL,
 			round INTEGER NOT NULL,
 			body TEXT NOT NULL,
 			attempts INTEGER NOT NULL DEFAULT 0,
 			PRIMARY KEY (match_id, round)
-		)`);
+		)`)
 
-	// Move log of the match being played; moved into its report when the match ends.
-	await database.execute(`
+  // Move log of the match being played; moved into its report when the match ends.
+  await database.execute(`
 		CREATE TABLE IF NOT EXISTS match_events (
 			match_id TEXT NOT NULL,
 			seq INTEGER NOT NULL,
 			body TEXT NOT NULL,
 			PRIMARY KEY (match_id, seq)
-		)`);
+		)`)
 }
 
 /** onWake: loads the saved room into `c.vars`. */
 export async function loadRoom(c: Ctx): Promise<void> {
-	const [row] = await c.db.execute("SELECT data FROM room WHERE id = 1");
-	if (row) {
-		Object.assign(c.vars, JSON.parse(row.data));
-	}
+  const [row] = await c.db.execute('SELECT data FROM room WHERE id = 1')
+  if (row) {
+    Object.assign(c.vars, JSON.parse(row.data))
+  }
 
-	c.vars.timer ??= null;
-	c.vars.match ??= null;
-	c.vars.kicked ??= [];
-	c.vars.terminated ??= null;
-	// A room saved before seeds were made per round commits again; a match it was playing deals on unseeded.
-	if (!c.vars.next?.firstRound) {
-		c.vars.next = newCommitment();
-	}
+  c.vars.timer ??= null
+  c.vars.match ??= null
+  c.vars.kicked ??= []
+  c.vars.terminated ??= null
+  // A room saved before seeds were made per round commits again; a match it was playing deals on unseeded.
+  if (!c.vars.next?.firstRound) {
+    c.vars.next = newCommitment()
+  }
 
-	if (c.vars.match?.seeds && !c.vars.match.seeds.next) {
-		c.vars.match.seeds = undefined;
-	}
+  if (c.vars.match?.seeds && !c.vars.match.seeds.next) {
+    c.vars.match.seeds = undefined
+  }
 
-	c.vars.fairLog = [];
+  c.vars.fairLog = []
 
-	// Matches started before the move log have no seq yet.
-	if (c.vars.match) {
-		c.vars.match.seq ??= 0;
-	}
+  // Matches started before the move log have no seq yet.
+  if (c.vars.match) {
+    c.vars.match.seq ??= 0
+  }
 
-	c.vars.logged = c.vars.game;
+  c.vars.logged = c.vars.game
 }
 
 /**
@@ -199,172 +199,172 @@ export async function loadRoom(c: Ctx): Promise<void> {
  * termination).
  */
 export async function commitRoom<G extends Table, M extends MatchState>(
-	c: Ctx,
-	game: {
-		slug: string;
-		scheduleTurn: () => Promise<void>;
-		logEvents: (before: G, after: G, auto: boolean) => LogEntry[];
-		/** Updates the match record after each move (e.g. who was knocked out). */
-		noteMove?: (match: M, game: G) => M;
-		/** The game's summary of a closed round, for the round history. */
-		roundResult: RoundResult;
-		buildReport: (
-			match: M,
-			game: G,
-			roomCode: string,
-			endedAt: string,
-			log: LogEvent[],
-			end: MatchEnd,
-		) => MatchReport;
-		view: () => unknown;
-		handOf: (playerId: string) => unknown;
-	},
-	auto = false,
-	extra: LogEntry[] = [],
+  c: Ctx,
+  game: {
+    slug: string
+    scheduleTurn: () => Promise<void>
+    logEvents: (before: G, after: G, auto: boolean) => LogEntry[]
+    /** Updates the match record after each move (e.g. who was knocked out). */
+    noteMove?: (match: M, game: G) => M
+    /** The game's summary of a closed round, for the round history. */
+    roundResult: RoundResult
+    buildReport: (
+      match: M,
+      game: G,
+      roomCode: string,
+      endedAt: string,
+      log: LogEvent[],
+      end: MatchEnd,
+    ) => MatchReport
+    view: () => unknown
+    handOf: (playerId: string) => unknown
+  },
+  auto = false,
+  extra: LogEntry[] = [],
 ): Promise<void> {
-	const vars = c.vars as RoomVars<G, M>;
+  const vars = c.vars as RoomVars<G, M>
 
-	// A terminated table runs no clock: nothing moves there again.
-	if (vars.terminated) {
-		vars.timer = null;
-	} else {
-		await game.scheduleTurn();
-	}
+  // A terminated table runs no clock: nothing moves there again.
+  if (vars.terminated) {
+    vars.timer = null
+  } else {
+    await game.scheduleTurn()
+  }
 
-	let end: MatchEnd | null = null;
-	if (vars.match && vars.terminated) {
-		end = "terminated";
-	} else if (vars.match && vars.game.phase === "finished") {
-		end = "finished";
-	}
+  let end: MatchEnd | null = null
+  if (vars.match && vars.terminated) {
+    end = 'terminated'
+  } else if (vars.match && vars.game.phase === 'finished') {
+    end = 'finished'
+  }
 
-	const finished = end !== null;
-	const seeds = vars.match?.seeds;
-	const moves = vars.match
-		? withoutKickedAway(extra, game.logEvents(vars.logged, vars.game, auto))
-		: [];
+  const finished = end !== null
+  const seeds = vars.match?.seeds
+  const moves = vars.match
+    ? withoutKickedAway(extra, game.logEvents(vars.logged, vars.game, auto))
+    : []
 
-	// The rounds this change closes: a new deal closes the round before it, the end of the match its last one.
-	// Each closed round's seed is revealed after its moves.
-	const closing = seeds ? closedRounds(moves, seeds.current?.round ?? null, finished) : [];
-	const reveals = closing.flatMap((round) => revealOf(seeds!, round));
+  // The rounds this change closes: a new deal closes the round before it, the end of the match its last one.
+  // Each closed round's seed is revealed after its moves.
+  const closing = seeds ? closedRounds(moves, seeds.current?.round ?? null, finished) : []
+  const reveals = closing.flatMap((round) => revealOf(seeds!, round))
 
-	const entries = vars.match ? [...extra, ...vars.fairLog, ...moves, ...reveals] : [];
-	vars.logged = vars.game;
-	vars.fairLog = [];
+  const entries = vars.match ? [...extra, ...vars.fairLog, ...moves, ...reveals] : []
+  vars.logged = vars.game
+  vars.fairLog = []
 
-	let match = vars.match;
-	let events: LogEvent[] = [];
-	if (match) {
-		const noted = game.noteMove ? game.noteMove(match, vars.game) : match;
-		({ match, events } = stamp(noted, entries, Date.now()));
-	}
+  let match = vars.match
+  let events: LogEvent[] = []
+  if (match) {
+    const noted = game.noteMove ? game.noteMove(match, vars.game) : match
+    ;({ match, events } = stamp(noted, entries, Date.now()))
+  }
 
-	vars.match = finished ? null : match;
-	if (finished) {
-		vars.lastMatchId = match!.id;
-	}
+  vars.match = finished ? null : match
+  if (finished) {
+    vars.lastMatchId = match!.id
+  }
 
-	const saved: Saved<G, M> = {
-		game: vars.game,
-		timer: vars.timer,
-		match: vars.match,
-		tournament: vars.tournament,
-		listed: vars.listed,
-		kicked: vars.kicked,
-		terminated: vars.terminated,
-		next: vars.next,
-		lastMatchId: vars.lastMatchId ?? null,
-		roomName: vars.roomName ?? null,
-	};
-	await c.db.transaction(
-		async (tx: Ctx) => {
-			for (const event of events) {
-				await tx.execute(
-					"INSERT INTO match_events (match_id, seq, body) VALUES (?, ?, ?)",
-					match!.id,
-					event.seq,
-					JSON.stringify(event),
-				);
-			}
+  const saved: Saved<G, M> = {
+    game: vars.game,
+    timer: vars.timer,
+    match: vars.match,
+    tournament: vars.tournament,
+    listed: vars.listed,
+    kicked: vars.kicked,
+    terminated: vars.terminated,
+    next: vars.next,
+    lastMatchId: vars.lastMatchId ?? null,
+    roomName: vars.roomName ?? null,
+  }
+  await c.db.transaction(
+    async (tx: Ctx) => {
+      for (const event of events) {
+        await tx.execute(
+          'INSERT INTO match_events (match_id, seq, body) VALUES (?, ?, ?)',
+          match!.id,
+          event.seq,
+          JSON.stringify(event),
+        )
+      }
 
-			const roomCode = c.key[0] as string;
-			let log: LogEvent[] = [];
-			if (finished || closing.length > 0) {
-				const rows = await tx.execute(
-					"SELECT body FROM match_events WHERE match_id = ? ORDER BY seq",
-					match!.id,
-				);
-				log = rows.map((row: { body: string }) => JSON.parse(row.body) as LogEvent);
-			}
+      const roomCode = c.key[0] as string
+      let log: LogEvent[] = []
+      if (finished || closing.length > 0) {
+        const rows = await tx.execute(
+          'SELECT body FROM match_events WHERE match_id = ? ORDER BY seq',
+          match!.id,
+        )
+        log = rows.map((row: { body: string }) => JSON.parse(row.body) as LogEvent)
+      }
 
-			const matchInfo = {
-				id: match?.id ?? "",
-				game: game.slug,
-				roomCode,
-				startedAt: match?.startedAt ?? "",
-			};
-			for (const round of closing) {
-				const closed = roundReport(log, round, matchInfo, game.roundResult);
-				if (closed) {
-					await queueRound(tx, match!.id, closed);
-				}
-			}
+      const matchInfo = {
+        id: match?.id ?? '',
+        game: game.slug,
+        roomCode,
+        startedAt: match?.startedAt ?? '',
+      }
+      for (const round of closing) {
+        const closed = roundReport(log, round, matchInfo, game.roundResult)
+        if (closed) {
+          await queueRound(tx, match!.id, closed)
+        }
+      }
 
-			if (finished) {
-				const endedAt = new Date().toISOString();
-				const report = game.buildReport(match!, vars.game, roomCode, endedAt, log, end!);
+      if (finished) {
+        const endedAt = new Date().toISOString()
+        const report = game.buildReport(match!, vars.game, roomCode, endedAt, log, end!)
 
-				await tx.execute(
-					"INSERT OR IGNORE INTO match_reports (match_id, body) VALUES (?, ?)",
-					report.matchId,
-					JSON.stringify(report),
-				);
-				await tx.execute("DELETE FROM match_events WHERE match_id = ?", match!.id);
-			}
+        await tx.execute(
+          'INSERT OR IGNORE INTO match_reports (match_id, body) VALUES (?, ?)',
+          report.matchId,
+          JSON.stringify(report),
+        )
+        await tx.execute('DELETE FROM match_events WHERE match_id = ?', match!.id)
+      }
 
-			await tx.execute(
-				`INSERT INTO room (id, data) VALUES (1, ?)
+      await tx.execute(
+        `INSERT INTO room (id, data) VALUES (1, ?)
 				ON CONFLICT(id) DO UPDATE SET data = excluded.data`,
-				JSON.stringify(saved),
-			);
-		},
-		{ name: "commit" },
-	);
+        JSON.stringify(saved),
+      )
+    },
+    { name: 'commit' },
+  )
 
-	c.broadcast("view", game.view());
-	for (const conn of c.conns.values()) {
-		const playerId = playerOf(c, conn);
-		if (playerId) {
-			conn.send("hand", game.handOf(playerId));
-		}
-	}
+  c.broadcast('view', game.view())
+  for (const conn of c.conns.values()) {
+    const playerId = playerOf(c, conn)
+    if (playerId) {
+      conn.send('hand', game.handOf(playerId))
+    }
+  }
 
-	// After the players got their update, so the list never slows a move.
-	await reportToDirectory(c, game.slug);
+  // After the players got their update, so the list never slows a move.
+  await reportToDirectory(c, game.slug)
 
-	if (finished || closing.length > 0) {
-		await c.schedule.after(0, "sendReports");
-	}
+  if (finished || closing.length > 0) {
+    await c.schedule.after(0, 'sendReports')
+  }
 }
 
 /** The `reveal` entry of a closed round: its seed, now that nobody is dealt from it again. */
 function revealOf(seeds: MatchSeeds, round: number): LogEntry[] {
-	const seed = [seeds.previous, seeds.current].find((held) => held?.round === round);
-	if (!seed) {
-		return [];
-	}
+  const seed = [seeds.previous, seeds.current].find((held) => held?.round === round)
+  if (!seed) {
+    return []
+  }
 
-	return [{ type: "reveal", data: { round, serverSeed: seed.serverSeed } }];
+  return [{ type: 'reveal', data: { round, serverSeed: seed.serverSeed } }]
 }
 
 async function queueRound(tx: Ctx, matchId: string, round: RoundReport): Promise<void> {
-	await tx.execute(
-		"INSERT OR IGNORE INTO round_reports (match_id, round, body) VALUES (?, ?, ?)",
-		matchId,
-		round.round,
-		JSON.stringify(round),
-	);
+  await tx.execute(
+    'INSERT OR IGNORE INTO round_reports (match_id, round, body) VALUES (?, ?, ?)',
+    matchId,
+    round.round,
+    JSON.stringify(round),
+  )
 }
 
 /**
@@ -373,33 +373,33 @@ async function queueRound(tx: Ctx, matchId: string, round: RoundReport): Promise
  * nothing changed. The next match gets a new commitment.
  */
 export function beginMatch<G extends Table, M extends MatchState>(
-	c: Ctx,
-	extra: Omit<M, keyof MatchState>,
-	start: (rng: Rng) => G,
+  c: Ctx,
+  extra: Omit<M, keyof MatchState>,
+  start: (rng: Rng) => G,
 ): void {
-	const vars = c.vars as RoomVars<G, M>;
-	const next = vars.next!;
+  const vars = c.vars as RoomVars<G, M>
+  const next = vars.next!
 
-	const match = {
-		...extra,
-		id: next.matchId,
-		startedAt: new Date().toISOString(),
-		seq: 0,
-		seeds: matchSeeds(next),
-	} as M;
+  const match = {
+    ...extra,
+    id: next.matchId,
+    startedAt: new Date().toISOString(),
+    seq: 0,
+    seeds: matchSeeds(next),
+  } as M
 
-	vars.match = match;
-	vars.fairLog = [];
+  vars.match = match
+  vars.fairLog = []
 
-	try {
-		vars.game = withRng(c, start);
-	} catch (err) {
-		vars.match = null;
-		vars.fairLog = [];
-		throw err;
-	}
+  try {
+    vars.game = withRng(c, start)
+  } catch (err) {
+    vars.match = null
+    vars.fairLog = []
+    throw err
+  }
 
-	vars.next = newCommitment();
+  vars.next = newCommitment()
 }
 
 /**
@@ -407,17 +407,17 @@ export function beginMatch<G extends Table, M extends MatchState>(
  * shuffles and log entries are taken back, so the log only ever holds shuffles the game kept.
  */
 export function withRng<G>(c: Ctx, move: (rng: Rng) => G): G {
-	const vars = c.vars as RoomVars<Table>;
-	const match = vars.match;
-	const pending = vars.fairLog.length;
+  const vars = c.vars as RoomVars<Table>
+  const match = vars.match
+  const pending = vars.fairLog.length
 
-	try {
-		return apply(() => move(roomRng(c)));
-	} catch (err) {
-		vars.match = match;
-		vars.fairLog = vars.fairLog.slice(0, pending);
-		throw err;
-	}
+  try {
+    return apply(() => move(roomRng(c)))
+  } catch (err) {
+    vars.match = match
+    vars.fairLog = vars.fairLog.slice(0, pending)
+    throw err
+  }
 }
 
 /**
@@ -426,31 +426,31 @@ export function withRng<G>(c: Ctx, move: (rng: Rng) => G): G {
  * logged. A match started before provably fair shuffles keeps a plain random one.
  */
 function roomRng(c: Ctx): Rng {
-	const vars = c.vars as RoomVars<Table>;
-	if (!vars.match?.seeds) {
-		return randomRng();
-	}
+  const vars = c.vars as RoomVars<Table>
+  if (!vars.match?.seeds) {
+    return randomRng()
+  }
 
-	const seedsFor = (round: number) => {
-		const { seeds, started } = seedsForRound(vars.match!.seeds!, round);
-		if (!started) {
-			return seeds;
-		}
+  const seedsFor = (round: number) => {
+    const { seeds, started } = seedsForRound(vars.match!.seeds!, round)
+    if (!started) {
+      return seeds
+    }
 
-		const { roundId, serverSeedHash } = seeds.current!;
-		vars.match = { ...vars.match!, seeds };
-		vars.fairLog.push({ type: "fairness", data: { round, roundId, serverSeedHash } });
+    const { roundId, serverSeedHash } = seeds.current!
+    vars.match = { ...vars.match!, seeds }
+    vars.fairLog.push({ type: 'fairness', data: { round, roundId, serverSeedHash } })
 
-		return seeds;
-	};
+    return seeds
+  }
 
-	return fairRng(seedsFor, (record) => {
-		const seeds = vars.match!.seeds!;
-		const last = { round: record.round, nonce: record.nonce };
+  return fairRng(seedsFor, (record) => {
+    const seeds = vars.match!.seeds!
+    const last = { round: record.round, nonce: record.nonce }
 
-		vars.match = { ...vars.match!, seeds: { ...seeds, last } };
-		vars.fairLog.push({ type: "shuffle", data: record });
-	});
+    vars.match = { ...vars.match!, seeds: { ...seeds, last } }
+    vars.fairLog.push({ type: 'shuffle', data: record })
+  })
 }
 
 /**
@@ -460,115 +460,115 @@ function roomRng(c: Ctx): Rng {
  * match started before provably fair shuffles.
  */
 export function fairnessView(c: Ctx) {
-	const vars = c.vars as RoomVars<Table>;
+  const vars = c.vars as RoomVars<Table>
 
-	if (!vars.match) {
-		const firstRound = vars.next!.firstRound;
+  if (!vars.match) {
+    const firstRound = vars.next!.firstRound
 
-		return {
-			matchId: null,
-			lastMatchId: vars.lastMatchId ?? null,
-			round: 1,
-			serverSeedHash: firstRound.serverSeedHash,
-			clientSeed: null,
-			nextServerSeedHash: null,
-		};
-	}
+    return {
+      matchId: null,
+      lastMatchId: vars.lastMatchId ?? null,
+      round: 1,
+      serverSeedHash: firstRound.serverSeedHash,
+      clientSeed: null,
+      nextServerSeedHash: null,
+    }
+  }
 
-	const seeds = vars.match.seeds;
-	if (!seeds?.current) {
-		return null;
-	}
+  const seeds = vars.match.seeds
+  if (!seeds?.current) {
+    return null
+  }
 
-	const clientSeed = seeds.last ? clientSeedOf(seeds.matchId, seeds.last) : null;
+  const clientSeed = seeds.last ? clientSeedOf(seeds.matchId, seeds.last) : null
 
-	return {
-		matchId: seeds.matchId,
-		lastMatchId: vars.lastMatchId ?? null,
-		round: seeds.current.round,
-		serverSeedHash: seeds.current.serverSeedHash,
-		clientSeed,
-		nextServerSeedHash: seeds.next.serverSeedHash,
-	};
+  return {
+    matchId: seeds.matchId,
+    lastMatchId: vars.lastMatchId ?? null,
+    round: seeds.current.round,
+    serverSeedHash: seeds.current.serverSeedHash,
+    clientSeed,
+    nextServerSeedHash: seeds.next.serverSeedHash,
+  }
 }
 
 /** A kicked player's chair turns "away" in the game's diff; the "kicked" entry already says so. */
 function withoutKickedAway(extra: LogEntry[], entries: LogEntry[]): LogEntry[] {
-	const kickedSeats = extra.filter((entry) => entry.type === "kicked").map((entry) => entry.seat);
+  const kickedSeats = extra.filter((entry) => entry.type === 'kicked').map((entry) => entry.seat)
 
-	return entries.filter((entry) => entry.type !== "away" || !kickedSeats.includes(entry.seat));
+  return entries.filter((entry) => entry.type !== 'away' || !kickedSeats.includes(entry.seat))
 }
 
 // ponytail: helpers take `any` because rivetkit's context generics are long;
 // they only touch c.vars, c.conn, c.db, c.conns, c.key, c.log, c.client() and c.schedule.
-export type Ctx = any;
+export type Ctx = any
 
 /** Turns rule violations into errors the client is allowed to see. */
 export function apply<T>(fn: () => T): T {
-	try {
-		return fn();
-	} catch (err) {
-		if (err instanceof RuleError) {
-			throw new UserError(err.message, { code: "rule" });
-		}
+  try {
+    return fn()
+  } catch (err) {
+    if (err instanceof RuleError) {
+      throw new UserError(err.message, { code: 'rule' })
+    }
 
-		throw err;
-	}
+    throw err
+  }
 }
 
 export function parseSeat(input: unknown): number {
-	const parsed = SeatInput.safeParse(input);
-	if (!parsed.success) {
-		throw new UserError("That seat does not exist.", { code: "bad_input" });
-	}
+  const parsed = SeatInput.safeParse(input)
+  if (!parsed.success) {
+    throw new UserError('That seat does not exist.', { code: 'bad_input' })
+  }
 
-	return parsed.data;
+  return parsed.data
 }
 
 export function botName(players: { name: string }[]): string {
-	const used = new Set(players.map((player) => player.name));
-	const free = BOT_NAMES.find((name) => !used.has(name));
+  const used = new Set(players.map((player) => player.name))
+  const free = BOT_NAMES.find((name) => !used.has(name))
 
-	return free ?? `Bot ${players.length + 1}`;
+  return free ?? `Bot ${players.length + 1}`
 }
 
 /** Every refusal of a closed table carries this code, so the browser stops trying to reconnect. */
-export const TABLE_CLOSED = "table_closed";
+export const TABLE_CLOSED = 'table_closed'
 
-const TERMINATED_MESSAGE = "An admin closed this table.";
-const KICKED_MESSAGE = "You were removed from this table.";
+const TERMINATED_MESSAGE = 'An admin closed this table.'
+const KICKED_MESSAGE = 'You were removed from this table.'
 
-const sha256 = (text: string) => createHash("sha256").update(text).digest();
+const sha256 = (text: string) => createHash('sha256').update(text).digest()
 
 /**
  * Whether `key` is the engine's admin token, which only our servers hold (the backoffice uses it for admin
  * actions). Hashed first, so the comparison takes the same time whatever the length. No token set: never.
  */
 function isAdminKey(key: string): boolean {
-	const expected = process.env.RIVET_TOKEN;
-	if (!expected) {
-		return false;
-	}
+  const expected = process.env.RIVET_TOKEN
+  if (!expected) {
+    return false
+  }
 
-	return timingSafeEqual(sha256(key), sha256(expected));
+  return timingSafeEqual(sha256(key), sha256(expected))
 }
 
 /** The connection is the backoffice, with the admin token. */
 function isAdminConn(conn: { params: unknown } | undefined): boolean {
-	const parsed = AdminParams.safeParse(conn?.params);
+  const parsed = AdminParams.safeParse(conn?.params)
 
-	return parsed.success && isAdminKey(parsed.data.adminKey);
+  return parsed.success && isAdminKey(parsed.data.adminKey)
 }
 
 /** Throws when an admin terminated the table, or kicked this player off it. */
 function refuseIfClosed(c: Ctx, playerId: string): void {
-	if (c.vars.terminated) {
-		throw new UserError(TERMINATED_MESSAGE, { code: TABLE_CLOSED });
-	}
+  if (c.vars.terminated) {
+    throw new UserError(TERMINATED_MESSAGE, { code: TABLE_CLOSED })
+  }
 
-	if ((c.vars.kicked as string[]).includes(playerId)) {
-		throw new UserError(KICKED_MESSAGE, { code: TABLE_CLOSED });
-	}
+  if ((c.vars.kicked as string[]).includes(playerId)) {
+    throw new UserError(KICKED_MESSAGE, { code: TABLE_CLOSED })
+  }
 }
 
 /**
@@ -576,22 +576,22 @@ function refuseIfClosed(c: Ctx, playerId: string): void {
  * A terminated table, or one the player was kicked from, refuses them.
  */
 export async function checkConnect(c: Ctx, params: unknown): Promise<void> {
-	const admin = AdminParams.safeParse(params);
-	if (admin.success) {
-		if (isAdminKey(admin.data.adminKey)) {
-			return;
-		}
+  const admin = AdminParams.safeParse(params)
+  if (admin.success) {
+    if (isAdminKey(admin.data.adminKey)) {
+      return
+    }
 
-		throw new UserError("Not allowed.", { code: "forbidden" });
-	}
+    throw new UserError('Not allowed.', { code: 'forbidden' })
+  }
 
-	const player = PlayerParams.safeParse(params);
-	const identity = player.success ? await verifyPlayToken(player.data.playToken) : null;
-	if (!identity) {
-		throw new UserError("Your session expired. Reload the page.", { code: "unauthenticated" });
-	}
+  const player = PlayerParams.safeParse(params)
+  const identity = player.success ? await verifyPlayToken(player.data.playToken) : null
+  if (!identity) {
+    throw new UserError('Your session expired. Reload the page.', { code: 'unauthenticated' })
+  }
 
-	refuseIfClosed(c, identity.id);
+  refuseIfClosed(c, identity.id)
 }
 
 /**
@@ -599,83 +599,83 @@ export async function checkConnect(c: Ctx, params: unknown): Promise<void> {
  * Returns true for a player; the backoffice's connection is not one (it sits nowhere and gets no updates).
  */
 export async function identify(
-	c: Ctx,
-	conn: { id: string; params: unknown; disconnect: (reason: string) => void },
+  c: Ctx,
+  conn: { id: string; params: unknown; disconnect: (reason: string) => void },
 ): Promise<boolean> {
-	if (isAdminConn(conn)) {
-		return false;
-	}
+  if (isAdminConn(conn)) {
+    return false
+  }
 
-	const player = PlayerParams.safeParse(conn.params);
-	const who = player.success ? await verifyPlayToken(player.data.playToken) : null;
-	if (!who) {
-		conn.disconnect("unauthenticated");
-		return false;
-	}
+  const player = PlayerParams.safeParse(conn.params)
+  const who = player.success ? await verifyPlayToken(player.data.playToken) : null
+  if (!who) {
+    conn.disconnect('unauthenticated')
+    return false
+  }
 
-	c.vars.who[conn.id] = who;
-	return true;
+  c.vars.who[conn.id] = who
+  return true
 }
 
 /** The identity of the connection calling an action. Refused at a closed table. */
 export function caller(c: Ctx): Identity {
-	const who = c.vars.who[c.conn.id] as Identity | undefined;
-	if (!who) {
-		throw new UserError("Your session expired. Reload the page.", { code: "unauthenticated" });
-	}
+  const who = c.vars.who[c.conn.id] as Identity | undefined
+  if (!who) {
+    throw new UserError('Your session expired. Reload the page.', { code: 'unauthenticated' })
+  }
 
-	refuseIfClosed(c, who.id);
-	return who;
+  refuseIfClosed(c, who.id)
+  return who
 }
 
 /** For the backoffice's actions: the connection must carry the admin token. */
 export function requireAdmin(c: Ctx): void {
-	if (!isAdminConn(c.conn)) {
-		throw new UserError("Not allowed.", { code: "forbidden" });
-	}
+  if (!isAdminConn(c.conn)) {
+    throw new UserError('Not allowed.', { code: 'forbidden' })
+  }
 }
 
 /** The player a connection sits as, if they joined the table. */
 export function playerOf(c: Ctx, conn: { id: string }): string | undefined {
-	const id = (c.vars.who[conn.id] as Identity | undefined)?.id;
-	if (!id) {
-		return undefined;
-	}
+  const id = (c.vars.who[conn.id] as Identity | undefined)?.id
+  if (!id) {
+    return undefined
+  }
 
-	const seated = (c.vars.game as Table).players.some((player) => player.id === id);
-	return seated ? id : undefined;
+  const seated = (c.vars.game as Table).players.some((player) => player.id === id)
+  return seated ? id : undefined
 }
 
 export function requirePlayer(c: Ctx): string {
-	const id = playerOf(c, c.conn);
-	if (!id) {
-		throw new UserError("Join the table first.", { code: "not_joined" });
-	}
+  const id = playerOf(c, c.conn)
+  if (!id) {
+    throw new UserError('Join the table first.', { code: 'not_joined' })
+  }
 
-	refuseIfClosed(c, id);
-	return id;
+  refuseIfClosed(c, id)
+  return id
 }
 
 export function requireHost(c: Ctx): string {
-	const me = requirePlayer(c);
-	if ((c.vars.game as Table).hostId !== me) {
-		throw new UserError("Only the host can do that.", { code: "rule" });
-	}
+  const me = requirePlayer(c)
+  if ((c.vars.game as Table).hostId !== me) {
+    throw new UserError('Only the host can do that.', { code: 'rule' })
+  }
 
-	return me;
+  return me
 }
 
 export function requireScheduler(c: Ctx): void {
-	if (!c.scheduledFire) {
-		throw new UserError("Not allowed.", { code: "forbidden" });
-	}
+  if (!c.scheduledFire) {
+    throw new UserError('Not allowed.', { code: 'forbidden' })
+  }
 }
 
 /** For scheduled game steps (turns, drops, starts, VIP tags): false once an admin terminated the table. */
 export function scheduledWhileOpen(c: Ctx): boolean {
-	requireScheduler(c);
+  requireScheduler(c)
 
-	return !c.vars.terminated;
+  return !c.vars.terminated
 }
 
 /**
@@ -684,44 +684,44 @@ export function scheduledWhileOpen(c: Ctx): boolean {
  * Returns false when nothing changed (they came back, or are gone already).
  */
 export async function dropIfGone(
-	c: Ctx,
-	id: unknown,
-	turn: { playerId: string | null; key: number },
+  c: Ctx,
+  id: unknown,
+  turn: { playerId: string | null; key: number },
 ): Promise<boolean> {
-	const game = c.vars.game as Table;
-	const player = game.players.find((player) => player.id === id);
-	if (!player) {
-		return false;
-	}
+  const game = c.vars.game as Table
+  const player = game.players.find((player) => player.id === id)
+  if (!player) {
+    return false
+  }
 
-	const cameBack = [...c.conns.values()].some((conn: { id: string }) => playerOf(c, conn) === id);
-	if (cameBack) {
-		return false;
-	}
+  const cameBack = [...c.conns.values()].some((conn: { id: string }) => playerOf(c, conn) === id)
+  if (cameBack) {
+    return false
+  }
 
-	if (game.phase === "lobby") {
-		c.vars.game = removePlayer(game, player.id);
-		return true;
-	}
+  if (game.phase === 'lobby') {
+    c.vars.game = removePlayer(game, player.id)
+    return true
+  }
 
-	c.vars.game = markAway(game, player.id);
+  c.vars.game = markAway(game, player.id)
 
-	// Their turn may be running on the full human clock: play it at bot speed instead.
-	if (game.phase === "playing" && turn.playerId === player.id) {
-		await c.schedule.after(BOT_THINK_MS[0], "autoPlay", turn.key);
-	}
+  // Their turn may be running on the full human clock: play it at bot speed instead.
+  if (game.phase === 'playing' && turn.playerId === player.id) {
+    await c.schedule.after(BOT_THINK_MS[0], 'autoPlay', turn.key)
+  }
 
-	return true;
+  return true
 }
 
 /** Who was kicked, from which phase, and the match it happened in (null when none was running). */
 export type KickResult = {
-	playerId: string;
-	name: string;
-	seat: number;
-	phase: Table["phase"];
-	matchId: string | null;
-};
+  playerId: string
+  name: string
+  seat: number
+  phase: Table['phase']
+  matchId: string | null
+}
 
 /**
  * Kicks the human in `seat` off the table and keeps them off it (see kickPlayer for what happens to the chair).
@@ -729,51 +729,51 @@ export type KickResult = {
  * log the kick when a match is running, then calls `closeKicked`.
  */
 export function kickFromTable(
-	c: Ctx,
-	seat: number,
-	by: { kind: "admin"; reason: string } | { kind: "host"; hostId: string },
+  c: Ctx,
+  seat: number,
+  by: { kind: 'admin'; reason: string } | { kind: 'host'; hostId: string },
 ): { result: KickResult; entries: LogEntry[] } {
-	if (c.vars.terminated) {
-		throw new UserError("This table is already closed.", { code: TABLE_CLOSED });
-	}
+  if (c.vars.terminated) {
+    throw new UserError('This table is already closed.', { code: TABLE_CLOSED })
+  }
 
-	const game = c.vars.game as Table;
-	const target = game.players.find((player) => player.seat === seat);
-	if (!target) {
-		throw new UserError("Nobody sits in that seat.", { code: "rule" });
-	}
+  const game = c.vars.game as Table
+  const target = game.players.find((player) => player.seat === seat)
+  if (!target) {
+    throw new UserError('Nobody sits in that seat.', { code: 'rule' })
+  }
 
-	if (target.bot) {
-		throw new UserError("That is a bot. Remove it instead.", { code: "rule" });
-	}
+  if (target.bot) {
+    throw new UserError('That is a bot. Remove it instead.', { code: 'rule' })
+  }
 
-	if (by.kind === "host") {
-		if (game.phase !== "lobby") {
-			throw new UserError("Players can only be removed before the game starts.", { code: "rule" });
-		}
+  if (by.kind === 'host') {
+    if (game.phase !== 'lobby') {
+      throw new UserError('Players can only be removed before the game starts.', { code: 'rule' })
+    }
 
-		if (target.id === by.hostId) {
-			throw new UserError("Use Leave table to leave.", { code: "rule" });
-		}
-	}
+    if (target.id === by.hostId) {
+      throw new UserError('Use Leave table to leave.', { code: 'rule' })
+    }
+  }
 
-	c.vars.kicked = [...(c.vars.kicked as string[]), target.id];
-	c.vars.game = kickPlayer(game, target.id);
+  c.vars.kicked = [...(c.vars.kicked as string[]), target.id]
+  c.vars.game = kickPlayer(game, target.id)
 
-	const data: Record<string, unknown> = { by: by.kind };
-	if (by.kind === "admin") {
-		data.reason = by.reason;
-	}
+  const data: Record<string, unknown> = { by: by.kind }
+  if (by.kind === 'admin') {
+    data.reason = by.reason
+  }
 
-	const result: KickResult = {
-		playerId: target.id,
-		name: target.name,
-		seat: target.seat,
-		phase: game.phase,
-		matchId: (c.vars.match as MatchState | null)?.id ?? null,
-	};
+  const result: KickResult = {
+    playerId: target.id,
+    name: target.name,
+    seat: target.seat,
+    phase: game.phase,
+    matchId: (c.vars.match as MatchState | null)?.id ?? null,
+  }
 
-	return { result, entries: [{ type: "kicked", seat: target.seat, data }] };
+  return { result, entries: [{ type: 'kicked', seat: target.seat, data }] }
 }
 
 /**
@@ -781,25 +781,25 @@ export function kickFromTable(
  * with the reason. `turn` is the running turn, as for dropIfGone.
  */
 export async function closeKicked(
-	c: Ctx,
-	playerId: string,
-	turn: { playerId: string | null; key: number },
+  c: Ctx,
+  playerId: string,
+  turn: { playerId: string | null; key: number },
 ): Promise<void> {
-	const game = c.vars.game as Table;
-	if (game.phase === "playing" && turn.playerId === playerId) {
-		await c.schedule.after(BOT_THINK_MS[0], "autoPlay", turn.key);
-	}
+  const game = c.vars.game as Table
+  if (game.phase === 'playing' && turn.playerId === playerId) {
+    await c.schedule.after(BOT_THINK_MS[0], 'autoPlay', turn.key)
+  }
 
-	closeConnections(c, (conn) => c.vars.who[conn.id]?.id === playerId, KICKED_MESSAGE);
+  closeConnections(c, (conn) => c.vars.who[conn.id]?.id === playerId, KICKED_MESSAGE)
 }
 
 /** What the table was doing when an admin terminated it. */
 export type TerminateResult = {
-	phase: Table["phase"];
-	matchId: string | null;
-	round: number;
-	players: number;
-};
+  phase: Table['phase']
+  matchId: string | null
+  round: number
+  players: number
+}
 
 /**
  * An admin terminates the table: nothing moves there again and nobody can join. A running match ends as
@@ -807,25 +807,25 @@ export type TerminateResult = {
  * then calls `closeTerminated`.
  */
 export function terminateTable(
-	c: Ctx,
-	reason: string,
+  c: Ctx,
+  reason: string,
 ): { result: TerminateResult; entries: LogEntry[] } {
-	if (c.vars.terminated) {
-		throw new UserError("This table is already closed.", { code: TABLE_CLOSED });
-	}
+  if (c.vars.terminated) {
+    throw new UserError('This table is already closed.', { code: TABLE_CLOSED })
+  }
 
-	const game = c.vars.game as Table & { round?: number };
-	const termination: Termination = { at: Date.now(), reason };
-	c.vars.terminated = termination;
+  const game = c.vars.game as Table & { round?: number }
+  const termination: Termination = { at: Date.now(), reason }
+  c.vars.terminated = termination
 
-	const result: TerminateResult = {
-		phase: game.phase,
-		matchId: (c.vars.match as MatchState | null)?.id ?? null,
-		round: game.round ?? 0,
-		players: game.players.length,
-	};
+  const result: TerminateResult = {
+    phase: game.phase,
+    matchId: (c.vars.match as MatchState | null)?.id ?? null,
+    round: game.round ?? 0,
+    players: game.players.length,
+  }
 
-	return { result, entries: [{ type: "terminated", data: { by: "admin", reason } }] };
+  return { result, entries: [{ type: 'terminated', data: { by: 'admin', reason } }] }
 }
 
 /**
@@ -833,37 +833,37 @@ export function terminateTable(
  * that had no match running is closed on the platform (a running match's report closes it instead).
  */
 export async function closeTerminated(c: Ctx, result: TerminateResult): Promise<void> {
-	closeConnections(c, (conn) => !!c.vars.who[conn.id], TERMINATED_MESSAGE);
+  closeConnections(c, (conn) => !!c.vars.who[conn.id], TERMINATED_MESSAGE)
 
-	const tournament = c.vars.tournament as TournamentRoom | null | undefined;
-	if (!tournament || tournament.closed || result.matchId) {
-		return;
-	}
+  const tournament = c.vars.tournament as TournamentRoom | null | undefined
+  if (!tournament || tournament.closed || result.matchId) {
+    return
+  }
 
-	c.vars.tournament = { ...tournament, closed: true };
+  c.vars.tournament = { ...tournament, closed: true }
 
-	const code = c.key[0] as string;
-	const marked = await markRoom(code, "close", "terminated");
-	if (!marked.ok) {
-		c.log.warn({ msg: "room termination not recorded", code, detail: marked.detail });
-	}
+  const code = c.key[0] as string
+  const marked = await markRoom(code, 'close', 'terminated')
+  if (!marked.ok) {
+    c.log.warn({ msg: 'room termination not recorded', code, detail: marked.detail })
+  }
 }
 
 /** Tells each chosen connection why, then closes it. The browser stops reconnecting on TABLE_CLOSED. */
 function closeConnections(
-	c: Ctx,
-	chosen: (conn: { id: string }) => boolean,
-	message: string,
+  c: Ctx,
+  chosen: (conn: { id: string }) => boolean,
+  message: string,
 ): void {
-	for (const conn of c.conns.values()) {
-		if (!chosen(conn)) {
-			continue;
-		}
+  for (const conn of c.conns.values()) {
+    if (!chosen(conn)) {
+      continue
+    }
 
-		conn.send("closed", { code: TABLE_CLOSED, message });
-		// "<group>.<code>", the shape the Rivet client reads a close reason in.
-		conn.disconnect(`user.${TABLE_CLOSED}`);
-	}
+    conn.send('closed', { code: TABLE_CLOSED, message })
+    // "<group>.<code>", the shape the Rivet client reads a close reason in.
+    conn.disconnect(`user.${TABLE_CLOSED}`)
+  }
 }
 
 /**
@@ -873,52 +873,52 @@ function closeConnections(
  * `pause` holds the clock for an animation.
  */
 export async function armTurn(
-	c: Ctx,
-	current: { bot: boolean; away?: boolean } | undefined,
-	opts: { key: number; turnMs: number; pause: number; resume: boolean; rng: () => number },
+  c: Ctx,
+  current: { bot: boolean; away?: boolean } | undefined,
+  opts: { key: number; turnMs: number; pause: number; resume: boolean; rng: () => number },
 ): Promise<void> {
-	const { timer } = c.vars as RoomVars<Table>;
-	if (!current) {
-		c.vars.timer = null;
-		return;
-	}
+  const { timer } = c.vars as RoomVars<Table>
+  if (!current) {
+    c.vars.timer = null
+    return
+  }
 
-	const sameTurn = timer?.moves === opts.key;
-	if (sameTurn && !opts.resume) {
-		return;
-	}
+  const sameTurn = timer?.moves === opts.key
+  if (sameTurn && !opts.resume) {
+    return
+  }
 
-	// Resuming after a wake keeps the deadline players already saw.
-	const next: NonNullable<TurnTimer> = sameTurn
-		? { ...timer!, total: timer!.total ?? opts.turnMs }
-		: {
-				moves: opts.key,
-				endsAt: Date.now() + opts.pause + opts.turnMs,
-				total: opts.turnMs,
-			};
-	c.vars.timer = next;
+  // Resuming after a wake keeps the deadline players already saw.
+  const next: NonNullable<TurnTimer> = sameTurn
+    ? { ...timer!, total: timer!.total ?? opts.turnMs }
+    : {
+        moves: opts.key,
+        endsAt: Date.now() + opts.pause + opts.turnMs,
+        total: opts.turnMs,
+      }
+  c.vars.timer = next
 
-	const pause = sameTurn ? 0 : opts.pause;
-	const untilTimeout = Math.max(0, next.endsAt - Date.now());
+  const pause = sameTurn ? 0 : opts.pause
+  const untilTimeout = Math.max(0, next.endsAt - Date.now())
 
-	let delay = untilTimeout;
-	if (current.bot || current.away) {
-		// A bot plays once it has "decided", which stops its clock early, like a quick human.
-		const [minThink, maxThink] = BOT_THINK_MS;
-		const think = minThink + Math.round(opts.rng() * (maxThink - minThink));
-		delay = Math.min(untilTimeout, pause + think);
-	}
+  let delay = untilTimeout
+  if (current.bot || current.away) {
+    // A bot plays once it has "decided", which stops its clock early, like a quick human.
+    const [minThink, maxThink] = BOT_THINK_MS
+    const think = minThink + Math.round(opts.rng() * (maxThink - minThink))
+    delay = Math.min(untilTimeout, pause + think)
+  }
 
-	await c.schedule.after(delay, "autoPlay", opts.key);
+  await c.schedule.after(delay, 'autoPlay', opts.key)
 }
 
 /** The turn clock as clients get it: relative, so a wrong device clock still counts down correctly. */
 export function turnClock(timer: TurnTimer): { left: number; total: number } | null {
-	if (!timer) {
-		return null;
-	}
+  if (!timer) {
+    return null
+  }
 
-	return { left: Math.max(0, timer.endsAt - Date.now()), total: timer.total };
+  return { left: Math.max(0, timer.endsAt - Date.now()), total: timer.total }
 }
 
 /**
@@ -927,69 +927,69 @@ export function turnClock(timer: TurnTimer): { left: number; total: number } | n
  * The list is a convenience, so a failure is logged and the game carries on.
  */
 export async function reportToDirectory(c: Ctx, slug: string, leaving?: string): Promise<void> {
-	// Public tables go to the game's list. Tournament tables go to their own list for the backoffice (round and
-	// seats). Private tables are for their players only.
-	const tournament = await loadTournament(c).catch(() => undefined);
-	const listKey = directoryKey(slug, c.vars.listed === true, !!tournament);
-	if (!listKey) {
-		return;
-	}
+  // Public tables go to the game's list. Tournament tables go to their own list for the backoffice (round and
+  // seats). Private tables are for their players only.
+  const tournament = await loadTournament(c).catch(() => undefined)
+  const listKey = directoryKey(slug, c.vars.listed === true, !!tournament)
+  if (!listKey) {
+    return
+  }
 
-	const code = c.key[0] as string;
-	const directory = c.client().roomList.getOrCreate([listKey]);
-	const game = c.vars.game as Table & { round?: number };
-	// Only players count: the backoffice's connection is not someone at the table.
-	const stayingConns = [...c.conns.values()].filter(
-		(conn: { id: string }) => conn.id !== leaving && c.vars.who[conn.id],
-	);
+  const code = c.key[0] as string
+  const directory = c.client().roomList.getOrCreate([listKey])
+  const game = c.vars.game as Table & { round?: number }
+  // Only players count: the backoffice's connection is not someone at the table.
+  const stayingConns = [...c.conns.values()].filter(
+    (conn: { id: string }) => conn.id !== leaving && c.vars.who[conn.id],
+  )
 
-	try {
-		if (stayingConns.length === 0 || c.vars.terminated) {
-			await directory.remove(code);
-			return;
-		}
+  try {
+    if (stayingConns.length === 0 || c.vars.terminated) {
+      await directory.remove(code)
+      return
+    }
 
-		const host = game.players.find((player) => player.id === game.hostId)?.name ?? null;
-		await directory.report({
-			code,
-			name: c.vars.roomName ?? null,
-			host,
-			players: game.players.length,
-			maxPlayers: SEATS,
-			phase: game.phase,
-			seats: game.players.map((player) => ({
-				seat: player.seat,
-				name: player.name,
-				bot: player.bot,
-			})),
-			round: game.round ?? 0,
-		});
-	} catch (err) {
-		c.log.warn({ msg: "room list update failed", code, err: String(err) });
-	}
+    const host = game.players.find((player) => player.id === game.hostId)?.name ?? null
+    await directory.report({
+      code,
+      name: c.vars.roomName ?? null,
+      host,
+      players: game.players.length,
+      maxPlayers: SEATS,
+      phase: game.phase,
+      seats: game.players.map((player) => ({
+        seat: player.seat,
+        name: player.name,
+        bot: player.bot,
+      })),
+      round: game.round ?? 0,
+    })
+  } catch (err) {
+    c.log.warn({ msg: 'room list update failed', code, err: String(err) })
+  }
 }
 
 /** Which room list a table reports to: the public one, the backoffice's tournament one, or none (private). */
 export function directoryKey(slug: string, listed: boolean, tournament: boolean): string | null {
-	if (listed) {
-		return slug;
-	}
+  if (listed) {
+    return slug
+  }
 
-	if (tournament) {
-		return tournamentListKey(slug);
-	}
+  if (tournament) {
+    return tournamentListKey(slug)
+  }
 
-	return null;
+  return null
 }
 
 /** onWake: a send may have been cut off by the actor stopping; the platform ignores duplicates. */
 export async function resumeReports(c: Ctx): Promise<void> {
-	const [matches] = await c.db.execute("SELECT count(*) AS n FROM match_reports");
-	const [rounds] = await c.db.execute("SELECT count(*) AS n FROM round_reports");
+  const [matches] = await c.db.execute('SELECT count(*) AS n FROM match_reports')
+  const [rounds] = await c.db.execute('SELECT count(*) AS n FROM round_reports')
 
-	if (matches?.n || rounds?.n) {
-		await c.schedule.after(REPORT_RETRY_MS[0]!, "sendReports");
-	}
+  if (matches?.n || rounds?.n) {
+    await c.schedule.after(REPORT_RETRY_MS[0]!, 'sendReports')
+  }
 }
 
 /**
@@ -997,118 +997,118 @@ export async function resumeReports(c: Ctx): Promise<void> {
  * A match's rounds go in order, and its result waits until they are all sent.
  */
 export async function sendReports(c: Ctx): Promise<void> {
-	let retryIn: number | null = null;
-	const retryAfter = (attempts: number) => {
-		const step = Math.min(attempts, REPORT_RETRY_MS.length - 1);
-		const wait = REPORT_RETRY_MS[step]!;
-		retryIn = Math.min(retryIn ?? wait, wait);
-	};
+  let retryIn: number | null = null
+  const retryAfter = (attempts: number) => {
+    const step = Math.min(attempts, REPORT_RETRY_MS.length - 1)
+    const wait = REPORT_RETRY_MS[step]!
+    retryIn = Math.min(retryIn ?? wait, wait)
+  }
 
-	const waiting = await sendRounds(c, retryAfter);
+  const waiting = await sendRounds(c, retryAfter)
 
-	type ReportRow = { match_id: string; body: string; attempts: number };
-	const rows = (await c.db.execute(
-		"SELECT match_id, body, attempts FROM match_reports",
-	)) as ReportRow[];
+  type ReportRow = { match_id: string; body: string; attempts: number }
+  const rows = (await c.db.execute(
+    'SELECT match_id, body, attempts FROM match_reports',
+  )) as ReportRow[]
 
-	for (const row of rows) {
-		if (waiting.has(row.match_id)) {
-			continue;
-		}
+  for (const row of rows) {
+    if (waiting.has(row.match_id)) {
+      continue
+    }
 
-		const { result, detail } = await reportMatch(JSON.parse(row.body));
+    const { result, detail } = await reportMatch(JSON.parse(row.body))
 
-		if (result === "retry") {
-			await c.db.execute(
-				"UPDATE match_reports SET attempts = attempts + 1 WHERE match_id = ?",
-				row.match_id,
-			);
-			retryAfter(row.attempts);
+    if (result === 'retry') {
+      await c.db.execute(
+        'UPDATE match_reports SET attempts = attempts + 1 WHERE match_id = ?',
+        row.match_id,
+      )
+      retryAfter(row.attempts)
 
-			c.log.warn({
-				msg: "match report failed, will retry",
-				matchId: row.match_id,
-				attempts: row.attempts + 1,
-				detail,
-			});
-			continue;
-		}
+      c.log.warn({
+        msg: 'match report failed, will retry',
+        matchId: row.match_id,
+        attempts: row.attempts + 1,
+        detail,
+      })
+      continue
+    }
 
-		if (result === "rejected") {
-			c.log.error({
-				msg: "match report rejected, dropped",
-				matchId: row.match_id,
-				body: row.body,
-				detail,
-			});
-		}
+    if (result === 'rejected') {
+      c.log.error({
+        msg: 'match report rejected, dropped',
+        matchId: row.match_id,
+        body: row.body,
+        detail,
+      })
+    }
 
-		await c.db.execute("DELETE FROM match_reports WHERE match_id = ?", row.match_id);
-	}
+    await c.db.execute('DELETE FROM match_reports WHERE match_id = ?', row.match_id)
+  }
 
-	if (retryIn !== null) {
-		await c.schedule.after(retryIn, "sendReports");
-	}
+  if (retryIn !== null) {
+    await c.schedule.after(retryIn, 'sendReports')
+  }
 }
 
 /** Sends queued rounds in order. Returns the matches with a round still waiting: their later rounds wait too. */
 async function sendRounds(c: Ctx, retryAfter: (attempts: number) => void): Promise<Set<string>> {
-	type RoundRow = { match_id: string; round: number; body: string; attempts: number };
-	const rows = (await c.db.execute(
-		"SELECT match_id, round, body, attempts FROM round_reports ORDER BY match_id, round",
-	)) as RoundRow[];
+  type RoundRow = { match_id: string; round: number; body: string; attempts: number }
+  const rows = (await c.db.execute(
+    'SELECT match_id, round, body, attempts FROM round_reports ORDER BY match_id, round',
+  )) as RoundRow[]
 
-	const waiting = new Set<string>();
+  const waiting = new Set<string>()
 
-	for (const row of rows) {
-		if (waiting.has(row.match_id)) {
-			continue;
-		}
+  for (const row of rows) {
+    if (waiting.has(row.match_id)) {
+      continue
+    }
 
-		const { result, detail } = await reportRound(row.match_id, JSON.parse(row.body));
-		const where = { matchId: row.match_id, round: row.round };
+    const { result, detail } = await reportRound(row.match_id, JSON.parse(row.body))
+    const where = { matchId: row.match_id, round: row.round }
 
-		if (result === "retry") {
-			await c.db.execute(
-				"UPDATE round_reports SET attempts = attempts + 1 WHERE match_id = ? AND round = ?",
-				row.match_id,
-				row.round,
-			);
-			retryAfter(row.attempts);
-			waiting.add(row.match_id);
+    if (result === 'retry') {
+      await c.db.execute(
+        'UPDATE round_reports SET attempts = attempts + 1 WHERE match_id = ? AND round = ?',
+        row.match_id,
+        row.round,
+      )
+      retryAfter(row.attempts)
+      waiting.add(row.match_id)
 
-			c.log.warn({
-				msg: "round report failed, will retry",
-				...where,
-				attempts: row.attempts + 1,
-				detail,
-			});
-			continue;
-		}
+      c.log.warn({
+        msg: 'round report failed, will retry',
+        ...where,
+        attempts: row.attempts + 1,
+        detail,
+      })
+      continue
+    }
 
-		if (result === "rejected") {
-			c.log.error({ msg: "round report rejected, dropped", ...where, body: row.body, detail });
-		}
+    if (result === 'rejected') {
+      c.log.error({ msg: 'round report rejected, dropped', ...where, body: row.body, detail })
+    }
 
-		await c.db.execute(
-			"DELETE FROM round_reports WHERE match_id = ? AND round = ?",
-			row.match_id,
-			row.round,
-		);
-	}
+    await c.db.execute(
+      'DELETE FROM round_reports WHERE match_id = ? AND round = ?',
+      row.match_id,
+      row.round,
+    )
+  }
 
-	return waiting;
+  return waiting
 }
 
 /** The room's tournament and whether it is listed: the known answer, else asked from the platform. */
 export async function loadTournament(c: Ctx): Promise<TournamentRoom | null> {
-	const known = c.vars.tournament as TournamentRoom | null | undefined;
-	// `listed` is undefined in rooms saved before private tables existed: ask once more.
-	if (known !== undefined && c.vars.listed !== undefined) {
-		return known;
-	}
+  const known = c.vars.tournament as TournamentRoom | null | undefined
+  // `listed` is undefined in rooms saved before private tables existed: ask once more.
+  if (known !== undefined && c.vars.listed !== undefined) {
+    return known
+  }
 
-	return refreshTournament(c);
+  return refreshTournament(c)
 }
 
 /**
@@ -1116,71 +1116,71 @@ export async function loadTournament(c: Ctx): Promise<TournamentRoom | null> {
  * If the platform can't be reached, the last known answer stands; with none yet, joining is refused.
  */
 export async function refreshTournament(c: Ctx): Promise<TournamentRoom | null> {
-	const known = c.vars.tournament as TournamentRoom | null | undefined;
-	const code = c.key[0] as string;
-	let room: Awaited<ReturnType<typeof fetchRoomSeats>>;
-	try {
-		room = await fetchRoomSeats(code);
-	} catch (err) {
-		c.log.warn({ msg: "room seats unavailable", code, err: String(err) });
-		if (known !== undefined) {
-			return known;
-		}
+  const known = c.vars.tournament as TournamentRoom | null | undefined
+  const code = c.key[0] as string
+  let room: Awaited<ReturnType<typeof fetchRoomSeats>>
+  try {
+    room = await fetchRoomSeats(code)
+  } catch (err) {
+    c.log.warn({ msg: 'room seats unavailable', code, err: String(err) })
+    if (known !== undefined) {
+      return known
+    }
 
-		throw new UserError("The table can't be reached right now. Try again shortly.", {
-			code: "unavailable",
-		});
-	}
+    throw new UserError("The table can't be reached right now. Try again shortly.", {
+      code: 'unavailable',
+    })
+  }
 
-	const tournament = room?.tournament;
-	c.vars.listed = !tournament && room?.visibility === "public";
-	c.vars.roomName = room?.name ?? null;
+  const tournament = room?.tournament
+  c.vars.listed = !tournament && room?.visibility === 'public'
+  c.vars.roomName = room?.name ?? null
 
-	if (!tournament) {
-		c.vars.tournament = null;
-		return null;
-	}
+  if (!tournament) {
+    c.vars.tournament = null
+    return null
+  }
 
-	const seats = Object.fromEntries(room!.seats.map((seat) => [seat.playerId, seat.seat]));
-	const bots = Object.fromEntries(
-		room!.seats.filter((seat) => seat.bot).map((seat) => [seat.playerId, seat.name || "Bot"]),
-	);
-	c.vars.tournament = {
-		bots,
-		id: tournament.id,
-		name: tournament.name,
-		format: tournament.format,
-		rounds: tournament.rounds,
-		registered: tournament.registered,
-		round: tournament.round,
-		startsAt: Date.parse(tournament.startsAt),
-		cancelled: tournament.cancelled,
-		minPlayers: room!.minPlayers,
-		seats,
-		closed: !!known?.closed || !!room!.closedAt,
-	};
+  const seats = Object.fromEntries(room!.seats.map((seat) => [seat.playerId, seat.seat]))
+  const bots = Object.fromEntries(
+    room!.seats.filter((seat) => seat.bot).map((seat) => [seat.playerId, seat.name || 'Bot']),
+  )
+  c.vars.tournament = {
+    bots,
+    id: tournament.id,
+    name: tournament.name,
+    format: tournament.format,
+    rounds: tournament.rounds,
+    registered: tournament.registered,
+    round: tournament.round,
+    startsAt: Date.parse(tournament.startsAt),
+    cancelled: tournament.cancelled,
+    minPlayers: room!.minPlayers,
+    seats,
+    closed: !!known?.closed || !!room!.closedAt,
+  }
 
-	return c.vars.tournament;
+  return c.vars.tournament
 }
 
 /** onWake: refreshes the tournament and arms its start and the end of the wait for late players. */
 export async function wakeTournament(c: Ctx): Promise<void> {
-	const tournament = await refreshTournament(c).catch(() => null);
-	if (!tournament || tournament.closed || tournament.cancelled) {
-		return;
-	}
+  const tournament = await refreshTournament(c).catch(() => null)
+  if (!tournament || tournament.closed || tournament.cancelled) {
+    return
+  }
 
-	if ((c.vars.game as Table).phase !== "lobby") {
-		return;
-	}
+  if ((c.vars.game as Table).phase !== 'lobby') {
+    return
+  }
 
-	const now = Date.now();
-	if (tournament.startsAt > now) {
-		await c.schedule.at(tournament.startsAt, "tournamentStart");
-	}
+  const now = Date.now()
+  if (tournament.startsAt > now) {
+    await c.schedule.at(tournament.startsAt, 'tournamentStart')
+  }
 
-	const waitEndsAt = Math.max(now, tournament.startsAt + LATE_GRACE_MS);
-	await c.schedule.at(waitEndsAt, "tournamentStart");
+  const waitEndsAt = Math.max(now, tournament.startsAt + LATE_GRACE_MS)
+  await c.schedule.at(waitEndsAt, 'tournamentStart')
 }
 
 /**
@@ -1188,31 +1188,31 @@ export async function wakeTournament(c: Ctx): Promise<void> {
  * Asks the platform again first, since an admin may have seated or removed someone by hand.
  */
 export async function seatFor(c: Ctx, who: Identity): Promise<number | undefined> {
-	const tournament = c.vars.tournament === null ? null : await refreshTournament(c);
-	if (!tournament) {
-		return undefined;
-	}
+  const tournament = c.vars.tournament === null ? null : await refreshTournament(c)
+  if (!tournament) {
+    return undefined
+  }
 
-	if (tournament.cancelled) {
-		throw new UserError(`${tournament.name} was cancelled.`, { code: "forbidden" });
-	}
+  if (tournament.cancelled) {
+    throw new UserError(`${tournament.name} was cancelled.`, { code: 'forbidden' })
+  }
 
-	if (tournament.closed) {
-		throw new UserError("This table has finished.", { code: "forbidden" });
-	}
+  if (tournament.closed) {
+    throw new UserError('This table has finished.', { code: 'forbidden' })
+  }
 
-	if (!(who.id in tournament.seats)) {
-		throw new UserError(`This table is for players of ${tournament.name}.`, { code: "forbidden" });
-	}
+  if (!(who.id in tournament.seats)) {
+    throw new UserError(`This table is for players of ${tournament.name}.`, { code: 'forbidden' })
+  }
 
-	return tournament.seats[who.id] ?? undefined;
+  return tournament.seats[who.id] ?? undefined
 }
 
 /** Host controls (bots, seats, start, play again) are for open tables; a tournament table runs itself. */
 export function requireOpenTable(c: Ctx): void {
-	if (c.vars.tournament) {
-		throw new UserError("A tournament table starts on its own.", { code: "rule" });
-	}
+  if (c.vars.tournament) {
+    throw new UserError('A tournament table starts on its own.', { code: 'rule' })
+  }
 }
 
 /**
@@ -1221,107 +1221,107 @@ export function requireOpenTable(c: Ctx): void {
  * Runs when scheduled and after each join; does nothing before the start time or once the match began.
  */
 export async function tournamentTick(
-	c: Ctx,
-	game: {
-		start: () => void;
-		commit: () => Promise<void>;
-		/** Sits a bot account at its seat; the room then plays it like any bot. */
-		seatBot: (id: string, name: string, seat: number | null) => void;
-	},
+  c: Ctx,
+  game: {
+    start: () => void
+    commit: () => Promise<void>
+    /** Sits a bot account at its seat; the room then plays it like any bot. */
+    seatBot: (id: string, name: string, seat: number | null) => void
+  },
 ): Promise<void> {
-	const tournament = c.vars.tournament as TournamentRoom | null | undefined;
-	const table = c.vars.game as Table;
-	const now = Date.now();
+  const tournament = c.vars.tournament as TournamentRoom | null | undefined
+  const table = c.vars.game as Table
+  const now = Date.now()
 
-	if (!tournament || tournament.closed || tournament.cancelled) {
-		return;
-	}
+  if (!tournament || tournament.closed || tournament.cancelled) {
+    return
+  }
 
-	if (c.vars.terminated) {
-		return;
-	}
+  if (c.vars.terminated) {
+    return
+  }
 
-	if (table.phase !== "lobby" || now < tournament.startsAt) {
-		return;
-	}
+  if (table.phase !== 'lobby' || now < tournament.startsAt) {
+    return
+  }
 
-	// Since they sat down a player may have withdrawn, been disqualified or moved by an admin: ask again, and
-	// whoever has no seat here anymore leaves before the match starts.
-	const seated = (await refreshTournament(c).catch(() => null)) ?? tournament;
-	if (seated.cancelled) {
-		return;
-	}
+  // Since they sat down a player may have withdrawn, been disqualified or moved by an admin: ask again, and
+  // whoever has no seat here anymore leaves before the match starts.
+  const seated = (await refreshTournament(c).catch(() => null)) ?? tournament
+  if (seated.cancelled) {
+    return
+  }
 
-	const unseated = table.players.filter((player) => !player.bot && !(player.id in seated.seats));
-	for (const player of unseated) {
-		c.vars.game = removePlayer(c.vars.game as Table, player.id);
-	}
+  const unseated = table.players.filter((player) => !player.bot && !(player.id in seated.seats))
+  for (const player of unseated) {
+    c.vars.game = removePlayer(c.vars.game as Table, player.id)
+  }
 
-	// Bot accounts are always on time: they take their seats as soon as the table may start.
-	const bots = seated.bots ?? {};
-	for (const [id, name] of Object.entries(bots)) {
-		const sitting = (c.vars.game as Table).players.some((player) => player.id === id);
-		if (!sitting) {
-			game.seatBot(id, name, seated.seats[id] ?? null);
-		}
-	}
+  // Bot accounts are always on time: they take their seats as soon as the table may start.
+  const bots = seated.bots ?? {}
+  for (const [id, name] of Object.entries(bots)) {
+    const sitting = (c.vars.game as Table).players.some((player) => player.id === id)
+    if (!sitting) {
+      game.seatBot(id, name, seated.seats[id] ?? null)
+    }
+  }
 
-	const people = Object.keys(seated.seats).filter((id) => !(id in bots)).length;
-	const present = (c.vars.game as Table).players.filter((player) => !player.bot).length;
-	const everyoneIsHere = present >= people;
-	const seatedCount = (c.vars.game as Table).players.length;
-	const stillWaiting = now < seated.startsAt + LATE_GRACE_MS;
-	if (!everyoneIsHere && stillWaiting) {
-		if (unseated.length > 0) {
-			await game.commit();
-		}
+  const people = Object.keys(seated.seats).filter((id) => !(id in bots)).length
+  const present = (c.vars.game as Table).players.filter((player) => !player.bot).length
+  const everyoneIsHere = present >= people
+  const seatedCount = (c.vars.game as Table).players.length
+  const stillWaiting = now < seated.startsAt + LATE_GRACE_MS
+  if (!everyoneIsHere && stillWaiting) {
+    if (unseated.length > 0) {
+      await game.commit()
+    }
 
-		return;
-	}
+    return
+  }
 
-	const code = c.key[0] as string;
+  const code = c.key[0] as string
 
-	if (seatedCount >= seated.minPlayers) {
-		game.start();
-		await game.commit();
+  if (seatedCount >= seated.minPlayers) {
+    game.start()
+    await game.commit()
 
-		const marked = await markRoom(code, "start");
-		if (!marked.ok) {
-			c.log.warn({ msg: "room start not recorded", code, detail: marked.detail });
-		}
+    const marked = await markRoom(code, 'start')
+    if (!marked.ok) {
+      c.log.warn({ msg: 'room start not recorded', code, detail: marked.detail })
+    }
 
-		return;
-	}
+    return
+  }
 
-	c.vars.tournament = { ...seated, closed: true };
-	await game.commit();
+  c.vars.tournament = { ...seated, closed: true }
+  await game.commit()
 
-	const marked = await markRoom(code, "close");
-	if (!marked.ok) {
-		c.log.warn({ msg: "room close not recorded", code, detail: marked.detail });
-	}
+  const marked = await markRoom(code, 'close')
+  if (!marked.ok) {
+    c.log.warn({ msg: 'room close not recorded', code, detail: marked.detail })
+  }
 }
 
 /** The tournament part of the view. Times are relative, like the turn clock, so a wrong device clock still counts right. */
 export function tournamentView(c: Ctx) {
-	const tournament = c.vars.tournament as TournamentRoom | null | undefined;
-	if (!tournament) {
-		return null;
-	}
+  const tournament = c.vars.tournament as TournamentRoom | null | undefined
+  if (!tournament) {
+    return null
+  }
 
-	const now = Date.now();
-	return {
-		id: tournament.id,
-		name: tournament.name,
-		format: tournament.format ?? null,
-		rounds: tournament.rounds ?? null,
-		registered: tournament.registered ?? null,
-		round: tournament.round,
-		startsIn: tournament.startsAt - now,
-		waitEndsIn: tournament.startsAt + LATE_GRACE_MS - now,
-		seats: Object.keys(tournament.seats).length,
-		closed: tournament.closed,
-	};
+  const now = Date.now()
+  return {
+    id: tournament.id,
+    name: tournament.name,
+    format: tournament.format ?? null,
+    rounds: tournament.rounds ?? null,
+    registered: tournament.registered ?? null,
+    round: tournament.round,
+    startsIn: tournament.startsAt - now,
+    waitEndsIn: tournament.startsAt + LATE_GRACE_MS - now,
+    seats: Object.keys(tournament.seats).length,
+    closed: tournament.closed,
+  }
 }
 
 /**
@@ -1329,13 +1329,13 @@ export function tournamentView(c: Ctx) {
  * connection starts a fresh check, and the timer left from before the sleep is ignored.
  */
 export async function armVipRefresh(c: Ctx): Promise<void> {
-	if (c.vars.vipCheckAt) {
-		return;
-	}
+  if (c.vars.vipCheckAt) {
+    return
+  }
 
-	const at = Date.now() + VIP_REFRESH_MS;
-	c.vars.vipCheckAt = at;
-	await c.schedule.at(at, "refreshVips", at);
+  const at = Date.now() + VIP_REFRESH_MS
+  c.vars.vipCheckAt = at
+  await c.schedule.at(at, 'refreshVips', at)
 }
 
 /**
@@ -1343,38 +1343,38 @@ export async function armVipRefresh(c: Ctx): Promise<void> {
  * checking while anyone is connected. Returns true when a tag changed.
  */
 export async function refreshVips(c: Ctx, at: unknown): Promise<boolean> {
-	// A timer from before a sleep, or a duplicate.
-	if (at !== c.vars.vipCheckAt) {
-		return false;
-	}
+  // A timer from before a sleep, or a duplicate.
+  if (at !== c.vars.vipCheckAt) {
+    return false
+  }
 
-	c.vars.vipCheckAt = null;
-	if (c.conns.size > 0) {
-		await armVipRefresh(c);
-	}
+  c.vars.vipCheckAt = null
+  if (c.conns.size > 0) {
+    await armVipRefresh(c)
+  }
 
-	const humanIds = (c.vars.game as Table).players
-		.filter((player) => !player.bot)
-		.map((player) => player.id);
-	if (humanIds.length === 0) {
-		return false;
-	}
+  const humanIds = (c.vars.game as Table).players
+    .filter((player) => !player.bot)
+    .map((player) => player.id)
+  if (humanIds.length === 0) {
+    return false
+  }
 
-	let vipIds: Set<string>;
-	try {
-		vipIds = await fetchVipIds(humanIds);
-	} catch (err) {
-		c.log.warn({ msg: "vip check failed", err: String(err) });
-		return false;
-	}
+  let vipIds: Set<string>
+  try {
+    vipIds = await fetchVipIds(humanIds)
+  } catch (err) {
+    c.log.warn({ msg: 'vip check failed', err: String(err) })
+    return false
+  }
 
-	// Read the game again: a move may have landed while the platform answered.
-	const game = c.vars.game as Table;
-	const updated = showVips(game, vipIds);
-	if (updated === game) {
-		return false;
-	}
+  // Read the game again: a move may have landed while the platform answered.
+  const game = c.vars.game as Table
+  const updated = showVips(game, vipIds)
+  if (updated === game) {
+    return false
+  }
 
-	c.vars.game = updated;
-	return true;
+  c.vars.game = updated
+  return true
 }

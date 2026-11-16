@@ -1,21 +1,21 @@
-import { fileURLToPath } from 'node:url';
-import adapter from '@sveltejs/adapter-node';
-import { sveltekit } from '@sveltejs/kit/vite';
-import tailwindcss from '@tailwindcss/vite';
-import { defineConfig } from 'vite';
+import { fileURLToPath } from 'node:url'
+import adapter from '@sveltejs/adapter-node'
+import { sveltekit } from '@sveltejs/kit/vite'
+import tailwindcss from '@tailwindcss/vite'
+import { defineConfig } from 'vite'
 
 export default defineConfig({
-	plugins: [
-		tailwindcss(),
-		sveltekit({
-			compilerOptions: {
-				// Force runes mode for the project, except for libraries. Can be removed in svelte 6.
-				runes: ({ filename }) =>
-					filename.split(/[/\\]/).includes('node_modules') ? undefined : true
-			},
-			adapter: adapter(),
-			// One .env for the whole repo, at the root.
-			env: { dir: fileURLToPath(new URL('../..', import.meta.url)) }
-		})
-	]
-});
+  plugins: [
+    tailwindcss(),
+    sveltekit({
+      compilerOptions: {
+        // Force runes mode for the project, except for libraries. Can be removed in svelte 6.
+        runes: ({ filename }) =>
+          filename.split(/[/\\]/).includes('node_modules') ? undefined : true,
+      },
+      adapter: adapter(),
+      // One .env for the whole repo, at the root.
+      env: { dir: fileURLToPath(new URL('../..', import.meta.url)) },
+    }),
+  ],
+})

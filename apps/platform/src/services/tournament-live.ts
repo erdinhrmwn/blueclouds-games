@@ -1,63 +1,63 @@
-import type { SQL } from "bun";
-import { ApiError } from "../lib/http";
-import { type FinalPlace, finalPlaces, pointsPlaces } from "./tournament-rounds";
-import { roundSeats, signUpOrderOf } from "./tournaments";
+import type { SQL } from 'bun'
+import { ApiError } from '../lib/http'
+import { type FinalPlace, finalPlaces, pointsPlaces } from './tournament-rounds'
+import { roundSeats, signUpOrderOf } from './tournaments'
 
 /** A finished tournament stays in its game's lobby this long, with its winners (phase 5 design). */
-const FINISHED_SHOWN = "24 hours";
+const FINISHED_SHOWN = '24 hours'
 
-const LIVE_LIMIT = 20;
+const LIVE_LIMIT = 20
 
 /** How many places a lobby card shows. */
-const CARD_PLACES = 3;
+const CARD_PLACES = 3
 
 /** Most rows the Detail's standings list. */
-const STANDINGS_LIMIT = 200;
+const STANDINGS_LIMIT = 200
 
 export type Standing = {
-	place: number;
-	playerId: string;
-	name: string;
-	points: number;
-	wins: number;
-	/** The furthest round they were seated in; in a knockout, below the current round means they are out. */
-	lastRound: number;
-	/** A bot account the platform signed up to fill the tables. */
-	bot: boolean;
-};
+  place: number
+  playerId: string
+  name: string
+  points: number
+  wins: number
+  /** The furthest round they were seated in; in a knockout, below the current round means they are out. */
+  lastRound: number
+  /** A bot account the platform signed up to fill the tables. */
+  bot: boolean
+}
 
 type LiveRow = {
-	id: string;
-	name: string;
-	format: "arena" | "knockout" | "swiss" | null;
-	rounds: number | null;
-	round: number;
-	round_starts_at: Date;
-	round_started: boolean;
-	starts_at: Date;
-	ended_at: Date | null;
-	players: number;
-	prizes: { place: number; coins: number; extra: string | null }[];
-	table_code: string | null;
-	table_started: boolean | null;
-	table_closed: boolean | null;
-};
+  id: string
+  name: string
+  format: 'arena' | 'knockout' | 'swiss' | null
+  rounds: number | null
+  round: number
+  round_starts_at: Date
+  round_started: boolean
+  starts_at: Date
+  ended_at: Date | null
+  players: number
+  prizes: { place: number; coins: number; extra: string | null }[]
+  table_code: string | null
+  table_started: boolean | null
+  table_closed: boolean | null
+}
 
 /**
  * Standings, best first: the stored results once the tournament finished, else worked out from the matches played
  * so far with the same rules the job uses at the end.
  */
 export async function standingsOf(sql: SQL, tournamentId: string): Promise<Standing[]> {
-	const [tournament] = await sql`
+  const [tournament] = await sql`
 			SELECT format, ended_at
 			FROM tournaments
-			WHERE id = ${tournamentId}`;
-	if (!tournament) {
-		throw new ApiError("not_found", 404, "There is no such tournament.");
-	}
+			WHERE id = ${tournamentId}`
+  if (!tournament) {
+    throw new ApiError('not_found', 404, 'There is no such tournament.')
+  }
 
-	if (tournament.ended_at) {
-		const rows = await sql`
+  if (tournament.ended_at) {
+    const rows = await sql`
 			SELECT
 				tr.place,
 				tr.player_id AS "playerId",
@@ -70,52 +70,52 @@ export async function standingsOf(sql: SQL, tournamentId: string): Promise<Stand
 			JOIN players p ON p.id = tr.player_id
 			WHERE tr.tournament_id = ${tournamentId}
 			ORDER BY tr.place
-			LIMIT ${STANDINGS_LIMIT}`;
+			LIMIT ${STANDINGS_LIMIT}`
 
-		return [...rows] as Standing[];
-	}
+    return [...rows] as Standing[]
+  }
 
-	const [seats, signUpOrder] = await Promise.all([
-		roundSeats(sql, tournamentId),
-		signUpOrderOf(sql, tournamentId),
-	]);
-	const byPoints = tournament.format === "arena" || tournament.format === "swiss";
-	const places: FinalPlace[] = byPoints
-		? pointsPlaces(seats, signUpOrder)
-		: finalPlaces(seats, signUpOrder);
+  const [seats, signUpOrder] = await Promise.all([
+    roundSeats(sql, tournamentId),
+    signUpOrderOf(sql, tournamentId),
+  ])
+  const byPoints = tournament.format === 'arena' || tournament.format === 'swiss'
+  const places: FinalPlace[] = byPoints
+    ? pointsPlaces(seats, signUpOrder)
+    : finalPlaces(seats, signUpOrder)
 
-	const ids = places.slice(0, STANDINGS_LIMIT).map((place) => place.playerId);
-	const names = await namesOf(sql, ids);
+  const ids = places.slice(0, STANDINGS_LIMIT).map((place) => place.playerId)
+  const names = await namesOf(sql, ids)
 
-	return places.slice(0, STANDINGS_LIMIT).map((place) => ({
-		place: place.place,
-		playerId: place.playerId,
-		name: names.get(place.playerId)?.name ?? "Player",
-		bot: names.get(place.playerId)?.bot ?? false,
-		points: place.points,
-		wins: place.wins,
-		lastRound: place.lastRound,
-	}));
+  return places.slice(0, STANDINGS_LIMIT).map((place) => ({
+    place: place.place,
+    playerId: place.playerId,
+    name: names.get(place.playerId)?.name ?? 'Player',
+    bot: names.get(place.playerId)?.bot ?? false,
+    points: place.points,
+    wins: place.wins,
+    lastRound: place.lastRound,
+  }))
 }
 
 async function namesOf(
-	sql: SQL,
-	ids: string[],
+  sql: SQL,
+  ids: string[],
 ): Promise<Map<string, { name: string; bot: boolean }>> {
-	if (ids.length === 0) {
-		return new Map();
-	}
+  if (ids.length === 0) {
+    return new Map()
+  }
 
-	const rows = await sql`
+  const rows = await sql`
 		SELECT id, display_name, is_bot
 		FROM players
-		WHERE id IN ${sql(ids)}`;
-	return new Map(
-		rows.map((row: { id: string; display_name: string; is_bot: boolean }) => [
-			row.id,
-			{ name: row.display_name, bot: row.is_bot },
-		]),
-	);
+		WHERE id IN ${sql(ids)}`
+  return new Map(
+    rows.map((row: { id: string; display_name: string; is_bot: boolean }) => [
+      row.id,
+      { name: row.display_name, bot: row.is_bot },
+    ]),
+  )
 }
 
 /**
@@ -123,7 +123,7 @@ async function namesOf(
  * the standings, and the caller's own place and current table.
  */
 export async function listLive(sql: SQL, game: string, playerId: string) {
-	const rows = (await sql`
+  const rows = (await sql`
 		SELECT
 			t.id,
 			t.name,
@@ -183,56 +183,56 @@ export async function listLive(sql: SQL, game: string, playerId: string) {
 			AND t.distributed_at IS NOT NULL
 			AND (t.ended_at IS NULL OR t.ended_at > now() - ${FINISHED_SHOWN}::interval)
 		ORDER BY t.ended_at NULLS FIRST, t.starts_at
-		LIMIT ${LIVE_LIMIT}`) as LiveRow[];
+		LIMIT ${LIVE_LIMIT}`) as LiveRow[]
 
-	return Promise.all(
-		rows.map(async (row) => {
-			const standings = await standingsOf(sql, row.id);
-			const me = standings.find((standing) => standing.playerId === playerId) ?? null;
+  return Promise.all(
+    rows.map(async (row) => {
+      const standings = await standingsOf(sql, row.id)
+      const me = standings.find((standing) => standing.playerId === playerId) ?? null
 
-			return {
-				id: row.id,
-				name: row.name,
-				format: row.format,
-				rounds: row.rounds,
-				round: row.round,
-				roundStartsAt: row.round_starts_at.toISOString(),
-				roundStarted: row.round_started,
-				startsAt: row.starts_at.toISOString(),
-				endedAt: row.ended_at?.toISOString() ?? null,
-				players: row.players,
-				prizes: row.prizes,
-				top: standings.slice(0, CARD_PLACES),
-				me,
-				table: row.table_code
-					? { code: row.table_code, started: !!row.table_started, closed: !!row.table_closed }
-					: null,
-			};
-		}),
-	);
+      return {
+        id: row.id,
+        name: row.name,
+        format: row.format,
+        rounds: row.rounds,
+        round: row.round,
+        roundStartsAt: row.round_starts_at.toISOString(),
+        roundStarted: row.round_started,
+        startsAt: row.starts_at.toISOString(),
+        endedAt: row.ended_at?.toISOString() ?? null,
+        players: row.players,
+        prizes: row.prizes,
+        top: standings.slice(0, CARD_PLACES),
+        me,
+        table: row.table_code
+          ? { code: row.table_code, started: !!row.table_started, closed: !!row.table_closed }
+          : null,
+      }
+    }),
+  )
 }
 
 /** One table of a round, with its players best finish first; a seat that wasn't played has no placement. */
 export type BoardTable = {
-	code: string;
-	startedAt: string | null;
-	closedAt: string | null;
-	closeReason: string | null;
-	players: {
-		playerId: string;
-		name: string;
-		bot: boolean;
-		seat: number | null;
-		placement: number | null;
-	}[];
-};
+  code: string
+  startedAt: string | null
+  closedAt: string | null
+  closeReason: string | null
+  players: {
+    playerId: string
+    name: string
+    bot: boolean
+    seat: number | null
+    placement: number | null
+  }[]
+}
 
 /**
  * Everything the tournament page shows: the tournament as the lobby lists it, every round with its tables and who
  * finished where (the bracket), and the standings. Only distributed tournaments have rounds.
  */
 export async function tournamentBoard(sql: SQL, tournamentId: string, playerId: string) {
-	const [tournament] = await sql`
+  const [tournament] = await sql`
 		SELECT
 			t.id,
 			t.game_slug,
@@ -255,19 +255,19 @@ export async function tournamentBoard(sql: SQL, tournamentId: string, playerId: 
 				'[]'
 			) AS prizes
 		FROM tournaments t
-		WHERE t.id = ${tournamentId}`;
+		WHERE t.id = ${tournamentId}`
 
-	if (!tournament) {
-		throw new ApiError("not_found", 404, "There is no such tournament.");
-	}
+  if (!tournament) {
+    throw new ApiError('not_found', 404, 'There is no such tournament.')
+  }
 
-	const roundRows = await sql`
+  const roundRows = await sql`
 		SELECT round, starts_at, ended_at
 		FROM tournament_rounds
 		WHERE tournament_id = ${tournamentId}
-		ORDER BY round`;
+		ORDER BY round`
 
-	const tableRows = await sql`
+  const tableRows = await sql`
 		SELECT
 			r.tournament_round AS round,
 			r.code,
@@ -291,59 +291,59 @@ export async function tournamentBoard(sql: SQL, tournamentId: string, playerId: 
 		LEFT JOIN match_players mp ON mp.match_id = m.id AND mp.player_id = ra.player_id
 		WHERE r.tournament_id = ${tournamentId}
 		GROUP BY r.id
-		ORDER BY r.tournament_round, r.code`;
+		ORDER BY r.tournament_round, r.code`
 
-	const toIso = (value: Date | null) => value?.toISOString() ?? null;
+  const toIso = (value: Date | null) => value?.toISOString() ?? null
 
-	const rounds = roundRows.map(
-		(row: { round: number; starts_at: Date; ended_at: Date | null }) => ({
-			round: row.round,
-			startsAt: row.starts_at.toISOString(),
-			endedAt: toIso(row.ended_at),
-			tables: tableRows
-				.filter((table: { round: number }) => table.round === row.round)
-				.map(
-					(table: {
-						code: string;
-						started_at: Date | null;
-						closed_at: Date | null;
-						close_reason: string | null;
-						players: BoardTable["players"];
-					}): BoardTable => ({
-						code: table.code,
-						startedAt: toIso(table.started_at),
-						closedAt: toIso(table.closed_at),
-						closeReason: table.close_reason,
-						players: table.players,
-					}),
-				),
-		}),
-	);
+  const rounds = roundRows.map(
+    (row: { round: number; starts_at: Date; ended_at: Date | null }) => ({
+      round: row.round,
+      startsAt: row.starts_at.toISOString(),
+      endedAt: toIso(row.ended_at),
+      tables: tableRows
+        .filter((table: { round: number }) => table.round === row.round)
+        .map(
+          (table: {
+            code: string
+            started_at: Date | null
+            closed_at: Date | null
+            close_reason: string | null
+            players: BoardTable['players']
+          }): BoardTable => ({
+            code: table.code,
+            startedAt: toIso(table.started_at),
+            closedAt: toIso(table.closed_at),
+            closeReason: table.close_reason,
+            players: table.players,
+          }),
+        ),
+    }),
+  )
 
-	const standings = await standingsOf(sql, tournamentId);
-	const me = standings.find((standing) => standing.playerId === playerId) ?? null;
-	const players = new Set(
-		rounds.flatMap((round: { tables: BoardTable[] }) =>
-			round.tables.flatMap((table) => table.players.map((seat) => seat.playerId)),
-		),
-	).size;
+  const standings = await standingsOf(sql, tournamentId)
+  const me = standings.find((standing) => standing.playerId === playerId) ?? null
+  const players = new Set(
+    rounds.flatMap((round: { tables: BoardTable[] }) =>
+      round.tables.flatMap((table) => table.players.map((seat) => seat.playerId)),
+    ),
+  ).size
 
-	return {
-		tournament: {
-			id: tournament.id,
-			game: tournament.game_slug,
-			name: tournament.name,
-			format: tournament.format,
-			rounds: tournament.rounds,
-			playersPerRoom: tournament.players_per_room,
-			startsAt: tournament.starts_at.toISOString(),
-			endedAt: toIso(tournament.ended_at),
-			cancelled: !!tournament.cancelled_at,
-			players,
-			prizes: tournament.prizes,
-		},
-		rounds,
-		standings,
-		me,
-	};
+  return {
+    tournament: {
+      id: tournament.id,
+      game: tournament.game_slug,
+      name: tournament.name,
+      format: tournament.format,
+      rounds: tournament.rounds,
+      playersPerRoom: tournament.players_per_room,
+      startsAt: tournament.starts_at.toISOString(),
+      endedAt: toIso(tournament.ended_at),
+      cancelled: !!tournament.cancelled_at,
+      players,
+      prizes: tournament.prizes,
+    },
+    rounds,
+    standings,
+    me,
+  }
 }

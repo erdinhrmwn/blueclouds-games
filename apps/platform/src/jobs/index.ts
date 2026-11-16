@@ -1,15 +1,15 @@
-import type { SQL } from "bun";
-import { log } from "../lib/log";
-import { sweepGuests } from "../services/guests";
-import { runTournamentJob } from "../services/tournaments";
+import type { SQL } from 'bun'
+import { log } from '../lib/log'
+import { sweepGuests } from '../services/guests'
+import { runTournamentJob } from '../services/tournaments'
 
 /** Cron expressions, read in UTC. Bun.cron has minute resolution. */
 export const SCHEDULES = {
-	/** Distributes tournaments whose registration closed and closes rooms nobody opened. */
-	tournaments: "* * * * *",
-	/** Deletes unused guests, at 03:00 WIB. */
-	guestSweep: "0 20 * * *",
-} as const;
+  /** Distributes tournaments whose registration closed and closes rooms nobody opened. */
+  tournaments: '* * * * *',
+  /** Deletes unused guests, at 03:00 WIB. */
+  guestSweep: '0 20 * * *',
+} as const
 
 /**
  * Schedules the platform jobs with Bun.cron in this process. A job's next run starts only after the last one settles.
@@ -18,56 +18,56 @@ export const SCHEDULES = {
  * on the same Postgres.
  */
 export function startJobs(sql: SQL): { stop: () => Promise<void> } {
-	const running = new Set<Promise<unknown>>();
+  const running = new Set<Promise<unknown>>()
 
-	/** `run` returns log fields when the run did something worth logging. */
-	const schedule = (
-		name: string,
-		cron: string,
-		run: () => Promise<Record<string, unknown> | null>,
-	) =>
-		Bun.cron(
-			cron,
-			() => {
-				// Errors are caught here: an unhandled rejection from a cron callback exits the process.
-				const pending: Promise<unknown> = run()
-					.then((fields) => fields && log.info({ msg: name, ...fields }))
-					.catch((err) => log.error({ msg: `${name} failed`, err }))
-					.finally(() => running.delete(pending));
-				running.add(pending);
+  /** `run` returns log fields when the run did something worth logging. */
+  const schedule = (
+    name: string,
+    cron: string,
+    run: () => Promise<Record<string, unknown> | null>,
+  ) =>
+    Bun.cron(
+      cron,
+      () => {
+        // Errors are caught here: an unhandled rejection from a cron callback exits the process.
+        const pending: Promise<unknown> = run()
+          .then((fields) => fields && log.info({ msg: name, ...fields }))
+          .catch((err) => log.error({ msg: `${name} failed`, err }))
+          .finally(() => running.delete(pending))
+        running.add(pending)
 
-				return pending;
-			},
-			{ tz: "UTC" },
-		);
+        return pending
+      },
+      { tz: 'UTC' },
+    )
 
-	const jobs = [
-		schedule("tournament job", SCHEDULES.tournaments, async () => {
-			const result = await runTournamentJob(sql);
-			const changed =
-				result.distributed +
-				result.cancelled +
-				result.failed +
-				result.closed +
-				result.nextRounds +
-				result.finished +
-				result.botsFilled;
+  const jobs = [
+    schedule('tournament job', SCHEDULES.tournaments, async () => {
+      const result = await runTournamentJob(sql)
+      const changed =
+        result.distributed +
+        result.cancelled +
+        result.failed +
+        result.closed +
+        result.nextRounds +
+        result.finished +
+        result.botsFilled
 
-			return changed > 0 ? result : null;
-		}),
-		schedule("guest sweep", SCHEDULES.guestSweep, async () => {
-			const deleted = await sweepGuests(sql);
-			return deleted > 0 ? { deleted } : null;
-		}),
-	];
+      return changed > 0 ? result : null
+    }),
+    schedule('guest sweep', SCHEDULES.guestSweep, async () => {
+      const deleted = await sweepGuests(sql)
+      return deleted > 0 ? { deleted } : null
+    }),
+  ]
 
-	return {
-		stop: async () => {
-			for (const job of jobs) {
-				job.stop();
-			}
+  return {
+    stop: async () => {
+      for (const job of jobs) {
+        job.stop()
+      }
 
-			await Promise.all(running);
-		},
-	};
+      await Promise.all(running)
+    },
+  }
 }

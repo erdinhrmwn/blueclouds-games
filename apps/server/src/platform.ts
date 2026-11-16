@@ -1,6 +1,6 @@
-import { importJWK, jwtVerify } from "jose";
-import { z } from "zod";
-import { AVATAR_COLORS, AVATAR_ICONS, type Avatar, NO_AVATAR } from "./games/shared/avatars";
+import { importJWK, jwtVerify } from 'jose'
+import { z } from 'zod'
+import { AVATAR_COLORS, AVATAR_ICONS, type Avatar, NO_AVATAR } from './games/shared/avatars'
 
 /**
  * Everything the actor server needs from the BlueClouds Platform, in one place, so another
@@ -8,97 +8,97 @@ import { AVATAR_COLORS, AVATAR_ICONS, type Avatar, NO_AVATAR } from "./games/sha
  */
 
 /** Must match the platform's PLAY_TOKEN_AUDIENCE. */
-const PLAY_TOKEN_AUDIENCE = "blueclouds-rooms";
+const PLAY_TOKEN_AUDIENCE = 'blueclouds-rooms'
 
 const Env = z.object({
-	/** Ed25519 public key (32 bytes, base64url) matching the platform's PLAY_TOKEN_PRIVATE_KEY. */
-	PLAY_TOKEN_PUBLIC_KEY: z
-		.string()
-		.regex(
-			/^[A-Za-z0-9_-]{43}$/,
-			"must be a 43-character base64url Ed25519 key; run `bun run --filter platform keys:generate`",
-		),
-	/** Where the actor server reaches the platform API (server to server, not the public URL). */
-	PLATFORM_URL: z
-		.url()
-		.default("http://127.0.0.1:3000")
-		.transform((url) => url.replace(/\/+$/, "")),
-	/** Bearer key for calls to the platform (match reports, tournament rooms); same value as the platform's. */
-	PLATFORM_SERVER_KEY: z.string().min(32, "must be at least 32 characters"),
-});
-type Env = z.output<typeof Env>;
+  /** Ed25519 public key (32 bytes, base64url) matching the platform's PLAY_TOKEN_PRIVATE_KEY. */
+  PLAY_TOKEN_PUBLIC_KEY: z
+    .string()
+    .regex(
+      /^[A-Za-z0-9_-]{43}$/,
+      'must be a 43-character base64url Ed25519 key; run `bun run --filter platform keys:generate`',
+    ),
+  /** Where the actor server reaches the platform API (server to server, not the public URL). */
+  PLATFORM_URL: z
+    .url()
+    .default('http://127.0.0.1:3000')
+    .transform((url) => url.replace(/\/+$/, '')),
+  /** Bearer key for calls to the platform (match reports, tournament rooms); same value as the platform's. */
+  PLATFORM_SERVER_KEY: z.string().min(32, 'must be at least 32 characters'),
+})
+type Env = z.output<typeof Env>
 
-const PLATFORM_TIMEOUT_MS = 5_000;
-const MAX_TOKEN_LENGTH = 2048;
-const MAX_DETAIL_LENGTH = 500;
+const PLATFORM_TIMEOUT_MS = 5_000
+const MAX_TOKEN_LENGTH = 2048
+const MAX_DETAIL_LENGTH = 500
 /** Statuses for a body the platform will never accept, so retrying is pointless. */
-const REJECTED_STATUSES = [400, 409, 422];
+const REJECTED_STATUSES = [400, 409, 422]
 
 const Claims = z.object({
-	sub: z.uuid(),
-	name: z.string().trim().min(1).max(20),
-	// Tokens signed before the platform added it have no flag.
-	vip: z.boolean().default(false),
-	// Older tokens have none; a look this build doesn't know never keeps anyone from their seat.
-	avatar: z
-		.object({
-			color: z.enum(AVATAR_COLORS).nullable(),
-			icon: z.enum(AVATAR_ICONS).nullable(),
-		})
-		.catch(NO_AVATAR),
-});
-export type Identity = { id: string; name: string; vip: boolean; avatar: Avatar };
+  sub: z.uuid(),
+  name: z.string().trim().min(1).max(20),
+  // Tokens signed before the platform added it have no flag.
+  vip: z.boolean().default(false),
+  // Older tokens have none; a look this build doesn't know never keeps anyone from their seat.
+  avatar: z
+    .object({
+      color: z.enum(AVATAR_COLORS).nullable(),
+      icon: z.enum(AVATAR_ICONS).nullable(),
+    })
+    .catch(NO_AVATAR),
+})
+export type Identity = { id: string; name: string; vip: boolean; avatar: Avatar }
 
-let publicKey: Promise<CryptoKey | Uint8Array> | undefined;
-let config: Env | undefined;
+let publicKey: Promise<CryptoKey | Uint8Array> | undefined
+let config: Env | undefined
 
 /** Validates the env once; call at boot so a bad config fails fast. */
 export function loadPlatformConfig(env: Record<string, string | undefined> = process.env) {
-	const parsed = Env.safeParse(env);
-	if (!parsed.success) {
-		const issues = parsed.error.issues
-			.map((issue) => `${issue.path.join(".")}: ${issue.message}`)
-			.join("; ");
-		throw new Error(`Invalid actor server config: ${issues}`);
-	}
+  const parsed = Env.safeParse(env)
+  if (!parsed.success) {
+    const issues = parsed.error.issues
+      .map((issue) => `${issue.path.join('.')}: ${issue.message}`)
+      .join('; ')
+    throw new Error(`Invalid actor server config: ${issues}`)
+  }
 
-	const jwk = { kty: "OKP", crv: "Ed25519", x: parsed.data.PLAY_TOKEN_PUBLIC_KEY };
-	publicKey = importJWK(jwk, "EdDSA");
-	config = parsed.data;
+  const jwk = { kty: 'OKP', crv: 'Ed25519', x: parsed.data.PLAY_TOKEN_PUBLIC_KEY }
+  publicKey = importJWK(jwk, 'EdDSA')
+  config = parsed.data
 
-	return config;
+  return config
 }
 
 /** Checks a play token from the platform. Returns who it belongs to, or null if it isn't valid. */
 export async function verifyPlayToken(token: unknown): Promise<Identity | null> {
-	if (typeof token !== "string" || token.length > MAX_TOKEN_LENGTH) {
-		return null;
-	}
+  if (typeof token !== 'string' || token.length > MAX_TOKEN_LENGTH) {
+    return null
+  }
 
-	if (!publicKey) {
-		loadPlatformConfig();
-	}
+  if (!publicKey) {
+    loadPlatformConfig()
+  }
 
-	try {
-		const { payload } = await jwtVerify(token, await publicKey!, {
-			audience: PLAY_TOKEN_AUDIENCE,
-			algorithms: ["EdDSA"],
-		});
+  try {
+    const { payload } = await jwtVerify(token, await publicKey!, {
+      audience: PLAY_TOKEN_AUDIENCE,
+      algorithms: ['EdDSA'],
+    })
 
-		const claims = Claims.safeParse(payload);
-		if (!claims.success) {
-			return null;
-		}
+    const claims = Claims.safeParse(payload)
+    if (!claims.success) {
+      return null
+    }
 
-		return {
-			id: claims.data.sub,
-			name: claims.data.name,
-			vip: claims.data.vip,
-			avatar: claims.data.avatar,
-		};
-	} catch {
-		return null;
-	}
+    return {
+      id: claims.data.sub,
+      name: claims.data.name,
+      vip: claims.data.vip,
+      avatar: claims.data.avatar,
+    }
+  } catch {
+    return null
+  }
 }
 
 /**
@@ -106,115 +106,115 @@ export async function verifyPlayToken(token: unknown): Promise<Identity | null> 
  * "rejected": the platform will never accept this body, so retrying is pointless. "retry": try again later.
  */
 export function reportMatch(report: { matchId: string }): Promise<SendResult> {
-	return send("/matches", report);
+  return send('/matches', report)
 }
 
 /** Sends a closed round of a running or finished match (rounds.ts); answered like `reportMatch`. */
 export function reportRound(matchId: string, round: { round: number }): Promise<SendResult> {
-	return send(`/matches/${matchId}/rounds`, round);
+  return send(`/matches/${matchId}/rounds`, round)
 }
 
-export type SendResult = { result: "sent" | "rejected" | "retry"; detail?: string };
+export type SendResult = { result: 'sent' | 'rejected' | 'retry'; detail?: string }
 
 async function send(path: string, body: unknown): Promise<SendResult> {
-	try {
-		const res = await callPlatform("POST", path, body);
-		if (res.ok) {
-			return { result: "sent" };
-		}
+  try {
+    const res = await callPlatform('POST', path, body)
+    if (res.ok) {
+      return { result: 'sent' }
+    }
 
-		const detail = await failureDetail(res);
-		const result = REJECTED_STATUSES.includes(res.status) ? "rejected" : "retry";
+    const detail = await failureDetail(res)
+    const result = REJECTED_STATUSES.includes(res.status) ? 'rejected' : 'retry'
 
-		return { result, detail };
-	} catch (err) {
-		return { result: "retry", detail: String(err) };
-	}
+    return { result, detail }
+  } catch (err) {
+    return { result: 'retry', detail: String(err) }
+  }
 }
 
 const TournamentRoom = z.object({
-	visibility: z.enum(["public", "private"]),
-	/** The table's own name; an older platform sends none. */
-	name: z.string().max(32).nullable().default(null),
-	minPlayers: z.number().int().min(1),
-	startedAt: z.string().nullable(),
-	closedAt: z.string().nullable(),
-	tournament: z
-		.object({
-			id: z.uuid(),
-			name: z.string(),
-			format: z.enum(["arena", "knockout", "swiss"]).nullable().default(null),
-			/** Arena and Swiss: how many rounds it plays; null for Knockout or from an older platform. */
-			rounds: z.number().int().min(1).nullable().default(null),
-			/** Everyone still signed up to the tournament; older platforms don't send it. */
-			registered: z.number().int().min(0).nullable().default(null),
-			/** The tournament round this table plays in; older platforms don't send it. */
-			round: z.number().int().min(1).default(1),
-			startsAt: z.iso.datetime({ offset: true }),
-			cancelled: z.boolean(),
-		})
-		.nullable(),
-	seats: z.array(
-		z.object({
-			playerId: z.uuid(),
-			seat: z.number().int().min(0).nullable(),
-			/** A bot account the platform signed up to fill the tables; the room plays its seat. */
-			bot: z.boolean().default(false),
-			name: z.string().default(""),
-		}),
-	),
-});
-export type RoomSeats = z.output<typeof TournamentRoom>;
+  visibility: z.enum(['public', 'private']),
+  /** The table's own name; an older platform sends none. */
+  name: z.string().max(32).nullable().default(null),
+  minPlayers: z.number().int().min(1),
+  startedAt: z.string().nullable(),
+  closedAt: z.string().nullable(),
+  tournament: z
+    .object({
+      id: z.uuid(),
+      name: z.string(),
+      format: z.enum(['arena', 'knockout', 'swiss']).nullable().default(null),
+      /** Arena and Swiss: how many rounds it plays; null for Knockout or from an older platform. */
+      rounds: z.number().int().min(1).nullable().default(null),
+      /** Everyone still signed up to the tournament; older platforms don't send it. */
+      registered: z.number().int().min(0).nullable().default(null),
+      /** The tournament round this table plays in; older platforms don't send it. */
+      round: z.number().int().min(1).default(1),
+      startsAt: z.iso.datetime({ offset: true }),
+      cancelled: z.boolean(),
+    })
+    .nullable(),
+  seats: z.array(
+    z.object({
+      playerId: z.uuid(),
+      seat: z.number().int().min(0).nullable(),
+      /** A bot account the platform signed up to fill the tables; the room plays its seat. */
+      bot: z.boolean().default(false),
+      name: z.string().default(''),
+    }),
+  ),
+})
+export type RoomSeats = z.output<typeof TournamentRoom>
 
 async function callPlatform(method: string, path: string, body?: unknown): Promise<Response> {
-	const { PLATFORM_URL, PLATFORM_SERVER_KEY } = config ?? loadPlatformConfig();
+  const { PLATFORM_URL, PLATFORM_SERVER_KEY } = config ?? loadPlatformConfig()
 
-	return fetch(`${PLATFORM_URL}/v1${path}`, {
-		method,
-		headers: {
-			"Content-Type": "application/json",
-			Authorization: `Bearer ${PLATFORM_SERVER_KEY}`,
-		},
-		body: body === undefined ? undefined : JSON.stringify(body),
-		signal: AbortSignal.timeout(PLATFORM_TIMEOUT_MS),
-	});
+  return fetch(`${PLATFORM_URL}/v1${path}`, {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${PLATFORM_SERVER_KEY}`,
+    },
+    body: body === undefined ? undefined : JSON.stringify(body),
+    signal: AbortSignal.timeout(PLATFORM_TIMEOUT_MS),
+  })
 }
 
 /** Status and the start of the body, for logs. */
 async function failureDetail(res: Response): Promise<string> {
-	const body = await res.text().catch(() => "");
-	return `${res.status} ${body}`.slice(0, MAX_DETAIL_LENGTH);
+  const body = await res.text().catch(() => '')
+  return `${res.status} ${body}`.slice(0, MAX_DETAIL_LENGTH)
 }
 
 /** The room's tournament, start time and seats. Null if the platform doesn't know the room; throws if it can't be reached. */
 export async function fetchRoomSeats(code: string): Promise<RoomSeats | null> {
-	const res = await callPlatform("GET", `/rooms/${encodeURIComponent(code)}/seats`);
-	if (res.status === 404) {
-		return null;
-	}
+  const res = await callPlatform('GET', `/rooms/${encodeURIComponent(code)}/seats`)
+  if (res.status === 404) {
+    return null
+  }
 
-	if (!res.ok) {
-		throw new Error(`room seats: ${res.status}`);
-	}
+  if (!res.ok) {
+    throw new Error(`room seats: ${res.status}`)
+  }
 
-	const body = (await res.json()) as { data: { room: unknown } };
-	return TournamentRoom.parse(body.data.room);
+  const body = (await res.json()) as { data: { room: unknown } }
+  return TournamentRoom.parse(body.data.room)
 }
 
-const VipIds = z.object({ vipIds: z.array(z.uuid()) });
+const VipIds = z.object({ vipIds: z.array(z.uuid()) })
 
 /** Which of these players are VIP right now. Throws if the platform can't be reached. */
 export async function fetchVipIds(ids: string[]): Promise<Set<string>> {
-	const query = ids.map(encodeURIComponent).join(",");
-	const res = await callPlatform("GET", `/players/vips?ids=${query}`);
-	if (!res.ok) {
-		throw new Error(`vip lookup: ${res.status}`);
-	}
+  const query = ids.map(encodeURIComponent).join(',')
+  const res = await callPlatform('GET', `/players/vips?ids=${query}`)
+  if (!res.ok) {
+    throw new Error(`vip lookup: ${res.status}`)
+  }
 
-	const body = (await res.json()) as { data: unknown };
-	const { vipIds } = VipIds.parse(body.data);
+  const body = (await res.json()) as { data: unknown }
+  const { vipIds } = VipIds.parse(body.data)
 
-	return new Set(vipIds);
+  return new Set(vipIds)
 }
 
 /**
@@ -222,21 +222,21 @@ export async function fetchVipIds(ids: string[]): Promise<Set<string>> {
  * admin terminated it. A lost call is fixed by the platform's job and the match report.
  */
 export async function markRoom(
-	code: string,
-	change: "start" | "close",
-	reason: "not_enough_players" | "terminated" = "not_enough_players",
+  code: string,
+  change: 'start' | 'close',
+  reason: 'not_enough_players' | 'terminated' = 'not_enough_players',
 ): Promise<{ ok: boolean; detail?: string }> {
-	try {
-		const path = `/rooms/${encodeURIComponent(code)}/${change}`;
-		const body = change === "close" ? { reason } : undefined;
+  try {
+    const path = `/rooms/${encodeURIComponent(code)}/${change}`
+    const body = change === 'close' ? { reason } : undefined
 
-		const res = await callPlatform("POST", path, body);
-		if (res.ok) {
-			return { ok: true };
-		}
+    const res = await callPlatform('POST', path, body)
+    if (res.ok) {
+      return { ok: true }
+    }
 
-		return { ok: false, detail: await failureDetail(res) };
-	} catch (err) {
-		return { ok: false, detail: String(err) };
-	}
+    return { ok: false, detail: await failureDetail(res) }
+  } catch (err) {
+    return { ok: false, detail: String(err) }
+  }
 }

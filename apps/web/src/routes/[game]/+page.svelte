@@ -1,7 +1,7 @@
 <script lang="ts">
-	import type { PageProps } from './$types';
+  import type { PageProps } from './$types'
 
-	let { data }: PageProps = $props();
+  let { data }: PageProps = $props()
 </script>
 
 <svelte:head><title>{data.game.name} · BlueClouds Games</title></svelte:head>

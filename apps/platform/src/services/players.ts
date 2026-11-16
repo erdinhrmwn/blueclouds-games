@@ -1,198 +1,198 @@
-import type { SQL } from "bun";
-import { ApiError } from "../lib/http";
-import type { Signer } from "../lib/play-tokens";
-import { hashSecret, newSecret, SECRET_PATTERN } from "../lib/secrets";
-import { grantSignupBonus } from "./coins";
-import { deleteGuestIfUnused } from "./guests";
+import type { SQL } from 'bun'
+import { ApiError } from '../lib/http'
+import type { Signer } from '../lib/play-tokens'
+import { hashSecret, newSecret, SECRET_PATTERN } from '../lib/secrets'
+import { grantSignupBonus } from './coins'
+import { deleteGuestIfUnused } from './guests'
 
 /** Preset avatar names, as players.avatar_color / avatar_icon allow (apps/server/src/games/shared/avatars.ts). */
 export const AVATAR_COLORS = [
-	"rain",
-	"navy",
-	"wind",
-	"felt",
-	"teal",
-	"slate",
-	"storm",
-	"rose",
-	"oxblood",
-	"ember",
-	"sun",
-	"brass",
-] as const;
+  'rain',
+  'navy',
+  'wind',
+  'felt',
+  'teal',
+  'slate',
+  'storm',
+  'rose',
+  'oxblood',
+  'ember',
+  'sun',
+  'brass',
+] as const
 export const AVATAR_ICONS = [
-	"cloud",
-	"sun",
-	"moon",
-	"star",
-	"bolt",
-	"drop",
-	"snow",
-	"rainbow",
-	"leaf",
-	"flame",
-	"kite",
-	"crown",
-	"chip",
-	"die",
-	"gem",
-	"anchor",
-] as const;
+  'cloud',
+  'sun',
+  'moon',
+  'star',
+  'bolt',
+  'drop',
+  'snow',
+  'rainbow',
+  'leaf',
+  'flame',
+  'kite',
+  'crown',
+  'chip',
+  'die',
+  'gem',
+  'anchor',
+] as const
 
 /** Null fields are not picked yet: the game shows a colour from the player id and the initial. */
 export type Avatar = {
-	color: (typeof AVATAR_COLORS)[number] | null;
-	icon: (typeof AVATAR_ICONS)[number] | null;
-};
+  color: (typeof AVATAR_COLORS)[number] | null
+  icon: (typeof AVATAR_ICONS)[number] | null
+}
 
 /** A guest has a generated `guest_…` username and no password: it exists only in the browser that holds its secret. */
 export type Player = {
-	id: string;
-	name: string;
-	username: string | null;
-	guest: boolean;
-	avatar: Avatar;
-	createdAt: string;
-};
+  id: string
+  name: string
+  username: string | null
+  guest: boolean
+  avatar: Avatar
+  createdAt: string
+}
 
 export type PlayerRow = {
-	id: string;
-	display_name: string;
-	username: string | null;
-	is_guest: boolean;
-	avatar_color: Avatar["color"];
-	avatar_icon: Avatar["icon"];
-	created_at: Date;
-	disabled_at: Date | null;
-};
+  id: string
+  display_name: string
+  username: string | null
+  is_guest: boolean
+  avatar_color: Avatar['color']
+  avatar_icon: Avatar['icon']
+  created_at: Date
+  disabled_at: Date | null
+}
 
 /** A player as the API returns it, with the secret when one was just made for this device. */
-type SignedIn = { player: Player; playerSecret?: string };
+type SignedIn = { player: Player; playerSecret?: string }
 
 const PLAYER_COLUMNS = (sql: SQL) =>
-	sql`p.id, p.display_name, p.username, p.is_guest, p.avatar_color, p.avatar_icon, p.created_at, p.disabled_at`;
+  sql`p.id, p.display_name, p.username, p.is_guest, p.avatar_color, p.avatar_icon, p.created_at, p.disabled_at`
 
 const RETURNING = (sql: SQL) =>
-	sql`RETURNING id, display_name, username, is_guest, avatar_color, avatar_icon, created_at, disabled_at`;
+  sql`RETURNING id, display_name, username, is_guest, avatar_color, avatar_icon, created_at, disabled_at`
 
 export const toPlayer = (row: PlayerRow): Player => ({
-	id: row.id,
-	name: row.display_name,
-	username: row.username,
-	guest: row.is_guest,
-	avatar: { color: row.avatar_color, icon: row.avatar_icon },
-	createdAt: row.created_at.toISOString(),
-});
+  id: row.id,
+  name: row.display_name,
+  username: row.username,
+  guest: row.is_guest,
+  avatar: { color: row.avatar_color, icon: row.avatar_icon },
+  createdAt: row.created_at.toISOString(),
+})
 
 /** 5 wrong passwords for one username within 15 minutes lock it for the rest of that window, like admin sign-in. */
-const LOCKOUT = { tries: 5, windowMs: 15 * 60_000 };
+const LOCKOUT = { tries: 5, windowMs: 15 * 60_000 }
 
 /** Tries before giving up on a free guest number (6 digits: a clash is rare, a few in a row means something else). */
-const GUEST_NUMBER_TRIES = 5;
+const GUEST_NUMBER_TRIES = 5
 
 /** A random 6-digit number, 100000-999999. */
 function guestNumber(): string {
-	const [random] = crypto.getRandomValues(new Uint32Array(1));
-	return String(100_000 + (random! % 900_000));
+  const [random] = crypto.getRandomValues(new Uint32Array(1))
+  return String(100_000 + (random! % 900_000))
 }
 
 /** Above this many tracked usernames, expired windows are swept so the map cannot grow forever. */
-const FAILURES_SWEEP_AT = 10_000;
+const FAILURES_SWEEP_AT = 10_000
 
 /**
  * Wrong passwords per username.
  * ponytail: counted in this process, like rateLimit. With more platform instances, move it to DragonflyDB.
  */
-const failures = new Map<string, { count: number; resetAt: number }>();
+const failures = new Map<string, { count: number; resetAt: number }>()
 
 function isLocked(username: string): boolean {
-	const entry = failures.get(username);
-	if (!entry) {
-		return false;
-	}
+  const entry = failures.get(username)
+  if (!entry) {
+    return false
+  }
 
-	return entry.resetAt > Date.now() && entry.count >= LOCKOUT.tries;
+  return entry.resetAt > Date.now() && entry.count >= LOCKOUT.tries
 }
 
 function noteFailure(username: string): void {
-	const now = Date.now();
-	if (failures.size > FAILURES_SWEEP_AT) {
-		for (const [name, entry] of failures) {
-			if (entry.resetAt <= now) {
-				failures.delete(name);
-			}
-		}
-	}
+  const now = Date.now()
+  if (failures.size > FAILURES_SWEEP_AT) {
+    for (const [name, entry] of failures) {
+      if (entry.resetAt <= now) {
+        failures.delete(name)
+      }
+    }
+  }
 
-	const entry = failures.get(username);
-	if (!entry || entry.resetAt <= now) {
-		failures.set(username, { count: 1, resetAt: now + LOCKOUT.windowMs });
-	} else {
-		entry.count += 1;
-	}
+  const entry = failures.get(username)
+  if (!entry || entry.resetAt <= now) {
+    failures.set(username, { count: 1, resetAt: now + LOCKOUT.windowMs })
+  } else {
+    entry.count += 1
+  }
 }
 
 /** Same work for an unknown username as for a wrong password, so timing doesn't reveal which usernames exist. */
-let dummyHash: Promise<string> | undefined;
+let dummyHash: Promise<string> | undefined
 
-const isUniqueViolation = (err: unknown) => (err as { errno?: string })?.errno === "23505";
+const isUniqueViolation = (err: unknown) => (err as { errno?: string })?.errno === '23505'
 
 /**
  * The player behind a player secret: null when there is none or it was revoked.
  * Throws 403 for a disabled player: the backoffice revokes their secrets too, and they should be told why.
  */
 export async function findBySecret(sql: SQL, secret: string | null): Promise<PlayerRow | null> {
-	if (!secret || !SECRET_PATTERN.test(secret)) {
-		return null;
-	}
+  if (!secret || !SECRET_PATTERN.test(secret)) {
+    return null
+  }
 
-	const [row] = (await sql`
+  const [row] = (await sql`
 		SELECT ${PLAYER_COLUMNS(sql)}, s.revoked_at
 		FROM player_secrets s
 		JOIN players p ON p.id = s.player_id
-		WHERE s.secret_hash = ${hashSecret(secret)}`) as (PlayerRow & { revoked_at: Date | null })[];
+		WHERE s.secret_hash = ${hashSecret(secret)}`) as (PlayerRow & { revoked_at: Date | null })[]
 
-	if (row?.disabled_at) {
-		throw new ApiError("forbidden", 403, "This player has been disabled.");
-	}
+  if (row?.disabled_at) {
+    throw new ApiError('forbidden', 403, 'This player has been disabled.')
+  }
 
-	if (!row || row.revoked_at) {
-		return null;
-	}
+  if (!row || row.revoked_at) {
+    return null
+  }
 
-	return row;
+  return row
 }
 
 /** New guest player, named "Guest 482193" with username "guest_482193" unless it brings a name. */
 export async function createGuest(sql: SQL, name: string | undefined): Promise<Required<SignedIn>> {
-	const secret = newSecret();
-	for (let i = 0; i < GUEST_NUMBER_TRIES; i++) {
-		const number = guestNumber();
-		const displayName = name ?? `Guest ${number}`;
-		const username = `guest_${number}`;
+  const secret = newSecret()
+  for (let i = 0; i < GUEST_NUMBER_TRIES; i++) {
+    const number = guestNumber()
+    const displayName = name ?? `Guest ${number}`
+    const username = `guest_${number}`
 
-		try {
-			const row = await sql.begin(async (tx) => {
-				const [player] = await tx`
+    try {
+      const row = await sql.begin(async (tx) => {
+        const [player] = await tx`
 					INSERT INTO players (display_name, username)
 					VALUES (${displayName}, ${username})
-					${RETURNING(tx)}`;
-				await tx`
+					${RETURNING(tx)}`
+        await tx`
 					INSERT INTO player_secrets (secret_hash, player_id)
-					VALUES (${hashSecret(secret)}, ${player.id})`;
+					VALUES (${hashSecret(secret)}, ${player.id})`
 
-				return player;
-			});
+        return player
+      })
 
-			return { player: toPlayer(row), playerSecret: secret };
-		} catch (err) {
-			if (!isUniqueViolation(err)) {
-				throw err;
-			} // that number is taken: draw another
-		}
-	}
+      return { player: toPlayer(row), playerSecret: secret }
+    } catch (err) {
+      if (!isUniqueViolation(err)) {
+        throw err
+      } // that number is taken: draw another
+    }
+  }
 
-	throw new ApiError("internal", 500, "Could not make a guest right now. Try again.");
+  throw new ApiError('internal', 500, 'Could not make a guest right now. Try again.')
 }
 
 /**
@@ -200,98 +200,98 @@ export async function createGuest(sql: SQL, name: string | undefined): Promise<R
  * secret returned); without one, a new player is made and its secret returned.
  */
 export async function register(
-	sql: SQL,
-	current: PlayerRow | null,
-	input: { name: string; username: string; password: string },
+  sql: SQL,
+  current: PlayerRow | null,
+  input: { name: string; username: string; password: string },
 ): Promise<SignedIn> {
-	const { name, username, password } = input;
-	if (current && !current.is_guest) {
-		throw new ApiError("conflict", 409, "You already have an account. Log out first.");
-	}
+  const { name, username, password } = input
+  if (current && !current.is_guest) {
+    throw new ApiError('conflict', 409, 'You already have an account. Log out first.')
+  }
 
-	const passwordHash = await Bun.password.hash(password); // argon2id
-	try {
-		if (current) {
-			// The guest becomes the account and gets the account's coins in the same step.
-			const row = await sql.begin(async (tx) => {
-				const [updated] = await tx`
+  const passwordHash = await Bun.password.hash(password) // argon2id
+  try {
+    if (current) {
+      // The guest becomes the account and gets the account's coins in the same step.
+      const row = await sql.begin(async (tx) => {
+        const [updated] = await tx`
 					UPDATE players
 					SET display_name = ${name}, username = ${username}, password_hash = ${passwordHash}
 					WHERE id = ${current.id} AND is_guest
-					${RETURNING(tx)}`;
+					${RETURNING(tx)}`
 
-				if (!updated) {
-					throw new ApiError("conflict", 409, "You already have an account. Log out first.");
-				}
+        if (!updated) {
+          throw new ApiError('conflict', 409, 'You already have an account. Log out first.')
+        }
 
-				await grantSignupBonus(tx, updated.id);
-				return updated as PlayerRow;
-			});
+        await grantSignupBonus(tx, updated.id)
+        return updated as PlayerRow
+      })
 
-			return { player: toPlayer(row) };
-		}
+      return { player: toPlayer(row) }
+    }
 
-		const secret = newSecret();
-		const row = await sql.begin(async (tx) => {
-			const [player] = await tx`
+    const secret = newSecret()
+    const row = await sql.begin(async (tx) => {
+      const [player] = await tx`
 				INSERT INTO players (display_name, username, password_hash)
 				VALUES (${name}, ${username}, ${passwordHash})
-				${RETURNING(tx)}`;
-			await tx`
+				${RETURNING(tx)}`
+      await tx`
 				INSERT INTO player_secrets (secret_hash, player_id)
-				VALUES (${hashSecret(secret)}, ${player.id})`;
-			await grantSignupBonus(tx, player.id);
+				VALUES (${hashSecret(secret)}, ${player.id})`
+      await grantSignupBonus(tx, player.id)
 
-			return player as PlayerRow;
-		});
+      return player as PlayerRow
+    })
 
-		return { player: toPlayer(row), playerSecret: secret };
-	} catch (err) {
-		if (isUniqueViolation(err)) {
-			throw new ApiError("conflict", 409, "Some fields are invalid.", {
-				username: "That username is taken.",
-			});
-		}
+    return { player: toPlayer(row), playerSecret: secret }
+  } catch (err) {
+    if (isUniqueViolation(err)) {
+      throw new ApiError('conflict', 409, 'Some fields are invalid.', {
+        username: 'That username is taken.',
+      })
+    }
 
-		throw err;
-	}
+    throw err
+  }
 }
 
 /** Signs in on this device: a new secret for this browser, the player's other devices stay signed in. */
 export async function login(
-	sql: SQL,
-	username: string,
-	password: string,
+  sql: SQL,
+  username: string,
+  password: string,
 ): Promise<Required<SignedIn>> {
-	if (isLocked(username)) {
-		throw new ApiError("rate_limited", 429, "Too many wrong passwords. Try again in 15 minutes.");
-	}
+  if (isLocked(username)) {
+    throw new ApiError('rate_limited', 429, 'Too many wrong passwords. Try again in 15 minutes.')
+  }
 
-	const [row] = (await sql`
+  const [row] = (await sql`
 		SELECT id, display_name, username, is_guest, avatar_color, avatar_icon, created_at, disabled_at, password_hash
 		FROM players
-		WHERE username = ${username}`) as (PlayerRow & { password_hash: string | null })[];
+		WHERE username = ${username}`) as (PlayerRow & { password_hash: string | null })[]
 
-	dummyHash ??= Bun.password.hash("not-a-real-password");
-	const hashToCheck = row?.password_hash ?? (await dummyHash);
-	const valid = await Bun.password.verify(password, hashToCheck);
+  dummyHash ??= Bun.password.hash('not-a-real-password')
+  const hashToCheck = row?.password_hash ?? (await dummyHash)
+  const valid = await Bun.password.verify(password, hashToCheck)
 
-	if (!row || !valid) {
-		noteFailure(username);
-		throw new ApiError("unauthenticated", 401, "Wrong username or password.");
-	}
+  if (!row || !valid) {
+    noteFailure(username)
+    throw new ApiError('unauthenticated', 401, 'Wrong username or password.')
+  }
 
-	failures.delete(username);
-	if (row.disabled_at) {
-		throw new ApiError("forbidden", 403, "This player has been disabled.");
-	}
+  failures.delete(username)
+  if (row.disabled_at) {
+    throw new ApiError('forbidden', 403, 'This player has been disabled.')
+  }
 
-	const secret = newSecret();
-	await sql`
+  const secret = newSecret()
+  await sql`
 		INSERT INTO player_secrets (secret_hash, player_id)
-		VALUES (${hashSecret(secret)}, ${row.id})`;
+		VALUES (${hashSecret(secret)}, ${row.id})`
 
-	return { player: toPlayer(row), playerSecret: secret };
+  return { player: toPlayer(row), playerSecret: secret }
 }
 
 /**
@@ -299,89 +299,89 @@ export async function login(
  * sign-in). Every other device is signed out; the one asking keeps its secret.
  */
 export async function changePassword(
-	sql: SQL,
-	player: Player,
-	keepSecret: string,
-	input: { currentPassword: string; newPassword: string },
+  sql: SQL,
+  player: Player,
+  keepSecret: string,
+  input: { currentPassword: string; newPassword: string },
 ): Promise<void> {
-	if (player.guest || !player.username) {
-		throw new ApiError("forbidden", 403, "Link an account to set a password.");
-	}
+  if (player.guest || !player.username) {
+    throw new ApiError('forbidden', 403, 'Link an account to set a password.')
+  }
 
-	const username = player.username;
-	if (isLocked(username)) {
-		throw new ApiError("rate_limited", 429, "Too many wrong passwords. Try again in 15 minutes.");
-	}
+  const username = player.username
+  if (isLocked(username)) {
+    throw new ApiError('rate_limited', 429, 'Too many wrong passwords. Try again in 15 minutes.')
+  }
 
-	const [row] = (await sql`
+  const [row] = (await sql`
 		SELECT password_hash
 		FROM players
-		WHERE id = ${player.id}`) as { password_hash: string | null }[];
+		WHERE id = ${player.id}`) as { password_hash: string | null }[]
 
-	const valid =
-		!!row?.password_hash && (await Bun.password.verify(input.currentPassword, row.password_hash));
-	if (!valid) {
-		noteFailure(username);
-		throw new ApiError("unauthenticated", 401, "Your current password is wrong.");
-	}
+  const valid =
+    !!row?.password_hash && (await Bun.password.verify(input.currentPassword, row.password_hash))
+  if (!valid) {
+    noteFailure(username)
+    throw new ApiError('unauthenticated', 401, 'Your current password is wrong.')
+  }
 
-	failures.delete(username);
-	const passwordHash = await Bun.password.hash(input.newPassword); // argon2id
+  failures.delete(username)
+  const passwordHash = await Bun.password.hash(input.newPassword) // argon2id
 
-	await sql.begin(async (tx) => {
-		await tx`
+  await sql.begin(async (tx) => {
+    await tx`
 			UPDATE players
 			SET password_hash = ${passwordHash}
-			WHERE id = ${player.id}`;
-		await tx`
+			WHERE id = ${player.id}`
+    await tx`
 			UPDATE player_secrets
 			SET revoked_at = now()
 			WHERE player_id = ${player.id}
 				AND revoked_at IS NULL
-				AND secret_hash <> ${hashSecret(keepSecret)}`;
-	});
+				AND secret_hash <> ${hashSecret(keepSecret)}`
+  })
 }
 
 /** Signs this device out: its secret stops working. A guest that never played is deleted, since it can't come back. */
 export async function logout(sql: SQL, player: Player, secret: string): Promise<void> {
-	await sql`
+  await sql`
 		UPDATE player_secrets
 		SET revoked_at = now()
-		WHERE secret_hash = ${hashSecret(secret)}`;
+		WHERE secret_hash = ${hashSecret(secret)}`
 
-	if (player.guest) {
-		await deleteGuestIfUnused(sql, player.id);
-	}
+  if (player.guest) {
+    await deleteGuestIfUnused(sql, player.id)
+  }
 }
 
 /** Counts as being seen, at most one write an hour, so the guest sweep spares the player. */
 export async function noteSeen(sql: SQL, playerId: string): Promise<void> {
-	await sql`
+  await sql`
 		UPDATE players
 		SET last_seen_at = now()
-		WHERE id = ${playerId} AND last_seen_at < now() - interval '1 hour'`;
+		WHERE id = ${playerId} AND last_seen_at < now() - interval '1 hour'`
 }
 
 export async function rename(sql: SQL, playerId: string, name: string): Promise<Player> {
-	const [row] = await sql`
+  const [row] = await sql`
 		UPDATE players
 		SET display_name = ${name}
 		WHERE id = ${playerId}
-		${RETURNING(sql)}`;
+		${RETURNING(sql)}`
 
-	return toPlayer(row);
+  return toPlayer(row)
 }
 
 /** Sets the player's preset avatar. Either part may be null: back to the default colour, or the initial. */
 export async function setAvatar(sql: SQL, playerId: string, avatar: Avatar): Promise<Player> {
-	const [row] = await sql`
+  const [row] = await sql`
 		UPDATE players
 		SET avatar_color = ${avatar.color},
 			avatar_icon = ${avatar.icon}
 		WHERE id = ${playerId}
-		${RETURNING(sql)}`;
+		${RETURNING(sql)}`
 
-	return toPlayer(row);
+  return toPlayer(row)
 }
 
 /**
@@ -389,26 +389,26 @@ export async function setAvatar(sql: SQL, playerId: string, avatar: Avatar): Pro
  * Counts as the player being seen.
  */
 export async function issuePlayToken(sql: SQL, signer: Signer, player: Player) {
-	const [row] = (await sql`
+  const [row] = (await sql`
 		UPDATE players
 		SET last_seen_at = now()
 		WHERE id = ${player.id}
 		RETURNING is_vip
-	`) as { is_vip: boolean }[];
+	`) as { is_vip: boolean }[]
 
-	const vip = row?.is_vip ?? false;
+  const vip = row?.is_vip ?? false
 
-	return signer.sign({ id: player.id, name: player.name, vip, avatar: player.avatar });
+  return signer.sign({ id: player.id, name: player.name, vip, avatar: player.avatar })
 }
 
 /** Which of these players are VIP, for the seat tags at a table. */
 export async function vipIds(sql: SQL, ids: string[]): Promise<string[]> {
-	const rows = (await sql`
+  const rows = (await sql`
 		SELECT id
 		FROM players
 		WHERE id IN ${sql(ids)}
 			AND is_vip
-	`) as { id: string }[];
+	`) as { id: string }[]
 
-	return rows.map((row) => row.id);
+  return rows.map((row) => row.id)
 }

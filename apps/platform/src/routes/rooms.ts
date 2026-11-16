@@ -1,126 +1,126 @@
-import type { SQL } from "bun";
-import { Hono } from "hono";
-import { z } from "zod";
-import type { AppEnv } from "../app";
-import { ok, validate } from "../lib/http";
-import { playerAuth, serverAuth } from "../middleware/auth";
-import { rateLimit } from "../middleware/rate-limit";
-import * as rooms from "../services/rooms";
+import type { SQL } from 'bun'
+import { Hono } from 'hono'
+import { z } from 'zod'
+import type { AppEnv } from '../app'
+import { ok, validate } from '../lib/http'
+import { playerAuth, serverAuth } from '../middleware/auth'
+import { rateLimit } from '../middleware/rate-limit'
+import * as rooms from '../services/rooms'
 
 /** Players open tables, so it is rate-limited like guest sign-ups, a bit looser. */
-const ROOM_LIMIT = { perIp: 20, windowMs: 60_000 };
+const ROOM_LIMIT = { perIp: 20, windowMs: 60_000 }
 
 /** Asking for and redeeming invite links, per IP. Redeeming is the tight one: it is where a link is tried. */
-const INVITE_LIMIT = { perIp: 20, windowMs: 60_000 };
-const REDEEM_LIMIT = { perIp: 10, windowMs: 60_000 };
+const INVITE_LIMIT = { perIp: 20, windowMs: 60_000 }
+const REDEEM_LIMIT = { perIp: 10, windowMs: 60_000 }
 
-const Game = z.string().regex(/^[a-z0-9-]{2,32}$/, "Unknown game.");
-const Visibility = z.enum(["public", "private"]);
-const RoomParam = z.object({ code: z.string().regex(/^[A-Z0-9]{4,8}$/, "Not a room code.") });
+const Game = z.string().regex(/^[a-z0-9-]{2,32}$/, 'Unknown game.')
+const Visibility = z.enum(['public', 'private'])
+const RoomParam = z.object({ code: z.string().regex(/^[A-Z0-9]{4,8}$/, 'Not a room code.') })
 
 const NewRoom = z.object({
-	game: Game,
-	visibility: Visibility.default("private"),
-	/** The table's own name; left out (or blank) shows "<host>'s table". */
-	name: z
-		.string()
-		.trim()
-		.max(32)
-		.transform((value) => value || null)
-		.optional(),
-});
+  game: Game,
+  visibility: Visibility.default('private'),
+  /** The table's own name; left out (or blank) shows "<host>'s table". */
+  name: z
+    .string()
+    .trim()
+    .max(32)
+    .transform((value) => value || null)
+    .optional(),
+})
 const Redeem = z.object({
-	invite: z
-		.string()
-		.trim()
-		.regex(/^[0-9a-f]{32}$/, "That invite link doesn't look right."),
-});
-const CloseBody = z.object({ reason: z.enum(["not_enough_players", "terminated"]) });
+  invite: z
+    .string()
+    .trim()
+    .regex(/^[0-9a-f]{32}$/, "That invite link doesn't look right."),
+})
+const CloseBody = z.object({ reason: z.enum(['not_enough_players', 'terminated']) })
 
 export function roomRoutes(sql: SQL, serverKey: string) {
-	const app = new Hono<AppEnv>();
-	const auth = playerAuth(sql);
-	const server = serverAuth(serverKey);
-	const roomParam = validate("param", RoomParam);
+  const app = new Hono<AppEnv>()
+  const auth = playerAuth(sql)
+  const server = serverAuth(serverKey)
+  const roomParam = validate('param', RoomParam)
 
-	app.post(
-		"/rooms",
-		rateLimit(ROOM_LIMIT.perIp, ROOM_LIMIT.windowMs),
-		auth,
-		validate("json", NewRoom),
-		async (c) => {
-			const { game, visibility, name } = c.req.valid("json");
-			const room = await rooms.openRoom(sql, game, visibility, c.get("player").id, name ?? null);
+  app.post(
+    '/rooms',
+    rateLimit(ROOM_LIMIT.perIp, ROOM_LIMIT.windowMs),
+    auth,
+    validate('json', NewRoom),
+    async (c) => {
+      const { game, visibility, name } = c.req.valid('json')
+      const room = await rooms.openRoom(sql, game, visibility, c.get('player').id, name ?? null)
 
-			return ok(c, { room }, 201);
-		},
-	);
+      return ok(c, { room }, 201)
+    },
+  )
 
-	/** Whether the signed-in player may enter this room. The game's server asks before it hands out a room token. */
-	app.get("/rooms/:code", auth, roomParam, async (c) => {
-		const { code } = c.req.valid("param");
-		const { opener: _, ...room } = await rooms.enterable(sql, code, c.get("player").id);
+  /** Whether the signed-in player may enter this room. The game's server asks before it hands out a room token. */
+  app.get('/rooms/:code', auth, roomParam, async (c) => {
+    const { code } = c.req.valid('param')
+    const { opener: _, ...room } = await rooms.enterable(sql, code, c.get('player').id)
 
-		return ok(c, { room });
-	});
+    return ok(c, { room })
+  })
 
-	/** The room's live invite link, made on first ask. */
-	app.post(
-		"/rooms/:code/invites",
-		rateLimit(INVITE_LIMIT.perIp, INVITE_LIMIT.windowMs),
-		auth,
-		roomParam,
-		async (c) => {
-			const { code } = c.req.valid("param");
-			const invite = await rooms.createInvite(sql, code, c.get("player").id);
+  /** The room's live invite link, made on first ask. */
+  app.post(
+    '/rooms/:code/invites',
+    rateLimit(INVITE_LIMIT.perIp, INVITE_LIMIT.windowMs),
+    auth,
+    roomParam,
+    async (c) => {
+      const { code } = c.req.valid('param')
+      const invite = await rooms.createInvite(sql, code, c.get('player').id)
 
-			return ok(c, { invite });
-		},
-	);
+      return ok(c, { invite })
+    },
+  )
 
-	app.delete("/rooms/:code/invites/link", auth, roomParam, async (c) => {
-		const { code } = c.req.valid("param");
-		await rooms.resetInviteLink(sql, code, c.get("player").id);
+  app.delete('/rooms/:code/invites/link', auth, roomParam, async (c) => {
+    const { code } = c.req.valid('param')
+    await rooms.resetInviteLink(sql, code, c.get('player').id)
 
-		return ok(c, { revoked: true });
-	});
+    return ok(c, { revoked: true })
+  })
 
-	app.post(
-		"/invites/redeem",
-		rateLimit(REDEEM_LIMIT.perIp, REDEEM_LIMIT.windowMs),
-		auth,
-		validate("json", Redeem),
-		async (c) => {
-			const { invite } = c.req.valid("json");
-			const room = await rooms.redeemInvite(sql, invite, c.get("player").id);
+  app.post(
+    '/invites/redeem',
+    rateLimit(REDEEM_LIMIT.perIp, REDEEM_LIMIT.windowMs),
+    auth,
+    validate('json', Redeem),
+    async (c) => {
+      const { invite } = c.req.valid('json')
+      const room = await rooms.redeemInvite(sql, invite, c.get('player').id)
 
-			return ok(c, { room });
-		},
-	);
+      return ok(c, { room })
+    },
+  )
 
-	// For the room actor, with the server key.
+  // For the room actor, with the server key.
 
-	app.get("/rooms/:code/seats", server, roomParam, async (c) => {
-		const { code } = c.req.valid("param");
-		const room = await rooms.roomSeats(sql, code);
+  app.get('/rooms/:code/seats', server, roomParam, async (c) => {
+    const { code } = c.req.valid('param')
+    const room = await rooms.roomSeats(sql, code)
 
-		return ok(c, { room });
-	});
+    return ok(c, { room })
+  })
 
-	app.post("/rooms/:code/start", server, roomParam, async (c) => {
-		const { code } = c.req.valid("param");
-		const room = await rooms.startRoom(sql, code);
+  app.post('/rooms/:code/start', server, roomParam, async (c) => {
+    const { code } = c.req.valid('param')
+    const room = await rooms.startRoom(sql, code)
 
-		return ok(c, { room });
-	});
+    return ok(c, { room })
+  })
 
-	app.post("/rooms/:code/close", server, roomParam, validate("json", CloseBody), async (c) => {
-		const { code } = c.req.valid("param");
-		const { reason } = c.req.valid("json");
-		await rooms.closeTournamentRoom(sql, code, reason);
+  app.post('/rooms/:code/close', server, roomParam, validate('json', CloseBody), async (c) => {
+    const { code } = c.req.valid('param')
+    const { reason } = c.req.valid('json')
+    await rooms.closeTournamentRoom(sql, code, reason)
 
-		return ok(c, { room: { code, closed: true } });
-	});
+    return ok(c, { room: { code, closed: true } })
+  })
 
-	return app;
+  return app
 }

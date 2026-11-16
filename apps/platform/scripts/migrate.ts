@@ -1,22 +1,22 @@
-import { SQL } from "bun";
-import { loadDbConfig } from "../src/config";
-import { migrate } from "../src/db/migrate";
-import { log } from "../src/lib/log";
+import { SQL } from 'bun'
+import { loadDbConfig } from '../src/config'
+import { migrate } from '../src/db/migrate'
+import { log } from '../src/lib/log'
 
-let sql: SQL;
+let sql: SQL
 try {
-	sql = new SQL(loadDbConfig());
+  sql = new SQL(loadDbConfig())
 } catch (err) {
-	log.error({ msg: String(err instanceof Error ? err.message : err) });
-	process.exit(1);
+  log.error({ msg: String(err instanceof Error ? err.message : err) })
+  process.exit(1)
 }
 
 try {
-	const applied = await migrate(sql);
-	log.info({ msg: applied.length ? "migrations applied" : "database is up to date", applied });
+  const applied = await migrate(sql)
+  log.info({ msg: applied.length ? 'migrations applied' : 'database is up to date', applied })
 } catch (err) {
-	log.error({ msg: "migration failed", err: String(err) });
-	process.exitCode = 1;
+  log.error({ msg: 'migration failed', err: String(err) })
+  process.exitCode = 1
 } finally {
-	await sql.close();
+  await sql.close()
 }
