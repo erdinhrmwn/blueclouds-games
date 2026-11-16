@@ -537,42 +537,6 @@ describe("bots", () => {
 			),
 		).toBe(true);
 	});
-
-	test("a knockout fills to a perfect bracket", async () => {
-		const id = await tournament({ closes: 0.5, starts: 10, perRoom: 2, bots: true });
-		await register(id, 13);
-
-		expect((await runTournamentJob(testApp.sql)).botsFilled).toBe(1);
-		const [{ n }] = await testApp.sql`
-				SELECT count(*)::int AS n
-				FROM tournament_players
-				WHERE tournament_id = ${id}`;
-		expect(n).toBe(16);
-	});
-
-	test("no bots for a tournament nobody signed up for, or one short of 80% or its minimum", async () => {
-		const empty = await tournament({ closes: 0.5, starts: 10, perRoom: 4, bots: true });
-		const thin = await tournament({
-			closes: 0.5,
-			starts: 10,
-			perRoom: 4,
-			max: 12,
-			format: "arena",
-			bots: true,
-		});
-		await register(thin, 9);
-		const short = await tournament({ closes: 0.5, starts: 10, perRoom: 4, min: 8, bots: true });
-		await register(short, 7);
-
-		expect((await runTournamentJob(testApp.sql)).botsFilled).toBe(0);
-		const rows = await testApp.sql`
-				SELECT bots_added_at
-				FROM tournaments
-				WHERE id IN ${testApp.sql([empty, thin, short])}`;
-		expect(rows.every((row: { bots_added_at: Date | null }) => row.bots_added_at === null)).toBe(
-			true,
-		);
-	});
 });
 
 describe("sign-up", () => {

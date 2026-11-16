@@ -175,7 +175,7 @@ describe("a round", () => {
 		expect(game.lastEvent).toMatchObject({ skipped: "b", forced: 4 });
 	});
 
-	test("a forced draw refills an empty deck from under the top card, and logs it", () => {
+	test("an empty deck refills from under the top card, on a draw and on a forced draw (logged)", () => {
 		const base = setup(table(), [[act("sun", "downpour"), num("sun", 1)]], num("sun", 5));
 		const game = {
 			...base,
@@ -189,6 +189,13 @@ describe("a round", () => {
 		const entries = logEvents(game, after);
 		expect(entries.map((entry) => entry.type)).toEqual(["reshuffle", "play"]);
 		expect((entries[1]!.data as { forced: { cards: string[] } }).forced.cards).toHaveLength(2);
+
+		let drawing = setup(table(), [[num("rain", 1)]], num("sun", 5));
+		drawing = { ...drawing, deck: [], discard: [num("wind", 1), num("wind", 2), num("sun", 5)] };
+		drawing = drawCard(drawing, "a", rng);
+		expect(drawing.discard.map((card) => card.id)).toEqual(["sun-5-0"]);
+		expect(drawing.players[0]!.hand).toHaveLength(2);
+		expect(drawing.deck).toHaveLength(1);
 	});
 
 	test("draw, then play only the drawn card or pass; the turn key stays during the draw", () => {
@@ -206,15 +213,6 @@ describe("a round", () => {
 		expect(passed.turn).toBe(1);
 		expect(passed.turnKey).toBe(key + 1);
 		expect(() => pass(passed, "b")).toThrow(RuleError);
-	});
-
-	test("an empty deck reshuffles everything under the top card", () => {
-		let game = setup(table(), [[num("rain", 1)]], num("sun", 5));
-		game = { ...game, deck: [], discard: [num("wind", 1), num("wind", 2), num("sun", 5)] };
-		game = drawCard(game, "a", rng);
-		expect(game.discard.map((card) => card.id)).toEqual(["sun-5-0"]);
-		expect(game.players[0]!.hand).toHaveLength(2);
-		expect(game.deck).toHaveLength(1);
 	});
 });
 

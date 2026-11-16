@@ -39,7 +39,7 @@ describe("rooms", () => {
 		}
 	});
 
-	test("a player opens a table and the platform picks a unique code", async () => {
+	test("a player opens a table of a known game and the platform picks a unique code", async () => {
 		const bustRoom = await open("bust-31");
 		const cloudRoom = await open("cloudburst");
 		expect(bustRoom.status).toBe(201);
@@ -50,9 +50,7 @@ describe("rooms", () => {
 				FROM rooms
 				WHERE code = ${bustRoom.json.data.room.code}`;
 		expect(row.created_by_player_id).toBe(ann.player.id);
-	});
 
-	test("needs a player and a known game", async () => {
 		expect(
 			(await call(testApp.app, "POST", "/v1/rooms", { body: { game: "bust-31" } })).status,
 		).toBe(401);

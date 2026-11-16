@@ -59,15 +59,10 @@ const finishedReport = (matchId: string) => ({
 });
 
 describe("round reports", () => {
-	test("need the server key", async () => {
-		const matchId = Bun.randomUUIDv7();
-
-		expect((await postRound(matchId, roundBody(matchId, 1), "wrong-key")).status).toBe(401);
-	});
-
-	test("new → 201, same retry → 200, changed body → 409", async () => {
+	test("need the server key; new → 201, same retry → 200, changed body → 409; a long round fits", async () => {
 		const matchId = Bun.randomUUIDv7();
 		const body = roundBody(matchId, 1);
+		expect((await postRound(matchId, body, "wrong-key")).status).toBe(401);
 
 		const first = await postRound(matchId, body);
 		expect(first.status).toBe(201);
@@ -86,6 +81,18 @@ describe("round reports", () => {
 				FROM round_fairness
 				WHERE round_id = ${body.roundId}`;
 		expect(n).toBe(1);
+
+		// A long round (over the 16 KB default body limit) is accepted.
+		const moves = Array.from({ length: 300 }, (_, seq) => ({
+			seq,
+			t: seq * 1000,
+			type: "play",
+			seat: 0,
+			data: { card: "n7-1", total: 7, by: "bot" },
+		}));
+		const longMatchId = Bun.randomUUIDv7();
+		const longRound = roundBody(longMatchId, 1, { events: moves });
+		expect((await postRound(longMatchId, longRound)).status).toBe(201);
 	});
 
 	test("refuses a seed that misses its hash, a wrong client seed, nonces out of order or another room", async () => {
@@ -110,22 +117,6 @@ describe("round reports", () => {
 		await room(testApp.sql, "bust-31", "OTHER1");
 		const otherRoom = roundBody(matchId, 2, { roomCode: "OTHER1" });
 		expect((await postRound(matchId, otherRoom)).status).toBe(409);
-	});
-});
-
-describe("round report size", () => {
-	test("a long round (over the 16 KB default) is accepted", async () => {
-		const matchId = Bun.randomUUIDv7();
-		const moves = Array.from({ length: 300 }, (_, seq) => ({
-			seq,
-			t: seq * 1000,
-			type: "play",
-			seat: 0,
-			data: { card: "n7-1", total: 7, by: "bot" },
-		}));
-
-		const res = await postRound(matchId, roundBody(matchId, 1, { events: moves }));
-		expect(res.status).toBe(201);
 	});
 });
 

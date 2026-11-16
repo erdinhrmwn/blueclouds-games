@@ -48,7 +48,7 @@ async function playMatch(playerId: string, code: string) {
 }
 
 describe("guest cleanup", () => {
-	test("logging out deletes a guest that never played, secrets and all", async () => {
+	test("logging out deletes a guest that never played, secrets and all, but keeps one in a match", async () => {
 		const guestUser = await guest(testApp.app, "Lone");
 		expect((await logout(guestUser.secret)).status).toBe(200);
 		expect(await exists(guestUser.player.id)).toBe(false);
@@ -57,13 +57,12 @@ describe("guest cleanup", () => {
 				FROM player_secrets
 				WHERE player_id = ${guestUser.player.id}`;
 		expect(n).toBe(0);
-	});
 
-	test("logging out keeps a guest that is in a match, so other players' history stays whole", async () => {
-		const guestUser = await guest(testApp.app, "Played");
-		await playMatch(guestUser.player.id, "GSTA1");
-		await logout(guestUser.secret);
-		expect(await exists(guestUser.player.id)).toBe(true);
+		// A guest in a match stays, so other players' history stays whole.
+		const played = await guest(testApp.app, "Played");
+		await playMatch(played.player.id, "GSTA1");
+		await logout(played.secret);
+		expect(await exists(played.player.id)).toBe(true);
 	});
 
 	test("the sweep deletes only unused guests unseen for the limit; rooms they opened stay", async () => {

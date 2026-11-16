@@ -20,12 +20,13 @@ const failures = async (username: string) =>
 	)[0].n;
 
 describe('admin login', () => {
-	test('a wrong password fails and writes a login_failed audit row', async () => {
+	test('a wrong password fails and writes a login_failed audit row; an unknown username fails the same way', async () => {
 		expect(await login(sql, 'root', 'wrong password!', '10.0.0.1')).toEqual({
 			ok: false,
 			reason: 'invalid'
 		});
 		expect(await failures('root')).toBe(1);
+		expect(await login(sql, 'ghost', 'whatever', null)).toEqual({ ok: false, reason: 'invalid' });
 	});
 
 	test('the right password gives a session that logout ends', async () => {
@@ -53,10 +54,6 @@ describe('admin login', () => {
 			ok: false,
 			reason: 'locked'
 		});
-	});
-
-	test('an unknown username fails the same way', async () => {
-		expect(await login(sql, 'ghost', 'whatever', null)).toEqual({ ok: false, reason: 'invalid' });
 	});
 
 	test('a disabled admin cannot sign in or keep a session', async () => {
@@ -118,7 +115,7 @@ describe('changing your own password', () => {
 		expect(row.n).toBe(1);
 	});
 
-	test('refuses a short, an over-long or an unchanged new password', async () => {
+	test('refuses a short, an over-long or an unchanged new password; root can change its own', async () => {
 		await createAdmin(sql, 'picky', 'picky long password');
 		const session = await signIn('picky', 'picky long password');
 		const change = (next: string) =>
@@ -133,14 +130,15 @@ describe('changing your own password', () => {
 		expect(await change('short')).toEqual({ ok: false, reason: 'too_short' });
 		expect(await change('x'.repeat(257))).toEqual({ ok: false, reason: 'too_long' });
 		expect(await change('picky long password')).toEqual({ ok: false, reason: 'unchanged' });
-	});
 
-	test('root can change its own password', async () => {
-		const session = await signIn('root', 'correct horse battery');
+		// Root can change its own password.
+		const rootSession = await signIn('root', 'correct horse battery');
 		const input = { current: 'correct horse battery', next: 'a brand new root password' };
 
-		expect(await changeOwnPassword(sql, session.admin, session.token, input, null)).toEqual({
-			ok: true
-		});
+		expect(await changeOwnPassword(sql, rootSession.admin, rootSession.token, input, null)).toEqual(
+			{
+				ok: true
+			}
+		);
 	});
 });

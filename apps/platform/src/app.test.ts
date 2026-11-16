@@ -16,54 +16,58 @@ afterAll(async () => {
 });
 
 describe("envelope", () => {
-	test("health returns ok envelope with a request id", async () => {
-		const res = await call(testApp.app, "GET", "/v1/health");
-		expect(res.status).toBe(200);
-		expect(res.json).toEqual({ ok: true, data: { status: "ok" }, error: null });
-		expect(res.headers.get("x-request-id")).toBeTruthy();
-	});
-
-	test("unknown route is a not_found envelope", async () => {
-		const res = await call(testApp.app, "GET", "/v1/nope");
-		expect(res.status).toBe(404);
-		expect(res.json).toEqual({
-			ok: false,
-			data: null,
-			error: { code: "not_found", message: "Not found." },
-		});
-	});
-
-	test("oversized body is rejected with the envelope", async () => {
-		const res = await call(testApp.app, "POST", "/v1/players/guest", {
-			body: JSON.stringify({ name: "x".repeat(20_000) }),
-		});
-		expect(res.status).toBe(413);
-		expect(res.json.error.code).toBe("payload_too_large");
-	});
-
-	test("an HTTPException from Hono keeps its status inside the envelope", async () => {
-		const res = await call(testApp.app, "GET", "/v1/test/http-exception");
-		expect(res.status).toBe(401);
-		expect(res.json).toEqual({
-			ok: false,
-			data: null,
-			error: { code: "unauthenticated", message: "No entry." },
-		});
-	});
-
-	test("malformed JSON is a bad_input envelope", async () => {
-		const res = await call(testApp.app, "POST", "/v1/players/guest", {
-			body: "{not json",
-			headers: { "x-forwarded-for": crypto.randomUUID() },
-		});
-		expect(res.status).toBe(400);
-		expect(res.json.error.code).toBe("bad_input");
-	});
-
-	test("sends no CORS headers: browsers never call the platform", async () => {
+	test("health returns ok envelope with a request id and no CORS headers", async () => {
 		const res = await call(testApp.app, "GET", "/v1/health", {
 			headers: { origin: "http://evil.test" },
 		});
+		expect(res.status).toBe(200);
+		expect(res.json).toEqual({ ok: true, data: { status: "ok" }, error: null });
+		expect(res.headers.get("x-request-id")).toBeTruthy();
+		// Browsers never call the platform.
 		expect(res.headers.get("access-control-allow-origin")).toBeNull();
+	});
+
+	test("errors keep the envelope: unknown route, oversized body, HTTPException, malformed JSON", async () => {
+		const cases = [
+			{ method: "GET", path: "/v1/nope", body: undefined, status: 404, code: "not_found" },
+			{
+				method: "POST",
+				path: "/v1/players/guest",
+				body: JSON.stringify({ name: "x".repeat(20_000) }),
+				status: 413,
+				code: "payload_too_large",
+			},
+			{
+				method: "GET",
+				path: "/v1/test/http-exception",
+				body: undefined,
+				status: 401,
+				code: "unauthenticated",
+			},
+			{
+				method: "POST",
+				path: "/v1/players/guest",
+				body: "{not json",
+				status: 400,
+				code: "bad_input",
+			},
+		];
+
+		for (const { method, path, body, status, code } of cases) {
+			const res = await call(testApp.app, method, path, {
+				body,
+				headers: { "x-forwarded-for": crypto.randomUUID() },
+			});
+			expect([path, res.status, res.json.ok, res.json.data, res.json.error.code]).toEqual([
+				path,
+				status,
+				false,
+				null,
+				code,
+			]);
+		}
+
+		const hono = await call(testApp.app, "GET", "/v1/test/http-exception");
+		expect(hono.json.error.message).toBe("No entry.");
 	});
 });

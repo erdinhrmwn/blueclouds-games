@@ -87,13 +87,11 @@ describe("match reports", () => {
 		expect((await post(report({ endReason: "abandoned" }))).status).toBe(400);
 	});
 
-	test("a room code the platform never made → 422, a retry of a stored match still → 200", async () => {
-		const res = await post(report({ roomCode: "NOPE9" }));
-		expect(res.status).toBe(422);
-		expect(res.json.error.code).toBe("unknown_room");
-	});
+	test("an unknown room or player → 422 and nothing is stored; a bot-only match is recorded", async () => {
+		const unknownRoom = await post(report({ roomCode: "NOPE9" }));
+		expect(unknownRoom.status).toBe(422);
+		expect(unknownRoom.json.error.code).toBe("unknown_room");
 
-	test("unknown player → 422 and nothing is stored", async () => {
 		const body = report({
 			players: [
 				{ seat: 0, playerId: Bun.randomUUIDv7(), bot: false, placement: 1, score: 1 },
@@ -108,16 +106,14 @@ describe("match reports", () => {
 			FROM matches
 			WHERE id = ${body.matchId}`;
 		expect(n).toBe(0);
-	});
 
-	test("bot-only matches are recorded", async () => {
-		const body = report({
+		const botsOnly = report({
 			players: [
 				{ seat: 0, playerId: null, bot: true, botName: "Bot Cloud", placement: 1, score: 1 },
 				{ seat: 1, playerId: null, bot: true, botName: "Bot Rain", placement: 2, score: 0 },
 			],
 		});
-		expect((await post(body)).status).toBe(201);
+		expect((await post(botsOnly)).status).toBe(201);
 	});
 
 	test("rejects invalid reports with field errors", async () => {
@@ -180,7 +176,7 @@ describe("any game in the catalog", () => {
 });
 
 describe("match logs", () => {
-	test("are stored with the match, as sent", async () => {
+	test("are stored with the match, as sent; a changed log is a conflict", async () => {
 		const body = report();
 		expect((await post(body)).status).toBe(201);
 		const [row] = await testApp.sql`
@@ -188,11 +184,7 @@ describe("match logs", () => {
 				FROM match_logs
 				WHERE match_id = ${body.matchId}`;
 		expect(row).toEqual({ log_version: 1, event_count: 3, events: events() });
-	});
 
-	test("a changed log is a conflict", async () => {
-		const body = report();
-		expect((await post(body)).status).toBe(201);
 		const changed = events();
 		changed[1]!.data.card = "n9-0";
 		expect((await post({ ...body, log: { logVersion: 1, events: changed } })).status).toBe(409);
@@ -383,7 +375,7 @@ describe("my match history", () => {
 		});
 	});
 
-	test("history keeps one game with ?game=", async () => {
+	test("history keeps one game with ?game=; a bad game or cursor is bad_input", async () => {
 		const finn = await guest(testApp.app, "Finn");
 		await room(testApp.sql, "cloudburst", "CLD8Y");
 		const seats = [
@@ -403,12 +395,9 @@ describe("my match history", () => {
 			token: finn.secret,
 		});
 		expect(bad.status).toBe(400);
-	});
-
-	test("bad cursor is bad_input", async () => {
-		const res = await call(testApp.app, "GET", "/v1/players/me/matches?cursor=nope", {
-			token: ann.secret,
+		const badCursor = await call(testApp.app, "GET", "/v1/players/me/matches?cursor=nope", {
+			token: finn.secret,
 		});
-		expect(res.status).toBe(400);
+		expect(badCursor.status).toBe(400);
 	});
 });

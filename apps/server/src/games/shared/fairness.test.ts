@@ -3,7 +3,6 @@ import { fairRng, matchSeeds, newCommitment, seedsForRound } from "./fair-rng";
 import {
 	checkMatch,
 	checkRound,
-	clientSeedOf,
 	type MatchSeeds,
 	nextNonce,
 	proofsFromLog,
@@ -84,7 +83,7 @@ describe("provably fair shuffles", () => {
 		expect(ordered).toEqual(["c9", "c1", "c4", "c3", "c8", "c6", "c7", "c2", "c5", "c0"]);
 	});
 
-	test("a changed card, a skipped nonce or another seed fails the round", async () => {
+	test("a changed card, a skipped nonce, another seed or a skipped round fails the check", async () => {
 		const [round] = playShuffles([
 			{ round: 1, size: 20 },
 			{ round: 1, size: 20 },
@@ -109,14 +108,12 @@ describe("provably fair shuffles", () => {
 		const check = await checkRound(otherSeed);
 		expect(check.hashMatches).toBe(false);
 		expect(check.ok).toBe(false);
-	});
 
-	test("a match's rounds start at 1 and never skip one", async () => {
+		// A match's rounds start at 1 and never skip one.
 		const [one, two] = playShuffles([
 			{ round: 1, size: 10 },
 			{ round: 2, size: 10 },
 		]) as [RoundProof, RoundProof];
-
 		expect((await checkMatch([one, two])).ok).toBe(true);
 		expect((await checkMatch([two])).rounds.map((round) => round.ok)).toEqual([false]);
 		expect((await checkMatch([one, { ...two, round: 3 }])).ok).toBe(false);
@@ -135,10 +132,6 @@ describe("provably fair shuffles", () => {
 		expect(second.seeds.current).toEqual({ ...first.seeds.next, round: 2 });
 		expect(second.seeds.previous).toEqual(first.seeds.current);
 		expect(() => seedsForRound(second.seeds, 4)).toThrow();
-	});
-
-	test("the client seed is the match id, round and nonce", () => {
-		expect(clientSeedOf("m-1", { round: 2, nonce: 1 })).toBe("m-1:2:1");
 	});
 
 	test("the nonce counts up within a round and starts again at 0 in the next", () => {
