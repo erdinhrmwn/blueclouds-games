@@ -35,11 +35,11 @@
 
 	/** One chip for all games, then one per game in the catalog; each shows its tournaments and tables. */
 	const chips = $derived([
-		{ slug: null, name: 'All games', back: '', href: '/lobby' },
+		{ slug: null, name: 'All games', Emblem: null, href: '/lobby' },
 		...GAMES.map((entry) => ({
 			slug: entry.slug,
 			name: entry.name,
-			back: entry.back,
+			Emblem: entry.Emblem,
 			href: `/lobby?game=${entry.slug}`
 		}))
 	]);
@@ -72,7 +72,7 @@
 		{@const total = countOf(tableCounts, chip.slug) + countOf(tournamentCounts, chip.slug)}
 		<a
 			href={chip.href}
-			class="inline-flex h-10 shrink-0 items-center gap-2 rounded-full border pr-3 text-sm font-semibold transition-colors {chip.back
+			class="inline-flex h-10 shrink-0 items-center gap-2 rounded-full border pr-3 text-sm font-semibold transition-colors {chip.Emblem
 				? 'pl-2'
 				: 'pl-4'} {active
 				? 'border-brass bg-brass/12 text-paper'
@@ -81,8 +81,8 @@
 			data-sveltekit-noscroll
 			data-sveltekit-replacestate
 		>
-			{#if chip.back}
-				<span class="card-back {chip.back} block h-6 w-[17px] -rotate-6" aria-hidden="true"></span>
+			{#if chip.Emblem}
+				<chip.Emblem small class="size-6" />
 			{/if}
 			{chip.name}
 			<span class="text-xs font-semibold tabular-nums {active ? 'text-brass' : 'text-paper/45'}"

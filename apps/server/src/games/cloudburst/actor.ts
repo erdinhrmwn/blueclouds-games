@@ -59,7 +59,7 @@ import {
 } from "../shared/room";
 import type { LogEntry, MatchState } from "../shared/match";
 import { AdminKickInput, AdminTerminateInput, BotIdInput } from "../shared/schema";
-import { markBack, markVip, removePlayer, takeSeat } from "../shared/table";
+import { markBack, markVip, removePlayer, showAvatar, takeSeat } from "../shared/table";
 
 const SLUG = "cloudburst";
 /** After a bot (or the timer) draws, it plays or passes this much later, so the draw shows first. */
@@ -108,14 +108,19 @@ export const cloudburstRoom = actor({
 					c.vars.game = markVip(c.vars.game, who.id);
 				}
 
+				c.vars.game = showAvatar(c.vars.game, who.id, who.avatar);
 				await commit(c);
 
 				// The last one in starts a tournament table.
 				await tournamentTick(c, tournament(c));
-			} else if (seated.away) {
-				// Back from a closed tab.
-				c.vars.game = markBack(c.vars.game, who.id);
-				await commit(c);
+			} else {
+				// Back from a closed tab, maybe with a new look picked meanwhile.
+				const back = seated.away ? markBack(c.vars.game, who.id) : c.vars.game;
+				const shown = showAvatar(back, who.id, who.avatar);
+				if (shown !== c.vars.game) {
+					c.vars.game = shown;
+					await commit(c);
+				}
 			}
 
 			return { playerId: who.id, view: viewOf(c), hand: handOf(c.vars.game, who.id) };

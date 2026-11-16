@@ -24,7 +24,7 @@
 		double: 'next player plays 2 cards'
 	};
 
-	/** The card faces are drawn in FigCraft (design/cards.figcraft) and exported to static/cards. */
+	/** The card faces are drawn in FigCraft (design/blueclouds.figcraft) and exported to static/cards. */
 	const face = $derived(card.kind === 'number' ? `n${card.value}` : card.kind);
 	const src = $derived(`/cards/bust-31/${face}.svg`);
 	const spoken = $derived(card.kind === 'number' ? `plus ${card.value}` : SPOKEN[card.kind]);

@@ -1,9 +1,23 @@
 <script lang="ts">
+	import Icon from '#lib/components/Icon.svelte';
+	import { AVATAR_TONES } from '#lib/components/Avatar.svelte';
+	import AvatarGlyph from '#lib/components/AvatarGlyph.svelte';
+	import { type Avatar, defaultAvatarColor } from 'server/games/shared/avatars';
 	import { countdown } from '#lib/motion.ts';
 	import type { Snippet } from 'svelte';
 
 	/** What any game shows about a player in a seat. */
-	type SeatPlayer = { id: string; name: string; bot: boolean; away?: boolean; vip?: boolean };
+	type SeatPlayer = {
+		id: string;
+		name: string;
+		bot: boolean;
+		away?: boolean;
+		vip?: boolean;
+		avatar?: Avatar | null;
+	};
+
+	/** Bots keep the dark tile with the robot; people sit on their own avatar colour. */
+	const BOT_TILE = '#2a1d13';
 
 	let {
 		player,
@@ -53,17 +67,28 @@
 	const outClass = $derived(out ? 'opacity-40 grayscale' : '');
 	const awayFade = $derived(player?.away ? 'opacity-50' : '');
 
-	/** Every avatar keeps the same full-strength edge, so none looks smaller than the rest. */
+	const tone = $derived.by(() => {
+		if (!player || player.bot) {
+			return BOT_TILE;
+		}
+
+		return AVATAR_TONES[player.avatar?.color ?? defaultAvatarColor(player.id)];
+	});
+
+	/**
+	 * Every avatar keeps the same full-strength edge, so none looks smaller than the rest. The tile keeps the
+	 * player's colour on their turn: the brass edge, the pulse and the brass plate say whose turn it is.
+	 */
 	const avatarLook = $derived.by(() => {
 		if (isTurn) {
-			return 'turn border-brass bg-brass text-ink';
+			return 'turn border-brass text-paper';
 		}
 
 		if (player?.away) {
-			return 'border-dashed border-paper/70 bg-[#2a1d13] text-paper/45';
+			return 'border-dashed border-paper/70 text-paper/45';
 		}
 
-		return 'border-rim-light bg-[#2a1d13] text-paper';
+		return 'border-rim-light text-paper';
 	});
 
 	/** One label for screen readers; the avatar and tags are hidden from them. */
@@ -114,26 +139,15 @@
 			<div
 				class="avatar relative grid size-12 place-items-center rounded-xl border-2 font-display text-lg font-bold wide:size-14 wide:rounded-[14px] wide:text-xl
 					{avatarLook}"
+				style:background-color={tone}
+				style:--avatar-tile={tone}
 				aria-hidden="true"
 			>
 				{#if player.bot}
-					<!-- robot head: bots get an icon instead of a monogram -->
-					<svg
-						viewBox="0 0 24 24"
-						class="size-6 wide:size-7 {awayFade}"
-						fill="none"
-						stroke="currentColor"
-						stroke-width="1.8"
-						stroke-linecap="round"
-						stroke-linejoin="round"
-					>
-						<path d="M12 3v3" />
-						<circle cx="12" cy="2.6" r="0.9" fill="currentColor" stroke="none" />
-						<rect x="4.5" y="6.5" width="15" height="12" rx="3" />
-						<circle cx="9.3" cy="11.8" r="1.4" fill="currentColor" stroke="none" />
-						<circle cx="14.7" cy="11.8" r="1.4" fill="currentColor" stroke="none" />
-						<path d="M9.5 15.5h5" />
-						<path d="M2.8 11v3.5M21.2 11v3.5" />
+					<Icon name="bot" class="size-6 wide:size-7 {awayFade}" />
+				{:else if player.avatar?.icon}
+					<svg viewBox="0 0 24 24" class="size-[62%] {awayFade}">
+						<AvatarGlyph icon={player.avatar.icon} />
 					</svg>
 				{:else}
 					<span class={awayFade}>{initial}</span>
@@ -183,10 +197,7 @@
 			aria-hidden="true"
 		>
 			{#if player.away}
-				<!-- moon -->
-				<svg viewBox="0 0 24 24" class="size-3 shrink-0 opacity-80" fill="currentColor">
-					<path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z" />
-				</svg>
+				<Icon name="away" class="size-3 shrink-0 opacity-80" />
 			{/if}
 			{#if player.vip}
 				<span

@@ -1,6 +1,7 @@
 // "Cloudburst": pure game rules, no Rivet. Every function returns a new state
 // or throws RuleError, so the actor can forward the message to the player.
 // Rules and their reasons: docs/games/cloudburst/rules.md.
+import { type Avatar, NO_AVATAR } from "../shared/avatars";
 import { nextIndex, type Rng, RuleError, SEATS, seatPlayer, shuffle } from "../shared/table";
 
 export const HAND_SIZE = 7;
@@ -38,6 +39,7 @@ export type Player = {
 	seat: number;
 	away?: boolean;
 	vip?: boolean;
+	avatar?: Avatar;
 	hand: Card[];
 	/** Points so far this match: one per card left when someone else went out. Fewest wins. */
 	points: number;
@@ -502,6 +504,7 @@ export function publicView(game: Game, turn: { left: number; total: number } | n
 			seat: p.seat,
 			away: !!p.away,
 			vip: !!p.vip,
+			avatar: p.avatar ?? NO_AVATAR,
 			cards: p.hand.length,
 			points: p.points,
 		})),

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Icon from '#lib/components/Icon.svelte';
 	import type { Tournament } from '#lib/platform.ts';
 	import { avatarTone, coins, FORMATS, startsIn } from '#lib/tournament-formats.ts';
 	import { when } from '#lib/when.ts';
@@ -154,17 +155,7 @@
 				onclick={() => (open = false)}
 				aria-label="Close"
 			>
-				<svg
-					viewBox="0 0 20 20"
-					class="size-4"
-					fill="none"
-					stroke="currentColor"
-					stroke-width="1.8"
-					stroke-linecap="round"
-					aria-hidden="true"
-				>
-					<path d="M5 5l10 10M15 5 5 15" />
-				</svg>
+				<Icon name="close" class="size-4" />
 			</button>
 		</TournamentFelt>
 
@@ -258,14 +249,7 @@
 								{#if step.state === 'next'}
 									<span class="size-1.5 rounded-full bg-brass"></span>
 								{:else if step.state === 'done'}
-									<svg viewBox="0 0 12 12" class="size-2.5 text-ink" fill="none" aria-hidden="true">
-										<path
-											d="M2.5 6.2l2.2 2.2 4.8-5"
-											stroke="currentColor"
-											stroke-width="1.8"
-											stroke-linecap="round"
-										/>
-									</svg>
+									<Icon name="check" class="size-2.5 text-ink" />
 								{/if}
 							</span>
 							<span class="flex-1 text-sm {LABEL[step.state]}">

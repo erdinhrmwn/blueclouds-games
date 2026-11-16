@@ -5,12 +5,53 @@ import { hashSecret, newSecret, SECRET_PATTERN } from "../lib/secrets";
 import { grantSignupBonus } from "./coins";
 import { deleteGuestIfUnused } from "./guests";
 
+/** Preset avatar names, as players.avatar_color / avatar_icon allow (apps/server/src/games/shared/avatars.ts). */
+export const AVATAR_COLORS = [
+	"rain",
+	"navy",
+	"wind",
+	"felt",
+	"teal",
+	"slate",
+	"storm",
+	"rose",
+	"oxblood",
+	"ember",
+	"sun",
+	"brass",
+] as const;
+export const AVATAR_ICONS = [
+	"cloud",
+	"sun",
+	"moon",
+	"star",
+	"bolt",
+	"drop",
+	"snow",
+	"rainbow",
+	"leaf",
+	"flame",
+	"kite",
+	"crown",
+	"chip",
+	"die",
+	"gem",
+	"anchor",
+] as const;
+
+/** Null fields are not picked yet: the game shows a colour from the player id and the initial. */
+export type Avatar = {
+	color: (typeof AVATAR_COLORS)[number] | null;
+	icon: (typeof AVATAR_ICONS)[number] | null;
+};
+
 /** A guest has a generated `guest_…` username and no password: it exists only in the browser that holds its secret. */
 export type Player = {
 	id: string;
 	name: string;
 	username: string | null;
 	guest: boolean;
+	avatar: Avatar;
 	createdAt: string;
 };
 
@@ -19,6 +60,8 @@ export type PlayerRow = {
 	display_name: string;
 	username: string | null;
 	is_guest: boolean;
+	avatar_color: Avatar["color"];
+	avatar_icon: Avatar["icon"];
 	created_at: Date;
 	disabled_at: Date | null;
 };
@@ -27,16 +70,17 @@ export type PlayerRow = {
 type SignedIn = { player: Player; playerSecret?: string };
 
 const PLAYER_COLUMNS = (sql: SQL) =>
-	sql`p.id, p.display_name, p.username, p.is_guest, p.created_at, p.disabled_at`;
+	sql`p.id, p.display_name, p.username, p.is_guest, p.avatar_color, p.avatar_icon, p.created_at, p.disabled_at`;
 
 const RETURNING = (sql: SQL) =>
-	sql`RETURNING id, display_name, username, is_guest, created_at, disabled_at`;
+	sql`RETURNING id, display_name, username, is_guest, avatar_color, avatar_icon, created_at, disabled_at`;
 
 export const toPlayer = (row: PlayerRow): Player => ({
 	id: row.id,
 	name: row.display_name,
 	username: row.username,
 	guest: row.is_guest,
+	avatar: { color: row.avatar_color, icon: row.avatar_icon },
 	createdAt: row.created_at.toISOString(),
 });
 
@@ -224,7 +268,7 @@ export async function login(
 	}
 
 	const [row] = (await sql`
-		SELECT id, display_name, username, is_guest, created_at, disabled_at, password_hash
+		SELECT id, display_name, username, is_guest, avatar_color, avatar_icon, created_at, disabled_at, password_hash
 		FROM players
 		WHERE username = ${username}`) as (PlayerRow & { password_hash: string | null })[];
 
@@ -328,7 +372,22 @@ export async function rename(sql: SQL, playerId: string, name: string): Promise<
 	return toPlayer(row);
 }
 
-/** Short-lived token for connecting to a room actor, with the VIP flag the table shows. Counts as the player being seen. */
+/** Sets the player's preset avatar. Either part may be null: back to the default colour, or the initial. */
+export async function setAvatar(sql: SQL, playerId: string, avatar: Avatar): Promise<Player> {
+	const [row] = await sql`
+		UPDATE players
+		SET avatar_color = ${avatar.color},
+			avatar_icon = ${avatar.icon}
+		WHERE id = ${playerId}
+		${RETURNING(sql)}`;
+
+	return toPlayer(row);
+}
+
+/**
+ * Short-lived token for connecting to a room actor, with the VIP flag and avatar the table shows.
+ * Counts as the player being seen.
+ */
 export async function issuePlayToken(sql: SQL, signer: Signer, player: Player) {
 	const [row] = (await sql`
 		UPDATE players
@@ -339,7 +398,7 @@ export async function issuePlayToken(sql: SQL, signer: Signer, player: Player) {
 
 	const vip = row?.is_vip ?? false;
 
-	return signer.sign({ id: player.id, name: player.name, vip });
+	return signer.sign({ id: player.id, name: player.name, vip, avatar: player.avatar });
 }
 
 /** Which of these players are VIP, for the seat tags at a table. */

@@ -2,6 +2,7 @@
 	import './layout.css';
 	import favicon from '#lib/assets/favicon.svg';
 	import AccountMenu from '#lib/components/AccountMenu.svelte';
+	import BrandMark from '#lib/components/BrandMark.svelte';
 	import ConfirmDialog from '#lib/components/ConfirmDialog.svelte';
 	import NameGate from '#lib/components/NameGate.svelte';
 	import { gameBySlug } from '#lib/games/catalog.ts';
@@ -47,9 +48,11 @@
 		<div class="flex min-w-0 items-center gap-6">
 			<a
 				href="/"
-				class="inline-flex min-h-11 shrink-0 items-center gap-1.5 font-display text-base font-black tracking-tight"
-				>BlueClouds <span class="text-brass">Games</span></a
+				class="inline-flex min-h-11 shrink-0 items-center gap-2 font-display text-base font-black tracking-tight"
 			>
+				<BrandMark small class="size-[26px]" />
+				<span>BlueClouds <span class="text-brass">Games</span></span>
+			</a>
 			{#if player.ready && player.name}
 				<!-- Phones have no room for it beside the account pill; there the game pages lead to the lobby. -->
 				<nav class="hidden items-center gap-1 text-sm font-semibold sm:flex" aria-label="Main">

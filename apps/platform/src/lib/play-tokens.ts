@@ -1,5 +1,6 @@
 import { createPrivateKey } from "node:crypto";
 import { SignJWT } from "jose";
+import type { Avatar } from "../services/players";
 
 /** Room actors only accept tokens with this audience. */
 export const PLAY_TOKEN_AUDIENCE = "blueclouds-rooms";
@@ -7,7 +8,7 @@ export const PLAY_TOKEN_TTL_SECONDS = 15 * 60;
 
 export type PlayToken = { token: string; expiresAt: string };
 export type Signer = {
-	sign: (player: { id: string; name: string; vip: boolean }) => Promise<PlayToken>;
+	sign: (player: { id: string; name: string; vip: boolean; avatar: Avatar }) => Promise<PlayToken>;
 };
 
 /** PKCS#8 DER header for a raw 32-byte Ed25519 seed (RFC 8410). */
@@ -23,7 +24,8 @@ export async function createSigner(privateKey: string): Promise<Signer> {
 			const issuedAt = Math.floor(Date.now() / 1000);
 			const expiresAt = issuedAt + PLAY_TOKEN_TTL_SECONDS;
 
-			const token = await new SignJWT({ name: player.name, vip: player.vip })
+			const claims = { name: player.name, vip: player.vip, avatar: player.avatar };
+			const token = await new SignJWT(claims)
 				.setProtectedHeader({ alg: "EdDSA" })
 				.setSubject(player.id)
 				.setAudience(PLAY_TOKEN_AUDIENCE)

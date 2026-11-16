@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Icon from '#lib/components/Icon.svelte';
 	import type { RoundCheck } from 'server/games/shared/fairness';
 	import type { BaseView, RoomConnection } from '#lib/rivet/room.svelte.ts';
 	import { type MatchRounds, type Round, roundSummary, verifyRound } from '#lib/rounds.ts';
@@ -74,20 +75,7 @@
 		aria-label="Rounds and fair play"
 		title="Rounds and fair play"
 	>
-		<!-- A shield with a tick: the deal can be checked. -->
-		<svg
-			viewBox="0 0 20 20"
-			class="size-5"
-			fill="none"
-			stroke="currentColor"
-			stroke-width="1.6"
-			stroke-linecap="round"
-			stroke-linejoin="round"
-			aria-hidden="true"
-		>
-			<path d="M10 2.5 4 5v4.5c0 3.8 2.6 6.9 6 8 3.4-1.1 6-4.2 6-8V5l-6-2.5Z" />
-			<path d="m7.25 10 2 2 3.5-3.75" />
-		</svg>
+		<Icon name="fair play" class="size-5" />
 	</button>
 
 	<dialog
@@ -104,17 +92,7 @@
 				</p>
 			</div>
 			<button class="btn-ghost size-10 shrink-0 p-0" onclick={closeAll} aria-label="Close">
-				<svg
-					viewBox="0 0 20 20"
-					class="size-4"
-					fill="none"
-					stroke="currentColor"
-					stroke-width="1.8"
-					stroke-linecap="round"
-					aria-hidden="true"
-				>
-					<path d="m5 5 10 10M15 5 5 15" />
-				</svg>
+				<Icon name="close" class="size-4" />
 			</button>
 		</div>
 

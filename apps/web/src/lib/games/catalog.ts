@@ -1,9 +1,11 @@
 import type { Component } from 'svelte';
 import * as bust31 from 'server/games/bust-31/rules';
+import Bust31Emblem from './bust-31/Emblem.svelte';
 import Bust31Fan from './bust-31/Fan.svelte';
 import Bust31Home from './bust-31/Home.svelte';
 import Bust31Room from './bust-31/Room.svelte';
 import * as cloudburst from 'server/games/cloudburst/rules';
+import CloudburstEmblem from './cloudburst/Emblem.svelte';
 import CloudburstFan from './cloudburst/Fan.svelte';
 import CloudburstHome from './cloudburst/Home.svelte';
 import CloudburstRoom from './cloudburst/Room.svelte';
@@ -24,6 +26,8 @@ export type GameEntry = {
 	back: string;
 	/** The profile's line about rounds: what a round won means in this game ("Survived 3 of 4 rounds"). */
 	roundsLine: (won: number, played: number) => string;
+	/** The game's logo: its card back cut into a tile with one motif. `small` under 48px. */
+	Emblem: Component<{ small?: boolean; label?: string; class?: string }>;
 	/** A few sample cards: the game's picture. */
 	Fan: Component<{ size?: 'sm' | 'md' }>;
 	/** The game's own page: rules plus the create/join forms. `maintenance`: no new tables for now. */
@@ -47,6 +51,7 @@ export const GAMES: GameEntry[] = [
 		back: 'table-back-bust-31',
 		roundsLine: (won, played) =>
 			`Survived ${won} of ${played} ${played === 1 ? 'round' : 'rounds'}`,
+		Emblem: Bust31Emblem,
 		Fan: Bust31Fan,
 		Home: Bust31Home,
 		Room: Bust31Room
@@ -63,6 +68,7 @@ export const GAMES: GameEntry[] = [
 		back: 'table-back-cloudburst',
 		roundsLine: (won, played) =>
 			`Went out first in ${won} of ${played} ${played === 1 ? 'round' : 'rounds'}`,
+		Emblem: CloudburstEmblem,
 		Fan: CloudburstFan,
 		Home: CloudburstHome,
 		Room: CloudburstRoom

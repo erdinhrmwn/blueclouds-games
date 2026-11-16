@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Icon from '#lib/components/Icon.svelte';
 	import { GAMES } from '#lib/games/catalog.ts';
 	import type { Visibility } from '#lib/platform.ts';
 	import { player } from '#lib/player.svelte.ts';
@@ -78,17 +79,7 @@
 				onclick={() => (open = false)}
 				aria-label="Close"
 			>
-				<svg
-					viewBox="0 0 20 20"
-					class="size-4"
-					fill="none"
-					stroke="currentColor"
-					stroke-width="1.8"
-					stroke-linecap="round"
-					aria-hidden="true"
-				>
-					<path d="M5 5l10 10M15 5 5 15" />
-				</svg>
+				<Icon name="close" class="size-4" />
 			</button>
 		</div>
 
@@ -102,10 +93,7 @@
 							? 'border-brass bg-black/35'
 							: 'border-paper/18 bg-black/20 hover:border-paper/40'}"
 					>
-						<span
-							class="card-back {entry.back} block h-10 w-7 shrink-0 -rotate-6"
-							aria-hidden="true"
-						></span>
+						<entry.Emblem small class="size-10 shrink-0" />
 						<span class="min-w-0 flex-1">
 							<span class="block font-semibold text-paper">{entry.name}</span>
 							<span class="block text-xs text-paper/60">

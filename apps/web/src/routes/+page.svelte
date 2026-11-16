@@ -118,10 +118,7 @@
 								</div>
 							</div>
 						</div>
-						<span
-							class="card-back {game.back} block h-[4.5rem] w-[3.25rem] shrink-0 -rotate-3 sm:hidden"
-							aria-hidden="true"
-						></span>
+						<game.Emblem class="size-14 shrink-0 sm:hidden" />
 						<div class="flex min-w-0 flex-1 flex-col sm:p-6">
 							<h3 class="font-display text-xl font-bold sm:text-2xl">{game.name}</h3>
 							<p

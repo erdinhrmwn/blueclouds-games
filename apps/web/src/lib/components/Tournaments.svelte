@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Icon from '#lib/components/Icon.svelte';
 	import { ask } from '#lib/confirm.svelte.ts';
 	import {
 		fetchTournaments,
@@ -564,9 +565,7 @@
 				onclick={() => page(-1)}
 				aria-label="Earlier tournaments"
 			>
-				<svg viewBox="0 0 24 24" class="size-5" aria-hidden="true">
-					<path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2.2" />
-				</svg>
+				<Icon name="back" class="size-5" />
 			</button>
 		{/if}
 		{#if canGoForward}
@@ -575,9 +574,7 @@
 				onclick={() => page(1)}
 				aria-label="More tournaments"
 			>
-				<svg viewBox="0 0 24 24" class="size-5" aria-hidden="true">
-					<path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.2" />
-				</svg>
+				<Icon name="next" class="size-5" />
 			</button>
 		{/if}
 	</div>

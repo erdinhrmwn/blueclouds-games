@@ -1,4 +1,5 @@
 <script lang="ts" generics="R extends RoomConnection<BaseView, unknown>">
+	import Icon from '#lib/components/Icon.svelte';
 	import { goto } from '$app/navigation';
 	import type { GameEntry } from '#lib/games/catalog.ts';
 	import { player } from '#lib/player.svelte.ts';
@@ -193,18 +194,7 @@
 					aria-label="Leave table"
 					title="Leave table"
 				>
-					<svg
-						viewBox="0 0 20 20"
-						class="size-5"
-						fill="none"
-						stroke="currentColor"
-						stroke-width="1.6"
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						aria-hidden="true"
-					>
-						<path d="M8 4H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3M13 14l4-4-4-4M17 10H8" />
-					</svg>
+					<Icon name="leave" class="size-5" />
 				</button>
 			{/if}
 		</div>

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, expect, mock, setSystemTime, test } from "bun:test";
+import { NO_AVATAR } from "./avatars";
 
 // The platform calls are replaced: these tests are about when a tournament table starts or gives up.
 const marked: string[] = [];
@@ -72,9 +73,14 @@ afterEach(() => setSystemTime());
 
 test("only assigned players sit, each on their own seat; host controls are off", async () => {
 	const c = room();
-	expect(await seatFor(c, { id: BEN, name: "Ben", vip: false })).toBe(1);
+	expect(await seatFor(c, { id: BEN, name: "Ben", vip: false, avatar: NO_AVATAR })).toBe(1);
 	expect(
-		seatFor(c, { id: "01900000-0000-7000-8000-0000000000ff", name: "Dee", vip: false }),
+		seatFor(c, {
+			id: "01900000-0000-7000-8000-0000000000ff",
+			name: "Dee",
+			vip: false,
+			avatar: NO_AVATAR,
+		}),
 	).rejects.toThrow("This table is for players of Friday Cup.");
 	expect(() => requireOpenTable(c)).toThrow("A tournament table starts on its own.");
 });
@@ -82,7 +88,7 @@ test("only assigned players sit, each on their own seat; host controls are off",
 test("an open room lets anyone sit anywhere", async () => {
 	seats = { minPlayers: 2, startedAt: null, closedAt: null, tournament: null, seats: [] };
 	const c = room();
-	expect(await seatFor(c, { id: ANN, name: "Ann", vip: false })).toBeUndefined();
+	expect(await seatFor(c, { id: ANN, name: "Ann", vip: false, avatar: NO_AVATAR })).toBeUndefined();
 	expect(() => requireOpenTable(c)).not.toThrow();
 });
 
@@ -149,7 +155,7 @@ test("closes the table when fewer than the game's minimum came", async () => {
 	expect(calls.started).toBe(0);
 	expect(c.vars.tournament.closed).toBe(true);
 	expect(marked).toEqual(["CUP01:close"]);
-	expect(seatFor(c, { id: BEN, name: "Ben", vip: false })).rejects.toThrow(
+	expect(seatFor(c, { id: BEN, name: "Ben", vip: false, avatar: NO_AVATAR })).rejects.toThrow(
 		"This table has finished.",
 	);
 });
@@ -170,7 +176,7 @@ test("a player who lost their seat since sitting down (withdrew, disqualified) l
 	await tournamentTick(c, game);
 	expect(calls.started).toBe(1);
 	expect(c.vars.game.players.map((p) => p.id)).toEqual([ANN, CY]);
-	expect(seatFor(c, { id: BEN, name: "Ben", vip: false })).rejects.toThrow(
+	expect(seatFor(c, { id: BEN, name: "Ben", vip: false, avatar: NO_AVATAR })).rejects.toThrow(
 		"This table is for players of Friday Cup.",
 	);
 });

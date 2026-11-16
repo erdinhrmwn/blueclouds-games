@@ -19,6 +19,11 @@ const Name = z
 	.refine((name) => !/\p{Cc}/u.test(name), "Must not contain control characters.");
 
 const NameBody = z.object({ name: Name });
+/** Both parts are sent every time; null puts that part back to the default (id colour, initial). */
+const AvatarBody = z.object({
+	color: z.enum(players.AVATAR_COLORS).nullable(),
+	icon: z.enum(players.AVATAR_ICONS).nullable(),
+});
 const CoinPage = z.object({ before: z.uuid("Not a history id.").optional() });
 
 /** A room asks about its seated humans only: at most a few ids. */
@@ -154,6 +159,14 @@ export function playerRoutes(sql: SQL, signer: Signer, serverKey: string) {
 		const renamed = await players.rename(sql, player.id, name);
 
 		return ok(c, { player: renamed });
+	});
+
+	/** Guests too: a look isn't tied to the account the way a name is. Tables show it from the next play token. */
+	app.put("/players/me/avatar", auth, validate("json", AvatarBody), async (c) => {
+		const player = c.get("player");
+		const updated = await players.setAvatar(sql, player.id, c.req.valid("json"));
+
+		return ok(c, { player: updated });
 	});
 
 	app.post("/play-tokens", auth, async (c) => {

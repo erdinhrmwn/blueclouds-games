@@ -1,5 +1,7 @@
 // Pure table rules every game shares: seats, host, shuffling. No Rivet here.
 
+import type { Avatar } from "./avatars";
+
 /** Every game has a table of 6 fixed chairs around the dealer. */
 export const SEATS = 6;
 
@@ -21,6 +23,8 @@ export type Seated = {
 	away?: boolean;
 	/** A VIP account, as its play token said when it sat down. */
 	vip?: boolean;
+	/** The look picked on the platform, as its play token said when it sat down or last came back. */
+	avatar?: Avatar;
 };
 
 /** What the shared helpers need from a game. */
@@ -167,6 +171,24 @@ export function markVip<G extends Table>(game: G, id: string): G {
 	return {
 		...game,
 		players: game.players.map((p) => (p.id === id ? { ...p, vip: true } : p)),
+	};
+}
+
+/** Shows the player's avatar. Returns the same game when it is already shown. */
+export function showAvatar<G extends Table>(game: G, id: string, avatar: Avatar): G {
+	const current = game.players.find((p) => p.id === id);
+	if (!current) {
+		return game;
+	}
+
+	const same = current.avatar?.color === avatar.color && current.avatar?.icon === avatar.icon;
+	if (same) {
+		return game;
+	}
+
+	return {
+		...game,
+		players: game.players.map((p) => (p.id === id ? { ...p, avatar } : p)),
 	};
 }
 

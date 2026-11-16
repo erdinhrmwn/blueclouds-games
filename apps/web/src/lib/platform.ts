@@ -1,3 +1,4 @@
+import type { Avatar } from 'server/games/shared/avatars';
 import type {
 	CoinChange,
 	LiveTournament,
@@ -58,6 +59,8 @@ const invitesPath = (game: string, code: string) =>
 // Player and account
 
 export const saveName = (name: string) => post<{ name: string }>('/api/player', { name });
+export const saveAvatar = (avatar: Avatar) =>
+	request<{ avatar: Avatar }>('PUT', '/api/player/avatar', avatar);
 export const fetchPlayToken = () => post<{ token: string }>('/api/play-token', {});
 export const startGuest = (name: string) => post<AccountPlayer>('/api/player/guest', { name });
 export const registerAccount = (body: { name: string; username: string; password: string }) =>

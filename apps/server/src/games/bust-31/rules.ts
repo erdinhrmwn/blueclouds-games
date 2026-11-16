@@ -1,5 +1,6 @@
 // "Bust 31": pure game rules, no Rivet. Every function returns a new state
 // or throws RuleError, so the actor can forward the message to the player.
+import { type Avatar, NO_AVATAR } from "../shared/avatars";
 import { nextIndex, type Rng, RuleError, SEATS, seatPlayer, shuffle } from "../shared/table";
 
 export const LIMIT = 31;
@@ -37,6 +38,7 @@ export type Player = {
 	/** A human who closed the game mid-match: their turns are played for them until they return. */
 	away?: boolean;
 	vip?: boolean;
+	avatar?: Avatar;
 };
 
 export type GameEvent =
@@ -356,6 +358,7 @@ export function publicView(game: Game, turn: { left: number; total: number } | n
 			seat: p.seat,
 			away: !!p.away,
 			vip: !!p.vip,
+			avatar: p.avatar ?? NO_AVATAR,
 		})),
 		deckCount: game.deck.length,
 		topCard: game.discard.at(-1) ?? null,

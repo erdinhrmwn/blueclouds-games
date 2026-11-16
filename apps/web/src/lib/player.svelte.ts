@@ -1,3 +1,4 @@
+import { type Avatar, NO_AVATAR } from 'server/games/shared/avatars';
 import {
 	fetchCoins,
 	fetchPlayToken,
@@ -16,9 +17,11 @@ const FALLBACK_ERROR = 'Something went wrong. Try again.';
 const messageOf = (err: unknown) => (err instanceof Error ? err.message : FALLBACK_ERROR);
 
 type Me = {
+	id?: string;
 	name: string;
 	username: string | null;
 	guest: boolean;
+	avatar?: Avatar;
 	createdAt?: string;
 	coins?: number;
 };
@@ -30,9 +33,12 @@ type Me = {
  * `playing` is true while a table is open (its lobby or game), so the page can hide everything but the table.
  */
 export const player = $state({
+	/** Empty for a new visitor; the avatar's default colour comes from it. */
+	id: '',
 	name: '',
 	username: '',
 	guest: false,
+	avatar: { ...NO_AVATAR } as Avatar,
 	/** When the player was made, as ISO text; empty until known. */
 	createdAt: '',
 	/** Coin balance (virtual coins for tournament fees and prizes). */
@@ -44,9 +50,11 @@ export const player = $state({
 
 /** Takes the server's answer (from the player cookie) as the truth; the browser keeps no copy of its own. */
 export function loadPlayer(me: Me | null): void {
+	player.id = me?.id ?? '';
 	player.name = me?.name ?? '';
 	player.username = me?.username ?? '';
 	player.guest = me?.guest ?? false;
+	player.avatar = me?.avatar ?? { ...NO_AVATAR };
 	player.createdAt = me?.createdAt ?? '';
 	player.coins = me?.coins ?? player.coins;
 	player.ready = true;

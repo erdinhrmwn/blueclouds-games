@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Icon from '#lib/components/Icon.svelte';
 	import type { GameEntry } from '#lib/games/catalog.ts';
 	import { fetchTournaments } from '#lib/platform.ts';
 	import { player } from '#lib/player.svelte.ts';
@@ -61,10 +62,7 @@
 
 <header class="mt-3 grid gap-6 md:grid-cols-[1fr_auto] md:items-center">
 	<div class="flex items-start gap-5">
-		<span
-			class="card-back {game.back} mt-1 h-[4.5rem] w-[3.25rem] shrink-0 -rotate-6 sm:h-[5.75rem] sm:w-16"
-			aria-hidden="true"
-		></span>
+		<game.Emblem class="mt-1 size-16 shrink-0 sm:size-20" />
 		<div>
 			<h1 class="font-display text-4xl leading-tight font-black sm:text-[2.5rem]">{game.name}</h1>
 			<p class="mt-0.5 text-[15px] font-medium text-paper/80">{game.rule}</p>
@@ -105,17 +103,7 @@
 	</div>
 	<a class="btn-ghost h-11 shrink-0 rounded-xl px-5" href="/lobby?game={game.slug}">
 		See them in the lobby
-		<svg
-			viewBox="0 0 20 20"
-			class="size-4"
-			fill="none"
-			stroke="currentColor"
-			stroke-width="1.8"
-			stroke-linecap="round"
-			aria-hidden="true"
-		>
-			<path d="M8 5l5 5-5 5" />
-		</svg>
+		<Icon name="next" class="size-4" />
 	</a>
 </section>
 

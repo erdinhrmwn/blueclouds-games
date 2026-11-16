@@ -116,10 +116,9 @@
 					{@const tableGame = gameBySlug(table.game)}
 					<tr>
 						<td class="py-2.5 pl-4 sm:pl-5">
-							<span
-								class="card-back {tableGame?.back ?? ''} block h-9 w-[25px] -rotate-6"
-								aria-hidden="true"
-							></span>
+							{#if tableGame}
+								<tableGame.Emblem small class="size-9" />
+							{/if}
 						</td>
 						<td class="w-full max-w-0 px-4 py-2.5 sm:w-[38%]">
 							<span class="block truncate text-[14.5px] font-semibold text-paper"

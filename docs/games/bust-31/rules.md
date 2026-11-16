@@ -10,7 +10,7 @@
   - **Swap**: after drawing, trade your whole hand with the next player. The turn passes to them as usual.
   - **Ten**: the total becomes 10, up or down.
   - **Double**: the next player plays 2 cards in a row. A Double played while owing 2 plays ends your own and hands 2 plays to the next player; there is no stacking past 2. Busting ends the round as usual.
-- Card faces are drawn in FigCraft (`design/cards.figcraft`) and exported to `apps/web/static/cards/bust-31/` (SVG with text as outlines, plus WebP @3x).
+- Card faces are drawn in FigCraft (`design/blueclouds.figcraft`) and exported to `apps/web/static/cards/bust-31/` (SVG with text as outlines, plus WebP @3x).
 - The last player with lives left wins.
 - Each human turn is limited to 20 seconds (`TURN_MS` in `rules.ts`). When it runs out, the server plays a card for you using the bot strategy. Bots get the same 20-second clock but decide within 1.5–4 seconds; every turn shows a countdown ring on that seat.
 

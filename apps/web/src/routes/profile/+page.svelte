@@ -1,9 +1,12 @@
 <script lang="ts">
+	import Icon from '#lib/components/Icon.svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { GAMES, gameBySlug } from '#lib/games/catalog.ts';
 	import { WELCOME } from '#lib/guest.ts';
 	import { createAccount, type FormErrors, logOut, NAME_MAX, player } from '#lib/player.svelte.ts';
+	import Avatar from '#lib/components/Avatar.svelte';
+	import AvatarDialog from '#lib/components/AvatarDialog.svelte';
 	import CoinsPanel from '#lib/components/CoinsPanel.svelte';
 	import MyTournaments from '#lib/components/MyTournaments.svelte';
 	import PasswordDialog from '#lib/components/PasswordDialog.svelte';
@@ -27,6 +30,7 @@
 	let linking = $state(false);
 	let logOutError = $state<string | null>(null);
 	let changingPassword = $state(false);
+	let pickingAvatar = $state(false);
 
 	// Dates follow the visitor's own clock and language, so they are written in the browser only.
 	let mounted = $state(false);
@@ -131,10 +135,26 @@
 <section class="mx-auto max-w-[50rem] pt-10 pb-16 md:pt-16">
 	{#if player.ready}
 		<header class="flex items-start gap-5">
-			<span
-				class="grid size-16 shrink-0 place-items-center rounded-[18px] bg-brass font-display text-3xl font-bold text-ink sm:size-[4.5rem]"
-				aria-hidden="true">{player.name.trim().charAt(0).toUpperCase()}</span
+			<!-- Everyone can change their look, guests too: unlike a name it isn't tied to an account. -->
+			<button
+				class="group relative shrink-0 rounded-[18px] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-brass"
+				onclick={() => (pickingAvatar = true)}
+				aria-label="Change avatar"
+				title="Change avatar"
 			>
+				<Avatar
+					id={player.id}
+					name={player.name}
+					avatar={player.avatar}
+					class="size-16 rounded-[18px] text-3xl sm:size-[4.5rem]"
+				/>
+				<span
+					class="absolute -right-1.5 -bottom-1.5 grid size-7 place-items-center rounded-full border-2 border-room bg-brass text-ink group-hover:brightness-110"
+					aria-hidden="true"
+				>
+					<Icon name="edit" class="size-3.5" />
+				</span>
+			</button>
 			<div class="min-w-0">
 				<div class="flex items-center gap-2">
 					<h1
@@ -150,17 +170,7 @@
 							aria-label="Change name"
 							title="Change name"
 						>
-							<svg
-								viewBox="0 0 20 20"
-								class="size-[18px]"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="1.6"
-								stroke-linejoin="round"
-								aria-hidden="true"
-							>
-								<path d="M12.5 4.5l3 3L7 16H4v-3z" />
-							</svg>
+							<Icon name="edit" class="size-[18px]" />
 						</button>
 					{/if}
 				</div>
@@ -173,6 +183,7 @@
 				</p>
 			</div>
 		</header>
+		<AvatarDialog bind:open={pickingAvatar} />
 		{#if linked}<p class="mt-4 text-sm text-brass" role="status">Account linked.</p>{/if}
 
 		{#if data.seats.length > 0}
@@ -182,10 +193,9 @@
 					<div
 						class="flex flex-wrap items-center gap-x-4 gap-y-3 rounded-2xl border-[1.5px] border-brass bg-panel p-4"
 					>
-						<span
-							class="card-back {game?.back ?? ''} block h-11 w-8 shrink-0 -rotate-3"
-							aria-hidden="true"
-						></span>
+						{#if game}
+							<game.Emblem small class="size-10 shrink-0" />
+						{/if}
 						<div class="min-w-0 flex-1">
 							<p class="font-semibold">
 								{seat.started ? 'Your table is playing' : 'Your table is ready'}
@@ -336,10 +346,7 @@
 				{#each byGame as row (row.game.slug)}
 					{@const percent = rate(row.wins, row.played)}
 					<li class="flex items-center gap-4 rounded-2xl border border-paper/10 bg-panel p-4">
-						<span
-							class="card-back {row.game.back} block h-14 w-10 shrink-0 -rotate-3"
-							aria-hidden="true"
-						></span>
+						<row.game.Emblem class="size-12 shrink-0" />
 						<div class="min-w-0 flex-1">
 							<p class="font-display text-lg font-bold">{row.game.name}</p>
 							<p class="text-sm text-paper/70 tabular-nums">
@@ -398,10 +405,9 @@
 								href="/history/{match.id}"
 								class="flex items-center gap-4 rounded-xl border border-paper/10 bg-panel px-4 py-3 hover:border-paper/30"
 							>
-								<span
-									class="card-back {game?.back ?? ''} block h-9 w-[1.6rem] shrink-0 -rotate-3"
-									aria-hidden="true"
-								></span>
+								{#if game}
+									<game.Emblem small class="size-9 shrink-0" />
+								{/if}
 								<span class="min-w-0 flex-1">
 									<span class="block font-semibold">{game?.name ?? match.game}</span>
 									<time class="block text-xs text-paper/50" datetime={match.endedAt}

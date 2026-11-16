@@ -1,7 +1,7 @@
 <script lang="ts">
 	/**
 	 * Nimbus, the house dealer at every BlueClouds table: a cloud in a green dealer's eyeshade and a brass
-	 * bow tie (drawn in FigCraft, see design/cards.figcraft). `head` drops the shadow and bow tie for the
+	 * bow tie (drawn in FigCraft, see design/blueclouds.figcraft). `head` drops the shadow and bow tie for the
 	 * tiny version in the move log.
 	 */
 	let { head = false, class: cls = 'size-14' }: { head?: boolean; class?: string } = $props();

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Icon from '#lib/components/Icon.svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { nextPath } from '#lib/guest.ts';
@@ -117,18 +118,10 @@
 						required
 						aria-invalid={!!guestError}
 					/>
-					<!-- The pencil says the suggested name can be changed right here. -->
-					<svg
-						viewBox="0 0 20 20"
+					<Icon
+						name="edit"
 						class="pointer-events-none absolute top-1/2 right-4 size-4 -translate-y-1/2 text-paper/55"
-						fill="none"
-						stroke="currentColor"
-						stroke-width="1.6"
-						stroke-linejoin="round"
-						aria-hidden="true"
-					>
-						<path d="M12.5 4.5l3 3L7 16H4v-3z" />
-					</svg>
+					/>
 				</span>
 			</label>
 			{#if guestError}<p class="text-sm text-ember" role="alert">{guestError}</p>{/if}

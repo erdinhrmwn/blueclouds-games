@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Icon from '#lib/components/Icon.svelte';
 	/** A seed shown in full with a copy button: the Fair play dialog and a match's history page. */
 	let { id, label, value }: { id: string; label: string; value: string } = $props();
 
@@ -44,36 +45,9 @@
 			title="Copy"
 		>
 			{#if copied}
-				<!-- A tick: copied. -->
-				<svg
-					viewBox="0 0 20 20"
-					class="size-4 text-brass"
-					fill="none"
-					stroke="currentColor"
-					stroke-width="1.8"
-					stroke-linecap="round"
-					stroke-linejoin="round"
-					aria-hidden="true"
-				>
-					<path d="m4.5 10.5 3.5 3.5 7.5-8" />
-				</svg>
+				<Icon name="check" class="size-4 text-brass" />
 			{:else}
-				<!-- Two sheets: copy. -->
-				<svg
-					viewBox="0 0 20 20"
-					class="size-4"
-					fill="none"
-					stroke="currentColor"
-					stroke-width="1.6"
-					stroke-linecap="round"
-					stroke-linejoin="round"
-					aria-hidden="true"
-				>
-					<rect x="7" y="7" width="10" height="10" rx="2" />
-					<path
-						d="M13 4.5V4a1.5 1.5 0 0 0-1.5-1.5h-7A1.5 1.5 0 0 0 3 4v7a1.5 1.5 0 0 0 1.5 1.5H5"
-					/>
-				</svg>
+				<Icon name="copy" class="size-4" />
 			{/if}
 		</button>
 	</div>

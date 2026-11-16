@@ -19,7 +19,7 @@ mock.module("../../platform", () => ({
 }));
 const { refreshVips, VIP_REFRESH_MS } = await import("./room");
 const { addPlayer, createGame } = await import("../bust-31/rules");
-const { markVip, showVips } = await import("./table");
+const { markVip, showAvatar, showVips } = await import("./table");
 
 const DUE = 1_000;
 
@@ -93,4 +93,15 @@ test("the platform being down changes nothing and the check runs again", async (
 
 	expect(await refreshVips(c, DUE)).toBe(false);
 	expect(c.scheduled).toHaveLength(1);
+});
+
+test("a player's avatar is shown, and an unchanged one keeps the same game", () => {
+	let game = createGame();
+	game = addPlayer(game, "ann", "Ann");
+	const kite = { color: "storm", icon: "kite" } as const;
+
+	const shown = showAvatar(game, "ann", kite);
+	expect(shown.players[0]!.avatar).toEqual(kite);
+	expect(showAvatar(shown, "ann", { ...kite })).toBe(shown);
+	expect(showAvatar(shown, "nobody", kite)).toBe(shown);
 });

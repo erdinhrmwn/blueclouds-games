@@ -27,7 +27,7 @@
 	/** Card art file names where they differ from the card's kind. */
 	const FILE: Partial<Record<Card['kind'], string>> = { downpour: 'draw' };
 
-	/** The card faces are drawn in FigCraft (design/cards.figcraft) and exported to static/cards. */
+	/** The card faces are drawn in FigCraft (design/blueclouds.figcraft) and exported to static/cards. */
 	const face = $derived.by(() => {
 		if (card.suit === null) {
 			return card.kind;

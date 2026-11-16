@@ -196,6 +196,47 @@ describe("play tokens", () => {
 		expect(payload.vip).toBe(true);
 	});
 
+	test("a player picks a preset avatar; the next token carries it", async () => {
+		const { secret } = await guest(t.app);
+		const me = await call(t.app, "GET", "/v1/players/me", { token: secret });
+		expect(me.json.data.player.avatar).toEqual({ color: null, icon: null });
+
+		const picked = await call(t.app, "PUT", "/v1/players/me/avatar", {
+			token: secret,
+			body: { color: "storm", icon: "kite" },
+		});
+		expect(picked.status).toBe(200);
+		expect(picked.json.data.player.avatar).toEqual({ color: "storm", icon: "kite" });
+
+		const res = await call(t.app, "POST", "/v1/play-tokens", { token: secret });
+		const { payload } = await jwtVerify(res.json.data.token, t.publicKey, {
+			audience: PLAY_TOKEN_AUDIENCE,
+			algorithms: ["EdDSA"],
+		});
+		expect(payload.avatar).toEqual({ color: "storm", icon: "kite" });
+
+		const initial = await call(t.app, "PUT", "/v1/players/me/avatar", {
+			token: secret,
+			body: { color: "storm", icon: null },
+		});
+		expect(initial.json.data.player.avatar).toEqual({ color: "storm", icon: null });
+	});
+
+	test("an avatar outside the presets is refused", async () => {
+		const { secret } = await guest(t.app);
+		const unknown = await call(t.app, "PUT", "/v1/players/me/avatar", {
+			token: secret,
+			body: { color: "#ff0000", icon: "kite" },
+		});
+		expect(unknown.status).toBe(400);
+
+		const partial = await call(t.app, "PUT", "/v1/players/me/avatar", {
+			token: secret,
+			body: { icon: "kite" },
+		});
+		expect(partial.status).toBe(400);
+	});
+
 	test("tells a room which of its players are VIP, with the server key only", async () => {
 		const vip = await guest(t.app);
 		const plain = await guest(t.app);

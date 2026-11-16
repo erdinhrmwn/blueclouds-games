@@ -1,4 +1,5 @@
 import { importJWK, jwtVerify } from "jose";
+import { AVATAR_COLORS, AVATAR_ICONS, type Avatar, NO_AVATAR } from "./games/shared/avatars";
 import { z } from "zod";
 
 /**
@@ -38,8 +39,15 @@ const Claims = z.object({
 	name: z.string().trim().min(1).max(20),
 	// Tokens signed before the platform added it have no flag.
 	vip: z.boolean().default(false),
+	// Older tokens have none; a look this build doesn't know never keeps anyone from their seat.
+	avatar: z
+		.object({
+			color: z.enum(AVATAR_COLORS).nullable(),
+			icon: z.enum(AVATAR_ICONS).nullable(),
+		})
+		.catch(NO_AVATAR),
 });
-export type Identity = { id: string; name: string; vip: boolean };
+export type Identity = { id: string; name: string; vip: boolean; avatar: Avatar };
 
 let publicKey: Promise<CryptoKey | Uint8Array> | undefined;
 let config: Env | undefined;
@@ -82,7 +90,12 @@ export async function verifyPlayToken(token: unknown): Promise<Identity | null> 
 			return null;
 		}
 
-		return { id: claims.data.sub, name: claims.data.name, vip: claims.data.vip };
+		return {
+			id: claims.data.sub,
+			name: claims.data.name,
+			vip: claims.data.vip,
+			avatar: claims.data.avatar,
+		};
 	} catch {
 		return null;
 	}

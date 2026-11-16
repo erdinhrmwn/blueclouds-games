@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Icon from '#lib/components/Icon.svelte';
 	import type { RoundCheck } from 'server/games/shared/fairness';
 	import type { Round } from '#lib/rounds.ts';
 	import { when } from '#lib/when.ts';
@@ -110,17 +111,7 @@
 				</p>
 			</div>
 			<button class="btn-ghost size-10 shrink-0 p-0" onclick={onclose} aria-label="Close">
-				<svg
-					viewBox="0 0 20 20"
-					class="size-4"
-					fill="none"
-					stroke="currentColor"
-					stroke-width="1.8"
-					stroke-linecap="round"
-					aria-hidden="true"
-				>
-					<path d="m5 5 10 10M15 5 5 15" />
-				</svg>
+				<Icon name="close" class="size-4" />
 			</button>
 		</div>
 

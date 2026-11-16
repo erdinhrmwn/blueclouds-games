@@ -112,10 +112,9 @@
 						href={linkOf(tournament)}
 						class="flex items-center gap-4 rounded-xl border border-paper/10 bg-panel px-4 py-3 hover:border-paper/30 focus-visible:outline-2 focus-visible:outline-brass"
 					>
-						<span
-							class="card-back {game?.back ?? ''} block h-9 w-[1.6rem] shrink-0 -rotate-3"
-							aria-hidden="true"
-						></span>
+						{#if game}
+							<game.Emblem small class="size-9 shrink-0" />
+						{/if}
 						<span class="min-w-0 flex-1">
 							<span class="block truncate font-semibold">{tournament.name}</span>
 							<span class="block text-xs text-paper/55">{detailOf(tournament)}</span>

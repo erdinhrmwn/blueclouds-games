@@ -1,4 +1,5 @@
 import { error, json, type Cookies, type RequestEvent } from '@sveltejs/kit';
+import type { Avatar } from 'server/games/shared/avatars';
 import { dev } from '$app/env';
 import { PLATFORM_URL } from '$app/env/private';
 import type { MatchRounds } from '#lib/rounds.ts';
@@ -91,7 +92,13 @@ export async function startGuest(event: RequestEvent, name: string): Promise<Me>
 
 	saveSecret(event.cookies, playerSecret);
 
-	return { name: player.name, username: player.username, guest: player.guest };
+	return {
+		id: player.id,
+		name: player.name,
+		username: player.username,
+		guest: player.guest,
+		avatar: player.avatar
+	};
 }
 
 /** A secret the platform no longer knows (e.g. a reset database). */
@@ -121,9 +128,12 @@ function secretOrNameFirst(cookies: Cookies): string {
 }
 
 export type Me = {
+	id: string;
 	name: string;
 	username: string | null;
 	guest: boolean;
+	/** The preset avatar; null parts are not picked yet. */
+	avatar: Avatar;
 	/** When the player was made, as ISO text. */
 	createdAt?: string;
 	/** Coin balance; left out where an answer doesn't carry it (sign-in, register). */
@@ -146,9 +156,11 @@ export async function whoAmI(event: RequestEvent): Promise<Me | null> {
 			secret
 		});
 		return {
+			id: player.id,
 			name: player.name,
 			username: player.username,
 			guest: player.guest,
+			avatar: player.avatar,
 			createdAt: player.createdAt,
 			coins
 		};
@@ -242,6 +254,17 @@ export async function savePlayerName(event: RequestEvent, name: string): Promise
 		secret: secretOrEnded(event.cookies),
 		body: { name }
 	});
+}
+
+/** Sets the player's preset avatar (guests too). Returns it as the platform saved it. */
+export async function savePlayerAvatar(event: RequestEvent, avatar: Avatar): Promise<Avatar> {
+	const { player } = await call<{ player: Me }>(event, '/players/me/avatar', {
+		method: 'PUT',
+		secret: secretOrEnded(event.cookies),
+		body: avatar
+	});
+
+	return player.avatar;
 }
 
 /** A fresh play token. */

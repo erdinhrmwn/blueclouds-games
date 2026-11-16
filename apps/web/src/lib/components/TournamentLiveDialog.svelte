@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Icon from '#lib/components/Icon.svelte';
 	import { fetchStandings, type LiveTournament, type Standing } from '#lib/platform.ts';
 	import { enterTable } from '#lib/tables.ts';
 	import {
@@ -205,17 +206,7 @@
 				onclick={() => (open = false)}
 				aria-label="Close"
 			>
-				<svg
-					viewBox="0 0 20 20"
-					class="size-4"
-					fill="none"
-					stroke="currentColor"
-					stroke-width="1.8"
-					stroke-linecap="round"
-					aria-hidden="true"
-				>
-					<path d="M5 5l10 10M15 5 5 15" />
-				</svg>
+				<Icon name="close" class="size-4" />
 			</button>
 		</TournamentFelt>
 

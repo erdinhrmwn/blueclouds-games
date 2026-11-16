@@ -1,4 +1,6 @@
 <script lang="ts">
+	import Avatar from '#lib/components/Avatar.svelte';
+	import Icon from '#lib/components/Icon.svelte';
 	import { ask } from '#lib/confirm.svelte.ts';
 	import { goto } from '$app/navigation';
 	import { WELCOME } from '#lib/guest.ts';
@@ -117,27 +119,21 @@
 				{player.coins.toLocaleString()}
 			</span>
 		{/if}
-		<span
-			class="grid size-8 shrink-0 place-items-center rounded-full bg-brass font-display text-sm font-bold text-ink"
-			aria-hidden="true">{player.name.trim().charAt(0).toUpperCase()}</span
-		>
+		<Avatar
+			id={player.id}
+			name={player.name}
+			avatar={player.avatar}
+			class="size-8 rounded-full text-sm"
+		/>
 		<span class="hidden max-w-32 min-w-0 truncate font-semibold sm:block" aria-hidden="true"
 			>{player.name}</span
 		>
-		<svg
-			viewBox="0 0 20 20"
+		<Icon
+			name="next"
 			class="size-4 shrink-0 text-paper/70 transition-transform max-sm:hidden motion-reduce:transition-none {open
-				? 'rotate-180'
-				: ''}"
-			fill="none"
-			stroke="currentColor"
-			stroke-width="1.8"
-			stroke-linecap="round"
-			stroke-linejoin="round"
-			aria-hidden="true"
-		>
-			<path d="m5 8 5 5 5-5" />
-		</svg>
+				? '-rotate-90'
+				: 'rotate-90'}"
+		/>
 	</button>
 
 	{#if open}
@@ -156,19 +152,7 @@
 				class="flex min-h-11 items-center gap-2.5 px-3 text-sm hover:bg-paper/5 focus:bg-paper/5 focus:outline-none"
 				onclick={() => close(false)}
 			>
-				<svg
-					viewBox="0 0 20 20"
-					class="size-4 text-paper/70"
-					fill="none"
-					stroke="currentColor"
-					stroke-width="1.6"
-					stroke-linecap="round"
-					stroke-linejoin="round"
-					aria-hidden="true"
-				>
-					<circle cx="10" cy="7" r="3" />
-					<path d="M4 16.5c.8-2.9 3.2-4.5 6-4.5s5.2 1.6 6 4.5" />
-				</svg>
+				<Icon name="player" class="size-4 text-paper/70" />
 				Profile
 			</a>
 			<a
@@ -177,20 +161,7 @@
 				class="flex min-h-11 items-center gap-2.5 px-3 text-sm hover:bg-paper/5 focus:bg-paper/5 focus:outline-none"
 				onclick={() => close(false)}
 			>
-				<!-- A clock: past matches. -->
-				<svg
-					viewBox="0 0 20 20"
-					class="size-4 text-paper/70"
-					fill="none"
-					stroke="currentColor"
-					stroke-width="1.6"
-					stroke-linecap="round"
-					stroke-linejoin="round"
-					aria-hidden="true"
-				>
-					<circle cx="10" cy="10" r="6.5" />
-					<path d="M10 6.5V10l2.5 1.5" />
-				</svg>
+				<Icon name="history" class="size-4 text-paper/70" />
 				Match history
 			</a>
 			<button
@@ -198,18 +169,7 @@
 				class="flex min-h-11 w-full items-center gap-2.5 px-3 text-left text-sm hover:bg-paper/5 focus:bg-paper/5 focus:outline-none"
 				onclick={signOut}
 			>
-				<svg
-					viewBox="0 0 20 20"
-					class="size-4 text-paper/70"
-					fill="none"
-					stroke="currentColor"
-					stroke-width="1.6"
-					stroke-linecap="round"
-					stroke-linejoin="round"
-					aria-hidden="true"
-				>
-					<path d="M8 4H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3M13 14l4-4-4-4M17 10H8" />
-				</svg>
+				<Icon name="log out" class="size-4 text-paper/70" />
 				Log out
 			</button>
 		</div>
