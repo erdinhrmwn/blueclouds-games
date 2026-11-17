@@ -10,6 +10,7 @@
       "apps/**/*.ts",
       "apps/**/*.js",
       "contracts/**/*.ts",
+      "scripts/**/*.ts",
       "!**/.svelte-kit",
       "!**/build"
     ]
