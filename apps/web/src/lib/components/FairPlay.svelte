@@ -1,7 +1,8 @@
 <script lang="ts">
   import Icon from '#lib/components/Icon.svelte'
-  import type { RoundCheck } from 'server/games/shared/fairness'
-  import type { BaseView, RoomConnection } from '#lib/rivet/room.svelte.ts'
+  import type { RoundCheck } from 'contracts/fairness/fairness'
+  import type { BaseView } from 'contracts/rooms/room'
+  import type { RoomConnection } from '#lib/rivet/room.svelte.ts'
   import { type MatchRounds, type Round, roundSummary, verifyRound } from '#lib/rounds.ts'
   import RoundDetail from './RoundDetail.svelte'
   import SeedField from './SeedField.svelte'

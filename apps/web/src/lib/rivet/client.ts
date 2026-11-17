@@ -1,5 +1,4 @@
 import { createClient } from 'rivetkit/client'
-import type { registry } from 'server'
 import { PUBLIC_RIVET_ENDPOINT } from '$app/env/public'
 
 type RoomAccess = { actorId: string; token: string }
@@ -39,7 +38,7 @@ export async function roomClient(game: string, code: string) {
   }
 
   // devtools off: the local engine does not serve the devtools bundle, which only adds a 404.
-  const client = createClient<typeof registry>({
+  const client = createClient({
     endpoint: PUBLIC_RIVET_ENDPOINT,
     devtools: false,
     getToken,

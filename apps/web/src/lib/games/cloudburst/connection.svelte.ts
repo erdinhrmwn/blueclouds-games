@@ -1,13 +1,8 @@
-import type { Card, PlayInput, PublicView } from 'server/games/cloudburst/rules'
-import { type BaseView, RoomConnection } from '#lib/rivet/room.svelte.ts'
-
-export type Hand = { cards: Card[]; drawnId: string | null }
+import type { Actions, Hand, PlayInput, View } from 'contracts/rooms/cloudburst'
+import { RoomConnection } from '#lib/rivet/room.svelte.ts'
 
 /** A Cloudburst room: the shared actions plus play, draw and pass. */
-export class CloudburstConnection extends RoomConnection<
-  PublicView & Pick<BaseView, 'tournament' | 'fairness'>,
-  Hand
-> {
+export class CloudburstConnection extends RoomConnection<View, Hand, Actions> {
   constructor(code: string) {
     super('cloudburst', 'cloudburstRoom', code, { cards: [], drawnId: null })
   }

@@ -7,7 +7,9 @@ COPY apps/platform/package.json apps/platform/
 COPY apps/server/package.json apps/server/
 COPY apps/web/package.json apps/web/
 COPY apps/backoffice/package.json apps/backoffice/
+COPY contracts/package.json contracts/
 RUN bun install --frozen-lockfile
+COPY contracts contracts
 COPY apps apps
 ENV NODE_ENV=production
 

@@ -17,7 +17,7 @@
     MAX_PLAYERS,
     type Suit,
     SUITS,
-  } from 'server/games/cloudburst/rules'
+  } from 'contracts/rooms/cloudburst'
   import { prefersReducedMotion } from 'svelte/motion'
   import CloudCard from './CloudCard.svelte'
   import type { CloudburstConnection } from './connection.svelte.ts'

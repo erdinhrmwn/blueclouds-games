@@ -1,5 +1,5 @@
+import { SEATS } from 'contracts/rooms/room'
 import { z } from 'zod'
-import { SEATS } from './table'
 
 /** Sent by the browser as connection params: a play token from the platform (who you are, and your name). */
 export const PlayerParams = z.object({ playToken: z.string().min(1).max(2048) })
@@ -23,12 +23,6 @@ export const AdminKickInput = z.object({ seat: SeatInput, reason: AdminReason })
 
 /** Room codes are the actor key: short, uppercase, easy to read aloud. */
 export const RoomCode = z.string().regex(/^[A-Z0-9]{4,8}$/)
-
-/**
- * Tournament tables report to their own list per game, read only by the backoffice: the public list (keyed by the
- * bare slug) never shows them.
- */
-export const tournamentListKey = (slug: string) => `${slug}:tournament`
 
 /** Who sits in one seat, for the backoffice's Live tables. No ids: the list is read by servers only. */
 export const SeatSummary = z.object({

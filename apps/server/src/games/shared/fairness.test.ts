@@ -1,5 +1,4 @@
 import { describe, expect, test } from 'bun:test'
-import { fairRng, matchSeeds, newCommitment, seedsForRound } from './fair-rng'
 import {
   checkMatch,
   checkRound,
@@ -8,7 +7,8 @@ import {
   proofsFromLog,
   type RoundProof,
   sha256Hex,
-} from './fairness'
+} from 'contracts/fairness/fairness'
+import { fairRng, matchSeeds, newCommitment, seedsForRound } from './fair-rng'
 
 const deck = (size: number) => Array.from({ length: size }, (_, index) => ({ id: `c${index}` }))
 

@@ -1,6 +1,6 @@
 // What every game sends the platform when a match ends: placements, a game-defined score
 // per seat, and the full move log (docs/architecture/match-log.md).
-import type { MatchSeeds } from './fairness'
+import type { MatchSeeds } from 'contracts/fairness/fairness'
 
 /** One step of the move log, before it gets its place (`seq`) and time (`t`, ms since the start). */
 export type LogEntry = { type: string; seat?: number; data?: Record<string, unknown> }

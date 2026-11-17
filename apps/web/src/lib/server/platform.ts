@@ -1,5 +1,5 @@
 import { type Cookies, error, json, type RequestEvent } from '@sveltejs/kit'
-import type { Avatar } from 'server/games/shared/avatars'
+import type { Avatar } from 'contracts/avatars'
 import type { MatchRounds } from '#lib/rounds.ts'
 import { dev } from '$app/env'
 import { PLATFORM_URL } from '$app/env/private'

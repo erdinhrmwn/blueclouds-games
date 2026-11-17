@@ -1,10 +1,26 @@
 // "Cloudburst": pure game rules, no Rivet. Every function returns a new state
 // or throws RuleError, so the actor can forward the message to the player.
 // Rules and their reasons: docs/games/cloudburst/rules.md.
-import { type Avatar, NO_AVATAR } from '../shared/avatars'
-import { nextIndex, type Rng, RuleError, SEATS, seatPlayer, shuffle } from '../shared/table'
+import { type Avatar, NO_AVATAR } from 'contracts/avatars'
+import {
+  ACTIONS,
+  BURST_AT,
+  type Card,
+  DEAL,
+  fits,
+  type GameEvent,
+  HAND_SIZE,
+  isWild,
+  MAX_PLAYERS,
+  MIN_PLAYERS,
+  type PlayInput,
+  type PublicView,
+  SUITS,
+  type Suit,
+} from 'contracts/rooms/cloudburst'
+import type { TurnClock } from 'contracts/rooms/room'
+import { nextIndex, type Rng, RuleError, seatPlayer, shuffle } from '../shared/table'
 
-export const HAND_SIZE = 7
 const COPIES_PER_CARD = 2
 const HIGHEST_NUMBER = 8
 const RAINBOWS = 4
@@ -13,25 +29,10 @@ const TEMPESTS = 4
 export const FORCED_DRAW = { downpour: 2, tempest: 4 } as const
 /** Extra wait after the deal animation, so the first turn never starts mid-flight. */
 const DEAL_SETTLE_MS = 100
-export const MIN_PLAYERS = 2
-export const MAX_PLAYERS = SEATS
-/** The match ends after the round in which anyone reaches this many points. */
-export const BURST_AT = 10
 /** How long a human has to move before the server moves for them. */
 export const TURN_MS = 20_000
-/** Dealing and round-end timing, shared so the server holds the first turn of a round until they end. */
-export const DEAL = { stepMs: 60, flightMs: 400, roundEndMs: 4000 }
 
-export const SUITS = ['sun', 'rain', 'wind', 'storm'] as const
-export type Suit = (typeof SUITS)[number]
-export const ACTIONS = ['calm', 'swirl', 'gust', 'downpour'] as const
-/** Wild cards fit anything and let their player pick the suit to follow. */
-export const WILDS = ['rainbow', 'tempest'] as const
-export type CardKind = 'number' | (typeof ACTIONS)[number] | (typeof WILDS)[number]
-/** `value` is 1–8 for numbers and 0 otherwise; `suit` is null only for a wild card. */
-export type Card = { id: string; kind: CardKind; suit: Suit | null; value: number }
-
-export type Player = {
+export interface Player {
   id: string
   name: string
   bot: boolean
@@ -45,37 +46,7 @@ export type Player = {
   points: number
 }
 
-/**
- * What happened last, for the table's animations. Never holds a card other players must not see:
- * the hands in `roundEnd.left` are shown on purpose, the round is over and they go back in the deck.
- */
-export type GameEvent =
-  | { type: 'joined'; playerId: string }
-  | { type: 'dealt'; round: number }
-  | {
-      type: 'played'
-      playerId: string
-      card: Card
-      skipped?: string
-      /** Downpour or Tempest: how many cards the skipped player had to draw. */
-      forced?: number
-      gaveTo?: string
-      auto?: boolean
-    }
-  | { type: 'drew'; playerId: string; got: boolean; auto?: boolean }
-  | { type: 'passed'; playerId: string; auto?: boolean }
-  | {
-      type: 'roundEnd'
-      outId: string
-      card: Card
-      gained: Record<string, number>
-      /** The cards each player still held, face up for the round-end reveal. */
-      left: Record<string, Card[]>
-      tie: boolean
-      next: 'round' | 'finished'
-    }
-
-export type Game = {
+export interface Game {
   phase: 'lobby' | 'playing' | 'finished'
   hostId: string | null
   players: Player[]
@@ -96,8 +67,6 @@ export type Game = {
   /** Changes whenever a new turn starts (not on a draw): keys the turn timer. */
   turnKey: number
 }
-
-export type PlayInput = { cardId: string; suit?: Suit; giveId?: string }
 
 export function createGame(): Game {
   return {
@@ -143,21 +112,6 @@ export function buildDeck(): Card[] {
   }
 
   return cards
-}
-
-export const isWild = (card: Card) => card.suit === null
-
-/** Same suit, a number exactly one up or down, the same action, or any wild card. A same number alone does not fit. */
-export function fits(card: Card, top: Card, suit: Suit): boolean {
-  if (isWild(card) || card.suit === suit) {
-    return true
-  }
-
-  if (card.kind === 'number') {
-    return top.kind === 'number' && Math.abs(card.value - top.value) === 1
-  }
-
-  return card.kind === top.kind
 }
 
 /** Sits a new player in `seat`, or in the first free one when no seat is given. */
@@ -493,7 +447,7 @@ export function placements(game: Game): Map<string, number> {
  * What every player may see: hand sizes, never the cards in them, nor the deck order.
  * `turn` is relative (ms left, full length) so clients with a wrong clock still count down correctly.
  */
-export function publicView(game: Game, turn: { left: number; total: number } | null = null) {
+export function publicView(game: Game, turn: TurnClock | null = null): PublicView {
   return {
     phase: game.phase,
     hostId: game.hostId,
@@ -524,8 +478,6 @@ export function publicView(game: Game, turn: { left: number; total: number } | n
     turn,
   }
 }
-
-export type PublicView = ReturnType<typeof publicView>
 
 /** Your own hand, plus the card you just drew (the only one you may play now). */
 export function handOf(game: Game, playerId: string): { cards: Card[]; drawnId: string | null } {

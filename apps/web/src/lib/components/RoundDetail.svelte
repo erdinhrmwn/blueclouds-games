@@ -1,6 +1,6 @@
 <script lang="ts">
   import Icon from '#lib/components/Icon.svelte'
-  import type { RoundCheck } from 'server/games/shared/fairness'
+  import type { RoundCheck } from 'contracts/fairness/fairness'
   import type { Round } from '#lib/rounds.ts'
   import { when } from '#lib/when.ts'
   import DeckChips from './DeckChips.svelte'

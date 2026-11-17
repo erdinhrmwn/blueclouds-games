@@ -1,4 +1,5 @@
 import type { SQL } from 'bun'
+import { AVATAR_COLORS, AVATAR_ICONS } from 'contracts/avatars'
 import { Hono } from 'hono'
 import { z } from 'zod'
 import type { AppEnv } from '../app'
@@ -21,8 +22,8 @@ const Name = z
 const NameBody = z.object({ name: Name })
 /** Both parts are sent every time; null puts that part back to the default (id colour, initial). */
 const AvatarBody = z.object({
-  color: z.enum(players.AVATAR_COLORS).nullable(),
-  icon: z.enum(players.AVATAR_ICONS).nullable(),
+  color: z.enum(AVATAR_COLORS).nullable(),
+  icon: z.enum(AVATAR_ICONS).nullable(),
 })
 const CoinPage = z.object({ before: z.uuid('Not a history id.').optional() })
 

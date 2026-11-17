@@ -2,7 +2,7 @@
   import Icon from '#lib/components/Icon.svelte'
   import { AVATAR_TONES } from '#lib/components/Avatar.svelte'
   import AvatarGlyph from '#lib/components/AvatarGlyph.svelte'
-  import { type Avatar, defaultAvatarColor } from 'server/games/shared/avatars'
+  import { type Avatar, defaultAvatarColor } from 'contracts/avatars'
   import { countdown } from '#lib/motion.ts'
   import type { Snippet } from 'svelte'
 

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { type Suit, SUITS } from 'server/games/cloudburst/rules'
+  import { type Suit, SUITS } from 'contracts/rooms/cloudburst'
   import SuitGlyph from './SuitGlyph.svelte'
   import { SUIT_NAME } from './suits.ts'
 

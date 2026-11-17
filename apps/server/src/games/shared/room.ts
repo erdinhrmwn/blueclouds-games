@@ -1,6 +1,14 @@
 // Actor-side helpers every game room shares: who is connected, the turn clock, leaving,
 // the room list and the match result outbox. Each game keeps its own actor and actions.
 import { createHash, timingSafeEqual } from 'node:crypto'
+import { clientSeedOf, type MatchSeeds } from 'contracts/fairness/fairness'
+import {
+  type KickResult,
+  SEATS,
+  TABLE_CLOSED,
+  type TerminateResult,
+  tournamentListKey,
+} from 'contracts/rooms/room'
 import { UserError } from 'rivetkit'
 import {
   fetchRoomSeats,
@@ -12,7 +20,6 @@ import {
   verifyPlayToken,
 } from '../../platform'
 import { fairRng, matchSeeds, type NextMatch, newCommitment, seedsForRound } from './fair-rng'
-import { clientSeedOf, type MatchSeeds } from './fairness'
 import {
   type LogEntry,
   type LogEvent,
@@ -22,7 +29,7 @@ import {
   stamp,
 } from './match'
 import { closedRounds, type RoundReport, type RoundResult, roundReport } from './rounds'
-import { AdminParams, PlayerParams, SeatInput, tournamentListKey } from './schema'
+import { AdminParams, PlayerParams, SeatInput } from './schema'
 import {
   kickPlayer,
   markAway,
@@ -30,7 +37,6 @@ import {
   RuleError,
   randomRng,
   removePlayer,
-  SEATS,
   showVips,
   type Table,
 } from './table'
@@ -532,9 +538,6 @@ export function botName(players: { name: string }[]): string {
   return free ?? `Bot ${players.length + 1}`
 }
 
-/** Every refusal of a closed table carries this code, so the browser stops trying to reconnect. */
-export const TABLE_CLOSED = 'table_closed'
-
 const TERMINATED_MESSAGE = 'An admin closed this table.'
 const KICKED_MESSAGE = 'You were removed from this table.'
 
@@ -714,15 +717,6 @@ export async function dropIfGone(
   return true
 }
 
-/** Who was kicked, from which phase, and the match it happened in (null when none was running). */
-export type KickResult = {
-  playerId: string
-  name: string
-  seat: number
-  phase: Table['phase']
-  matchId: string | null
-}
-
 /**
  * Kicks the human in `seat` off the table and keeps them off it (see kickPlayer for what happens to the chair).
  * The host may only kick before the game starts, and not themselves. The caller commits with `entries`, which
@@ -791,14 +785,6 @@ export async function closeKicked(
   }
 
   closeConnections(c, (conn) => c.vars.who[conn.id]?.id === playerId, KICKED_MESSAGE)
-}
-
-/** What the table was doing when an admin terminated it. */
-export type TerminateResult = {
-  phase: Table['phase']
-  matchId: string | null
-  round: number
-  players: number
 }
 
 /**

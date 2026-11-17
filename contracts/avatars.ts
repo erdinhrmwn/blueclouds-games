@@ -1,6 +1,6 @@
 /**
  * Preset avatars (FigCraft page "Brand · Avatars"): a colour and, optionally, an icon in place of the initial.
- * The platform keeps the same lists (players.avatar_color / avatar_icon checks and its request schema).
+ * Owned by the platform: a new name here also needs a migration for the players.avatar_color / avatar_icon checks.
  */
 export const AVATAR_COLORS = [
   'rain',
@@ -40,7 +40,10 @@ export type AvatarColor = (typeof AVATAR_COLORS)[number]
 export type AvatarIcon = (typeof AVATAR_ICONS)[number]
 
 /** Null fields are not picked yet: the colour then comes from the player id and the initial stands in for the icon. */
-export type Avatar = { color: AvatarColor | null; icon: AvatarIcon | null }
+export interface Avatar {
+  color: AvatarColor | null
+  icon: AvatarIcon | null
+}
 
 export const NO_AVATAR: Avatar = { color: null, icon: null }
 

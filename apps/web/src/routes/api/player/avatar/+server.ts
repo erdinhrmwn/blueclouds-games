@@ -5,7 +5,7 @@ import {
   type Avatar,
   type AvatarColor,
   type AvatarIcon,
-} from 'server/games/shared/avatars'
+} from 'contracts/avatars'
 import { failure, savePlayerAvatar } from '#lib/server/platform.ts'
 import type { RequestHandler } from './$types'
 

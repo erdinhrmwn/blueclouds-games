@@ -1,4 +1,4 @@
-import { checkRound, type RoundCheck } from 'server/games/shared/fairness'
+import { checkRound, type RoundCheck } from 'contracts/fairness/fairness'
 import { SUIT_TEXT } from '#lib/games/cloudburst/suits.ts'
 
 /** One event of a round's moves (docs/architecture/match-log.md). */

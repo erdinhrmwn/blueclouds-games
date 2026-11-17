@@ -1,4 +1,4 @@
-import type { RoomSummary } from 'server/games/shared/schema'
+import type { RoomSummary } from 'contracts/rooms/room'
 
 /** A table as the public list shows it: the API leaves out who sits where. `game` says which game it plays. */
 export type OpenTable = Omit<RoomSummary, 'seats'> & { game: string }

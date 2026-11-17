@@ -1,5 +1,5 @@
-import * as bust31 from 'server/games/bust-31/rules'
-import * as cloudburst from 'server/games/cloudburst/rules'
+import * as bust31 from 'contracts/rooms/bust-31'
+import * as cloudburst from 'contracts/rooms/cloudburst'
 import type { Component } from 'svelte'
 import Bust31Emblem from './bust-31/Emblem.svelte'
 import Bust31Fan from './bust-31/Fan.svelte'

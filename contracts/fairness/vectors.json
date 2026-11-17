@@ -1,0 +1,379 @@
+{
+  "about": "Test vectors for checkRound (fairness.ts). Any port of the check must give `expected` for each `proof`.",
+  "vectors": [
+    {
+      "name": "Bust 31: one full deck",
+      "proof": {
+        "matchId": "0192f000-0000-7000-8000-000000000001",
+        "round": 1,
+        "serverSeed": "af13c6fb7378ca8c5bd5ea96b522daddbeab834e05bbd685657e0bda441eb73b",
+        "serverSeedHash": "d64bb445bd5238c7154969bd265ab8d0ca5233d13e5158b7504b629a28fa5b40",
+        "shuffles": [
+          {
+            "nonce": 0,
+            "deck": [
+              "t-0",
+              "n9-0",
+              "n7-2",
+              "d-0",
+              "n8-0",
+              "n8-3",
+              "n3-2",
+              "s-1",
+              "n1-2",
+              "n7-0",
+              "n7-3",
+              "n5-3",
+              "z-3",
+              "n4-0",
+              "n8-2",
+              "d-1",
+              "n9-3",
+              "n3-0",
+              "s-0",
+              "m-3",
+              "z-0",
+              "m-2",
+              "n6-3",
+              "r-2",
+              "m-1",
+              "n7-1",
+              "t-1",
+              "n4-2",
+              "n5-0",
+              "n9-2",
+              "z-2",
+              "n5-2",
+              "n5-1",
+              "n6-2",
+              "n9-1",
+              "n6-1",
+              "n2-3",
+              "r-1",
+              "n2-0",
+              "n1-0",
+              "n8-1",
+              "r-0",
+              "n2-2",
+              "n6-0",
+              "n3-1",
+              "m-0",
+              "n3-3",
+              "r-3",
+              "n2-1",
+              "n1-1",
+              "z-1",
+              "n4-3",
+              "n4-1",
+              "n1-3"
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "round": 1,
+        "hashMatches": true,
+        "shuffles": [
+          {
+            "nonce": 0,
+            "ok": true
+          }
+        ],
+        "ok": true
+      }
+    },
+    {
+      "name": "Cloudburst: a deal, then a reshuffle of the discard pile",
+      "proof": {
+        "matchId": "0192f000-0000-7000-8000-000000000001",
+        "round": 2,
+        "serverSeed": "82a3e8a2aa1c6b7fa26d4b1e7fb4b0fbf1ec13bc5b6e85e79f23b05a258b21c3",
+        "serverSeedHash": "a6c1f055bef2078a33f6d10595875fff6aff50332d6278feb86c3b3212c7f806",
+        "shuffles": [
+          {
+            "nonce": 0,
+            "deck": [
+              "wind-7-0",
+              "wind-swirl-0",
+              "storm-calm-1",
+              "rain-downpour-1",
+              "storm-downpour-1",
+              "rain-gust-0",
+              "wind-5-0",
+              "rainbow-3",
+              "sun-7-0",
+              "wind-swirl-1",
+              "rain-7-0",
+              "rain-5-1",
+              "sun-4-1",
+              "wind-gust-0",
+              "wind-downpour-0",
+              "sun-8-1",
+              "storm-8-1",
+              "wind-1-0",
+              "wind-3-1",
+              "rain-6-1",
+              "rain-5-0",
+              "rain-2-1",
+              "tempest-1",
+              "sun-2-0",
+              "rain-1-0",
+              "sun-6-0",
+              "storm-5-0",
+              "rain-swirl-1",
+              "rainbow-0",
+              "rain-calm-1",
+              "rain-7-1",
+              "sun-downpour-1",
+              "wind-2-0",
+              "wind-6-0",
+              "sun-gust-0",
+              "rain-8-1",
+              "storm-1-0",
+              "rain-swirl-0",
+              "storm-swirl-1",
+              "storm-downpour-0",
+              "wind-4-1",
+              "rain-6-0",
+              "storm-swirl-0",
+              "sun-8-0",
+              "wind-8-1",
+              "sun-calm-1",
+              "sun-6-1",
+              "storm-8-0",
+              "sun-1-1",
+              "sun-5-1",
+              "sun-7-1",
+              "rain-gust-1",
+              "wind-downpour-1",
+              "rain-downpour-0",
+              "tempest-2",
+              "wind-1-1",
+              "sun-calm-0",
+              "storm-3-1",
+              "sun-swirl-1",
+              "sun-1-0",
+              "storm-gust-0",
+              "wind-6-1",
+              "storm-7-1",
+              "sun-5-0",
+              "storm-gust-1",
+              "sun-3-0",
+              "rain-3-1",
+              "wind-7-1",
+              "rain-3-0",
+              "storm-4-1",
+              "storm-calm-0",
+              "wind-3-0",
+              "wind-2-1",
+              "sun-2-1",
+              "wind-8-0",
+              "wind-calm-1",
+              "rainbow-1",
+              "sun-3-1",
+              "wind-gust-1",
+              "sun-swirl-0",
+              "storm-3-0",
+              "tempest-0",
+              "rain-2-0",
+              "storm-4-0",
+              "rain-1-1",
+              "rainbow-2",
+              "wind-5-1",
+              "storm-7-0",
+              "rain-calm-0",
+              "sun-4-0",
+              "rain-4-1",
+              "rain-4-0",
+              "rain-8-0",
+              "storm-2-1",
+              "wind-calm-0",
+              "storm-6-1",
+              "tempest-3",
+              "storm-6-0",
+              "sun-gust-1",
+              "storm-1-1",
+              "sun-downpour-0",
+              "storm-2-0",
+              "storm-5-1",
+              "wind-4-0"
+            ]
+          },
+          {
+            "nonce": 1,
+            "deck": [
+              "sun-downpour-0",
+              "sun-8-1",
+              "sun-6-1",
+              "sun-1-1",
+              "sun-4-1",
+              "sun-5-0",
+              "sun-7-1",
+              "sun-2-1",
+              "sun-1-0",
+              "sun-2-0",
+              "sun-7-0",
+              "sun-8-0",
+              "sun-5-1",
+              "sun-calm-0",
+              "sun-6-0",
+              "sun-swirl-0",
+              "sun-3-1",
+              "sun-4-0",
+              "sun-3-0",
+              "sun-gust-0"
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "round": 2,
+        "hashMatches": true,
+        "shuffles": [
+          {
+            "nonce": 0,
+            "ok": true
+          },
+          {
+            "nonce": 1,
+            "ok": true
+          }
+        ],
+        "ok": true
+      }
+    },
+    {
+      "name": "Three cards",
+      "proof": {
+        "matchId": "0192f000-0000-7000-8000-000000000001",
+        "round": 3,
+        "serverSeed": "ddd6b800f767626dbb443a67ecae0215bdaf3e8874a37e8e4789af2ab9a07290",
+        "serverSeedHash": "1fc168b8908dfa869c5b3e7b6dc4d0e0ae80e766c94f30d21716c8c0771f5390",
+        "shuffles": [
+          {
+            "nonce": 0,
+            "deck": ["a", "b", "c"]
+          }
+        ]
+      },
+      "expected": {
+        "round": 3,
+        "hashMatches": true,
+        "shuffles": [
+          {
+            "nonce": 0,
+            "ok": true
+          }
+        ],
+        "ok": true
+      }
+    },
+    {
+      "name": "Bust 31: two cards swapped after the shuffle",
+      "proof": {
+        "matchId": "0192f000-0000-7000-8000-000000000001",
+        "round": 1,
+        "serverSeed": "af13c6fb7378ca8c5bd5ea96b522daddbeab834e05bbd685657e0bda441eb73b",
+        "serverSeedHash": "d64bb445bd5238c7154969bd265ab8d0ca5233d13e5158b7504b629a28fa5b40",
+        "shuffles": [
+          {
+            "nonce": 0,
+            "deck": [
+              "n9-0",
+              "t-0",
+              "n7-2",
+              "d-0",
+              "n8-0",
+              "n8-3",
+              "n3-2",
+              "s-1",
+              "n1-2",
+              "n7-0",
+              "n7-3",
+              "n5-3",
+              "z-3",
+              "n4-0",
+              "n8-2",
+              "d-1",
+              "n9-3",
+              "n3-0",
+              "s-0",
+              "m-3",
+              "z-0",
+              "m-2",
+              "n6-3",
+              "r-2",
+              "m-1",
+              "n7-1",
+              "t-1",
+              "n4-2",
+              "n5-0",
+              "n9-2",
+              "z-2",
+              "n5-2",
+              "n5-1",
+              "n6-2",
+              "n9-1",
+              "n6-1",
+              "n2-3",
+              "r-1",
+              "n2-0",
+              "n1-0",
+              "n8-1",
+              "r-0",
+              "n2-2",
+              "n6-0",
+              "n3-1",
+              "m-0",
+              "n3-3",
+              "r-3",
+              "n2-1",
+              "n1-1",
+              "z-1",
+              "n4-3",
+              "n4-1",
+              "n1-3"
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "round": 1,
+        "hashMatches": true,
+        "shuffles": [
+          {
+            "nonce": 0,
+            "ok": false
+          }
+        ],
+        "ok": false
+      }
+    },
+    {
+      "name": "A revealed seed that does not match its hash",
+      "proof": {
+        "matchId": "0192f000-0000-7000-8000-000000000001",
+        "round": 3,
+        "serverSeed": "2af4ac5e14c71b0a188aee5d4f35ac149737c543990d696e1c34a64c699ef572",
+        "serverSeedHash": "1fc168b8908dfa869c5b3e7b6dc4d0e0ae80e766c94f30d21716c8c0771f5390",
+        "shuffles": [
+          {
+            "nonce": 0,
+            "deck": ["a", "b", "c"]
+          }
+        ]
+      },
+      "expected": {
+        "round": 3,
+        "hashMatches": false,
+        "shuffles": [
+          {
+            "nonce": 0,
+            "ok": true
+          }
+        ],
+        "ok": false
+      }
+    }
+  ]
+}

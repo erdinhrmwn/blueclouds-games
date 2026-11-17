@@ -1,4 +1,4 @@
-import { type Avatar, NO_AVATAR } from 'server/games/shared/avatars'
+import { type Avatar, NO_AVATAR } from 'contracts/avatars'
 import {
   fetchCoins,
   fetchPlayToken,

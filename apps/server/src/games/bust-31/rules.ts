@@ -1,17 +1,22 @@
 // "Bust 31": pure game rules, no Rivet. Every function returns a new state
 // or throws RuleError, so the actor can forward the message to the player.
-import { type Avatar, NO_AVATAR } from '../shared/avatars'
-import { nextIndex, type Rng, RuleError, SEATS, seatPlayer, shuffle } from '../shared/table'
+import { type Avatar, NO_AVATAR } from 'contracts/avatars'
+import {
+  type Card,
+  DEAL,
+  type GameEvent,
+  HAND_SIZE,
+  LIMIT,
+  MAX_PLAYERS,
+  MIN_PLAYERS,
+  type PublicView,
+  START_LIVES,
+} from 'contracts/rooms/bust-31'
+import type { TurnClock } from 'contracts/rooms/room'
+import { nextIndex, type Rng, RuleError, seatPlayer, shuffle } from '../shared/table'
 
-export const LIMIT = 31
-export const HAND_SIZE = 3
-export const START_LIVES = 3
-export const MIN_PLAYERS = 2
-export const MAX_PLAYERS = SEATS
 /** How long a human has to play before a card is played for them. */
 export const TURN_MS = 20_000
-/** Dealing animation timing, shared so the server holds the first turn of a round until it ends. */
-export const DEAL = { stepMs: 80, flightMs: 400, afterBustMs: 1300 }
 const MINUS_VALUE = 5
 /** A Ten sets the total to this, whatever it was. */
 export const TEN_TOTAL = 10
@@ -24,10 +29,7 @@ const HIGHEST_NUMBER = 9
 /** Extra wait after the deal animation, so the first turn never starts mid-flight. */
 const DEAL_SETTLE_MS = 100
 
-export type CardKind = 'number' | 'zero' | 'minus' | 'reverse' | 'swap' | 'ten' | 'double'
-export type Card = { id: string; kind: CardKind; value: number }
-
-export type Player = {
+export interface Player {
   id: string
   name: string
   lives: number
@@ -41,29 +43,7 @@ export type Player = {
   avatar?: Avatar
 }
 
-export type GameEvent =
-  | { type: 'joined'; playerId: string }
-  | { type: 'started' }
-  | {
-      type: 'played'
-      playerId: string
-      card: Card
-      total: number
-      /** Swap: the player who got the swapper's hand (and gave theirs). */
-      swappedWith?: string
-      auto?: boolean
-    }
-  | {
-      type: 'bust'
-      playerId: string
-      card: Card
-      total: number
-      eliminated: boolean
-      auto?: boolean
-    }
-  | { type: 'finished'; winnerId: string }
-
-export type Game = {
+export interface Game {
   phase: 'lobby' | 'playing' | 'finished'
   hostId: string | null
   players: Player[]
@@ -350,7 +330,7 @@ const nextAlive = (players: Player[], from: number, direction: 1 | -1) =>
  * What every player may see: no hands, no deck order.
  * `turn` is relative (ms left, full length) so clients with a wrong clock still count down correctly.
  */
-export function publicView(game: Game, turn: { left: number; total: number } | null = null) {
+export function publicView(game: Game, turn: TurnClock | null = null): PublicView {
   return {
     phase: game.phase,
     hostId: game.hostId,
@@ -381,8 +361,6 @@ export function publicView(game: Game, turn: { left: number; total: number } | n
     turn,
   }
 }
-
-export type PublicView = ReturnType<typeof publicView>
 
 /**
  * How long the first turn of a fresh round waits for the dealing animation

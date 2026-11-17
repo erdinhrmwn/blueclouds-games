@@ -1,9 +1,7 @@
 // Pure table rules every game shares: seats, host, shuffling. No Rivet here.
 
-import type { Avatar } from './avatars'
-
-/** Every game has a table of 6 fixed chairs around the dealer. */
-export const SEATS = 6
+import type { Avatar } from 'contracts/avatars'
+import { SEATS } from 'contracts/rooms/room'
 
 /**
  * Shuffles a deck for a round (being dealt or played), which is part of its client seed. Injected: a room

@@ -1,3 +1,4 @@
+import type { Card } from 'contracts/rooms/bust-31'
 import {
   type LogEntry,
   type LogEvent,
@@ -9,7 +10,7 @@ import {
   type MatchState as SharedMatch,
 } from '../shared/match'
 import type { RoundResult } from '../shared/rounds'
-import type { Card, Game, Player } from './rules'
+import type { Game, Player } from './rules'
 
 /** Bump when a rule change makes old results incomparable to new ones. */
 /** 2: Swap, Ten and Double joined the deck. */

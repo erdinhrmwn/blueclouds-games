@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Card } from 'server/games/cloudburst/rules'
+  import type { Card } from 'contracts/rooms/cloudburst'
   import CloudCard from './CloudCard.svelte'
 
   /** A small fan of sample cards: the game's picture on its home page and the landing page. */

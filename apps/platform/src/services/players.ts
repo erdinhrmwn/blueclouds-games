@@ -1,49 +1,10 @@
 import type { SQL } from 'bun'
+import type { Avatar } from 'contracts/avatars'
 import { ApiError } from '../lib/http'
 import type { Signer } from '../lib/play-tokens'
 import { hashSecret, newSecret, SECRET_PATTERN } from '../lib/secrets'
 import { grantSignupBonus } from './coins'
 import { deleteGuestIfUnused } from './guests'
-
-/** Preset avatar names, as players.avatar_color / avatar_icon allow (apps/server/src/games/shared/avatars.ts). */
-export const AVATAR_COLORS = [
-  'rain',
-  'navy',
-  'wind',
-  'felt',
-  'teal',
-  'slate',
-  'storm',
-  'rose',
-  'oxblood',
-  'ember',
-  'sun',
-  'brass',
-] as const
-export const AVATAR_ICONS = [
-  'cloud',
-  'sun',
-  'moon',
-  'star',
-  'bolt',
-  'drop',
-  'snow',
-  'rainbow',
-  'leaf',
-  'flame',
-  'kite',
-  'crown',
-  'chip',
-  'die',
-  'gem',
-  'anchor',
-] as const
-
-/** Null fields are not picked yet: the game shows a colour from the player id and the initial. */
-export type Avatar = {
-  color: (typeof AVATAR_COLORS)[number] | null
-  icon: (typeof AVATAR_ICONS)[number] | null
-}
 
 /** A guest has a generated `guest_…` username and no password: it exists only in the browser that holds its secret. */
 export type Player = {

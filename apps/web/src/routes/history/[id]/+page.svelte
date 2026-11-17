@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { RoundCheck } from 'server/games/shared/fairness'
+  import type { RoundCheck } from 'contracts/fairness/fairness'
   import RoundDetail from '#lib/components/RoundDetail.svelte'
   import { gameBySlug } from '#lib/games/catalog.ts'
   import { type Round, roundSummary, verifyRound } from '#lib/rounds.ts'

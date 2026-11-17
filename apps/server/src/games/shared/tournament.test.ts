@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, mock, setSystemTime, test } from 'bun:test'
-import { NO_AVATAR } from './avatars'
+import { NO_AVATAR } from 'contracts/avatars'
 
 // The platform calls are replaced: these tests are about when a tournament table starts or gives up.
 const marked: string[] = []

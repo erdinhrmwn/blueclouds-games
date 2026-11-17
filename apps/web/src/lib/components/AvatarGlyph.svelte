@@ -1,7 +1,7 @@
 <svelte:options namespace="svg" />
 
 <script lang="ts">
-  import type { AvatarIcon } from 'server/games/shared/avatars'
+  import type { AvatarIcon } from 'contracts/avatars'
 
   /**
    * A preset avatar icon (FigCraft page "Brand · Avatars") on a 24 grid, in currentColor. Inner details

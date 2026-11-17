@@ -1,5 +1,13 @@
+import {
+  type Card,
+  fits,
+  isWild,
+  type PlayInput,
+  SUITS,
+  type Suit,
+} from 'contracts/rooms/cloudburst'
 import { nextIndex } from '../shared/table'
-import { type Card, fits, type Game, isWild, type PlayInput, SUITS, type Suit } from './rules'
+import type { Game } from './rules'
 
 export type BotMove = { type: 'play'; input: PlayInput } | { type: 'draw' } | { type: 'pass' }
 
