@@ -1,26 +1,26 @@
-import { PUBLIC_RIVET_ENDPOINT } from '$app/env/public';
-import { createClient } from 'rivetkit/client';
-import type { registry } from 'server';
+import { createClient } from 'rivetkit/client'
+import type { registry } from 'server'
+import { PUBLIC_RIVET_ENDPOINT } from '$app/env/public'
 
-type RoomAccess = { actorId: string; token: string };
+type RoomAccess = { actorId: string; token: string }
 
 /** The table exists for someone else, or not at all (a private table without an invite, another tournament's table). */
 export class RoomRefused extends Error {}
 
 async function roomAccess(game: string, code: string): Promise<RoomAccess> {
-	const url = `/api/${encodeURIComponent(game)}/rooms/${encodeURIComponent(code)}/token`;
-	const res = await fetch(url, { method: 'POST', cache: 'no-store' });
+  const url = `/api/${encodeURIComponent(game)}/rooms/${encodeURIComponent(code)}/token`
+  const res = await fetch(url, { method: 'POST', cache: 'no-store' })
 
-	if (!res.ok) {
-		// Our route answers { error: { message } } for known cases (unknown code, no name yet).
-		const body = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
-		const text = body?.error?.message ?? 'Could not reach the game server. Try again.';
+  if (!res.ok) {
+    // Our route answers { error: { message } } for known cases (unknown code, no name yet).
+    const body = (await res.json().catch(() => null)) as { error?: { message?: string } } | null
+    const text = body?.error?.message ?? 'Could not reach the game server. Try again.'
 
-		const refused = res.status === 403 || res.status === 404;
-		throw refused ? new RoomRefused(text) : new Error(text);
-	}
+    const refused = res.status === 403 || res.status === 404
+    throw refused ? new RoomRefused(text) : new Error(text)
+  }
 
-	return (await res.json()) as RoomAccess;
+  return (await res.json()) as RoomAccess
 }
 
 /**
@@ -28,21 +28,21 @@ async function roomAccess(game: string, code: string): Promise<RoomAccess> {
  * that room's actor; the engine's admin token never reaches the browser.
  */
 export async function roomClient(game: string, code: string) {
-	const first = await roomAccess(game, code);
+  const first = await roomAccess(game, code)
 
-	// The first token is used once; every later one is fetched fresh.
-	let unused: string | null = first.token;
-	const getToken = async () => {
-		const token = unused ?? (await roomAccess(game, code)).token;
-		unused = null;
-		return token;
-	};
+  // The first token is used once; every later one is fetched fresh.
+  let unused: string | null = first.token
+  const getToken = async () => {
+    const token = unused ?? (await roomAccess(game, code)).token
+    unused = null
+    return token
+  }
 
-	// devtools off: the local engine does not serve the devtools bundle, which only adds a 404.
-	const client = createClient<typeof registry>({
-		endpoint: PUBLIC_RIVET_ENDPOINT,
-		devtools: false,
-		getToken
-	});
-	return { client, actorId: first.actorId };
+  // devtools off: the local engine does not serve the devtools bundle, which only adds a 404.
+  const client = createClient<typeof registry>({
+    endpoint: PUBLIC_RIVET_ENDPOINT,
+    devtools: false,
+    getToken,
+  })
+  return { client, actorId: first.actorId }
 }

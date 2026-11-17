@@ -1,252 +1,252 @@
 <script lang="ts" generics="R extends RoomConnection<BaseView, unknown>">
-	import Icon from '#lib/components/Icon.svelte';
-	import { goto } from '$app/navigation';
-	import type { GameEntry } from '#lib/games/catalog.ts';
-	import { player } from '#lib/player.svelte.ts';
-	import type { BaseView, RoomConnection } from '#lib/rivet/room.svelte.ts';
-	import { fetchTournaments, type LiveTournament } from '#lib/platform.ts';
-	import { FORMATS } from '#lib/tournament-formats.ts';
-	import type { Snippet } from 'svelte';
-	import FairPlay from './FairPlay.svelte';
-	import Lobby from './Lobby.svelte';
-	import Marquee from './Marquee.svelte';
-	import Stage from './Stage.svelte';
-	import TournamentLiveDialog from './TournamentLiveDialog.svelte';
+  import Icon from '#lib/components/Icon.svelte'
+  import { goto } from '$app/navigation'
+  import type { GameEntry } from '#lib/games/catalog.ts'
+  import { player } from '#lib/player.svelte.ts'
+  import type { BaseView, RoomConnection } from '#lib/rivet/room.svelte.ts'
+  import { fetchTournaments, type LiveTournament } from '#lib/platform.ts'
+  import { FORMATS } from '#lib/tournament-formats.ts'
+  import type { Snippet } from 'svelte'
+  import FairPlay from './FairPlay.svelte'
+  import Lobby from './Lobby.svelte'
+  import Marquee from './Marquee.svelte'
+  import Stage from './Stage.svelte'
+  import TournamentLiveDialog from './TournamentLiveDialog.svelte'
 
-	/** Everything around a game's table: connecting, the lobby, reconnect and error lines, leaving. */
-	let {
-		game,
-		code,
-		connect,
-		table
-	}: { game: GameEntry; code: string; connect: () => R; table: Snippet<[R]> } = $props();
+  /** Everything around a game's table: connecting, the lobby, reconnect and error lines, leaving. */
+  let {
+    game,
+    code,
+    connect,
+    table,
+  }: { game: GameEntry; code: string; connect: () => R; table: Snippet<[R]> } = $props()
 
-	let room = $state<R | null>(null);
+  let room = $state<R | null>(null)
 
-	// Connect once there is a name; someone opening an invite link first fills in the name dialog.
-	// The name is read once: changing it later applies to the next table you join.
-	let connected = false;
-	$effect(() => {
-		if (!player.name || connected) {
-			return;
-		}
+  // Connect once there is a name; someone opening an invite link first fills in the name dialog.
+  // The name is read once: changing it later applies to the next table you join.
+  let connected = false
+  $effect(() => {
+    if (!player.name || connected) {
+      return
+    }
 
-		connected = true;
-		room = connect();
-	});
+    connected = true
+    room = connect()
+  })
 
-	$effect(() => {
-		return () => void room?.dispose();
-	});
+  $effect(() => {
+    return () => void room?.dispose()
+  })
 
-	// Hide the site header at the table: the stage takes the whole screen.
-	$effect(() => {
-		player.playing = true;
+  // Hide the site header at the table: the stage takes the whole screen.
+  $effect(() => {
+    player.playing = true
 
-		return () => {
-			player.playing = false;
-		};
-	});
+    return () => {
+      player.playing = false
+    }
+  })
 
-	/** A tournament table goes by its tournament's name; any other table by its host's. */
-	const roomName = $derived.by(() => {
-		const view = room?.view;
-		if (!view) {
-			return 'Table';
-		}
+  /** A tournament table goes by its tournament's name; any other table by its host's. */
+  const roomName = $derived.by(() => {
+    const view = room?.view
+    if (!view) {
+      return 'Table'
+    }
 
-		if (view.tournament) {
-			return view.tournament.name;
-		}
+    if (view.tournament) {
+      return view.tournament.name
+    }
 
-		if (view.roomName) {
-			return view.roomName;
-		}
+    if (view.roomName) {
+      return view.roomName
+    }
 
-		const host = view.players.find((player) => player.id === view.hostId);
-		return host ? `${host.name}’s table` : 'Table';
-	});
+    const host = view.players.find((player) => player.id === view.hostId)
+    return host ? `${host.name}’s table` : 'Table'
+  })
 
-	/** "4 players", "1 player". */
-	const playersText = (count: number) => (count === 1 ? '1 player' : `${count} players`);
+  /** "4 players", "1 player". */
+  const playersText = (count: number) => (count === 1 ? '1 player' : `${count} players`)
 
-	/**
-	 * The sign's one line, only what a player at the table needs. A tournament table: format, stage and entrants (the
-	 * seats are on the felt, and nobody is invited to one, so no code). Any other table: round, seats and its code.
-	 */
-	const facts = $derived.by(() => {
-		const view = room?.view;
-		if (!view) {
-			return [];
-		}
+  /**
+   * The sign's one line, only what a player at the table needs. A tournament table: format, stage and entrants (the
+   * seats are on the felt, and nobody is invited to one, so no code). Any other table: round, seats and its code.
+   */
+  const facts = $derived.by(() => {
+    const view = room?.view
+    if (!view) {
+      return []
+    }
 
-		const tournament = view.tournament;
-		if (tournament) {
-			const stage = tournament.rounds
-				? `Stage ${tournament.round} of ${tournament.rounds}`
-				: `Stage ${tournament.round}`;
-			return [
-				tournament.format ? FORMATS[tournament.format].label : 'Tournament',
-				...(tournament.round ? [stage] : []),
-				...(tournament.registered ? [playersText(tournament.registered)] : [])
-			];
-		}
+    const tournament = view.tournament
+    if (tournament) {
+      const stage = tournament.rounds
+        ? `Stage ${tournament.round} of ${tournament.rounds}`
+        : `Stage ${tournament.round}`
+      return [
+        tournament.format ? FORMATS[tournament.format].label : 'Tournament',
+        ...(tournament.round ? [stage] : []),
+        ...(tournament.registered ? [playersText(tournament.registered)] : []),
+      ]
+    }
 
-		return [
-			...(view.phase === 'lobby' ? [] : [`Round ${view.round}`]),
-			`${view.players.length}/${game.maxPlayers} players`,
-			code
-		];
-	});
+    return [
+      ...(view.phase === 'lobby' ? [] : [`Round ${view.round}`]),
+      `${view.players.length}/${game.maxPlayers} players`,
+      code,
+    ]
+  })
 
-	/** The tournament's standings, opened from the sign; read from the lobby's list when asked for. */
-	const STANDINGS_TICK_MS = 1_000;
-	let standingsOpen = $state(false);
-	let standingsOf = $state<LiveTournament | null>(null);
-	let standingsNow = $state(Date.now());
+  /** The tournament's standings, opened from the sign; read from the lobby's list when asked for. */
+  const STANDINGS_TICK_MS = 1_000
+  let standingsOpen = $state(false)
+  let standingsOf = $state<LiveTournament | null>(null)
+  let standingsNow = $state(Date.now())
 
-	async function showStandings() {
-		const id = room?.view?.tournament?.id;
-		if (!id) {
-			return;
-		}
+  async function showStandings() {
+    const id = room?.view?.tournament?.id
+    if (!id) {
+      return
+    }
 
-		try {
-			const { live } = await fetchTournaments(game.slug);
-			standingsOf = live.find((entry) => entry.id === id) ?? null;
-		} catch {
-			standingsOf = null;
-		}
+    try {
+      const { live } = await fetchTournaments(game.slug)
+      standingsOf = live.find((entry) => entry.id === id) ?? null
+    } catch {
+      standingsOf = null
+    }
 
-		standingsNow = Date.now();
-		standingsOpen = true;
-	}
+    standingsNow = Date.now()
+    standingsOpen = true
+  }
 
-	$effect(() => {
-		if (!standingsOpen) {
-			return;
-		}
+  $effect(() => {
+    if (!standingsOpen) {
+      return
+    }
 
-		const tick = setInterval(() => {
-			standingsNow = Date.now();
-		}, STANDINGS_TICK_MS);
+    const tick = setInterval(() => {
+      standingsNow = Date.now()
+    }, STANDINGS_TICK_MS)
 
-		return () => clearInterval(tick);
-	});
+    return () => clearInterval(tick)
+  })
 
-	async function leave() {
-		await room?.leave();
-		goto(`/${game.slug}`);
-	}
+  async function leave() {
+    await room?.leave()
+    goto(`/${game.slug}`)
+  }
 </script>
 
 <TournamentLiveDialog
-	bind:open={standingsOpen}
-	tournament={standingsOf}
-	game={game.slug}
-	back={game.back}
-	now={standingsNow}
+  bind:open={standingsOpen}
+  tournament={standingsOf}
+  game={game.slug}
+  back={game.back}
+  now={standingsNow}
 />
 
 <Stage>
-	<!-- The room's sign, a brass-framed plaque: its name, then one line of what matters. On the wide stage it sits in
+  <!-- The room's sign, a brass-framed plaque: its name, then one line of what matters. On the wide stage it sits in
 		 the top left corner on one line, leaving the head of the table to the dealer; the buttons take the other corner. -->
-	<header class="flex shrink-0 items-center gap-2 py-2">
-		<div
-			class="placard flex min-w-0 flex-1 flex-col rounded-xl px-3 py-1.5 text-center wide:max-w-[32rem] wide:flex-none wide:flex-row wide:items-baseline wide:gap-3 wide:px-4 wide:py-2.5 wide:text-left"
-		>
-			<h1
-				class="min-w-0 font-display text-base leading-tight font-bold text-paper wide:max-w-56 wide:shrink-0 wide:text-lg"
-			>
-				<span class="sr-only">{game.name},&nbsp;</span><Marquee text={roomName} />
-			</h1>
-			<p
-				class="mt-0.5 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-xs text-paper/70 wide:mt-0 wide:flex-nowrap wide:justify-start wide:text-[13px] wide:whitespace-nowrap"
-			>
-				{#each facts as fact, index (index)}
-					<!-- A tournament's entrant count waits for its Standings on the tall stage, so the sign stays two lines. -->
-					{@const spare = index === 2 && !!room?.view?.tournament}
-					{#if index}
-						<span class="text-paper/30 {spare ? 'tall:hidden' : ''}" aria-hidden="true">·</span>
-					{/if}
-					<span
-						class="tabular-nums {index === 0 && room?.view?.tournament
-							? 'font-semibold text-brass'
-							: ''} {spare ? 'tall:hidden' : ''}">{fact}</span
-					>
-				{/each}
-				{#if room?.view?.tournament?.id}
-					<button
-						class="relative ml-1 rounded-full bg-black/40 px-2.5 py-0.5 font-semibold text-brass after:absolute after:-inset-x-1 after:-inset-y-3 hover:bg-paper/10"
-						onclick={showStandings}>Standings</button
-					>
-				{/if}
-			</p>
-		</div>
-		<div class="flex shrink-0 items-center justify-end gap-2 wide:ml-auto">
-			{#if room?.view}
-				{#if room.status !== 'refused'}
-					<FairPlay {room} game={game.slug} />
-				{/if}
-				<button
-					class="btn-ghost size-10 shrink-0 p-0 wide:size-11"
-					onclick={leave}
-					aria-label="Leave table"
-					title="Leave table"
-				>
-					<Icon name="leave" class="size-5" />
-				</button>
-			{/if}
-		</div>
-	</header>
+  <header class="flex shrink-0 items-center gap-2 py-2">
+    <div
+      class="placard flex min-w-0 flex-1 flex-col rounded-xl px-3 py-1.5 text-center wide:max-w-[32rem] wide:flex-none wide:flex-row wide:items-baseline wide:gap-3 wide:px-4 wide:py-2.5 wide:text-left"
+    >
+      <h1
+        class="min-w-0 font-display text-base leading-tight font-bold text-paper wide:max-w-56 wide:shrink-0 wide:text-lg"
+      >
+        <span class="sr-only">{game.name},&nbsp;</span><Marquee text={roomName} />
+      </h1>
+      <p
+        class="mt-0.5 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-xs text-paper/70 wide:mt-0 wide:flex-nowrap wide:justify-start wide:text-[13px] wide:whitespace-nowrap"
+      >
+        {#each facts as fact, index (index)}
+          <!-- A tournament's entrant count waits for its Standings on the tall stage, so the sign stays two lines. -->
+          {@const spare = index === 2 && !!room?.view?.tournament}
+          {#if index}
+            <span class="text-paper/30 {spare ? 'tall:hidden' : ''}" aria-hidden="true">·</span>
+          {/if}
+          <span
+            class="tabular-nums {index === 0 && room?.view?.tournament
+              ? 'font-semibold text-brass'
+              : ''} {spare ? 'tall:hidden' : ''}">{fact}</span
+          >
+        {/each}
+        {#if room?.view?.tournament?.id}
+          <button
+            class="relative ml-1 rounded-full bg-black/40 px-2.5 py-0.5 font-semibold text-brass after:absolute after:-inset-x-1 after:-inset-y-3 hover:bg-paper/10"
+            onclick={showStandings}>Standings</button
+          >
+        {/if}
+      </p>
+    </div>
+    <div class="flex shrink-0 items-center justify-end gap-2 wide:ml-auto">
+      {#if room?.view}
+        {#if room.status !== 'refused'}
+          <FairPlay {room} game={game.slug} />
+        {/if}
+        <button
+          class="btn-ghost size-10 shrink-0 p-0 wide:size-11"
+          onclick={leave}
+          aria-label="Leave table"
+          title="Leave table"
+        >
+          <Icon name="leave" class="size-5" />
+        </button>
+      {/if}
+    </div>
+  </header>
 
-	{#if room?.status === 'reconnecting'}
-		<p
-			class="shrink-0 rounded-md border border-brass/40 bg-brass/10 px-3 py-2 text-center text-sm text-brass"
-			role="status"
-		>
-			Connection lost, reconnecting…
-		</p>
-	{/if}
+  {#if room?.status === 'reconnecting'}
+    <p
+      class="shrink-0 rounded-md border border-brass/40 bg-brass/10 px-3 py-2 text-center text-sm text-brass"
+      role="status"
+    >
+      Connection lost, reconnecting…
+    </p>
+  {/if}
 
-	<!-- Everything under the sign shares what is left of the stage: the felt grows, the rest keeps its height. -->
-	<div class="flex min-h-0 flex-1 flex-col">
-		{#if room?.status === 'refused'}
-			<p class="pt-24 text-center font-display text-lg text-paper/75 italic">
-				You can't join this table.
-			</p>
-			<p class="mt-4 text-center">
-				<a class="btn-ghost" href="/{game.slug}">Back to {game.name}</a>
-			</p>
-		{:else if !room || !room.view}
-			<p class="pt-24 text-center font-display text-lg text-paper/75 italic" aria-live="polite">
-				{room?.status === 'error' ? 'Could not reach the table.' : 'Setting up the table…'}
-			</p>
-			{#if room?.status === 'error'}
-				<p class="mt-4 text-center">
-					<button class="btn-ghost" onclick={() => location.reload()}>Try again</button>
-				</p>
-			{/if}
-		{:else if room.view.phase === 'lobby'}
-			<Lobby {room} {code} minPlayers={game.minPlayers} seats={game.maxPlayers} />
-		{:else}
-			{@render table(room)}
-		{/if}
-	</div>
+  <!-- Everything under the sign shares what is left of the stage: the felt grows, the rest keeps its height. -->
+  <div class="flex min-h-0 flex-1 flex-col">
+    {#if room?.status === 'refused'}
+      <p class="pt-24 text-center font-display text-lg text-paper/75 italic">
+        You can't join this table.
+      </p>
+      <p class="mt-4 text-center">
+        <a class="btn-ghost" href="/{game.slug}">Back to {game.name}</a>
+      </p>
+    {:else if !room || !room.view}
+      <p class="pt-24 text-center font-display text-lg text-paper/75 italic" aria-live="polite">
+        {room?.status === 'error' ? 'Could not reach the table.' : 'Setting up the table…'}
+      </p>
+      {#if room?.status === 'error'}
+        <p class="mt-4 text-center">
+          <button class="btn-ghost" onclick={() => location.reload()}>Try again</button>
+        </p>
+      {/if}
+    {:else if room.view.phase === 'lobby'}
+      <Lobby {room} {code} minPlayers={game.minPlayers} seats={game.maxPlayers} />
+    {:else}
+      {@render table(room)}
+    {/if}
+  </div>
 
-	{#if room?.error}
-		<p class="shrink-0 pt-2 text-center text-sm text-ember" role="alert">{room.error}</p>
-	{/if}
+  {#if room?.error}
+    <p class="shrink-0 pt-2 text-center text-sm text-ember" role="alert">{room.error}</p>
+  {/if}
 </Stage>
 
 <style>
-	.placard {
-		position: relative;
-		background: #1c1510;
-		box-shadow:
-			inset 0 0 0 1.5px var(--color-brass),
-			inset 0 0 0 4px #1c1510,
-			inset 0 0 0 5px rgb(210 165 76 / 0.22),
-			0 8px 18px rgb(0 0 0 / 0.4);
-	}
+  .placard {
+    position: relative;
+    background: #1c1510;
+    box-shadow:
+      inset 0 0 0 1.5px var(--color-brass),
+      inset 0 0 0 4px #1c1510,
+      inset 0 0 0 5px rgb(210 165 76 / 0.22),
+      0 8px 18px rgb(0 0 0 / 0.4);
+  }
 </style>

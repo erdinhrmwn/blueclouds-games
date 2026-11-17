@@ -1,665 +1,665 @@
 <script lang="ts">
-	import Icon from '#lib/components/Icon.svelte';
-	import { ask } from '#lib/confirm.svelte.ts';
-	import {
-		fetchTournaments,
-		joinTournament,
-		leaveTournament,
-		type LiveTournament,
-		type Tournament
-	} from '#lib/platform.ts';
-	import { player, refreshCoins } from '#lib/player.svelte.ts';
-	import { enterTable } from '#lib/tables.ts';
-	import { gameBySlug } from '#lib/games/catalog.ts';
-	import {
-		coins,
-		FORMATS,
-		ordinal,
-		pointsText,
-		ranksByPoints,
-		startsIn
-	} from '#lib/tournament-formats.ts';
-	import { day, when } from '#lib/when.ts';
-	import { prefersReducedMotion } from 'svelte/motion';
-	import PrizeFee from './PrizeFee.svelte';
-	import SignUpBar from './SignUpBar.svelte';
-	import TournamentDialog from './TournamentDialog.svelte';
-	import TournamentFelt from './TournamentFelt.svelte';
-	import TournamentLiveDialog from './TournamentLiveDialog.svelte';
-
-	/**
-	 * The tournaments of every game in `games` as a row of cards that scrolls sideways: the ones playing (with the
-	 * player's place and table), the ones open for sign-up, then the ones that finished in the last day. `game` shows
-	 * only that game's; `counts` reports how many each game has, whatever is shown.
-	 */
-	let {
-		games,
-		game = null,
-		counts = $bindable({})
-	}: {
-		games: string[];
-		game?: string | null;
-		counts?: Record<string, number>;
-	} = $props();
-
-	/** A tournament with the game it is played in. */
-	type OfGame<T> = T & { game: string };
-
-	/** A game's own card back, shown on the felt at the top of its tournaments' cards. */
-	const backOf = (slug: string) => gameBySlug(slug)?.back ?? '';
-	const nameOf = (slug: string) => gameBySlug(slug)?.name ?? slug;
-
-	let live = $state<OfGame<LiveTournament>[]>([]);
-	let open = $state<OfGame<Tournament>[]>([]);
-	const picked = <T extends { game: string }>(list: T[]) =>
-		game ? list.filter((tournament) => tournament.game === game) : list;
-	const shownLive = $derived(picked(live));
-	const shownOpen = $derived(picked(open));
-	const running = $derived(shownLive.filter((tournament) => !tournament.endedAt));
-	const finished = $derived(shownLive.filter((tournament) => tournament.endedAt));
-	const gameName = $derived(game ? nameOf(game) : '');
-
-	/** The countdowns on running cards tick while any is waiting for its round. */
-	const TICK_MS = 15_000;
-	let now = $state(Date.now());
-
-	$effect(() => {
-		if (running.length === 0) {
-			return;
-		}
-
-		const timer = setInterval(() => {
-			now = Date.now();
-		}, TICK_MS);
-
-		return () => clearInterval(timer);
-	});
-	let busy = $state<string | null>(null);
-	let error = $state<string | null>(null);
-
-	let scroller = $state<HTMLUListElement>();
-	let canGoBack = $state(false);
-	let canGoForward = $state(false);
-
-	/** Slack for rounding, so a row scrolled to its end doesn't still offer an arrow. */
-	const EDGE_PX = 4;
-	/** One arrow press moves this share of the visible row, so the last card stays in view as a cue. */
-	const PAGE_SHARE = 0.9;
-
-	function updateArrows() {
-		if (!scroller) {
-			return;
-		}
-
-		const { scrollLeft, clientWidth, scrollWidth } = scroller;
-		canGoBack = scrollLeft > EDGE_PX;
-		canGoForward = scrollLeft + clientWidth < scrollWidth - EDGE_PX;
-	}
-
-	function page(direction: 1 | -1) {
-		if (!scroller) {
-			return;
-		}
-
-		const behavior = prefersReducedMotion.current ? 'auto' : 'smooth';
-		scroller.scrollBy({ left: direction * scroller.clientWidth * PAGE_SHARE, behavior });
-	}
-
-	// The cards change when the lists reload or another game is picked; the arrows follow.
-	$effect(() => {
-		void shownLive.length;
-		void shownOpen.length;
-		updateArrows();
-	});
-
-	/** One game's tournaments, each marked with the game. */
-	async function loadGame(slug: string) {
-		const result = await fetchTournaments(slug);
-		const tag = <T,>(tournament: T) => ({ ...tournament, game: slug });
-
-		return { open: result.tournaments.map(tag), live: result.live.map(tag) };
-	}
-
-	async function load() {
-		const results = await Promise.allSettled(games.map((slug) => loadGame(slug)));
-
-		// Nothing answered (a network blip): keep the cards already shown until the next reload.
-		if (results.every((result) => result.status === 'rejected')) {
-			return;
-		}
-
-		const nextOpen: OfGame<Tournament>[] = [];
-		const nextLive: OfGame<LiveTournament>[] = [];
-
-		for (const result of results) {
-			// Tournaments are extra: a game that fails to answer is left out, the rest of the page works on.
-			if (result.status === 'rejected') {
-				continue;
-			}
-
-			nextOpen.push(...result.value.open);
-			nextLive.push(...result.value.live);
-		}
-
-		open = nextOpen;
-		live = nextLive;
-		now = Date.now();
-	}
-
-	$effect(() => {
-		const perGame: Record<string, number> = {};
-
-		for (const tournament of [...live, ...open]) {
-			perGame[tournament.game] = (perGame[tournament.game] ?? 0) + 1;
-		}
-
-		counts = perGame;
-	});
-
-	/** `dot`: the colour of the dot beside the label. The chip itself is always dark, so it reads on any felt. */
-	type Status = { label: string; dot: string };
-
-	const SIGN_UP_OPEN: Status = { label: 'Sign-up open', dot: 'bg-go' };
-	const STARTING_SOON: Status = { label: 'Starting soon', dot: 'bg-brass' };
-	const FULL: Status = { label: 'Sign-up closed', dot: 'bg-ember' };
-
-	const isFull = (tournament: Tournament) =>
-		tournament.maxPlayers !== null && tournament.registered >= tournament.maxPlayers;
-
-	/** A tournament open for sign-up until it fills or sign-up closes; after that it is about to start. */
-	function openStatus(tournament: Tournament): Status {
-		const closesAt = Date.parse(tournament.registrationClosesAt);
-		if (Date.now() >= closesAt) {
-			return STARTING_SOON;
-		}
-
-		if (isFull(tournament)) {
-			return FULL;
-		}
-
-		return SIGN_UP_OPEN;
-	}
-
-	/**
-	 * The card's main button: Leave for a player who is in; Join in brass while sign-up is open, else a quiet outline
-	 * that reads as off.
-	 */
-	function actionOf(tournament: Tournament, status: Status) {
-		const saving = busy === tournament.id;
-
-		if (tournament.joined) {
-			return { label: saving ? 'Saving…' : 'Leave', style: 'btn-ghost', disabled: saving };
-		}
-
-		const affordable = shortBy(tournament) === 0;
-		if (status === SIGN_UP_OPEN && affordable) {
-			return { label: saving ? 'Saving…' : 'Join', style: 'btn-brass', disabled: saving };
-		}
-
-		return {
-			label: 'Join',
-			style: 'btn border border-paper/25 bg-black/20 text-paper',
-			disabled: true
-		};
-	}
-
-	/** The tournament whose Detail dialog is open. */
-	let detailId = $state<string | null>(null);
-	let detailOpen = $state(false);
-	const detail = $derived(open.find((tournament) => tournament.id === detailId) ?? null);
-	const detailStatus = $derived(detail ? openStatus(detail) : SIGN_UP_OPEN);
-
-	function showDetail(tournament: Tournament) {
-		detailId = tournament.id;
-		detailOpen = true;
-	}
-
-	// Reload once the player has a name: a brand-new visitor has no account to sign up with yet.
-	$effect(() => {
-		if (player.ready && player.name) {
-			void load();
-		}
-	});
-
-	/**
-	 * The platform's job runs every minute: it closes sign-up, hands out tables and starts rounds. Reloading this often
-	 * shows a waiting player their table without a page refresh.
-	 */
-	const RELOAD_MS = 30_000;
-
-	$effect(() => {
-		const waiting = open.length > 0 || running.length > 0;
-		if (!waiting || !player.name) {
-			return;
-		}
-
-		const timer = setInterval(() => {
-			void load();
-		}, RELOAD_MS);
-
-		return () => clearInterval(timer);
-	});
-
-	/** Gives up a seat already handed out. The platform keeps the player out of this tournament from then on. */
-	async function withdraw(tournament: LiveTournament) {
-		const { id, name } = tournament;
-		const sure = await ask({
-			title: `Withdraw from ${name}?`,
-			body: 'Your seat is given up and you can’t come back to this tournament.',
-			action: 'Withdraw'
-		});
-		if (!sure) {
-			return;
-		}
-
-		busy = id;
-		error = null;
-
-		try {
-			await leaveTournament(id);
-			await load();
-			void refreshCoins();
-		} catch (err) {
-			error = err instanceof Error ? err.message : 'Something went wrong. Try again.';
-		} finally {
-			busy = null;
-		}
-	}
-
-	/** "Round 2 of 3" for Arena and Swiss; a knockout plays until one is left, so just "Round 2". */
-	function roundLabel(tournament: LiveTournament): string {
-		if (!ranksByPoints(tournament.format)) {
-			return `Stage ${tournament.round}`;
-		}
-
-		return `Stage ${tournament.round} of ${tournament.rounds ?? 3}`;
-	}
-
-	/** The felt's line: when the round starts, or that it is being played. */
-	function roundLine(tournament: LiveTournament): string {
-		if (tournament.roundStarted) {
-			return `Stage ${tournament.round} in play`;
-		}
-
-		return startsIn(tournament.roundStartsAt, now);
-	}
-
-	/** The brass line under the name: where the player stands. */
-	function myLine(tournament: LiveTournament): string | null {
-		const me = tournament.me;
-		if (!me) {
-			return tournament.table ? 'You’re in' : null;
-		}
-
-		if (ranksByPoints(tournament.format)) {
-			return `You’re ${ordinal(me.place)} with ${pointsText(me.points)}`;
-		}
-
-		if (tournament.table) {
-			return `You’re in stage ${tournament.round}`;
-		}
-
-		return `You’re out · ${ordinal(me.place)}`;
-	}
-
-	/** A card row's right side: points, or how far a knockout player got. */
-	function rowNote(tournament: LiveTournament, standing: LiveTournament['top'][number]): string {
-		if (ranksByPoints(tournament.format)) {
-			return `${standing.points} ${standing.points === 1 ? 'pt' : 'pts'}`;
-		}
-
-		return standing.lastRound >= tournament.round ? 'in' : `out in stage ${standing.lastRound}`;
-	}
-
-	const prizeFor = (tournament: LiveTournament, place: number) =>
-		tournament.prizes.find((prize) => prize.place === place);
-
-	/** Whose live Detail is open. */
-	let liveId = $state<string | null>(null);
-	let liveOpen = $state(false);
-	const liveDetail = $derived(live.find((tournament) => tournament.id === liveId) ?? null);
-
-	function showLive(tournament: LiveTournament) {
-		liveId = tournament.id;
-		liveOpen = true;
-	}
-
-	/** Joining with a fee asks first, showing what it costs and what is left. */
-	async function confirmFee(tournament: Tournament): Promise<boolean> {
-		if (tournament.joined || tournament.fee === 0) {
-			return true;
-		}
-
-		const left = player.coins - tournament.fee;
-		return ask({
-			title: `Join ${tournament.name}?`,
-			body: 'You get the fee back if you leave before your table starts.',
-			action: `Join for ${tournament.fee.toLocaleString()}`,
-			tone: 'brass',
-			rows: [
-				{ label: 'Fee', value: coins(tournament.fee) },
-				{ label: 'Your coins', value: coins(player.coins) },
-				{ label: 'Left after joining', value: coins(left), strong: true }
-			]
-		});
-	}
-
-	/** Coins missing to join; 0 when the player can afford it (or it's free, or they're in). */
-	const shortBy = (tournament: Tournament) =>
-		tournament.joined ? 0 : Math.max(tournament.fee - player.coins, 0);
-
-	async function toggle(tournament: Tournament) {
-		const sure = await confirmFee(tournament);
-		if (!sure) {
-			return;
-		}
-
-		busy = tournament.id;
-		error = null;
-
-		try {
-			if (tournament.joined) {
-				await leaveTournament(tournament.id);
-			} else {
-				await joinTournament(tournament.id);
-			}
-
-			await load();
-			void refreshCoins();
-		} catch (err) {
-			error = err instanceof Error ? err.message : 'Something went wrong. Try again.';
-		} finally {
-			busy = null;
-		}
-	}
+  import Icon from '#lib/components/Icon.svelte'
+  import { ask } from '#lib/confirm.svelte.ts'
+  import {
+    fetchTournaments,
+    joinTournament,
+    leaveTournament,
+    type LiveTournament,
+    type Tournament,
+  } from '#lib/platform.ts'
+  import { player, refreshCoins } from '#lib/player.svelte.ts'
+  import { enterTable } from '#lib/tables.ts'
+  import { gameBySlug } from '#lib/games/catalog.ts'
+  import {
+    coins,
+    FORMATS,
+    ordinal,
+    pointsText,
+    ranksByPoints,
+    startsIn,
+  } from '#lib/tournament-formats.ts'
+  import { day, when } from '#lib/when.ts'
+  import { prefersReducedMotion } from 'svelte/motion'
+  import PrizeFee from './PrizeFee.svelte'
+  import SignUpBar from './SignUpBar.svelte'
+  import TournamentDialog from './TournamentDialog.svelte'
+  import TournamentFelt from './TournamentFelt.svelte'
+  import TournamentLiveDialog from './TournamentLiveDialog.svelte'
+
+  /**
+   * The tournaments of every game in `games` as a row of cards that scrolls sideways: the ones playing (with the
+   * player's place and table), the ones open for sign-up, then the ones that finished in the last day. `game` shows
+   * only that game's; `counts` reports how many each game has, whatever is shown.
+   */
+  let {
+    games,
+    game = null,
+    counts = $bindable({}),
+  }: {
+    games: string[]
+    game?: string | null
+    counts?: Record<string, number>
+  } = $props()
+
+  /** A tournament with the game it is played in. */
+  type OfGame<T> = T & { game: string }
+
+  /** A game's own card back, shown on the felt at the top of its tournaments' cards. */
+  const backOf = (slug: string) => gameBySlug(slug)?.back ?? ''
+  const nameOf = (slug: string) => gameBySlug(slug)?.name ?? slug
+
+  let live = $state<OfGame<LiveTournament>[]>([])
+  let open = $state<OfGame<Tournament>[]>([])
+  const picked = <T extends { game: string }>(list: T[]) =>
+    game ? list.filter((tournament) => tournament.game === game) : list
+  const shownLive = $derived(picked(live))
+  const shownOpen = $derived(picked(open))
+  const running = $derived(shownLive.filter((tournament) => !tournament.endedAt))
+  const finished = $derived(shownLive.filter((tournament) => tournament.endedAt))
+  const gameName = $derived(game ? nameOf(game) : '')
+
+  /** The countdowns on running cards tick while any is waiting for its round. */
+  const TICK_MS = 15_000
+  let now = $state(Date.now())
+
+  $effect(() => {
+    if (running.length === 0) {
+      return
+    }
+
+    const timer = setInterval(() => {
+      now = Date.now()
+    }, TICK_MS)
+
+    return () => clearInterval(timer)
+  })
+  let busy = $state<string | null>(null)
+  let error = $state<string | null>(null)
+
+  let scroller = $state<HTMLUListElement>()
+  let canGoBack = $state(false)
+  let canGoForward = $state(false)
+
+  /** Slack for rounding, so a row scrolled to its end doesn't still offer an arrow. */
+  const EDGE_PX = 4
+  /** One arrow press moves this share of the visible row, so the last card stays in view as a cue. */
+  const PAGE_SHARE = 0.9
+
+  function updateArrows() {
+    if (!scroller) {
+      return
+    }
+
+    const { scrollLeft, clientWidth, scrollWidth } = scroller
+    canGoBack = scrollLeft > EDGE_PX
+    canGoForward = scrollLeft + clientWidth < scrollWidth - EDGE_PX
+  }
+
+  function page(direction: 1 | -1) {
+    if (!scroller) {
+      return
+    }
+
+    const behavior = prefersReducedMotion.current ? 'auto' : 'smooth'
+    scroller.scrollBy({ left: direction * scroller.clientWidth * PAGE_SHARE, behavior })
+  }
+
+  // The cards change when the lists reload or another game is picked; the arrows follow.
+  $effect(() => {
+    void shownLive.length
+    void shownOpen.length
+    updateArrows()
+  })
+
+  /** One game's tournaments, each marked with the game. */
+  async function loadGame(slug: string) {
+    const result = await fetchTournaments(slug)
+    const tag = <T,>(tournament: T) => ({ ...tournament, game: slug })
+
+    return { open: result.tournaments.map(tag), live: result.live.map(tag) }
+  }
+
+  async function load() {
+    const results = await Promise.allSettled(games.map((slug) => loadGame(slug)))
+
+    // Nothing answered (a network blip): keep the cards already shown until the next reload.
+    if (results.every((result) => result.status === 'rejected')) {
+      return
+    }
+
+    const nextOpen: OfGame<Tournament>[] = []
+    const nextLive: OfGame<LiveTournament>[] = []
+
+    for (const result of results) {
+      // Tournaments are extra: a game that fails to answer is left out, the rest of the page works on.
+      if (result.status === 'rejected') {
+        continue
+      }
+
+      nextOpen.push(...result.value.open)
+      nextLive.push(...result.value.live)
+    }
+
+    open = nextOpen
+    live = nextLive
+    now = Date.now()
+  }
+
+  $effect(() => {
+    const perGame: Record<string, number> = {}
+
+    for (const tournament of [...live, ...open]) {
+      perGame[tournament.game] = (perGame[tournament.game] ?? 0) + 1
+    }
+
+    counts = perGame
+  })
+
+  /** `dot`: the colour of the dot beside the label. The chip itself is always dark, so it reads on any felt. */
+  type Status = { label: string; dot: string }
+
+  const SIGN_UP_OPEN: Status = { label: 'Sign-up open', dot: 'bg-go' }
+  const STARTING_SOON: Status = { label: 'Starting soon', dot: 'bg-brass' }
+  const FULL: Status = { label: 'Sign-up closed', dot: 'bg-ember' }
+
+  const isFull = (tournament: Tournament) =>
+    tournament.maxPlayers !== null && tournament.registered >= tournament.maxPlayers
+
+  /** A tournament open for sign-up until it fills or sign-up closes; after that it is about to start. */
+  function openStatus(tournament: Tournament): Status {
+    const closesAt = Date.parse(tournament.registrationClosesAt)
+    if (Date.now() >= closesAt) {
+      return STARTING_SOON
+    }
+
+    if (isFull(tournament)) {
+      return FULL
+    }
+
+    return SIGN_UP_OPEN
+  }
+
+  /**
+   * The card's main button: Leave for a player who is in; Join in brass while sign-up is open, else a quiet outline
+   * that reads as off.
+   */
+  function actionOf(tournament: Tournament, status: Status) {
+    const saving = busy === tournament.id
+
+    if (tournament.joined) {
+      return { label: saving ? 'Saving…' : 'Leave', style: 'btn-ghost', disabled: saving }
+    }
+
+    const affordable = shortBy(tournament) === 0
+    if (status === SIGN_UP_OPEN && affordable) {
+      return { label: saving ? 'Saving…' : 'Join', style: 'btn-brass', disabled: saving }
+    }
+
+    return {
+      label: 'Join',
+      style: 'btn border border-paper/25 bg-black/20 text-paper',
+      disabled: true,
+    }
+  }
+
+  /** The tournament whose Detail dialog is open. */
+  let detailId = $state<string | null>(null)
+  let detailOpen = $state(false)
+  const detail = $derived(open.find((tournament) => tournament.id === detailId) ?? null)
+  const detailStatus = $derived(detail ? openStatus(detail) : SIGN_UP_OPEN)
+
+  function showDetail(tournament: Tournament) {
+    detailId = tournament.id
+    detailOpen = true
+  }
+
+  // Reload once the player has a name: a brand-new visitor has no account to sign up with yet.
+  $effect(() => {
+    if (player.ready && player.name) {
+      void load()
+    }
+  })
+
+  /**
+   * The platform's job runs every minute: it closes sign-up, hands out tables and starts rounds. Reloading this often
+   * shows a waiting player their table without a page refresh.
+   */
+  const RELOAD_MS = 30_000
+
+  $effect(() => {
+    const waiting = open.length > 0 || running.length > 0
+    if (!waiting || !player.name) {
+      return
+    }
+
+    const timer = setInterval(() => {
+      void load()
+    }, RELOAD_MS)
+
+    return () => clearInterval(timer)
+  })
+
+  /** Gives up a seat already handed out. The platform keeps the player out of this tournament from then on. */
+  async function withdraw(tournament: LiveTournament) {
+    const { id, name } = tournament
+    const sure = await ask({
+      title: `Withdraw from ${name}?`,
+      body: 'Your seat is given up and you can’t come back to this tournament.',
+      action: 'Withdraw',
+    })
+    if (!sure) {
+      return
+    }
+
+    busy = id
+    error = null
+
+    try {
+      await leaveTournament(id)
+      await load()
+      void refreshCoins()
+    } catch (err) {
+      error = err instanceof Error ? err.message : 'Something went wrong. Try again.'
+    } finally {
+      busy = null
+    }
+  }
+
+  /** "Round 2 of 3" for Arena and Swiss; a knockout plays until one is left, so just "Round 2". */
+  function roundLabel(tournament: LiveTournament): string {
+    if (!ranksByPoints(tournament.format)) {
+      return `Stage ${tournament.round}`
+    }
+
+    return `Stage ${tournament.round} of ${tournament.rounds ?? 3}`
+  }
+
+  /** The felt's line: when the round starts, or that it is being played. */
+  function roundLine(tournament: LiveTournament): string {
+    if (tournament.roundStarted) {
+      return `Stage ${tournament.round} in play`
+    }
+
+    return startsIn(tournament.roundStartsAt, now)
+  }
+
+  /** The brass line under the name: where the player stands. */
+  function myLine(tournament: LiveTournament): string | null {
+    const me = tournament.me
+    if (!me) {
+      return tournament.table ? 'You’re in' : null
+    }
+
+    if (ranksByPoints(tournament.format)) {
+      return `You’re ${ordinal(me.place)} with ${pointsText(me.points)}`
+    }
+
+    if (tournament.table) {
+      return `You’re in stage ${tournament.round}`
+    }
+
+    return `You’re out · ${ordinal(me.place)}`
+  }
+
+  /** A card row's right side: points, or how far a knockout player got. */
+  function rowNote(tournament: LiveTournament, standing: LiveTournament['top'][number]): string {
+    if (ranksByPoints(tournament.format)) {
+      return `${standing.points} ${standing.points === 1 ? 'pt' : 'pts'}`
+    }
+
+    return standing.lastRound >= tournament.round ? 'in' : `out in stage ${standing.lastRound}`
+  }
+
+  const prizeFor = (tournament: LiveTournament, place: number) =>
+    tournament.prizes.find((prize) => prize.place === place)
+
+  /** Whose live Detail is open. */
+  let liveId = $state<string | null>(null)
+  let liveOpen = $state(false)
+  const liveDetail = $derived(live.find((tournament) => tournament.id === liveId) ?? null)
+
+  function showLive(tournament: LiveTournament) {
+    liveId = tournament.id
+    liveOpen = true
+  }
+
+  /** Joining with a fee asks first, showing what it costs and what is left. */
+  async function confirmFee(tournament: Tournament): Promise<boolean> {
+    if (tournament.joined || tournament.fee === 0) {
+      return true
+    }
+
+    const left = player.coins - tournament.fee
+    return ask({
+      title: `Join ${tournament.name}?`,
+      body: 'You get the fee back if you leave before your table starts.',
+      action: `Join for ${tournament.fee.toLocaleString()}`,
+      tone: 'brass',
+      rows: [
+        { label: 'Fee', value: coins(tournament.fee) },
+        { label: 'Your coins', value: coins(player.coins) },
+        { label: 'Left after joining', value: coins(left), strong: true },
+      ],
+    })
+  }
+
+  /** Coins missing to join; 0 when the player can afford it (or it's free, or they're in). */
+  const shortBy = (tournament: Tournament) =>
+    tournament.joined ? 0 : Math.max(tournament.fee - player.coins, 0)
+
+  async function toggle(tournament: Tournament) {
+    const sure = await confirmFee(tournament)
+    if (!sure) {
+      return
+    }
+
+    busy = tournament.id
+    error = null
+
+    try {
+      if (tournament.joined) {
+        await leaveTournament(tournament.id)
+      } else {
+        await joinTournament(tournament.id)
+      }
+
+      await load()
+      void refreshCoins()
+    } catch (err) {
+      error = err instanceof Error ? err.message : 'Something went wrong. Try again.'
+    } finally {
+      busy = null
+    }
+  }
 </script>
 
 {#if shownLive.length === 0 && shownOpen.length === 0}
-	<p class="rounded-xl border border-dashed border-paper/20 p-6 text-sm text-paper/70">
-		No {gameName} tournaments open for sign-up right now.
-	</p>
+  <p class="rounded-xl border border-dashed border-paper/20 p-6 text-sm text-paper/70">
+    No {gameName} tournaments open for sign-up right now.
+  </p>
 {:else}
-	<div class="relative">
-		<!-- Snap scrolling row; the next card peeks in at the edge, so it reads as more to swipe. Every card has a
+  <div class="relative">
+    <!-- Snap scrolling row; the next card peeks in at the edge, so it reads as more to swipe. Every card has a
 			 button, so tabbing through them scrolls the row with the keyboard. -->
-		<ul
-			bind:this={scroller}
-			onscroll={updateArrows}
-			class="carousel -mx-4 flex snap-x snap-mandatory scroll-px-4 gap-4 overflow-x-auto px-4 pb-3 sm:mx-0 sm:scroll-px-0 sm:px-0"
-		>
-			{#each running as tournament (tournament.id)}
-				{@const line = myLine(tournament)}
-				<li
-					class="tournament {tournament.table
-						? 'border-[1.5px] border-brass'
-						: 'border border-paper/10'}"
-				>
-					<TournamentFelt
-						label={roundLabel(tournament)}
-						dot="bg-paper"
-						startsAt={tournament.roundStartsAt}
-						headline={roundLine(tournament)}
-						back={backOf(tournament.game)}
-					/>
-					<div class="flex flex-1 flex-col p-4 pt-3">
-						<h3 class="font-display text-lg font-bold text-paper">{tournament.name}</h3>
-						<p class="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
-							<span class="font-semibold text-paper/85">{nameOf(tournament.game)}</span>
-							{#if tournament.format}
-								<span class="rounded-md border border-brass/55 px-1.5 py-0.5 font-bold text-brass"
-									>{FORMATS[tournament.format].label}</span
-								>
-							{/if}
-							{#if line}
-								<span class="font-bold text-brass">{line}</span>
-							{:else}
-								<span class="text-paper/55">{tournament.players} players</span>
-							{/if}
-						</p>
-						{#if tournament.top.length > 0}
-							<ol class="mt-3 space-y-1 text-sm" aria-label="Top of the standings">
-								{#each tournament.top as standing (standing.playerId)}
-									{@const mine = standing.playerId === tournament.me?.playerId}
-									<li
-										class="flex items-center gap-3 rounded-md px-2 py-1 {mine ? 'bg-brass/12' : ''}"
-									>
-										<span class="w-4 font-extrabold text-brass tabular-nums">{standing.place}</span>
-										<span class="min-w-0 flex-1 truncate {mine ? 'font-bold' : ''}"
-											>{standing.name}{mine ? ' (you)' : ''}</span
-										>
-										<span class="text-xs text-paper/70 tabular-nums"
-											>{rowNote(tournament, standing)}</span
-										>
-									</li>
-								{/each}
-							</ol>
-						{:else}
-							<p class="mt-3 text-xs text-paper/55">Standings show once the first tables finish.</p>
-						{/if}
-						<div
-							class="mt-auto grid gap-2.5 pt-4 {tournament.table && !tournament.table.closed
-								? 'grid-cols-2'
-								: ''}"
-						>
-							<button
-								class="btn-ghost h-11 rounded-xl"
-								onclick={() => showLive(tournament)}
-								aria-label="Standings of {tournament.name}">Standings</button
-							>
-							{#if tournament.table && !tournament.table.closed}
-								<button
-									class="btn-brass h-11 rounded-xl"
-									onclick={() => (error = enterTable(tournament.game, tournament.table!.code))}
-									>Go to table</button
-								>
-							{/if}
-						</div>
-					</div>
-				</li>
-			{/each}
-			{#each shownOpen as tournament (tournament.id)}
-				{@const status = openStatus(tournament)}
-				{@const action = actionOf(tournament, status)}
-				<li
-					class="tournament {tournament.joined
-						? 'border-[1.5px] border-brass'
-						: 'border border-paper/10'}"
-				>
-					<TournamentFelt
-						label={status.label}
-						dot={status.dot}
-						startsAt={tournament.startsAt}
-						back={backOf(tournament.game)}
-					/>
-					<div class="flex flex-1 flex-col p-4 pt-3">
-						<h3 class="font-display text-lg font-bold text-paper">{tournament.name}</h3>
-						<p class="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-paper/55">
-							<span class="font-semibold text-paper/85">{nameOf(tournament.game)}</span>
-							{#if tournament.format}
-								<span class="rounded-md border border-brass/55 px-1.5 py-0.5 font-bold text-brass"
-									>{FORMATS[tournament.format].label}</span
-								>
-							{/if}
-							<span
-								>{tournament.playersPerRoom} per table · Sign-up closes {when(
-									tournament.registrationClosesAt
-								)}</span
-							>
-						</p>
-						<div class="mt-3">
-							<PrizeFee prizes={tournament.prizes} fee={tournament.fee} />
-						</div>
-						<div class="mt-auto pt-4">
-							<SignUpBar
-								registered={tournament.registered}
-								minPlayers={tournament.minPlayers}
-								maxPlayers={tournament.maxPlayers}
-								joined={tournament.joined}
-								full={status === FULL}
-							/>
-							{#if shortBy(tournament) > 0}
-								<p class="mt-2 text-xs font-bold text-ember">
-									You have {coins(player.coins)}, {shortBy(tournament).toLocaleString()} short
-								</p>
-							{/if}
-						</div>
-						<div class="mt-4 grid grid-cols-2 gap-2.5">
-							<button
-								class="btn-ghost h-11 rounded-xl"
-								onclick={() => showDetail(tournament)}
-								aria-label="Details of {tournament.name}">Detail</button
-							>
-							<button
-								class="{action.style} h-11 rounded-xl"
-								onclick={() => toggle(tournament)}
-								disabled={action.disabled}
-								aria-label="{tournament.joined ? 'Leave' : 'Join'} {tournament.name}"
-							>
-								{action.label}
-							</button>
-						</div>
-					</div>
-				</li>
-			{/each}
-			{#each finished as tournament (tournament.id)}
-				<li class="tournament border border-paper/10">
-					<TournamentFelt
-						label="Finished"
-						dot="bg-brass"
-						startsAt={tournament.endedAt ?? tournament.roundStartsAt}
-						headline={day(tournament.endedAt ?? tournament.startsAt)}
-						back={backOf(tournament.game)}
-					/>
-					<div class="flex flex-1 flex-col p-4 pt-3">
-						<h3 class="font-display text-lg font-bold text-paper">{tournament.name}</h3>
-						<p class="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-paper/55">
-							<span class="font-semibold text-paper/85">{nameOf(tournament.game)}</span>
-							{#if tournament.format}
-								<span class="rounded-md border border-brass/55 px-1.5 py-0.5 font-bold text-brass"
-									>{FORMATS[tournament.format].label}</span
-								>
-							{/if}
-							{tournament.players} players · {tournament.round}
-							{tournament.round === 1 ? 'stage' : 'stages'}
-						</p>
-						<ol class="mt-3 space-y-2 text-sm" aria-label="Winners">
-							{#each tournament.top as standing (standing.playerId)}
-								{@const prize = prizeFor(tournament, standing.place)}
-								<li class="flex items-center gap-3">
-									<span
-										class="grid size-6 shrink-0 place-items-center rounded-full text-xs font-extrabold {standing.place ===
-										1
-											? 'bg-brass text-ink'
-											: 'bg-paper/15 text-paper'}">{standing.place}</span
-									>
-									<span class="min-w-0 flex-1 truncate font-semibold">{standing.name}</span>
-									<span
-										class="text-xs font-bold tabular-nums {standing.place === 1
-											? 'text-brass'
-											: 'text-paper/80'}">{coins(prize?.coins ?? 0)}</span
-									>
-								</li>
-							{/each}
-						</ol>
-						<div class="mt-auto pt-4">
-							<button
-								class="btn-ghost h-11 w-full rounded-xl"
-								onclick={() => showLive(tournament)}
-								aria-label="Results of {tournament.name}">Results</button
-							>
-						</div>
-					</div>
-				</li>
-			{/each}
-		</ul>
-		{#if canGoBack}
-			<button
-				class="arrow absolute top-1/2 -left-5 hidden md:grid"
-				onclick={() => page(-1)}
-				aria-label="Earlier tournaments"
-			>
-				<Icon name="back" class="size-5" />
-			</button>
-		{/if}
-		{#if canGoForward}
-			<button
-				class="arrow absolute top-1/2 -right-5 hidden md:grid"
-				onclick={() => page(1)}
-				aria-label="More tournaments"
-			>
-				<Icon name="next" class="size-5" />
-			</button>
-		{/if}
-	</div>
+    <ul
+      bind:this={scroller}
+      onscroll={updateArrows}
+      class="carousel -mx-4 flex snap-x snap-mandatory scroll-px-4 gap-4 overflow-x-auto px-4 pb-3 sm:mx-0 sm:scroll-px-0 sm:px-0"
+    >
+      {#each running as tournament (tournament.id)}
+        {@const line = myLine(tournament)}
+        <li
+          class="tournament {tournament.table
+            ? 'border-[1.5px] border-brass'
+            : 'border border-paper/10'}"
+        >
+          <TournamentFelt
+            label={roundLabel(tournament)}
+            dot="bg-paper"
+            startsAt={tournament.roundStartsAt}
+            headline={roundLine(tournament)}
+            back={backOf(tournament.game)}
+          />
+          <div class="flex flex-1 flex-col p-4 pt-3">
+            <h3 class="font-display text-lg font-bold text-paper">{tournament.name}</h3>
+            <p class="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+              <span class="font-semibold text-paper/85">{nameOf(tournament.game)}</span>
+              {#if tournament.format}
+                <span class="rounded-md border border-brass/55 px-1.5 py-0.5 font-bold text-brass"
+                  >{FORMATS[tournament.format].label}</span
+                >
+              {/if}
+              {#if line}
+                <span class="font-bold text-brass">{line}</span>
+              {:else}
+                <span class="text-paper/55">{tournament.players} players</span>
+              {/if}
+            </p>
+            {#if tournament.top.length > 0}
+              <ol class="mt-3 space-y-1 text-sm" aria-label="Top of the standings">
+                {#each tournament.top as standing (standing.playerId)}
+                  {@const mine = standing.playerId === tournament.me?.playerId}
+                  <li
+                    class="flex items-center gap-3 rounded-md px-2 py-1 {mine ? 'bg-brass/12' : ''}"
+                  >
+                    <span class="w-4 font-extrabold text-brass tabular-nums">{standing.place}</span>
+                    <span class="min-w-0 flex-1 truncate {mine ? 'font-bold' : ''}"
+                      >{standing.name}{mine ? ' (you)' : ''}</span
+                    >
+                    <span class="text-xs text-paper/70 tabular-nums"
+                      >{rowNote(tournament, standing)}</span
+                    >
+                  </li>
+                {/each}
+              </ol>
+            {:else}
+              <p class="mt-3 text-xs text-paper/55">Standings show once the first tables finish.</p>
+            {/if}
+            <div
+              class="mt-auto grid gap-2.5 pt-4 {tournament.table && !tournament.table.closed
+                ? 'grid-cols-2'
+                : ''}"
+            >
+              <button
+                class="btn-ghost h-11 rounded-xl"
+                onclick={() => showLive(tournament)}
+                aria-label="Standings of {tournament.name}">Standings</button
+              >
+              {#if tournament.table && !tournament.table.closed}
+                <button
+                  class="btn-brass h-11 rounded-xl"
+                  onclick={() => (error = enterTable(tournament.game, tournament.table!.code))}
+                  >Go to table</button
+                >
+              {/if}
+            </div>
+          </div>
+        </li>
+      {/each}
+      {#each shownOpen as tournament (tournament.id)}
+        {@const status = openStatus(tournament)}
+        {@const action = actionOf(tournament, status)}
+        <li
+          class="tournament {tournament.joined
+            ? 'border-[1.5px] border-brass'
+            : 'border border-paper/10'}"
+        >
+          <TournamentFelt
+            label={status.label}
+            dot={status.dot}
+            startsAt={tournament.startsAt}
+            back={backOf(tournament.game)}
+          />
+          <div class="flex flex-1 flex-col p-4 pt-3">
+            <h3 class="font-display text-lg font-bold text-paper">{tournament.name}</h3>
+            <p class="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-paper/55">
+              <span class="font-semibold text-paper/85">{nameOf(tournament.game)}</span>
+              {#if tournament.format}
+                <span class="rounded-md border border-brass/55 px-1.5 py-0.5 font-bold text-brass"
+                  >{FORMATS[tournament.format].label}</span
+                >
+              {/if}
+              <span
+                >{tournament.playersPerRoom} per table · Sign-up closes {when(
+                  tournament.registrationClosesAt,
+                )}</span
+              >
+            </p>
+            <div class="mt-3">
+              <PrizeFee prizes={tournament.prizes} fee={tournament.fee} />
+            </div>
+            <div class="mt-auto pt-4">
+              <SignUpBar
+                registered={tournament.registered}
+                minPlayers={tournament.minPlayers}
+                maxPlayers={tournament.maxPlayers}
+                joined={tournament.joined}
+                full={status === FULL}
+              />
+              {#if shortBy(tournament) > 0}
+                <p class="mt-2 text-xs font-bold text-ember">
+                  You have {coins(player.coins)}, {shortBy(tournament).toLocaleString()} short
+                </p>
+              {/if}
+            </div>
+            <div class="mt-4 grid grid-cols-2 gap-2.5">
+              <button
+                class="btn-ghost h-11 rounded-xl"
+                onclick={() => showDetail(tournament)}
+                aria-label="Details of {tournament.name}">Detail</button
+              >
+              <button
+                class="{action.style} h-11 rounded-xl"
+                onclick={() => toggle(tournament)}
+                disabled={action.disabled}
+                aria-label="{tournament.joined ? 'Leave' : 'Join'} {tournament.name}"
+              >
+                {action.label}
+              </button>
+            </div>
+          </div>
+        </li>
+      {/each}
+      {#each finished as tournament (tournament.id)}
+        <li class="tournament border border-paper/10">
+          <TournamentFelt
+            label="Finished"
+            dot="bg-brass"
+            startsAt={tournament.endedAt ?? tournament.roundStartsAt}
+            headline={day(tournament.endedAt ?? tournament.startsAt)}
+            back={backOf(tournament.game)}
+          />
+          <div class="flex flex-1 flex-col p-4 pt-3">
+            <h3 class="font-display text-lg font-bold text-paper">{tournament.name}</h3>
+            <p class="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-paper/55">
+              <span class="font-semibold text-paper/85">{nameOf(tournament.game)}</span>
+              {#if tournament.format}
+                <span class="rounded-md border border-brass/55 px-1.5 py-0.5 font-bold text-brass"
+                  >{FORMATS[tournament.format].label}</span
+                >
+              {/if}
+              {tournament.players} players · {tournament.round}
+              {tournament.round === 1 ? 'stage' : 'stages'}
+            </p>
+            <ol class="mt-3 space-y-2 text-sm" aria-label="Winners">
+              {#each tournament.top as standing (standing.playerId)}
+                {@const prize = prizeFor(tournament, standing.place)}
+                <li class="flex items-center gap-3">
+                  <span
+                    class="grid size-6 shrink-0 place-items-center rounded-full text-xs font-extrabold {standing.place ===
+                    1
+                      ? 'bg-brass text-ink'
+                      : 'bg-paper/15 text-paper'}">{standing.place}</span
+                  >
+                  <span class="min-w-0 flex-1 truncate font-semibold">{standing.name}</span>
+                  <span
+                    class="text-xs font-bold tabular-nums {standing.place === 1
+                      ? 'text-brass'
+                      : 'text-paper/80'}">{coins(prize?.coins ?? 0)}</span
+                  >
+                </li>
+              {/each}
+            </ol>
+            <div class="mt-auto pt-4">
+              <button
+                class="btn-ghost h-11 w-full rounded-xl"
+                onclick={() => showLive(tournament)}
+                aria-label="Results of {tournament.name}">Results</button
+              >
+            </div>
+          </div>
+        </li>
+      {/each}
+    </ul>
+    {#if canGoBack}
+      <button
+        class="arrow absolute top-1/2 -left-5 hidden md:grid"
+        onclick={() => page(-1)}
+        aria-label="Earlier tournaments"
+      >
+        <Icon name="back" class="size-5" />
+      </button>
+    {/if}
+    {#if canGoForward}
+      <button
+        class="arrow absolute top-1/2 -right-5 hidden md:grid"
+        onclick={() => page(1)}
+        aria-label="More tournaments"
+      >
+        <Icon name="next" class="size-5" />
+      </button>
+    {/if}
+  </div>
 {/if}
 {#if error}<p class="mt-3 text-sm text-ember" role="alert">{error}</p>{/if}
 
 <TournamentLiveDialog
-	bind:open={liveOpen}
-	tournament={liveDetail}
-	game={liveDetail?.game ?? ''}
-	back={backOf(liveDetail?.game ?? '')}
-	{now}
-	onwithdraw={withdraw}
+  bind:open={liveOpen}
+  tournament={liveDetail}
+  game={liveDetail?.game ?? ''}
+  back={backOf(liveDetail?.game ?? '')}
+  {now}
+  onwithdraw={withdraw}
 />
 
 <TournamentDialog
-	bind:open={detailOpen}
-	tournament={detail}
-	status={detailStatus}
-	back={backOf(detail?.game ?? '')}
-	full={detailStatus === FULL}
-	action={detail
-		? actionOf(detail, detailStatus)
-		: { label: 'Join', style: 'btn-brass', disabled: true }}
-	onaction={() => detail && toggle(detail)}
+  bind:open={detailOpen}
+  tournament={detail}
+  status={detailStatus}
+  back={backOf(detail?.game ?? '')}
+  full={detailStatus === FULL}
+  action={detail
+    ? actionOf(detail, detailStatus)
+    : { label: 'Join', style: 'btn-brass', disabled: true }}
+  onaction={() => detail && toggle(detail)}
 />
 
 <style>
-	.tournament {
-		display: flex;
-		width: 85%;
-		flex-shrink: 0;
-		scroll-snap-align: start;
-		flex-direction: column;
-		overflow: hidden;
-		border-radius: 1rem;
-		background: var(--color-panel);
-	}
-	@media (min-width: 40rem) {
-		.tournament {
-			width: 20rem;
-		}
-	}
-	/* Three cards fill the row; the arrow brings in the rest. */
-	@media (min-width: 64rem) {
-		.tournament {
-			width: calc((100% - 2rem) / 3);
-		}
-	}
-	.carousel {
-		scrollbar-width: thin;
-		scrollbar-color: rgb(243 234 214 / 0.2) transparent;
-	}
-	/* Phones swipe, and the peeking card already says there is more; the bar would only add a stray line. */
-	@media (max-width: 47.99rem) {
-		.carousel {
-			scrollbar-width: none;
-		}
-	}
-	/* Shown from md up through Tailwind's `hidden md:grid`, so no display here. */
-	.arrow {
-		place-items: center;
-		width: 2.5rem;
-		height: 2.5rem;
-		translate: 0 -50%;
-		border-radius: 9999px;
-		border: 1px solid rgb(243 234 214 / 0.15);
-		background: var(--color-panel);
-		color: var(--color-paper);
-		box-shadow: 0 6px 16px rgb(0 0 0 / 0.45);
-	}
-	.arrow:hover {
-		border-color: rgb(210 165 76 / 0.6);
-	}
+  .tournament {
+    display: flex;
+    width: 85%;
+    flex-shrink: 0;
+    scroll-snap-align: start;
+    flex-direction: column;
+    overflow: hidden;
+    border-radius: 1rem;
+    background: var(--color-panel);
+  }
+  @media (min-width: 40rem) {
+    .tournament {
+      width: 20rem;
+    }
+  }
+  /* Three cards fill the row; the arrow brings in the rest. */
+  @media (min-width: 64rem) {
+    .tournament {
+      width: calc((100% - 2rem) / 3);
+    }
+  }
+  .carousel {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(243 234 214 / 0.2) transparent;
+  }
+  /* Phones swipe, and the peeking card already says there is more; the bar would only add a stray line. */
+  @media (max-width: 47.99rem) {
+    .carousel {
+      scrollbar-width: none;
+    }
+  }
+  /* Shown from md up through Tailwind's `hidden md:grid`, so no display here. */
+  .arrow {
+    place-items: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    translate: 0 -50%;
+    border-radius: 9999px;
+    border: 1px solid rgb(243 234 214 / 0.15);
+    background: var(--color-panel);
+    color: var(--color-paper);
+    box-shadow: 0 6px 16px rgb(0 0 0 / 0.45);
+  }
+  .arrow:hover {
+    border-color: rgb(210 165 76 / 0.6);
+  }
 </style>

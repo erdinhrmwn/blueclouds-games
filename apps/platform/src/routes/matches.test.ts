@@ -1,351 +1,351 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { call, guest, room, SERVER_KEY, setupTestApp } from "../test-helpers";
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
+import { call, guest, room, SERVER_KEY, setupTestApp } from '../test-helpers'
 
-let testApp: Awaited<ReturnType<typeof setupTestApp>>;
-let ann: Awaited<ReturnType<typeof guest>>;
-let bob: Awaited<ReturnType<typeof guest>>;
+let testApp: Awaited<ReturnType<typeof setupTestApp>>
+let ann: Awaited<ReturnType<typeof guest>>
+let bob: Awaited<ReturnType<typeof guest>>
 beforeAll(async () => {
-	testApp = await setupTestApp();
-	ann = await guest(testApp.app, "Ann");
-	bob = await guest(testApp.app, "Bob");
-	await room(testApp.sql, "bust-31", "K7PQX");
-});
+  testApp = await setupTestApp()
+  ann = await guest(testApp.app, 'Ann')
+  bob = await guest(testApp.app, 'Bob')
+  await room(testApp.sql, 'bust-31', 'K7PQX')
+})
 afterAll(async () => {
-	await testApp.sql.close();
-});
+  await testApp.sql.close()
+})
 
 const report = (over: Record<string, unknown> = {}) => ({
-	matchId: Bun.randomUUIDv7(),
-	game: "bust-31",
-	roomCode: "K7PQX",
-	rulesVersion: 1,
-	startedAt: "2026-11-11T08:00:00Z",
-	endedAt: "2026-11-11T08:06:12Z",
-	players: [
-		{ seat: 0, playerId: ann.player.id, bot: false, placement: 1, score: 2 },
-		{ seat: 2, playerId: bob.player.id, bot: false, placement: 3, score: 0 },
-		{ seat: 3, playerId: null, bot: true, botName: "Bot Rain", placement: 2, score: 0 },
-	],
-	log: { logVersion: 1, events: events() },
-	...over,
-});
+  matchId: Bun.randomUUIDv7(),
+  game: 'bust-31',
+  roomCode: 'K7PQX',
+  rulesVersion: 1,
+  startedAt: '2026-11-11T08:00:00Z',
+  endedAt: '2026-11-11T08:06:12Z',
+  players: [
+    { seat: 0, playerId: ann.player.id, bot: false, placement: 1, score: 2 },
+    { seat: 2, playerId: bob.player.id, bot: false, placement: 3, score: 0 },
+    { seat: 3, playerId: null, bot: true, botName: 'Bot Rain', placement: 2, score: 0 },
+  ],
+  log: { logVersion: 1, events: events() },
+  ...over,
+})
 const events = () => [
-	{ seq: 0, t: 0, type: "deal", data: { round: 1, hands: { 0: ["n7-1"] } } },
-	{ seq: 1, t: 4120, type: "play", seat: 0, data: { card: "n7-1", total: 7, by: "player" } },
-	{ seq: 2, t: 4120, type: "finished", data: { winner: 0 } },
-];
+  { seq: 0, t: 0, type: 'deal', data: { round: 1, hands: { 0: ['n7-1'] } } },
+  { seq: 1, t: 4120, type: 'play', seat: 0, data: { card: 'n7-1', total: 7, by: 'player' } },
+  { seq: 2, t: 4120, type: 'finished', data: { winner: 0 } },
+]
 const post = (body: unknown, token = SERVER_KEY) =>
-	call(testApp.app, "POST", "/v1/matches", { body, token });
+  call(testApp.app, 'POST', '/v1/matches', { body, token })
 
-describe("match reports", () => {
-	test("needs the server key", async () => {
-		expect((await post(report(), "wrong-key")).status).toBe(401);
-		expect(
-			(await call(testApp.app, "POST", "/v1/matches", { body: report() })).json.error.code,
-		).toBe("unauthenticated");
-	});
+describe('match reports', () => {
+  test('needs the server key', async () => {
+    expect((await post(report(), 'wrong-key')).status).toBe(401)
+    expect(
+      (await call(testApp.app, 'POST', '/v1/matches', { body: report() })).json.error.code,
+    ).toBe('unauthenticated')
+  })
 
-	test("new → 201, same retry → 200, changed body → 409", async () => {
-		const body = report();
-		const first = await post(body);
-		expect(first.status).toBe(201);
-		expect(first.json.data).toEqual({ match: { id: body.matchId, created: true } });
+  test('new → 201, same retry → 200, changed body → 409', async () => {
+    const body = report()
+    const first = await post(body)
+    expect(first.status).toBe(201)
+    expect(first.json.data).toEqual({ match: { id: body.matchId, created: true } })
 
-		// Same report with seats in another order is still the same report.
-		const retry = await post({ ...body, players: [...body.players].reverse() });
-		expect(retry.status).toBe(200);
-		expect(retry.json.data.match.created).toBe(false);
+    // Same report with seats in another order is still the same report.
+    const retry = await post({ ...body, players: [...body.players].reverse() })
+    expect(retry.status).toBe(200)
+    expect(retry.json.data.match.created).toBe(false)
 
-		const changed = await post({ ...body, roomCode: "ZZZZZ" });
-		expect(changed.status).toBe(409);
-		expect(changed.json.error.code).toBe("conflict");
+    const changed = await post({ ...body, roomCode: 'ZZZZZ' })
+    expect(changed.status).toBe(409)
+    expect(changed.json.error.code).toBe('conflict')
 
-		const [{ n }] = await testApp.sql`
+    const [{ n }] = await testApp.sql`
 				SELECT count(*)::int AS n
 				FROM match_players
-				WHERE match_id = ${body.matchId}`;
-		expect(n).toBe(3);
-	});
+				WHERE match_id = ${body.matchId}`
+    expect(n).toBe(3)
+  })
 
-	test("a terminated match is stored as terminated; one without endReason as finished", async () => {
-		const terminated = report({ endReason: "terminated" });
-		expect((await post(terminated)).status).toBe(201);
-		expect((await post(terminated)).status).toBe(200);
+  test('a terminated match is stored as terminated; one without endReason as finished', async () => {
+    const terminated = report({ endReason: 'terminated' })
+    expect((await post(terminated)).status).toBe(201)
+    expect((await post(terminated)).status).toBe(200)
 
-		const finished = report();
-		expect((await post(finished)).status).toBe(201);
+    const finished = report()
+    expect((await post(finished)).status).toBe(201)
 
-		const rows = await testApp.sql`
+    const rows = await testApp.sql`
 			SELECT id, end_reason
 			FROM matches
-			WHERE id IN (${terminated.matchId}, ${finished.matchId})`;
-		const reasons = Object.fromEntries(
-			rows.map((row: { id: string; end_reason: string }) => [row.id, row.end_reason]),
-		);
-		expect(reasons).toEqual({ [terminated.matchId]: "terminated", [finished.matchId]: "finished" });
+			WHERE id IN (${terminated.matchId}, ${finished.matchId})`
+    const reasons = Object.fromEntries(
+      rows.map((row: { id: string; end_reason: string }) => [row.id, row.end_reason]),
+    )
+    expect(reasons).toEqual({ [terminated.matchId]: 'terminated', [finished.matchId]: 'finished' })
 
-		expect((await post(report({ endReason: "abandoned" }))).status).toBe(400);
-	});
+    expect((await post(report({ endReason: 'abandoned' }))).status).toBe(400)
+  })
 
-	test("an unknown room or player → 422 and nothing is stored; a bot-only match is recorded", async () => {
-		const unknownRoom = await post(report({ roomCode: "NOPE9" }));
-		expect(unknownRoom.status).toBe(422);
-		expect(unknownRoom.json.error.code).toBe("unknown_room");
+  test('an unknown room or player → 422 and nothing is stored; a bot-only match is recorded', async () => {
+    const unknownRoom = await post(report({ roomCode: 'NOPE9' }))
+    expect(unknownRoom.status).toBe(422)
+    expect(unknownRoom.json.error.code).toBe('unknown_room')
 
-		const body = report({
-			players: [
-				{ seat: 0, playerId: Bun.randomUUIDv7(), bot: false, placement: 1, score: 1 },
-				{ seat: 1, playerId: null, bot: true, botName: "Bot Rain", placement: 2, score: 0 },
-			],
-		});
-		const res = await post(body);
-		expect(res.status).toBe(422);
-		expect(res.json.error.code).toBe("unknown_player");
-		const [{ n }] = await testApp.sql`
+    const body = report({
+      players: [
+        { seat: 0, playerId: Bun.randomUUIDv7(), bot: false, placement: 1, score: 1 },
+        { seat: 1, playerId: null, bot: true, botName: 'Bot Rain', placement: 2, score: 0 },
+      ],
+    })
+    const res = await post(body)
+    expect(res.status).toBe(422)
+    expect(res.json.error.code).toBe('unknown_player')
+    const [{ n }] = await testApp.sql`
 			SELECT count(*)::int AS n
 			FROM matches
-			WHERE id = ${body.matchId}`;
-		expect(n).toBe(0);
+			WHERE id = ${body.matchId}`
+    expect(n).toBe(0)
 
-		const botsOnly = report({
-			players: [
-				{ seat: 0, playerId: null, bot: true, botName: "Bot Cloud", placement: 1, score: 1 },
-				{ seat: 1, playerId: null, bot: true, botName: "Bot Rain", placement: 2, score: 0 },
-			],
-		});
-		expect((await post(botsOnly)).status).toBe(201);
-	});
+    const botsOnly = report({
+      players: [
+        { seat: 0, playerId: null, bot: true, botName: 'Bot Cloud', placement: 1, score: 1 },
+        { seat: 1, playerId: null, bot: true, botName: 'Bot Rain', placement: 2, score: 0 },
+      ],
+    })
+    expect((await post(botsOnly)).status).toBe(201)
+  })
 
-	test("rejects invalid reports with field errors", async () => {
-		const twoWinners = report({
-			players: [
-				{ seat: 0, playerId: ann.player.id, bot: false, placement: 1, score: 1 },
-				{ seat: 1, playerId: null, bot: true, botName: "Bot Rain", placement: 1, score: 0 },
-			],
-		});
-		const res = await post(twoWinners);
-		expect(res.status).toBe(400);
-		expect(res.json.error.fields.players).toBe("Exactly one player must place first.");
+  test('rejects invalid reports with field errors', async () => {
+    const twoWinners = report({
+      players: [
+        { seat: 0, playerId: ann.player.id, bot: false, placement: 1, score: 1 },
+        { seat: 1, playerId: null, bot: true, botName: 'Bot Rain', placement: 1, score: 0 },
+      ],
+    })
+    const res = await post(twoWinners)
+    expect(res.status).toBe(400)
+    expect(res.json.error.fields.players).toBe('Exactly one player must place first.')
 
-		expect((await post(report({ game: "chess" }))).json.error.fields.game).toBe("Unknown game.");
-		expect((await post(report({ matchId: crypto.randomUUID() }))).status).toBe(400); // not v7
-		expect(
-			(await post(report({ endedAt: "2026-11-11T07:00:00Z" }))).json.error.fields.endedAt,
-		).toBeTruthy();
-		const namelessBot = { seat: 1, playerId: null, bot: true, placement: 2, score: 0 };
-		expect((await post(report({ players: [report().players[0], namelessBot] }))).status).toBe(400);
-	});
-});
+    expect((await post(report({ game: 'chess' }))).json.error.fields.game).toBe('Unknown game.')
+    expect((await post(report({ matchId: crypto.randomUUID() }))).status).toBe(400) // not v7
+    expect(
+      (await post(report({ endedAt: '2026-11-11T07:00:00Z' }))).json.error.fields.endedAt,
+    ).toBeTruthy()
+    const namelessBot = { seat: 1, playerId: null, bot: true, placement: 2, score: 0 }
+    expect((await post(report({ players: [report().players[0], namelessBot] }))).status).toBe(400)
+  })
+})
 
-describe("any game in the catalog", () => {
-	test("a new game only needs its row in games; score means what the game says", async () => {
-		const seat = (seatIndex: number, placement: number, score: number) => ({
-			seat: seatIndex,
-			playerId: null,
-			bot: true,
-			botName: `Bot ${seatIndex}`,
-			placement,
-			score,
-		});
-		const twoSeats = report({
-			game: "test-game",
-			roomCode: "TGAME",
-			players: [seat(0, 1, 3), seat(1, 2, 12)],
-		});
-		expect((await post(twoSeats)).json.error.fields.game).toBe("Unknown game.");
+describe('any game in the catalog', () => {
+  test('a new game only needs its row in games; score means what the game says', async () => {
+    const seat = (seatIndex: number, placement: number, score: number) => ({
+      seat: seatIndex,
+      playerId: null,
+      bot: true,
+      botName: `Bot ${seatIndex}`,
+      placement,
+      score,
+    })
+    const twoSeats = report({
+      game: 'test-game',
+      roomCode: 'TGAME',
+      players: [seat(0, 1, 3), seat(1, 2, 12)],
+    })
+    expect((await post(twoSeats)).json.error.fields.game).toBe('Unknown game.')
 
-		await testApp.sql`
+    await testApp.sql`
 			INSERT INTO games (slug, name, min_players, max_players, score_label)
-			VALUES ('test-game', 'Test Game', 3, 4, 'Points')`;
-		await room(testApp.sql, "test-game", "TGAME");
-		expect((await post(twoSeats)).json.error.fields.players).toBe("Needs 3–4 players.");
-		// Lower is better here, places 2 and 3 tie, and a score may be negative: all up to the game.
-		const body = report({
-			game: "test-game",
-			roomCode: "TGAME",
-			players: [seat(0, 1, -2), seat(1, 2, 12), seat(2, 2, 12)],
-		});
-		expect((await post(body)).status).toBe(201);
-		const rows = await testApp.sql`
+			VALUES ('test-game', 'Test Game', 3, 4, 'Points')`
+    await room(testApp.sql, 'test-game', 'TGAME')
+    expect((await post(twoSeats)).json.error.fields.players).toBe('Needs 3–4 players.')
+    // Lower is better here, places 2 and 3 tie, and a score may be negative: all up to the game.
+    const body = report({
+      game: 'test-game',
+      roomCode: 'TGAME',
+      players: [seat(0, 1, -2), seat(1, 2, 12), seat(2, 2, 12)],
+    })
+    expect((await post(body)).status).toBe(201)
+    const rows = await testApp.sql`
 				SELECT seat, placement, score
 				FROM match_players
 				WHERE match_id = ${body.matchId}
-				ORDER BY seat`;
-		expect(rows.map((row: { score: number }) => row.score)).toEqual([-2, 12, 12]);
-	});
-});
+				ORDER BY seat`
+    expect(rows.map((row: { score: number }) => row.score)).toEqual([-2, 12, 12])
+  })
+})
 
-describe("match logs", () => {
-	test("are stored with the match, as sent; a changed log is a conflict", async () => {
-		const body = report();
-		expect((await post(body)).status).toBe(201);
-		const [row] = await testApp.sql`
+describe('match logs', () => {
+  test('are stored with the match, as sent; a changed log is a conflict', async () => {
+    const body = report()
+    expect((await post(body)).status).toBe(201)
+    const [row] = await testApp.sql`
 				SELECT log_version, event_count, events
 				FROM match_logs
-				WHERE match_id = ${body.matchId}`;
-		expect(row).toEqual({ log_version: 1, event_count: 3, events: events() });
+				WHERE match_id = ${body.matchId}`
+    expect(row).toEqual({ log_version: 1, event_count: 3, events: events() })
 
-		const changed = events();
-		changed[1]!.data.card = "n9-0";
-		expect((await post({ ...body, log: { logVersion: 1, events: changed } })).status).toBe(409);
-	});
+    const changed = events()
+    changed[1]!.data.card = 'n9-0'
+    expect((await post({ ...body, log: { logVersion: 1, events: changed } })).status).toBe(409)
+  })
 
-	test("rejects a missing log, gaps in seq, unknown seats and bad types", async () => {
-		const field = async (over: Record<string, unknown>) =>
-			(await post(report(over))).json.error?.fields;
-		const { log: _, ...noLog } = report();
-		expect((await post(noLog)).status).toBe(400);
-		const [first, second, third] = events();
-		expect((await field({ log: { logVersion: 1, events: [first, third] } })).log).toBe(
-			"Event 1 must have seq 1 and a seat from players.",
-		);
-		expect(
-			(await field({ log: { logVersion: 1, events: [first, { ...second, seat: 5 }, third] } })).log,
-		).toBeTruthy();
-		expect(
-			await field({ log: { logVersion: 1, events: [{ ...first, type: "Deal!" }] } }),
-		).toHaveProperty(["log.events.0.type"]);
-		expect(await field({ log: { logVersion: 1, events: [{ ...first, t: -1 }] } })).toHaveProperty([
-			"log.events.0.t",
-		]);
-		expect(
-			await field({
-				log: { logVersion: 1, events: [{ ...first, data: { pad: "x".repeat(5000) } }] },
-			}),
-		).toHaveProperty(["log.events.0.data"]);
-	});
+  test('rejects a missing log, gaps in seq, unknown seats and bad types', async () => {
+    const field = async (over: Record<string, unknown>) =>
+      (await post(report(over))).json.error?.fields
+    const { log: _, ...noLog } = report()
+    expect((await post(noLog)).status).toBe(400)
+    const [first, second, third] = events()
+    expect((await field({ log: { logVersion: 1, events: [first, third] } })).log).toBe(
+      'Event 1 must have seq 1 and a seat from players.',
+    )
+    expect(
+      (await field({ log: { logVersion: 1, events: [first, { ...second, seat: 5 }, third] } })).log,
+    ).toBeTruthy()
+    expect(
+      await field({ log: { logVersion: 1, events: [{ ...first, type: 'Deal!' }] } }),
+    ).toHaveProperty(['log.events.0.type'])
+    expect(await field({ log: { logVersion: 1, events: [{ ...first, t: -1 }] } })).toHaveProperty([
+      'log.events.0.t',
+    ])
+    expect(
+      await field({
+        log: { logVersion: 1, events: [{ ...first, data: { pad: 'x'.repeat(5000) } }] },
+      }),
+    ).toHaveProperty(['log.events.0.data'])
+  })
 
-	test("a big log fits the larger body limit; other routes keep 16 KB", async () => {
-		// About 120 KB: far more than a real 6-player match.
-		const big = Array.from({ length: 1500 }, (_, i) => ({
-			seq: i,
-			t: i * 900,
-			type: "play",
-			seat: 0,
-			data: { card: "n7-1", total: 7, drew: "n9-0", by: "player" },
-		}));
-		const body = report({ log: { logVersion: 1, events: big } });
-		expect(JSON.stringify(body).length).toBeGreaterThan(100_000);
-		expect((await post(body)).status).toBe(201);
-		const huge = await call(testApp.app, "POST", "/v1/matches", {
-			body: "x".repeat(600 * 1024),
-			token: SERVER_KEY,
-		});
-		expect(huge.status).toBe(413);
-		const guestBody = await call(testApp.app, "POST", "/v1/players/guest", {
-			body: "x".repeat(20 * 1024),
-		});
-		expect(guestBody.status).toBe(413);
-	});
-});
+  test('a big log fits the larger body limit; other routes keep 16 KB', async () => {
+    // About 120 KB: far more than a real 6-player match.
+    const big = Array.from({ length: 1500 }, (_, i) => ({
+      seq: i,
+      t: i * 900,
+      type: 'play',
+      seat: 0,
+      data: { card: 'n7-1', total: 7, drew: 'n9-0', by: 'player' },
+    }))
+    const body = report({ log: { logVersion: 1, events: big } })
+    expect(JSON.stringify(body).length).toBeGreaterThan(100_000)
+    expect((await post(body)).status).toBe(201)
+    const huge = await call(testApp.app, 'POST', '/v1/matches', {
+      body: 'x'.repeat(600 * 1024),
+      token: SERVER_KEY,
+    })
+    expect(huge.status).toBe(413)
+    const guestBody = await call(testApp.app, 'POST', '/v1/players/guest', {
+      body: 'x'.repeat(20 * 1024),
+    })
+    expect(guestBody.status).toBe(413)
+  })
+})
 
-describe("my match history", () => {
-	test("lists my matches newest first with paging", async () => {
-		const carl = await guest(testApp.app, "Carl");
-		const ids: string[] = [];
-		for (let i = 0; i < 22; i++) {
-			const body = report({
-				players: [
-					{ seat: 0, playerId: carl.player.id, bot: false, placement: i % 2 ? 1 : 2, score: 1 },
-					{
-						seat: 1,
-						playerId: null,
-						bot: true,
-						botName: "Bot Rain",
-						placement: i % 2 ? 2 : 1,
-						score: 0,
-					},
-				],
-			});
-			ids.push(body.matchId);
-			expect((await post(body)).status).toBe(201);
-		}
+describe('my match history', () => {
+  test('lists my matches newest first with paging', async () => {
+    const carl = await guest(testApp.app, 'Carl')
+    const ids: string[] = []
+    for (let i = 0; i < 22; i++) {
+      const body = report({
+        players: [
+          { seat: 0, playerId: carl.player.id, bot: false, placement: i % 2 ? 1 : 2, score: 1 },
+          {
+            seat: 1,
+            playerId: null,
+            bot: true,
+            botName: 'Bot Rain',
+            placement: i % 2 ? 2 : 1,
+            score: 0,
+          },
+        ],
+      })
+      ids.push(body.matchId)
+      expect((await post(body)).status).toBe(201)
+    }
 
-		const first = await call(testApp.app, "GET", "/v1/players/me/matches", { token: carl.secret });
-		expect(first.status).toBe(200);
-		expect(first.json.data.matches).toHaveLength(20);
-		expect(first.json.data.matches[0].id).toBe(ids.at(-1));
-		expect(first.json.data.matches[0]).toEqual(
-			expect.objectContaining({ game: "bust-31", players: 2, seat: 0 }),
-		);
-		const second = await call(
-			testApp.app,
-			"GET",
-			`/v1/players/me/matches?cursor=${first.json.data.nextCursor}`,
-			{ token: carl.secret },
-		);
-		expect(second.json.data.matches.map((match: { id: string }) => match.id)).toEqual([
-			ids[1],
-			ids[0],
-		]);
-		expect(second.json.data.nextCursor).toBeNull();
-	});
+    const first = await call(testApp.app, 'GET', '/v1/players/me/matches', { token: carl.secret })
+    expect(first.status).toBe(200)
+    expect(first.json.data.matches).toHaveLength(20)
+    expect(first.json.data.matches[0].id).toBe(ids.at(-1))
+    expect(first.json.data.matches[0]).toEqual(
+      expect.objectContaining({ game: 'bust-31', players: 2, seat: 0 }),
+    )
+    const second = await call(
+      testApp.app,
+      'GET',
+      `/v1/players/me/matches?cursor=${first.json.data.nextCursor}`,
+      { token: carl.secret },
+    )
+    expect(second.json.data.matches.map((match: { id: string }) => match.id)).toEqual([
+      ids[1],
+      ids[0],
+    ])
+    expect(second.json.data.nextCursor).toBeNull()
+  })
 
-	test("stats count finished matches, wins and the best run of wins per game, not terminated ones", async () => {
-		const dana = await guest(testApp.app, "Dana");
-		const seats = (placement: number) => [
-			{ seat: 0, playerId: dana.player.id, bot: false, placement, score: 1 },
-			{
-				seat: 1,
-				playerId: null,
-				bot: true,
-				botName: "Bot Rain",
-				placement: 3 - placement,
-				score: 0,
-			},
-		];
-		// Won, won, lost, won, then a terminated "win" that counts for nothing: best run is 2.
-		const at = (minute: number) => `2026-11-12T08:${String(minute).padStart(2, "0")}:00Z`;
-		const placements = [1, 1, 2, 1];
-		for (const [index, placement] of placements.entries()) {
-			const body = report({ players: seats(placement), endedAt: at(10 + index) });
-			expect((await post(body)).status).toBe(201);
-		}
+  test('stats count finished matches, wins and the best run of wins per game, not terminated ones', async () => {
+    const dana = await guest(testApp.app, 'Dana')
+    const seats = (placement: number) => [
+      { seat: 0, playerId: dana.player.id, bot: false, placement, score: 1 },
+      {
+        seat: 1,
+        playerId: null,
+        bot: true,
+        botName: 'Bot Rain',
+        placement: 3 - placement,
+        score: 0,
+      },
+    ]
+    // Won, won, lost, won, then a terminated "win" that counts for nothing: best run is 2.
+    const at = (minute: number) => `2026-11-12T08:${String(minute).padStart(2, '0')}:00Z`
+    const placements = [1, 1, 2, 1]
+    for (const [index, placement] of placements.entries()) {
+      const body = report({ players: seats(placement), endedAt: at(10 + index) })
+      expect((await post(body)).status).toBe(201)
+    }
 
-		const stopped = report({ players: seats(1), endReason: "terminated", endedAt: at(20) });
-		expect((await post(stopped)).status).toBe(201);
+    const stopped = report({ players: seats(1), endReason: 'terminated', endedAt: at(20) })
+    expect((await post(stopped)).status).toBe(201)
 
-		const res = await call(testApp.app, "GET", "/v1/players/me/stats", { token: dana.secret });
-		expect(res.status).toBe(200);
-		expect(res.json.data).toEqual({
-			games: [
-				{
-					game: "bust-31",
-					played: 4,
-					wins: 3,
-					bestStreak: 2,
-					currentStreak: 1,
-					averagePlace: 1.3,
-					rounds: { played: 0, won: null },
-				},
-			],
-		});
-	});
+    const res = await call(testApp.app, 'GET', '/v1/players/me/stats', { token: dana.secret })
+    expect(res.status).toBe(200)
+    expect(res.json.data).toEqual({
+      games: [
+        {
+          game: 'bust-31',
+          played: 4,
+          wins: 3,
+          bestStreak: 2,
+          currentStreak: 1,
+          averagePlace: 1.3,
+          rounds: { played: 0, won: null },
+        },
+      ],
+    })
+  })
 
-	test("stats count the rounds a seat was dealt into and how each game counts a round won", async () => {
-		const eve = await guest(testApp.app, "Eve");
-		await room(testApp.sql, "cloudburst", "CLD9X");
-		const seats = [
-			{ seat: 0, playerId: eve.player.id, bot: false, placement: 2, score: 1 },
-			{ seat: 1, playerId: null, bot: true, botName: "Bot Rain", placement: 1, score: 2 },
-		];
-		const bust = report({ players: seats });
-		const cloud = report({ game: "cloudburst", roomCode: "CLD9X", players: seats });
-		expect((await post(bust)).status).toBe(201);
-		expect((await post(cloud)).status).toBe(201);
+  test('stats count the rounds a seat was dealt into and how each game counts a round won', async () => {
+    const eve = await guest(testApp.app, 'Eve')
+    await room(testApp.sql, 'cloudburst', 'CLD9X')
+    const seats = [
+      { seat: 0, playerId: eve.player.id, bot: false, placement: 2, score: 1 },
+      { seat: 1, playerId: null, bot: true, botName: 'Bot Rain', placement: 1, score: 2 },
+    ]
+    const bust = report({ players: seats })
+    const cloud = report({ game: 'cloudburst', roomCode: 'CLD9X', players: seats })
+    expect((await post(bust)).status).toBe(201)
+    expect((await post(cloud)).status).toBe(201)
 
-		// Bust 31: Eve survives round 1 (seat 1 busts), busts in round 2, sits out round 3 (no hand).
-		// Cloudburst: Eve goes out first in round 1 only.
-		const rounds = [
-			{ match: bust, round: 1, hands: { 0: [], 1: [] }, result: { seat: 1 } },
-			{ match: bust, round: 2, hands: { 0: [], 1: [] }, result: { seat: 0 } },
-			{ match: bust, round: 3, hands: { 1: [] }, result: { seat: 1 } },
-			{ match: cloud, round: 1, hands: { 0: [], 1: [] }, result: { out: 0 } },
-			{ match: cloud, round: 2, hands: { 0: [], 1: [] }, result: { out: 1 } },
-		];
-		for (const row of rounds) {
-			const events = [{ seq: 0, t: 0, type: "deal", data: { round: row.round, hands: row.hands } }];
-			await testApp.sql`
+    // Bust 31: Eve survives round 1 (seat 1 busts), busts in round 2, sits out round 3 (no hand).
+    // Cloudburst: Eve goes out first in round 1 only.
+    const rounds = [
+      { match: bust, round: 1, hands: { 0: [], 1: [] }, result: { seat: 1 } },
+      { match: bust, round: 2, hands: { 0: [], 1: [] }, result: { seat: 0 } },
+      { match: bust, round: 3, hands: { 1: [] }, result: { seat: 1 } },
+      { match: cloud, round: 1, hands: { 0: [], 1: [] }, result: { out: 0 } },
+      { match: cloud, round: 2, hands: { 0: [], 1: [] }, result: { out: 1 } },
+    ]
+    for (const row of rounds) {
+      const events = [{ seq: 0, t: 0, type: 'deal', data: { round: row.round, hands: row.hands } }]
+      await testApp.sql`
 				INSERT INTO match_rounds (id, match_id, round, game_slug, room_id, result, events, started_at, ended_at, body_hash)
 				SELECT
 					${Bun.randomUUIDv7()},
@@ -359,45 +359,45 @@ describe("my match history", () => {
 					m.ended_at,
 					decode(repeat('ab', 32), 'hex')
 				FROM matches m
-				WHERE m.id = ${row.match.matchId}`;
-		}
+				WHERE m.id = ${row.match.matchId}`
+    }
 
-		const res = await call(testApp.app, "GET", "/v1/players/me/stats", { token: eve.secret });
-		const rounds_ = Object.fromEntries(
-			res.json.data.games.map((game: { game: string; rounds: unknown }) => [
-				game.game,
-				game.rounds,
-			]),
-		);
-		expect(rounds_).toEqual({
-			"bust-31": { played: 2, won: 1 },
-			cloudburst: { played: 2, won: 1 },
-		});
-	});
+    const res = await call(testApp.app, 'GET', '/v1/players/me/stats', { token: eve.secret })
+    const rounds_ = Object.fromEntries(
+      res.json.data.games.map((game: { game: string; rounds: unknown }) => [
+        game.game,
+        game.rounds,
+      ]),
+    )
+    expect(rounds_).toEqual({
+      'bust-31': { played: 2, won: 1 },
+      cloudburst: { played: 2, won: 1 },
+    })
+  })
 
-	test("history keeps one game with ?game=; a bad game or cursor is bad_input", async () => {
-		const finn = await guest(testApp.app, "Finn");
-		await room(testApp.sql, "cloudburst", "CLD8Y");
-		const seats = [
-			{ seat: 0, playerId: finn.player.id, bot: false, placement: 1, score: 1 },
-			{ seat: 1, playerId: null, bot: true, botName: "Bot Rain", placement: 2, score: 0 },
-		];
-		const bust = report({ players: seats });
-		const cloud = report({ game: "cloudburst", roomCode: "CLD8Y", players: seats });
-		expect((await post(bust)).status).toBe(201);
-		expect((await post(cloud)).status).toBe(201);
+  test('history keeps one game with ?game=; a bad game or cursor is bad_input', async () => {
+    const finn = await guest(testApp.app, 'Finn')
+    await room(testApp.sql, 'cloudburst', 'CLD8Y')
+    const seats = [
+      { seat: 0, playerId: finn.player.id, bot: false, placement: 1, score: 1 },
+      { seat: 1, playerId: null, bot: true, botName: 'Bot Rain', placement: 2, score: 0 },
+    ]
+    const bust = report({ players: seats })
+    const cloud = report({ game: 'cloudburst', roomCode: 'CLD8Y', players: seats })
+    expect((await post(bust)).status).toBe(201)
+    expect((await post(cloud)).status).toBe(201)
 
-		const path = "/v1/players/me/matches?game=cloudburst";
-		const res = await call(testApp.app, "GET", path, { token: finn.secret });
-		expect(res.json.data.matches.map((match: { id: string }) => match.id)).toEqual([cloud.matchId]);
+    const path = '/v1/players/me/matches?game=cloudburst'
+    const res = await call(testApp.app, 'GET', path, { token: finn.secret })
+    expect(res.json.data.matches.map((match: { id: string }) => match.id)).toEqual([cloud.matchId])
 
-		const bad = await call(testApp.app, "GET", "/v1/players/me/matches?game=NOPE!", {
-			token: finn.secret,
-		});
-		expect(bad.status).toBe(400);
-		const badCursor = await call(testApp.app, "GET", "/v1/players/me/matches?cursor=nope", {
-			token: finn.secret,
-		});
-		expect(badCursor.status).toBe(400);
-	});
-});
+    const bad = await call(testApp.app, 'GET', '/v1/players/me/matches?game=NOPE!', {
+      token: finn.secret,
+    })
+    expect(bad.status).toBe(400)
+    const badCursor = await call(testApp.app, 'GET', '/v1/players/me/matches?cursor=nope', {
+      token: finn.secret,
+    })
+    expect(badCursor.status).toBe(400)
+  })
+})

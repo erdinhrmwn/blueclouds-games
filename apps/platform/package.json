@@ -1,27 +1,27 @@
 {
-	"name": "platform",
-	"version": "0.0.1",
-	"private": true,
-	"type": "module",
-	"scripts": {
-		"dev": "bun --env-file=../../.env --watch src/index.ts",
-		"start": "bun --env-file=../../.env src/index.ts",
-		"test": "bun test --env-file=../../.env",
-		"check": "tsc --noEmit",
-		"db:migrate": "bun --env-file=../../.env scripts/migrate.ts",
-		"keys:generate": "bun scripts/keys-generate.ts"
-	},
-	"dependencies": {
-		"@hono/bun": "^1.0.1",
-		"@hono/zod-validator": "^0.9.1",
-		"hono": "^4.13.18",
-		"jose": "^6.2.17",
-		"pino": "^9.14.0",
-		"zod": "^4.1.0"
-	},
-	"devDependencies": {
-		"@types/bun": "latest",
-		"pino-pretty": "^13.2.0",
-		"typescript": "^6.0.3"
-	}
+  "name": "platform",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --env-file=../../.env --watch src/index.ts",
+    "start": "bun --env-file=../../.env src/index.ts",
+    "test": "bun test --env-file=../../.env",
+    "check": "tsc --noEmit",
+    "db:migrate": "bun --env-file=../../.env scripts/migrate.ts",
+    "keys:generate": "bun scripts/keys-generate.ts"
+  },
+  "dependencies": {
+    "@hono/bun": "^1.0.1",
+    "@hono/zod-validator": "^0.9.1",
+    "hono": "^4.13.18",
+    "jose": "^6.2.17",
+    "pino": "^9.14.0",
+    "zod": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "pino-pretty": "^13.2.0",
+    "typescript": "^6.0.3"
+  }
 }

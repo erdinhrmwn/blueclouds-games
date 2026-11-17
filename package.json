@@ -2,7 +2,9 @@
   "name": "card-game",
   "private": true,
   "type": "module",
-  "workspaces": ["apps/*"],
+  "workspaces": [
+    "apps/*"
+  ],
   "scripts": {
     "dev": "bun run --parallel --no-exit-on-error dev:server dev:web dev:platform",
     "dev:server": "bun run --filter server dev",
@@ -10,10 +12,12 @@
     "dev:platform": "bun run --filter platform dev",
     "dev:backoffice": "bun run --filter backoffice dev",
     "test": "bun run --filter server test && bun run --filter platform test && bun run --filter backoffice test",
-    "check": "prettier --check \"apps/**/*.{ts,js,svelte}\" && bun run --filter '*' check",
-    "format": "prettier --write \"apps/**/*.{ts,js,svelte}\""
+    "check": "prettier --check \"**/*.{ts,js,svelte,json}\" && biome check --diagnostic-level=error && bun run --filter '*' check",
+    "format": "biome check --write && prettier --write \"**/*.{ts,js,svelte,json}\"",
+    "lint": "biome check"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.6.8",
     "prettier": "^3.10.0",
     "prettier-plugin-svelte": "^4.1.1"
   }

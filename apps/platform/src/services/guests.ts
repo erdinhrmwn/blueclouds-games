@@ -1,10 +1,10 @@
-import type { SQL } from "bun";
+import type { SQL } from 'bun'
 
 /** A guest that never played a match is deleted after this long unseen (Erdin, 2026-11-11). */
-export const GUEST_UNUSED_DAYS = 30;
+export const GUEST_UNUSED_DAYS = 30
 
 /** Rows per sweep, so one run never holds a long lock; a backlog clears over the next days. */
-const SWEEP_BATCH = 5_000;
+const SWEEP_BATCH = 5_000
 
 /**
  * A guest nobody else's history points at: no match, no tournament sign-up or seat, no admin audit entry, no coins.
@@ -41,21 +41,21 @@ const unused = (sql: SQL) => sql`
 		SELECT 1
 		FROM wallets w
 		WHERE w.player_id = p.id
-	)`;
+	)`
 
 /** On logout: a guest can never come back once its secret is gone, so an unused one is deleted right away. */
 export async function deleteGuestIfUnused(sql: SQL, playerId: string): Promise<boolean> {
-	const rows = await sql`
+  const rows = await sql`
 		DELETE FROM players p
 		WHERE p.id = ${playerId} AND ${unused(sql)}
-		RETURNING p.id`;
+		RETURNING p.id`
 
-	return rows.length > 0;
+  return rows.length > 0
 }
 
 /** Deletes unused guests not seen for GUEST_UNUSED_DAYS. Returns how many went. */
 export async function sweepGuests(sql: SQL, days = GUEST_UNUSED_DAYS): Promise<number> {
-	const rows = await sql`
+  const rows = await sql`
 		DELETE FROM players
 		WHERE id IN (
 			SELECT p.id
@@ -63,7 +63,7 @@ export async function sweepGuests(sql: SQL, days = GUEST_UNUSED_DAYS): Promise<n
 			WHERE p.last_seen_at < now() - make_interval(days => ${days}) AND ${unused(sql)}
 			LIMIT ${SWEEP_BATCH}
 		)
-		RETURNING id`;
+		RETURNING id`
 
-	return rows.length;
+  return rows.length
 }

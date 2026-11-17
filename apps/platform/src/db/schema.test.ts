@@ -1,288 +1,287 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import type { SQL } from "bun";
-import { resetTestDatabase, room } from "../test-helpers";
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
+import type { SQL } from 'bun'
+import { resetTestDatabase, room } from '../test-helpers'
 
 // Rules the database holds on its own (docs/architecture/database.md), checked with plain SQL.
-let sql: SQL;
-let player: string;
-let admin: string;
-let roomId: string;
-const MATCH = "01900000-0000-7000-8000-000000000001";
-const hash = () => crypto.getRandomValues(new Uint8Array(32));
+let sql: SQL
+let player: string
+let admin: string
+let roomId: string
+const MATCH = '01900000-0000-7000-8000-000000000001'
+const hash = () => crypto.getRandomValues(new Uint8Array(32))
 
 beforeAll(async () => {
-	sql = (await resetTestDatabase()).sql;
-	[{ id: player }] = await sql`
+  sql = (await resetTestDatabase()).sql
+  ;[{ id: player }] = await sql`
 		INSERT INTO players (display_name)
 		VALUES ('Rina')
-		RETURNING id`;
-	[{ id: admin }] = await sql`
+		RETURNING id`
+  ;[{ id: admin }] = await sql`
 			INSERT INTO admins (username, password_hash, role)
 			VALUES ('root', '$argon2id$v=19$test', 'owner')
-			RETURNING id`;
-	roomId = await room(sql, "bust-31", "ABCD");
-	await sql`
+			RETURNING id`
+  roomId = await room(sql, 'bust-31', 'ABCD')
+  await sql`
 		INSERT INTO matches (id, game_slug, room_id, rules_version, started_at, ended_at, body_hash)
-		VALUES (${MATCH}, 'bust-31', ${roomId}, 1, now() - interval '5 min', now(), ${hash()})`;
-	await sql`
+		VALUES (${MATCH}, 'bust-31', ${roomId}, 1, now() - interval '5 min', now(), ${hash()})`
+  await sql`
 		INSERT INTO match_players (match_id, seat, player_id, bot_name, placement, score)
-		VALUES (${MATCH}, 0, ${player}, NULL, 1, 2), (${MATCH}, 1, NULL, 'Bot Rain', 2, 0)`;
-	await sql`
+		VALUES (${MATCH}, 0, ${player}, NULL, 1, 2), (${MATCH}, 1, NULL, 'Bot Rain', 2, 0)`
+  await sql`
 		INSERT INTO match_logs (match_id, log_version, event_count, events)
-		VALUES (${MATCH}, 1, 1, '[{"seq":0}]')`;
-	await sql`
+		VALUES (${MATCH}, 1, 1, '[{"seq":0}]')`
+  await sql`
 		INSERT INTO admin_audit_events (admin_id, action)
-		VALUES (${admin}, 'login')`;
-});
-afterAll(() => sql.close());
+		VALUES (${admin}, 'login')`
+})
+afterAll(() => sql.close())
 
-const refused = (query: Promise<unknown>, message: RegExp) =>
-	expect(query).rejects.toThrow(message);
+const refused = (query: Promise<unknown>, message: RegExp) => expect(query).rejects.toThrow(message)
 
-describe("append-only history", () => {
-	test("UPDATE and DELETE are refused on matches, match_players, match_logs and admin_audit_events", async () => {
-		for (const table of ["matches", "match_players", "match_logs", "admin_audit_events"]) {
-			await refused(
-				sql.unsafe(`
+describe('append-only history', () => {
+  test('UPDATE and DELETE are refused on matches, match_players, match_logs and admin_audit_events', async () => {
+    for (const table of ['matches', 'match_players', 'match_logs', 'admin_audit_events']) {
+      await refused(
+        sql.unsafe(`
 					UPDATE ${table}
 					SET created_at = now()`),
-				/append-only/,
-			);
-			await refused(sql.unsafe(`DELETE FROM ${table}`), /append-only/);
-		}
-	});
-});
+        /append-only/,
+      )
+      await refused(sql.unsafe(`DELETE FROM ${table}`), /append-only/)
+    }
+  })
+})
 
-describe("match rules", () => {
-	test("a second winner, a player in two seats, a non-v7 id, a short hash or a wrong event count is refused", async () => {
-		await refused(
-			sql`
+describe('match rules', () => {
+  test('a second winner, a player in two seats, a non-v7 id, a short hash or a wrong event count is refused', async () => {
+    await refused(
+      sql`
 				INSERT INTO match_players (match_id, seat, player_id, bot_name, placement, score)
 				VALUES (${MATCH}, 2, NULL, 'Bot Sun', 1, 0)`,
-			/winner_key/,
-		);
-		await refused(
-			sql`
+      /winner_key/,
+    )
+    await refused(
+      sql`
 				INSERT INTO match_players (match_id, seat, player_id, bot_name, placement, score)
 				VALUES (${MATCH}, 2, ${player}, NULL, 3, 0)`,
-			/player_id_match_id_key/,
-		);
+      /player_id_match_id_key/,
+    )
 
-		const insert = (id: string, bodyHash: Uint8Array) =>
-			sql`
+    const insert = (id: string, bodyHash: Uint8Array) =>
+      sql`
 				INSERT INTO matches (id, game_slug, room_id, rules_version, started_at, ended_at, body_hash)
-				VALUES (${id}, 'bust-31', ${roomId}, 1, now(), now(), ${bodyHash})`;
-		await refused(insert("01900000-0000-4000-8000-000000000002", hash()), /matches_id_check/);
-		await refused(
-			insert("01900000-0000-7000-8000-000000000002", new Uint8Array(1)),
-			/matches_body_hash_check/,
-		);
-		await insert("01900000-0000-7000-8000-000000000003", hash());
-		await refused(
-			sql`
+				VALUES (${id}, 'bust-31', ${roomId}, 1, now(), now(), ${bodyHash})`
+    await refused(insert('01900000-0000-4000-8000-000000000002', hash()), /matches_id_check/)
+    await refused(
+      insert('01900000-0000-7000-8000-000000000002', new Uint8Array(1)),
+      /matches_body_hash_check/,
+    )
+    await insert('01900000-0000-7000-8000-000000000003', hash())
+    await refused(
+      sql`
 				INSERT INTO match_logs (match_id, log_version, event_count, events)
 				VALUES ('01900000-0000-7000-8000-000000000003', 1, 2, '[{"seq":0}]')`,
-			/events_length_check/,
-		);
-	});
-});
+      /events_length_check/,
+    )
+  })
+})
 
-describe("admins and audit", () => {
-	test("root stays an enabled owner; roles, password hashes and audit actions are checked", async () => {
-		await refused(
-			sql`
+describe('admins and audit', () => {
+  test('root stays an enabled owner; roles, password hashes and audit actions are checked', async () => {
+    await refused(
+      sql`
 				UPDATE admins
 				SET disabled_at = now()
 				WHERE username = 'root'`,
-			/root_enabled_check/,
-		);
-		await sql`
+      /root_enabled_check/,
+    )
+    await sql`
 			INSERT INTO admins (username, password_hash)
-			VALUES ('ops', '$argon2id$v=19$test')`;
-		await sql`
+			VALUES ('ops', '$argon2id$v=19$test')`
+    await sql`
 			UPDATE admins
 			SET disabled_at = now()
-			WHERE username = 'ops'`;
+			WHERE username = 'ops'`
 
-		await refused(
-			sql`
+    await refused(
+      sql`
 				UPDATE admins
 				SET role = 'viewer'
 				WHERE username = 'root'`,
-			/root_owner_check/,
-		);
-		await refused(
-			sql`
+      /root_owner_check/,
+    )
+    await refused(
+      sql`
 			UPDATE admins
 			SET role = 'superuser'
 			WHERE username = 'ops'`,
-			/role_check/,
-		);
+      /role_check/,
+    )
 
-		await refused(
-			sql`
+    await refused(
+      sql`
 				INSERT INTO admins (username, password_hash)
 				VALUES ('plain', 'hunter2')`,
-			/password_hash_check/,
-		);
+      /password_hash_check/,
+    )
 
-		await refused(
-			sql`
+    await refused(
+      sql`
 				INSERT INTO admin_audit_events (admin_id, action)
 				VALUES (${admin}, 'player.delete')`,
-			/action_check/,
-		);
-	});
-});
+      /action_check/,
+    )
+  })
+})
 
-describe("tournament rooms", () => {
-	let cup: string;
-	let cupRoom: string;
-	let other: string;
-	beforeAll(async () => {
-		[{ id: cup }] = await sql`
+describe('tournament rooms', () => {
+  let cup: string
+  let cupRoom: string
+  let other: string
+  beforeAll(async () => {
+    ;[{ id: cup }] = await sql`
 			INSERT INTO tournaments (game_slug, name, players_per_room, starts_at, registration_closes_at, created_by_admin_id)
 			VALUES ('bust-31', 'Cup', 6, now() + interval '1 hour', now() + interval '50 min', ${admin})
-			RETURNING id`;
-		await sql`
+			RETURNING id`
+    await sql`
 			INSERT INTO tournament_rounds (tournament_id, round, starts_at)
-			VALUES (${cup}, 1, now()), (${cup}, 2, now())`;
-		[{ id: cupRoom }] = await sql`
+			VALUES (${cup}, 1, now()), (${cup}, 2, now())`
+    ;[{ id: cupRoom }] = await sql`
 				INSERT INTO rooms (game_slug, code, tournament_id, tournament_round)
 				VALUES ('bust-31', 'CUP01', ${cup}, 1)
-				RETURNING id`;
-		[{ id: other }] = await sql`
+				RETURNING id`
+    ;[{ id: other }] = await sql`
 			INSERT INTO players (display_name)
 			VALUES ('Ben')
-			RETURNING id`;
-		await sql`
+			RETURNING id`
+    await sql`
 			INSERT INTO tournament_players (tournament_id, player_id)
-			VALUES (${cup}, ${player}), (${cup}, ${other})`;
-		await sql`
+			VALUES (${cup}, ${player}), (${cup}, ${other})`
+    await sql`
 			INSERT INTO room_assignments (room_id, tournament_id, tournament_round, player_id, seat)
-			VALUES (${cupRoom}, ${cup}, 1, ${player}, 0)`;
-	});
-	const assign = (roomId: string, playerId: string, seat: number, round = 1) =>
-		sql`
+			VALUES (${cupRoom}, ${cup}, 1, ${player}, 0)`
+  })
+  const assign = (roomId: string, playerId: string, seat: number, round = 1) =>
+    sql`
 			INSERT INTO room_assignments (room_id, tournament_id, tournament_round, player_id, seat)
-			VALUES (${roomId}, ${cup}, ${round}, ${playerId}, ${seat})`;
+			VALUES (${roomId}, ${cup}, ${round}, ${playerId}, ${seat})`
 
-	test("only a disqualification has a reason, and a changed status has a time", async () => {
-		const setStatus = (status: string, reason: string | null, changed: boolean) => sql`
+  test('only a disqualification has a reason, and a changed status has a time', async () => {
+    const setStatus = (status: string, reason: string | null, changed: boolean) => sql`
 			UPDATE tournament_players
 			SET status = ${status}, status_reason = ${reason}, status_changed_at = ${changed ? new Date() : null}
-			WHERE tournament_id = ${cup} AND player_id = ${other}`;
+			WHERE tournament_id = ${cup} AND player_id = ${other}`
 
-		await refused(setStatus("disqualified", null, true), /status_reason_check/);
-		await refused(setStatus("withdrawn", "Left", true), /status_reason_check/);
-		await refused(setStatus("withdrawn", null, false), /status_changed_check/);
-		await refused(setStatus("gone", null, true), /status_check/);
-	});
+    await refused(setStatus('disqualified', null, true), /status_reason_check/)
+    await refused(setStatus('withdrawn', 'Left', true), /status_reason_check/)
+    await refused(setStatus('withdrawn', null, false), /status_changed_check/)
+    await refused(setStatus('gone', null, true), /status_check/)
+  })
 
-	test("one player per seat, only registered players, one room per player per round", async () => {
-		await refused(assign(cupRoom, other, 0), /room_id_seat_key/);
-		const [{ id: stranger }] = await sql`
+  test('one player per seat, only registered players, one room per player per round', async () => {
+    await refused(assign(cupRoom, other, 0), /room_id_seat_key/)
+    const [{ id: stranger }] = await sql`
 				INSERT INTO players (display_name)
 				VALUES ('Cy')
-				RETURNING id`;
-		await refused(assign(cupRoom, stranger, 1), /tournament_id_player_id_fkey/);
-		const [{ id: second }] = await sql`
+				RETURNING id`
+    await refused(assign(cupRoom, stranger, 1), /tournament_id_player_id_fkey/)
+    const [{ id: second }] = await sql`
 				INSERT INTO rooms (game_slug, code, tournament_id, tournament_round)
 				VALUES ('bust-31', 'CUP04', ${cup}, 1)
-				RETURNING id`;
-		await refused(assign(second, player, 0), /round_player_key/);
+				RETURNING id`
+    await refused(assign(second, player, 0), /round_player_key/)
 
-		// The next round seats them again, at a table of that round only.
-		const [{ id: nextRound }] = await sql`
+    // The next round seats them again, at a table of that round only.
+    const [{ id: nextRound }] = await sql`
 				INSERT INTO rooms (game_slug, code, tournament_id, tournament_round)
 				VALUES ('bust-31', 'CUP05', ${cup}, 2)
-				RETURNING id`;
-		await assign(nextRound, player, 0, 2);
-		await refused(assign(nextRound, other, 1, 1), /room_round_fkey/);
-	});
+				RETURNING id`
+    await assign(nextRound, player, 0, 2)
+    await refused(assign(nextRound, other, 1, 1), /room_round_fkey/)
+  })
 
-	test("a player can't make one; it plays its tournament's game and has its round; an open one has none and takes no assignments", async () => {
-		await refused(
-			sql`
+  test("a player can't make one; it plays its tournament's game and has its round; an open one has none and takes no assignments", async () => {
+    await refused(
+      sql`
 				INSERT INTO rooms (game_slug, code, tournament_id, tournament_round, created_by_player_id)
 				VALUES ('bust-31', 'CUP02', ${cup}, 1, ${player})`,
-			/tournament_creator_check/,
-		);
-		await refused(
-			sql`
+      /tournament_creator_check/,
+    )
+    await refused(
+      sql`
 				INSERT INTO rooms (game_slug, code, tournament_id, tournament_round)
 				VALUES ('cloudburst', 'CUP03', ${cup}, 1)`,
-			/tournament_id_game_slug_fkey/,
-		);
+      /tournament_id_game_slug_fkey/,
+    )
 
-		await refused(
-			sql`
+    await refused(
+      sql`
 				INSERT INTO rooms (game_slug, code, tournament_id)
 				VALUES ('bust-31', 'CUP06', ${cup})`,
-			/tournament_round_check/,
-		);
-		await refused(
-			sql`
+      /tournament_round_check/,
+    )
+    await refused(
+      sql`
 				INSERT INTO rooms (game_slug, code, tournament_id, tournament_round)
 				VALUES ('bust-31', 'CUP07', ${cup}, 9)`,
-			/tournament_round_fkey/,
-		);
+      /tournament_round_fkey/,
+    )
 
-		await refused(assign(roomId, other, 1), /room_round_fkey/);
-	});
-});
+    await refused(assign(roomId, other, 1), /room_round_fkey/)
+  })
+})
 
-describe("player names", () => {
-	test("names are trimmed single lines; guests (no password) have guest_ usernames, accounts don't; is_active and is_guest can't be written", async () => {
-		await refused(
-			sql`
+describe('player names', () => {
+  test("names are trimmed single lines; guests (no password) have guest_ usernames, accounts don't; is_active and is_guest can't be written", async () => {
+    await refused(
+      sql`
 				INSERT INTO players (display_name)
-				VALUES (${"Rina\n"})`,
-			/display_name_check/,
-		);
-		await refused(
-			sql`
+				VALUES (${'Rina\n'})`,
+      /display_name_check/,
+    )
+    await refused(
+      sql`
 			INSERT INTO players (display_name)
 			VALUES (' Rina')`,
-			/display_name_check/,
-		);
+      /display_name_check/,
+    )
 
-		await refused(
-			sql`
+    await refused(
+      sql`
 				INSERT INTO players (display_name, username)
 				VALUES ('Lu', 'lu')`,
-			/players_guest_username_check/,
-		);
-		await refused(
-			sql`
+      /players_guest_username_check/,
+    )
+    await refused(
+      sql`
 				INSERT INTO players (display_name, username, password_hash)
 				VALUES ('Lu', 'guest_lu', '$argon2id$x')`,
-			/players_guest_username_check/,
-		);
-		const [guestRow] = await sql`
+      /players_guest_username_check/,
+    )
+    const [guestRow] = await sql`
 				INSERT INTO players (display_name, username)
 				VALUES ('Guest 1', 'guest_000001')
-				RETURNING is_guest`;
-		expect(guestRow.is_guest).toBe(true);
-		await refused(
-			sql`
+				RETURNING is_guest`
+    expect(guestRow.is_guest).toBe(true)
+    await refused(
+      sql`
 			UPDATE players
 			SET is_guest = false
 			WHERE id = ${player}`,
-			/is_guest/,
-		);
-		await refused(
-			sql`
+      /is_guest/,
+    )
+    await refused(
+      sql`
 				INSERT INTO players (display_name, username, password_hash)
 				VALUES ('Lu', 'Lu', '$argon2id$x')`,
-			/players_username_check/,
-		);
-		await refused(
-			sql`
+      /players_username_check/,
+    )
+    await refused(
+      sql`
 			UPDATE players
 			SET is_active = false
 			WHERE id = ${player}`,
-			/is_active/,
-		);
-	});
-});
+      /is_active/,
+    )
+  })
+})
