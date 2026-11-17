@@ -1,4 +1,4 @@
-// The room's side of provably fair shuffles: makes the seeds and shuffles with them, synchronously (the game rules
+// Layer 2, rules: the room's side of provably fair shuffles: makes the seeds and shuffles with them, synchronously (the game rules
 // shuffle mid-move). Same numbers as checkRound in fairness.ts, which a test holds it to.
 import { createHash, createHmac, randomBytes } from 'node:crypto'
 import {
@@ -14,10 +14,8 @@ import {
   type RoundSeed,
   type ShuffleRecord,
 } from 'contracts/fairness/fairness'
-import type { Rng } from './table'
-
-/** The next match, fixed before anyone sits down for it: its id and the commitment of its first round. */
-export type NextMatch = { matchId: string; firstRound: RoundSeed }
+import type { NextMatch } from '../domain/room'
+import type { Rng } from '../domain/table'
 
 const SERVER_SEED_BYTES = 32
 

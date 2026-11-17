@@ -1,3 +1,5 @@
+// Cloudburst, layer 2 (rules): what the server plays for a bot, or for a human whose time ran out. Pure.
+
 import {
   type Card,
   fits,
@@ -6,10 +8,8 @@ import {
   SUITS,
   type Suit,
 } from 'contracts/rooms/cloudburst'
-import { nextIndex } from '../shared/table'
-import type { Game } from './rules'
-
-export type BotMove = { type: 'play'; input: PlayInput } | { type: 'draw' } | { type: 'pass' }
+import { nextIndex } from '../../core/rules/table'
+import type { Action, Game } from './domain'
 
 /** Slow the leader down when the next player is about to go out. */
 const STOPPERS = ['calm', 'downpour', 'gust', 'swirl'] as const
@@ -24,7 +24,7 @@ const NEARLY_OUT = 2
  * 3. a wild card (Rainbow, Tempest) only when nothing else fits; nothing fits: draw, then play the card if it
  *    fits, or pass.
  */
-export function chooseBotMove(game: Game): BotMove {
+export function chooseBotMove(game: Game): Action {
   const me = game.players[game.turn]!
   const top = game.discard.at(-1)!
 

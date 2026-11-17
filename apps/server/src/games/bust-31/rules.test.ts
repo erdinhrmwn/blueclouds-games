@@ -1,21 +1,21 @@
 import { describe, expect, test } from 'bun:test'
 import { type Card, DEAL, LIMIT, START_LIVES } from 'contracts/rooms/bust-31'
+import { RuleError } from '../../core/domain/table'
 import {
   markAway,
   markBack,
   markVip,
-  RuleError,
   randomRng,
   removePlayer,
   takeSeat,
-} from '../shared/table'
+} from '../../core/rules/table'
 import { chooseBotCard } from './bots'
+import type { Game } from './domain'
 import {
   addPlayer,
   buildDeck,
   createGame,
   dealPauseMs,
-  type Game,
   playCard,
   publicView,
   resetToLobby,

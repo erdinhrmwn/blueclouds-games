@@ -71,7 +71,7 @@ One VPS, one Docker Compose project. Caddy is the only thing listening on the in
 - **backoffice** uses SvelteKit server code (`+page.server.ts` loads and form actions) that queries Postgres directly with the same database user as the platform (Erdin's call, 2026-11-11: one user is simpler to run).
 - **Migrations have one owner:** the platform. The backoffice never changes the schema; it reads the same tables.
 - **Actors → platform** go over the private network (`http://platform:3000`), so match reports never leave the VPS. The server key is still checked.
-- Actors talk to the platform through one module, `apps/server/src/platform.ts` (`verifyPlayToken`, `reportMatch`), so game code never knows the platform's URL or format.
+- Actors talk to the platform through one port, `PlatformPort`, implemented in `apps/server/src/core/adapters/platform.ts` (`verifyPlayToken`, `reportMatch`), so game code never knows the platform's URL or format.
 
 **Hostnames** (`<domain>` = `nblueclouds.online`):
 

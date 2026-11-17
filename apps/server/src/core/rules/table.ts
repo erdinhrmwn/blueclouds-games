@@ -1,37 +1,9 @@
-// Pure table rules every game shares: seats, host, shuffling. No Rivet here.
+// Layer 2, rules: the table every game shares (seats, host, away players, tags, shuffling). Pure: no Rivet,
+// no I/O.
 
 import type { Avatar } from 'contracts/avatars'
 import { SEATS } from 'contracts/rooms/room'
-
-/**
- * Shuffles a deck for a round (being dealt or played), which is part of its client seed. Injected: a room
- * shuffles provably fair (fair-rng.ts), tests pass `randomRng` with a fixed number.
- */
-export type Rng = { shuffle: <T extends { id: string }>(items: T[], round: number) => T[] }
-
-/** A rule was broken; the actor forwards the message to the player. */
-export class RuleError extends Error {}
-
-/** What the shared helpers need from a player. Turns go up the seat numbers (clockwise). */
-export type Seated = {
-  id: string
-  name: string
-  bot: boolean
-  seat: number
-  away?: boolean
-  /** A VIP account, as its play token said when it sat down. */
-  vip?: boolean
-  /** The look picked on the platform, as its play token said when it sat down or last came back. */
-  avatar?: Avatar
-}
-
-/** What the shared helpers need from a game. */
-export type Table<P extends Seated = Seated> = {
-  phase: 'lobby' | 'playing' | 'finished'
-  hostId: string | null
-  players: P[]
-  moves: number
-}
+import { type Rng, RuleError, type Seated, type Table } from '../domain/table'
 
 export function shuffle<T extends { id: string }>(items: T[], rng: Rng, round: number): T[] {
   return rng.shuffle(items, round)
@@ -226,4 +198,14 @@ export function nextIndex<P>(
   }
 
   return from
+}
+
+const BOT_NAMES = ['Bot Cloud', 'Bot Rain', 'Bot Thunder', 'Bot Rainbow', 'Bot Wind']
+
+/** A name for a new bot that nobody at the table has yet. */
+export function botName(players: { name: string }[]): string {
+  const used = new Set(players.map((player) => player.name))
+  const free = BOT_NAMES.find((name) => !used.has(name))
+
+  return free ?? `Bot ${players.length + 1}`
 }

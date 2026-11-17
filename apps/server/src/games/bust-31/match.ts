@@ -1,25 +1,21 @@
+// Bust 31, layer 2 (rules): the move log and the match result, from the game's states. Pure.
+
 import type { Card } from 'contracts/rooms/bust-31'
-import {
-  type LogEntry,
-  type LogEvent,
-  type MatchEnd,
-  type MatchReport,
-  moveBy,
-  placementsInOrder,
-  reportedSeat,
-  type MatchState as SharedMatch,
-} from '../shared/match'
-import type { RoundResult } from '../shared/rounds'
-import type { Game, Player } from './rules'
+import type {
+  LogEntry,
+  LogEvent,
+  MatchEnd,
+  MatchReport,
+  RoundResult,
+} from '../../core/domain/match'
+import { moveBy, placementsInOrder, reportedSeat } from '../../core/rules/match'
+import type { Game, MatchState, Player } from './domain'
 
 /** Bump when a rule change makes old results incomparable to new ones. */
 /** 2: Swap, Ten and Double joined the deck. */
 export const RULES_VERSION = 2
 /** Bump when the shape of a log event changes (see docs/architecture/match-log.md). */
 export const LOG_VERSION = 1
-
-/** The game in progress. `out` lists player ids in the order they were eliminated. */
-export type MatchState = SharedMatch & { out: string[] }
 
 /** Notes who lost their last life on the move that produced `game`. Call after every move. */
 export function noteMove(match: MatchState, game: Game): MatchState {

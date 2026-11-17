@@ -1,7 +1,7 @@
-// "Cloudburst": pure game rules, no Rivet. Every function returns a new state
-// or throws RuleError, so the actor can forward the message to the player.
+// Cloudburst, layer 2 (rules): pure game rules, no Rivet. Every function returns a new state or throws RuleError,
+// so the room can forward the message to the player.
 // Rules and their reasons: docs/games/cloudburst/rules.md.
-import { type Avatar, NO_AVATAR } from 'contracts/avatars'
+import { NO_AVATAR } from 'contracts/avatars'
 import {
   ACTIONS,
   BURST_AT,
@@ -11,15 +11,15 @@ import {
   type GameEvent,
   HAND_SIZE,
   isWild,
-  MAX_PLAYERS,
   MIN_PLAYERS,
   type PlayInput,
   type PublicView,
   SUITS,
-  type Suit,
 } from 'contracts/rooms/cloudburst'
 import type { TurnClock } from 'contracts/rooms/room'
-import { nextIndex, type Rng, RuleError, seatPlayer, shuffle } from '../shared/table'
+import { type Rng, RuleError } from '../../core/domain/table'
+import { nextIndex, seatPlayer, shuffle } from '../../core/rules/table'
+import type { Action, Game, Player } from './domain'
 
 const COPIES_PER_CARD = 2
 const HIGHEST_NUMBER = 8
@@ -31,42 +31,6 @@ export const FORCED_DRAW = { downpour: 2, tempest: 4 } as const
 const DEAL_SETTLE_MS = 100
 /** How long a human has to move before the server moves for them. */
 export const TURN_MS = 20_000
-
-export interface Player {
-  id: string
-  name: string
-  bot: boolean
-  /** Fixed chair at the table, 0 to SEATS - 1. Turns go up the seat numbers (clockwise). */
-  seat: number
-  away?: boolean
-  vip?: boolean
-  avatar?: Avatar
-  hand: Card[]
-  /** Points so far this match: one per card left when someone else went out. Fewest wins. */
-  points: number
-}
-
-export interface Game {
-  phase: 'lobby' | 'playing' | 'finished'
-  hostId: string | null
-  players: Player[]
-  deck: Card[]
-  discard: Card[]
-  /** The suit to follow: the top card's, or the one its player chose for a Rainbow. */
-  suit: Suit
-  turn: number // index into players
-  direction: 1 | -1
-  round: number
-  /** The current player drew this turn: they may play only that card (`drawnId`), or pass. */
-  drew: boolean
-  drawnId: string | null
-  winnerId: string | null
-  lastEvent: GameEvent | null
-  /** Counts every change; clients use it to spot a new event. */
-  moves: number
-  /** Changes whenever a new turn starts (not on a draw): keys the turn timer. */
-  turnKey: number
-}
 
 export function createGame(): Game {
   return {
@@ -124,7 +88,7 @@ export function addPlayer(game: Game, id: string, name: string, bot = false, sea
   return { ...seated, lastEvent: { type: 'joined', playerId: id } }
 }
 
-export function startGame(game: Game, byId: string, rng: Rng): Game {
+export function startGame(game: Game, byId: string | null, rng: Rng): Game {
   if (game.hostId !== byId) {
     throw new RuleError('Only the host can start the game.')
   }
@@ -507,4 +471,26 @@ export function dealPauseMs(game: Game): number {
   const dealMs = game.players.length * HAND_SIZE * DEAL.stepMs + DEAL.flightMs
 
   return summaryMs + dealMs + DEAL_SETTLE_MS
+}
+
+/** A player's move, whichever it is. */
+export function applyAction(game: Game, playerId: string, action: Action, rng: Rng): Game {
+  switch (action.type) {
+    case 'play':
+      return playCard(game, playerId, action.input, rng)
+    case 'draw':
+      return drawCard(game, playerId, rng)
+    case 'pass':
+      return pass(game, playerId)
+  }
+}
+
+/** A move made for a human (timeout or away) is marked, so the table can say so. */
+export function markAuto(game: Game): Game {
+  const event = game.lastEvent
+  if (event?.type !== 'played' && event?.type !== 'drew' && event?.type !== 'passed') {
+    return game
+  }
+
+  return { ...game, lastEvent: { ...event, auto: true } }
 }

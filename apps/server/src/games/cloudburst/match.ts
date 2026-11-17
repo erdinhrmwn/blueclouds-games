@@ -1,16 +1,17 @@
+// Cloudburst, layer 2 (rules): the move log and the match result, from the game's states. Pure.
+
 import type { Card } from 'contracts/rooms/cloudburst'
-import {
-  type LogEntry,
-  type LogEvent,
-  type MatchEnd,
-  type MatchReport,
-  type MatchState,
-  moveBy,
-  placementsInOrder,
-  reportedSeat,
-} from '../shared/match'
-import type { RoundResult } from '../shared/rounds'
-import { type Game, placements } from './rules'
+import type {
+  LogEntry,
+  LogEvent,
+  MatchEnd,
+  MatchReport,
+  MatchState,
+  RoundResult,
+} from '../../core/domain/match'
+import { moveBy, placementsInOrder, reportedSeat } from '../../core/rules/match'
+import type { Game } from './domain'
+import { placements } from './rules'
 
 /** Bump when a rule change makes old results incomparable to new ones. */
 /** 2: Downpour (+2) and Tempest (+4) joined the deck. */

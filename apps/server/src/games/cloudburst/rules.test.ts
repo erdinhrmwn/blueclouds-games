@@ -1,15 +1,16 @@
 import { describe, expect, test } from 'bun:test'
 import { BURST_AT, type Card, fits, HAND_SIZE } from 'contracts/rooms/cloudburst'
-import type { LogEntry } from '../shared/match'
-import { RuleError, randomRng } from '../shared/table'
+import type { LogEntry } from '../../core/domain/match'
+import { RuleError } from '../../core/domain/table'
+import { randomRng } from '../../core/rules/table'
 import { chooseBotMove } from './bots'
+import type { Game } from './domain'
 import { buildReport, logEvents } from './match'
 import {
   addPlayer,
   buildDeck,
   createGame,
   drawCard,
-  type Game,
   handOf,
   pass,
   placements,

@@ -1,19 +1,20 @@
-// "Bust 31": pure game rules, no Rivet. Every function returns a new state
-// or throws RuleError, so the actor can forward the message to the player.
-import { type Avatar, NO_AVATAR } from 'contracts/avatars'
+// Bust 31, layer 2 (rules): pure game rules, no Rivet. Every function returns a new state or throws RuleError, so
+// the room can forward the message to the player. Rules and their reasons: docs/games/bust-31/rules.md.
+import { NO_AVATAR } from 'contracts/avatars'
 import {
   type Card,
   DEAL,
   type GameEvent,
   HAND_SIZE,
   LIMIT,
-  MAX_PLAYERS,
   MIN_PLAYERS,
   type PublicView,
   START_LIVES,
 } from 'contracts/rooms/bust-31'
 import type { TurnClock } from 'contracts/rooms/room'
-import { nextIndex, type Rng, RuleError, seatPlayer, shuffle } from '../shared/table'
+import { type Rng, RuleError } from '../../core/domain/table'
+import { nextIndex, seatPlayer, shuffle } from '../../core/rules/table'
+import type { Action, Game, Player } from './domain'
 
 /** How long a human has to play before a card is played for them. */
 export const TURN_MS = 20_000
@@ -28,38 +29,6 @@ const COPIES_PER_RARE_CARD = 2
 const HIGHEST_NUMBER = 9
 /** Extra wait after the deal animation, so the first turn never starts mid-flight. */
 const DEAL_SETTLE_MS = 100
-
-export interface Player {
-  id: string
-  name: string
-  lives: number
-  hand: Card[]
-  bot: boolean
-  /** Fixed chair at the table, 0 to MAX_PLAYERS - 1. Turns go up the seat numbers (clockwise). */
-  seat: number
-  /** A human who closed the game mid-match: their turns are played for them until they return. */
-  away?: boolean
-  vip?: boolean
-  avatar?: Avatar
-}
-
-export interface Game {
-  phase: 'lobby' | 'playing' | 'finished'
-  hostId: string | null
-  players: Player[]
-  deck: Card[]
-  discard: Card[]
-  total: number
-  turn: number // index into players
-  direction: 1 | -1
-  /** Cards the player on turn still has to play this turn: 2 after a Double, otherwise 1. */
-  playsLeft: number
-  round: number
-  winnerId: string | null
-  lastEvent: GameEvent | null
-  /** Counts every deal and play, never resets: identifies a game position for timers. */
-  moves: number
-}
 
 export function createGame(): Game {
   return {
@@ -122,7 +91,7 @@ export function addPlayer(game: Game, id: string, name: string, bot = false, sea
   return { ...seated, lastEvent: { type: 'joined', playerId: id } }
 }
 
-export function startGame(game: Game, byId: string, rng: Rng): Game {
+export function startGame(game: Game, byId: string | null, rng: Rng): Game {
   if (game.hostId !== byId) {
     throw new RuleError('Only the host can start the game.')
   }
@@ -385,4 +354,22 @@ export function dealPauseMs(game: Game): number {
 
 export function handOf(game: Game, playerId: string): Card[] {
   return game.players.find((player) => player.id === playerId)?.hand ?? []
+}
+
+/** A player's move, whichever it is. */
+export function applyAction(game: Game, playerId: string, action: Action, rng: Rng): Game {
+  switch (action.type) {
+    case 'play':
+      return playCard(game, playerId, action.cardId, rng)
+  }
+}
+
+/** A card played for a human (timeout or away) is marked, so the table can say so. */
+export function markAuto(game: Game): Game {
+  const event = game.lastEvent
+  if (event?.type !== 'played' && event?.type !== 'bust') {
+    return game
+  }
+
+  return { ...game, lastEvent: { ...event, auto: true } }
 }

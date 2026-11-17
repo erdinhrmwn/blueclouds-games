@@ -1,58 +1,63 @@
 import { Database } from 'bun:sqlite'
-import { expect, mock, test } from 'bun:test'
+import { expect, test } from 'bun:test'
+import { checkMatch, proofsFromLog } from 'contracts/fairness/fairness'
+import { chooseBotCard } from '../../games/bust-31/bots'
+import type { Game, MatchState } from '../../games/bust-31/domain'
+import * as match from '../../games/bust-31/match'
+import * as rules from '../../games/bust-31/rules'
+import { migrateRoom, type SqlDatabase, sqliteRoomStore } from '../adapters/room-store'
+import { RuleError } from '../domain/table'
+import { fairnessView } from '../rules/views'
+import { beginMatch, commitRoom, withRng } from './commit'
+import type { RoomCtx } from './context'
+import { fakeLists, fakePlatform } from './fakes'
+import { roomVars } from './state'
 
-// The platform is replaced: this test is about what the room deals, logs and reports.
-mock.module('../../platform', () => ({
-  verifyPlayToken: async () => null,
-  reportMatch: async () => ({ result: 'sent' }),
-  reportRound: async () => ({ result: 'sent' }),
-  fetchRoomSeats: async () => null,
-  markRoom: async () => ({ ok: true }),
-  fetchVipIds: async () => new Set(),
-}))
-const room = await import('./room')
-const { checkMatch, proofsFromLog } = await import('contracts/fairness/fairness')
-const { chooseBotCard } = await import('../bust-31/bots')
-const match = await import('../bust-31/match')
-const rules = await import('../bust-31/rules')
-const { RuleError } = await import('./table')
+// This test is about what the room deals, logs and reports, through the real SQLite store.
 
-/** Just enough of an actor context for commitRoom: SQLite in memory, no connections, an open private table. */
-function fakeRoom() {
+/** bun:sqlite in memory, shaped like rivetkit's SQLite client. */
+function memoryDatabase(): SqlDatabase {
   const sqlite = new Database(':memory:')
-  const execute = async (sql: string, ...args: (string | number)[]) =>
-    sqlite.query(sql).all(...args) as Record<string, unknown>[]
-  const db = {
-    execute,
-    transaction: async (fn: (tx: { execute: typeof execute }) => Promise<void>) => {
+  const database: SqlDatabase = {
+    execute: async <Row extends Record<string, unknown>>(sql: string, ...args: unknown[]) =>
+      sqlite.query(sql).all(...(args as (string | number)[])) as Row[],
+    transaction: async (work) => {
       sqlite.run('BEGIN')
-      await fn({ execute })
+      const result = await work(database)
       sqlite.run('COMMIT')
+
+      return result
     },
   }
+
+  return database
+}
+
+/** Just enough of an actor context for commitRoom: no connections, an open private table. */
+function fakeRoom() {
+  const db = memoryDatabase()
 
   let game = rules.createGame()
   game = rules.addPlayer(game, 'ann', 'Ann', false, 0)
   game = rules.addPlayer(game, 'bot-1', 'Bot Rain', true, 2)
   game = rules.addPlayer(game, 'bot-2', 'Bot Wind', true, 4)
 
-  const vars = { ...room.roomVars(game), tournament: null, listed: false }
-  const c = {
-    vars,
-    db,
+  const c: RoomCtx<Game, MatchState> = {
+    vars: { ...roomVars<Game, MatchState>(game), tournament: null, listed: false },
     key: ['ROOM42'],
     conns: new Map(),
     broadcast: () => {},
-    log: { warn: () => {}, info: () => {} },
+    log: { info: () => {}, warn: () => {}, error: () => {} },
     schedule: { after: async () => {}, at: async () => {} },
   }
 
   return { c, db }
 }
 
-const commit = (c: unknown, auto = false) =>
-  room.commitRoom(
+const commit = (c: RoomCtx<Game, MatchState>, db: SqlDatabase, auto = false) =>
+  commitRoom(
     c,
+    { platform: fakePlatform(), store: sqliteRoomStore(db), lists: fakeLists() },
     {
       slug: 'bust-31',
       scheduleTurn: async () => {},
@@ -68,11 +73,11 @@ const commit = (c: unknown, auto = false) =>
 
 test('each round deals from the seed committed before it, and is reported with that seed revealed', async () => {
   const { c, db } = fakeRoom()
-  await room.migrateRoom(db)
+  await migrateRoom(db)
 
-  const committed = structuredClone(c.vars.next!)
+  const committed = structuredClone(c.vars.next)
   // The lobby shows the hash round 1 of the next match is locked to, before anyone is dealt a card.
-  expect(room.fairnessView(c)).toEqual({
+  expect(fairnessView(c.vars)).toEqual({
     matchId: null,
     lastMatchId: null,
     round: 1,
@@ -81,11 +86,11 @@ test('each round deals from the seed committed before it, and is reported with t
     nextServerSeedHash: null,
   })
 
-  room.beginMatch(c, { out: [] }, (rng) => rules.startGame(c.vars.game, 'ann', rng))
-  await commit(c)
-  expect(c.vars.next!.matchId).not.toBe(committed.matchId)
+  beginMatch(c, { out: [] }, (rng) => rules.startGame(c.vars.game, 'ann', rng))
+  await commit(c, db)
+  expect(c.vars.next.matchId).not.toBe(committed.matchId)
 
-  const playing = room.fairnessView(c)!
+  const playing = fairnessView(c.vars)!
   expect(playing).toMatchObject({
     matchId: committed.matchId,
     round: 1,
@@ -100,10 +105,10 @@ test('each round deals from the seed committed before it, and is reported with t
   while (c.vars.game.phase === 'playing') {
     const player = c.vars.game.players[c.vars.game.turn]!
     const card = chooseBotCard(player.hand, c.vars.game.total)!
-    c.vars.game = room.withRng(c, (rng) => rules.playCard(c.vars.game, player.id, card.id, rng))
-    await commit(c, true)
+    c.vars.game = withRng(c, (rng) => rules.playCard(c.vars.game, player.id, card.id, rng))
+    await commit(c, db, true)
 
-    const view = room.fairnessView(c)
+    const view = fairnessView(c.vars)
     if (view?.round === 2) {
       seenRound2 = true
       expect(view.serverSeedHash).toBe(round2Hash!)
@@ -121,7 +126,7 @@ test('each round deals from the seed committed before it, and is reported with t
   const proofs = proofsFromLog(report.matchId, report.log.events)
   const deals = report.log.events.filter((event: { type: string }) => event.type === 'deal')
   expect(proofs.length).toBe(deals.length)
-  expect(room.fairnessView(c)!.lastMatchId).toBe(committed.matchId)
+  expect(fairnessView(c.vars)!.lastMatchId).toBe(committed.matchId)
   expect(proofs.at(0)!.serverSeed).toBe(committed.firstRound.serverSeed)
   expect(await checkMatch(proofs)).toMatchObject({ ok: true })
 
@@ -143,12 +148,12 @@ test('each round deals from the seed committed before it, and is reported with t
 
 test('a move the rules refuse takes back its shuffle', () => {
   const { c } = fakeRoom()
-  room.beginMatch(c, { out: [] }, (rng) => rules.startGame(c.vars.game, 'ann', rng))
+  beginMatch(c, { out: [] }, (rng) => rules.startGame(c.vars.game, 'ann', rng))
   const before = { seeds: c.vars.match!.seeds, pending: c.vars.fairLog.length }
 
   // A refused move that would have started round 2 keeps round 2's committed seed for the real one.
   expect(() =>
-    room.withRng(c, (rng) => {
+    withRng(c, (rng) => {
       rng.shuffle([{ id: 'a' }, { id: 'b' }], 2)
       throw new RuleError('nope')
     }),
@@ -163,7 +168,7 @@ test('a start the rules refuse leaves no match and keeps the commitment', () => 
   const committed = c.vars.next
 
   expect(() =>
-    room.beginMatch(c, { out: [] }, (rng) => rules.startGame(c.vars.game, 'bot-1', rng)),
+    beginMatch(c, { out: [] }, (rng) => rules.startGame(c.vars.game, 'bot-1', rng)),
   ).toThrow()
   expect(c.vars.match).toBeNull()
   expect(c.vars.next).toBe(committed)

@@ -1,13 +1,21 @@
-import { AVATAR_COLORS, AVATAR_ICONS, type Avatar, NO_AVATAR } from 'contracts/avatars'
-import { type ClientRequestOptions, hc, type InferRequestType } from 'hono/client'
+import { AVATAR_COLORS, AVATAR_ICONS, NO_AVATAR } from 'contracts/avatars'
+import { type ClientRequestOptions, hc } from 'hono/client'
 import { importJWK, jwtVerify } from 'jose'
 import type { AppType } from 'platform/rpc'
 import { z } from 'zod'
+import type { MatchReport, RoundReport } from '../domain/match'
+import type {
+  CloseReason,
+  MarkResult,
+  PlatformPort,
+  PlatformRoom,
+  RoomChange,
+  SendResult,
+} from '../domain/ports'
+import type { Identity } from '../domain/room'
 
-/**
- * Everything the actor server needs from the BlueClouds Platform, in one place, so another
- * platform could replace it later. Reads its config from env on first use.
- */
+// Layer 4, adapter: PlatformPort over the BlueClouds Platform's HTTP API (Hono RPC client), and play tokens checked
+// with the platform's public key. Reads its config from env on first use.
 
 /** Must match the platform's PLAY_TOKEN_AUDIENCE. */
 const PLAY_TOKEN_AUDIENCE = 'blueclouds-rooms'
@@ -49,7 +57,6 @@ const Claims = z.object({
     })
     .catch(NO_AVATAR),
 })
-export type Identity = { id: string; name: string; vip: boolean; avatar: Avatar }
 
 let publicKey: Promise<CryptoKey | Uint8Array> | undefined
 let config: Env | undefined
@@ -72,7 +79,7 @@ export function loadPlatformConfig(env: Record<string, string | undefined> = pro
 }
 
 /** Checks a play token from the platform. Returns who it belongs to, or null if it isn't valid. */
-export async function verifyPlayToken(token: unknown): Promise<Identity | null> {
+async function verifyPlayToken(token: unknown): Promise<Identity | null> {
   if (typeof token !== 'string' || token.length > MAX_TOKEN_LENGTH) {
     return null
   }
@@ -107,20 +114,18 @@ export async function verifyPlayToken(token: unknown): Promise<Identity | null> 
  * Sends a finished match. "sent": stored (or already stored, the platform is idempotent by matchId).
  * "rejected": the platform will never accept this body, so retrying is pointless. "retry": try again later.
  */
-export function reportMatch(report: MatchReportBody): Promise<SendResult> {
+function reportMatch(report: MatchReport): Promise<SendResult> {
   return send(() => platform().matches.$post({ json: report }, requestOptions()))
 }
 
 /** Sends a closed round of a running or finished match (rounds.ts); answered like `reportMatch`. */
-export function reportRound(matchId: string, round: RoundReportBody): Promise<SendResult> {
+function reportRound(matchId: string, round: RoundReport): Promise<SendResult> {
   const param = { id: encodeURIComponent(matchId) }
 
   return send(() =>
     platform().matches[':id'].rounds.$post({ param, json: round }, requestOptions()),
   )
 }
-
-export type SendResult = { result: 'sent' | 'rejected' | 'retry'; detail?: string }
 
 async function send(request: () => Promise<Answer>): Promise<SendResult> {
   try {
@@ -170,7 +175,6 @@ const TournamentRoom = z.object({
     }),
   ),
 })
-export type RoomSeats = z.output<typeof TournamentRoom>
 
 /** The platform's API, typed by its routes (AppType). Made on first use, once the config is loaded. */
 let client: ReturnType<typeof createClient> | undefined
@@ -196,12 +200,6 @@ const requestOptions = (): ClientRequestOptions => ({
   init: { signal: AbortSignal.timeout(PLATFORM_TIMEOUT_MS) },
 })
 
-/** What the platform's report routes take, from their own schemas. */
-type MatchReportBody = InferRequestType<ReturnType<typeof platform>['matches']['$post']>['json']
-type RoundReportBody = InferRequestType<
-  ReturnType<typeof platform>['matches'][':id']['rounds']['$post']
->['json']
-
 /** Status and the start of the body, for logs. */
 async function failureDetail(res: Answer): Promise<string> {
   const body = await res.text().catch(() => '')
@@ -209,7 +207,7 @@ async function failureDetail(res: Answer): Promise<string> {
 }
 
 /** The room's tournament, start time and seats. Null if the platform doesn't know the room; throws if it can't be reached. */
-export async function fetchRoomSeats(code: string): Promise<RoomSeats | null> {
+async function fetchRoomSeats(code: string): Promise<PlatformRoom | null> {
   const param = { code: encodeURIComponent(code) }
   const res = await platform().rooms[':code'].seats.$get({ param }, requestOptions())
   if (res.status === 404) {
@@ -229,7 +227,7 @@ const RoomSeatsAnswer = z.object({ data: z.object({ room: z.unknown() }) })
 const VipIds = z.object({ data: z.object({ vipIds: z.array(z.uuid()) }) })
 
 /** Which of these players are VIP right now. Throws if the platform can't be reached. */
-export async function fetchVipIds(ids: string[]): Promise<Set<string>> {
+async function fetchVipIds(ids: string[]): Promise<Set<string>> {
   const query = { ids: ids.join(',') }
   const res = await platform().players.vips.$get({ query }, requestOptions())
   if (!res.ok) {
@@ -245,11 +243,11 @@ export async function fetchVipIds(ids: string[]): Promise<Set<string>> {
  * Tells the platform a tournament room's match began, or that it closed without one: too few players came, or an
  * admin terminated it. A lost call is fixed by the platform's job and the match report.
  */
-export async function markRoom(
+async function markRoom(
   code: string,
-  change: 'start' | 'close',
-  reason: 'not_enough_players' | 'terminated' = 'not_enough_players',
-): Promise<{ ok: boolean; detail?: string }> {
+  change: RoomChange,
+  reason: CloseReason = 'not_enough_players',
+): Promise<MarkResult> {
   try {
     const room = platform().rooms[':code']
     const param = { code: encodeURIComponent(code) }
@@ -266,4 +264,14 @@ export async function markRoom(
   } catch (err) {
     return { ok: false, detail: String(err) }
   }
+}
+
+/** The platform as rooms reach it. */
+export const httpPlatform: PlatformPort = {
+  verifyPlayToken,
+  reportMatch,
+  reportRound,
+  fetchRoomSeats,
+  fetchVipIds,
+  markRoom,
 }

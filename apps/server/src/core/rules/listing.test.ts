@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { directoryKey } from './room'
+import { directoryKey } from './listing'
 
 describe('room list key', () => {
   test("public tables use the game's list, tournament tables their own, private tables none", () => {
