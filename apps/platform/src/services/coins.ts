@@ -113,8 +113,23 @@ export async function grantSignupBonus(tx: SQL, playerId: string): Promise<void>
   await moveCoins(tx, { playerId, amount: SIGNUP_BONUS, reason: 'signup_bonus' })
 }
 
+/** What changed a player's coins: a fee, refund, prize, bonus or an admin's change with its note. */
+export interface CoinChange {
+  id: string
+  amount: number
+  balanceAfter: number
+  reason: CoinReason
+  note: string | null
+  at: string
+  tournament: { id: string; name: string; cancelled: boolean } | null
+}
+
 /** A player's coin history, newest first; `before` is the last id of the previous page. */
-export async function coinHistory(sql: SQL, playerId: string, before?: string) {
+export async function coinHistory(
+  sql: SQL,
+  playerId: string,
+  before?: string,
+): Promise<CoinChange[]> {
   const page = before ? sql`AND cl.id < ${before}` : sql``
   const rows = await sql`
 		SELECT

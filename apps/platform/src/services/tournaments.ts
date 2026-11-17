@@ -1,4 +1,5 @@
 import type { SQL, TransactionSQL } from 'bun'
+import type { TournamentFormat } from 'contracts/rooms/room'
 import { ApiError } from '../lib/http'
 import { log } from '../lib/log'
 import { moveCoins, refundEveryone, refundSignUp } from './coins'
@@ -678,8 +679,45 @@ async function saveDistributeError(tx: SQL, tournamentId: string, err: unknown):
 		WHERE id = ${tournamentId} AND distribute_error IS DISTINCT FROM ${reason}`
 }
 
+/** A prize for one finishing place; nothing is paid out until an admin does. */
+export interface TournamentPrize {
+  place: number
+  coins: number
+  extra: string | null
+}
+
+/** A tournament open for sign-up, as the lobby lists it. */
+export interface OpenTournament {
+  id: string
+  name: string
+  startsAt: string
+  registrationClosesAt: string
+  playersPerRoom: number
+  /** Fewest players it runs with, else it is cancelled when sign-up closes; null for no minimum. */
+  minPlayers: number | null
+  /** Most sign-ups, which closes sign-up; null for a tournament that takes anyone. */
+  maxPlayers: number | null
+  format: TournamentFormat | null
+  /** Arena and Swiss: how many rounds it plays; null for a knockout. */
+  rounds: number | null
+  description: string | null
+  /** By finishing place, 1st first. */
+  prizes: TournamentPrize[]
+  registrationOpensAt: string
+  /** Names of the first few to sign up, in the order they did. */
+  players: string[]
+  /** In coins; 0 is free. */
+  fee: number
+  registered: number
+  joined: boolean
+}
+
 /** Tournaments of a game whose registration is open now, and whether this player is in. */
-export async function listOpen(sql: SQL, game: string, playerId: string) {
+export async function listOpen(
+  sql: SQL,
+  game: string,
+  playerId: string,
+): Promise<OpenTournament[]> {
   const rows = await sql`
 		SELECT
 			t.id,
@@ -945,8 +983,22 @@ function requireOpenRegistration(tournament: { distributed_at: Date | null; open
   }
 }
 
+/** A tournament table the player sits at. */
+export interface SeatedRoom {
+  code: string
+  game: string
+  seat: number | null
+  /** Its match began: withdrawing is no longer possible, the player leaves from the table. */
+  started: boolean
+  tournament: { id: string; name: string; startsAt: string }
+}
+
 /** The open tournament tables the player is seated at, so the game's home page can show "your table". */
-export async function seatedRooms(sql: SQL, playerId: string, game: string | undefined) {
+export async function seatedRooms(
+  sql: SQL,
+  playerId: string,
+  game: string | undefined,
+): Promise<SeatedRoom[]> {
   const gameFilter = game ? sql`AND r.game_slug = ${game}` : sql``
 
   const rows = await sql`
@@ -977,6 +1029,37 @@ export async function seatedRooms(sql: SQL, playerId: string, game: string | und
   }))
 }
 
+/** One tournament the player is or was in, as their profile lists it. */
+export interface MyTournament {
+  id: string
+  game: string
+  name: string
+  format: TournamentFormat | null
+  status: 'upcoming' | 'live' | 'finished' | 'cancelled'
+  startsAt: string
+  endedAt: string | null
+  entry: 'registered' | 'withdrawn' | 'disqualified'
+  players: number
+  /** Live: the Stage being played. Finished: the last Stage they sat in. */
+  stage: number | null
+  place: number | null
+  /** What their place wins, never whether it was paid out yet. */
+  prize: { coins: number; extra: string | null } | null
+}
+
+/** The player's record over every tournament they finished. */
+export interface TournamentRecord {
+  played: number
+  podiums: number
+  bestPlace: number | null
+  prizeCoins: number
+}
+
+export interface MyTournaments {
+  tournaments: MyTournament[]
+  record: TournamentRecord
+}
+
 /** How many of the player's tournaments their profile lists; their record counts all of them. */
 const MY_TOURNAMENTS_SHOWN = 20
 
@@ -984,7 +1067,7 @@ type MyTournamentRow = {
   id: string
   game_slug: string
   name: string
-  format: string | null
+  format: TournamentFormat | null
   starts_at: Date
   ended_at: Date | null
   cancelled: boolean
@@ -1002,7 +1085,7 @@ type MyTournamentRow = {
  * their place and the prize that place carries, plus their record over all of them. The prize is what the place
  * wins, never whether it was paid out yet: players don't see payout status (Erdin, 2026-11-14).
  */
-export async function myTournaments(sql: SQL, playerId: string) {
+export async function myTournaments(sql: SQL, playerId: string): Promise<MyTournaments> {
   const rows = await sql`
 		SELECT
 			t.id,

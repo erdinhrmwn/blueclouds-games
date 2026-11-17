@@ -1,7 +1,7 @@
 import type { SQL } from 'bun'
 import type { Avatar } from 'contracts/avatars'
 import { ApiError } from '../lib/http'
-import type { Signer } from '../lib/play-tokens'
+import type { PlayToken, Signer } from '../lib/play-tokens'
 import { hashSecret, newSecret, SECRET_PATTERN } from '../lib/secrets'
 import { grantSignupBonus } from './coins'
 import { deleteGuestIfUnused } from './guests'
@@ -349,7 +349,7 @@ export async function setAvatar(sql: SQL, playerId: string, avatar: Avatar): Pro
  * Short-lived token for connecting to a room actor, with the VIP flag and avatar the table shows.
  * Counts as the player being seen.
  */
-export async function issuePlayToken(sql: SQL, signer: Signer, player: Player) {
+export async function issuePlayToken(sql: SQL, signer: Signer, player: Player): Promise<PlayToken> {
   const [row] = (await sql`
 		UPDATE players
 		SET last_seen_at = now()

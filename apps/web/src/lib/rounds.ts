@@ -1,34 +1,12 @@
 import { checkRound, type RoundCheck } from 'contracts/fairness/fairness'
 import { SUIT_TEXT } from '#lib/games/cloudburst/suits.ts'
-
-/** One event of a round's moves (docs/architecture/match-log.md). */
-export type RoundEvent = {
-  seq: number
-  t: number
-  type: string
-  seat?: number
-  data?: Record<string, unknown>
-}
+import type { MatchRounds } from '#lib/server/platform.ts'
 
 /** A closed round as the platform keeps it: its result, its revealed seed and every shuffle. */
-export type Round = {
-  id: string
-  round: number
-  startedAt: string
-  endedAt: string
-  result: Record<string, unknown>
-  /** Every move from the round's deal on, as the match's move log has them (`t`: ms since the match start). */
-  events: RoundEvent[]
-  serverSeedHash: string
-  serverSeed: string
-  shuffles: { nonce: number; clientSeed: string; deck: string[] }[]
-}
+export type Round = MatchRounds['rounds'][number]
 
-export type MatchRounds = {
-  /** `players`: who sat in each seat, once the match is reported. */
-  match: { id: string; game: string; finished: boolean; players: { seat: number; name: string }[] }
-  rounds: Round[]
-}
+/** One event of a round's moves (docs/architecture/match-log.md). */
+export type RoundEvent = Round['events'][number]
 
 /** Recomputes a closed round's shuffles in this browser from its revealed seed (docs/architecture/fairness.md). */
 export function verifyRound(matchId: string, round: Round): Promise<RoundCheck> {

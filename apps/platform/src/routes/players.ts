@@ -69,120 +69,125 @@ const GUEST_LIMIT = { perIp: 5, windowMs: 60_000 }
 const LOGIN_LIMIT = { perIp: 10, windowMs: 60_000 }
 
 export function playerRoutes(sql: SQL, signer: Signer, serverKey: string) {
-  const app = new Hono<AppEnv>()
   const auth = playerAuth(sql)
   const server = serverAuth(serverKey)
 
-  /** New guest player. The secret is returned only here. */
-  app.post(
-    '/players/guest',
-    rateLimit(GUEST_LIMIT.perIp, GUEST_LIMIT.windowMs),
-    validate('json', GuestBody),
-    async (c) => {
-      const { name } = c.req.valid('json')
-      const signedIn = await players.createGuest(sql, name)
+  return (
+    new Hono<AppEnv>()
+      /** New guest player. The secret is returned only here. */
+      .post(
+        '/players/guest',
+        rateLimit(GUEST_LIMIT.perIp, GUEST_LIMIT.windowMs),
+        validate('json', GuestBody),
+        async (c) => {
+          const { name } = c.req.valid('json')
+          const signedIn = await players.createGuest(sql, name)
 
-      return ok(c, signedIn, 201)
-    },
+          return ok(c, signedIn, 201)
+        },
+      )
+
+      /** With the current guest's secret, that guest becomes the account; without one, a new player is made (201). */
+      .post(
+        '/players/register',
+        rateLimit(GUEST_LIMIT.perIp, GUEST_LIMIT.windowMs),
+        validate('json', Register),
+        async (c) => {
+          const input = c.req.valid('json')
+          const current = await players.findBySecret(sql, bearer(c.req.header('authorization')))
+          const result = await players.register(sql, current, input)
+          const status = result.playerSecret ? 201 : 200
+
+          return ok(c, result, status)
+        },
+      )
+
+      .post(
+        '/players/login',
+        rateLimit(LOGIN_LIMIT.perIp, LOGIN_LIMIT.windowMs),
+        validate('json', Login),
+        async (c) => {
+          const { username, password } = c.req.valid('json')
+          const signedIn = await players.login(sql, username, password)
+
+          return ok(c, signedIn)
+        },
+      )
+
+      .post('/players/logout', auth, async (c) => {
+        await players.logout(sql, c.get('player'), c.get('playerSecret'))
+
+        return ok(c, { signedOut: true })
+      })
+
+      /** The game asks on every page load; that counts as being seen. */
+      .get('/players/me', auth, async (c) => {
+        const player = c.get('player')
+        const [, coins] = await Promise.all([
+          players.noteSeen(sql, player.id),
+          balanceOf(sql, player.id),
+        ])
+
+        return ok(c, { player, coins })
+      })
+
+      /** The player's coins and what changed them, newest first, a page at a time. */
+      .get('/players/me/coins', auth, validate('query', CoinPage), async (c) => {
+        const player = c.get('player')
+        const { before } = c.req.valid('query')
+        const [balance, history] = await Promise.all([
+          balanceOf(sql, player.id),
+          coinHistory(sql, player.id, before),
+        ])
+
+        return ok(c, { balance, history })
+      })
+
+      /** Accounts only. Signs out every other device; this one stays signed in. */
+      .put('/players/me/password', auth, validate('json', PasswordChange), async (c) => {
+        await players.changePassword(
+          sql,
+          c.get('player'),
+          c.get('playerSecret'),
+          c.req.valid('json'),
+        )
+
+        return ok(c, { changed: true })
+      })
+
+      /** Accounts only: a guest keeps its generated name until it links an account. */
+      .patch('/players/me', auth, validate('json', NameBody), async (c) => {
+        const player = c.get('player')
+        if (player.guest) {
+          throw new ApiError('forbidden', 403, 'Link an account to choose your name.')
+        }
+
+        const { name } = c.req.valid('json')
+        const renamed = await players.rename(sql, player.id, name)
+
+        return ok(c, { player: renamed })
+      })
+
+      /** Guests too: a look isn't tied to the account the way a name is. Tables show it from the next play token. */
+      .put('/players/me/avatar', auth, validate('json', AvatarBody), async (c) => {
+        const player = c.get('player')
+        const updated = await players.setAvatar(sql, player.id, c.req.valid('json'))
+
+        return ok(c, { player: updated })
+      })
+
+      .post('/play-tokens', auth, async (c) => {
+        const playToken = await players.issuePlayToken(sql, signer, c.get('player'))
+
+        return ok(c, playToken)
+      })
+
+      /** For the room actor, with the server key: which of its seated players are VIP right now. */
+      .get('/players/vips', server, validate('query', VipQuery), async (c) => {
+        const { ids } = c.req.valid('query')
+        const vipIds = await players.vipIds(sql, ids)
+
+        return ok(c, { vipIds })
+      })
   )
-
-  /** With the current guest's secret, that guest becomes the account; without one, a new player is made (201). */
-  app.post(
-    '/players/register',
-    rateLimit(GUEST_LIMIT.perIp, GUEST_LIMIT.windowMs),
-    validate('json', Register),
-    async (c) => {
-      const input = c.req.valid('json')
-      const current = await players.findBySecret(sql, bearer(c.req.header('authorization')))
-      const result = await players.register(sql, current, input)
-      const status = result.playerSecret ? 201 : 200
-
-      return ok(c, result, status)
-    },
-  )
-
-  app.post(
-    '/players/login',
-    rateLimit(LOGIN_LIMIT.perIp, LOGIN_LIMIT.windowMs),
-    validate('json', Login),
-    async (c) => {
-      const { username, password } = c.req.valid('json')
-      const signedIn = await players.login(sql, username, password)
-
-      return ok(c, signedIn)
-    },
-  )
-
-  app.post('/players/logout', auth, async (c) => {
-    await players.logout(sql, c.get('player'), c.get('playerSecret'))
-
-    return ok(c, { signedOut: true })
-  })
-
-  /** The game asks on every page load; that counts as being seen. */
-  app.get('/players/me', auth, async (c) => {
-    const player = c.get('player')
-    const [, coins] = await Promise.all([
-      players.noteSeen(sql, player.id),
-      balanceOf(sql, player.id),
-    ])
-
-    return ok(c, { player, coins })
-  })
-
-  /** The player's coins and what changed them, newest first, a page at a time. */
-  app.get('/players/me/coins', auth, validate('query', CoinPage), async (c) => {
-    const player = c.get('player')
-    const { before } = c.req.valid('query')
-    const [balance, history] = await Promise.all([
-      balanceOf(sql, player.id),
-      coinHistory(sql, player.id, before),
-    ])
-
-    return ok(c, { balance, history })
-  })
-
-  /** Accounts only. Signs out every other device; this one stays signed in. */
-  app.put('/players/me/password', auth, validate('json', PasswordChange), async (c) => {
-    await players.changePassword(sql, c.get('player'), c.get('playerSecret'), c.req.valid('json'))
-
-    return ok(c, { changed: true })
-  })
-
-  /** Accounts only: a guest keeps its generated name until it links an account. */
-  app.patch('/players/me', auth, validate('json', NameBody), async (c) => {
-    const player = c.get('player')
-    if (player.guest) {
-      throw new ApiError('forbidden', 403, 'Link an account to choose your name.')
-    }
-
-    const { name } = c.req.valid('json')
-    const renamed = await players.rename(sql, player.id, name)
-
-    return ok(c, { player: renamed })
-  })
-
-  /** Guests too: a look isn't tied to the account the way a name is. Tables show it from the next play token. */
-  app.put('/players/me/avatar', auth, validate('json', AvatarBody), async (c) => {
-    const player = c.get('player')
-    const updated = await players.setAvatar(sql, player.id, c.req.valid('json'))
-
-    return ok(c, { player: updated })
-  })
-
-  app.post('/play-tokens', auth, async (c) => {
-    const playToken = await players.issuePlayToken(sql, signer, c.get('player'))
-
-    return ok(c, playToken)
-  })
-
-  /** For the room actor, with the server key: which of its seated players are VIP right now. */
-  app.get('/players/vips', server, validate('query', VipQuery), async (c) => {
-    const { ids } = c.req.valid('query')
-    const vipIds = await players.vipIds(sql, ids)
-
-    return ok(c, { vipIds })
-  })
-
-  return app
 }

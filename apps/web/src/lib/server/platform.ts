@@ -1,6 +1,12 @@
 import { type Cookies, error, json, type RequestEvent } from '@sveltejs/kit'
 import type { Avatar } from 'contracts/avatars'
-import type { MatchRounds } from '#lib/rounds.ts'
+import {
+  type ClientRequestOptions,
+  type ClientResponse,
+  hc,
+  type InferResponseType,
+} from 'hono/client'
+import type { AppType } from 'platform/rpc'
 import { dev } from '$app/env'
 import { PLATFORM_URL } from '$app/env/private'
 import { log } from './log.ts'
@@ -16,9 +22,23 @@ const SECRET_MAX_AGE = 400 * 24 * 60 * 60
 const TIMEOUT_MS = 5_000
 const NAME_MAX = 20
 
-type Envelope<T> =
-  | { ok: true; data: T }
-  | { ok: false; error: { code: string; message: string; fields?: Record<string, string> } }
+/** The platform's API, typed by its routes (AppType): paths, inputs and answers can't drift from it. */
+const platform = hc<AppType>(PLATFORM_URL).v1
+
+/** What a route answers on success. Errors are the same envelope for every route (see `call`). */
+interface Ok<T> {
+  ok: true
+  data: T
+}
+interface Failed {
+  ok: false
+  error: { code: string; message: string; fields?: Record<string, string> }
+}
+type Envelope<T> = Ok<T> | Failed
+type Answer<T> = ClientResponse<Ok<T>, number, 'json'>
+
+/** The `data` a platform route answers with. */
+type Data<Route extends (...args: never[]) => unknown> = InferResponseType<Route>['data']
 
 export class PlatformError extends Error {
   constructor(
@@ -31,34 +51,32 @@ export class PlatformError extends Error {
   }
 }
 
+/**
+ * Sends one request to the platform: `send` makes it with the options given here (who asks, the timeout).
+ * Answers the route's data, or throws a PlatformError with the platform's own code and message.
+ */
 async function call<T>(
   event: RequestEvent,
-  path: string,
-  init: { method: string; secret?: string; body?: unknown },
+  secret: string | undefined,
+  send: (options: ClientRequestOptions) => Promise<Answer<T>>,
 ): Promise<T> {
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
     // The platform rate-limits guests by IP; it trusts this header because only we can reach it.
     'X-Forwarded-For': event.getClientAddress(),
   }
-  if (init.secret) {
-    headers.Authorization = `Bearer ${init.secret}`
+  if (secret) {
+    headers.Authorization = `Bearer ${secret}`
   }
 
-  let res: Response
+  let res: Answer<T>
   try {
-    res = await fetch(`${PLATFORM_URL}/v1${path}`, {
-      method: init.method,
-      headers,
-      body: init.body === undefined ? undefined : JSON.stringify(init.body),
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-    })
+    res = await send({ headers, init: { signal: AbortSignal.timeout(TIMEOUT_MS) } })
   } catch (err) {
-    log.error({ msg: 'platform unreachable', path, err })
+    log.error({ msg: 'platform unreachable', err })
     throw new PlatformError(503, 'unavailable', 'The game server is busy. Try again in a moment.')
   }
 
-  const body = (await res.json().catch(() => null)) as Envelope<T> | null
+  const body = await envelopeOf(res)
   if (body?.ok) {
     return body.data
   }
@@ -70,6 +88,14 @@ async function call<T>(
     body?.error.fields,
   )
 }
+
+/** The answer's envelope: a route's types know only its success, but any answer may be an error. */
+function envelopeOf<T>(res: Answer<T>): Promise<Envelope<T> | null> {
+  return res.json().catch(() => null)
+}
+
+/** A path segment, as the platform's routes take it. */
+const segment = (value: string) => encodeURIComponent(value)
 
 const secretOf = (cookies: Cookies) => cookies.get(SECRET_COOKIE)
 
@@ -84,10 +110,8 @@ const saveSecret = (cookies: Cookies, secret: string) =>
 
 /** "Play as guest": a new guest for this browser under the name it picked; the platform makes up the username. */
 export async function startGuest(event: RequestEvent, name: string): Promise<Me> {
-  const { player, playerSecret } = await call<{ player: Me; playerSecret: string }>(
-    event,
-    '/players/guest',
-    { method: 'POST', body: { name } },
+  const { player, playerSecret } = await call(event, undefined, (options) =>
+    platform.players.guest.$post({ json: { name } }, options),
   )
 
   saveSecret(event.cookies, playerSecret)
@@ -98,6 +122,7 @@ export async function startGuest(event: RequestEvent, name: string): Promise<Me>
     username: player.username,
     guest: player.guest,
     avatar: player.avatar,
+    createdAt: player.createdAt,
   }
 }
 
@@ -127,15 +152,10 @@ function secretOrNameFirst(cookies: Cookies): string {
   return secret
 }
 
-export type Me = {
-  id: string
-  name: string
-  username: string | null
-  guest: boolean
-  /** The preset avatar; null parts are not picked yet. */
-  avatar: Avatar
-  /** When the player was made, as ISO text. */
-  createdAt?: string
+/** A player as the platform answers it; the avatar's null parts are not picked yet. */
+type Player = Data<typeof platform.players.me.$get>['player']
+
+export interface Me extends Player {
   /** Coin balance; left out where an answer doesn't carry it (sign-in, register). */
   coins?: number
 }
@@ -151,10 +171,9 @@ export async function whoAmI(event: RequestEvent): Promise<Me | null> {
   }
 
   try {
-    const { player, coins } = await call<{ player: Me; coins: number }>(event, '/players/me', {
-      method: 'GET',
-      secret,
-    })
+    const { player, coins } = await call(event, secret, (options) =>
+      platform.players.me.$get({}, options),
+    )
     return {
       id: player.id,
       name: player.name,
@@ -179,8 +198,6 @@ export async function whoAmI(event: RequestEvent): Promise<Me | null> {
   }
 }
 
-type Account = { player: Me; playerSecret?: string }
-
 /**
  * Registers a username and password. A guest in this browser becomes the account (keeping their history);
  * without one, a new player is made. Returns the name and username to show.
@@ -188,11 +205,11 @@ type Account = { player: Me; playerSecret?: string }
 export async function register(
   event: RequestEvent,
   body: { name: string; username: string; password: string },
-): Promise<Account['player']> {
+): Promise<Me> {
   const send = (secret?: string) =>
-    call<Account>(event, '/players/register', { method: 'POST', secret, body })
+    call(event, secret, (options) => platform.players.register.$post({ json: body }, options))
 
-  let res: Account
+  let res: Awaited<ReturnType<typeof send>>
   try {
     res = await send(secretOf(event.cookies))
   } catch (err) {
@@ -215,9 +232,11 @@ export async function register(
 export async function login(
   event: RequestEvent,
   body: { username: string; password: string },
-): Promise<Account['player']> {
-  const res = await call<Account>(event, '/players/login', { method: 'POST', body })
-  saveSecret(event.cookies, res.playerSecret!)
+): Promise<Me> {
+  const res = await call(event, undefined, (options) =>
+    platform.players.login.$post({ json: body }, options),
+  )
+  saveSecret(event.cookies, res.playerSecret)
 
   return res.player
 }
@@ -227,7 +246,9 @@ export async function changePassword(
   event: RequestEvent,
   body: { currentPassword: string; newPassword: string },
 ): Promise<void> {
-  await call(event, '/players/me/password', { method: 'PUT', secret: signedIn(event), body })
+  await call(event, signedIn(event), (options) =>
+    platform.players.me.password.$put({ json: body }, options),
+  )
 }
 
 /** Signs this browser out. A secret the platform already forgot is fine: the cookie goes either way. */
@@ -239,7 +260,7 @@ export async function logout(event: RequestEvent): Promise<void> {
   }
 
   try {
-    await call(event, '/players/logout', { method: 'POST', secret })
+    await call(event, secret, (options) => platform.players.logout.$post({}, options))
   } catch (err) {
     if (!lost(err)) {
       throw err
@@ -249,37 +270,32 @@ export async function logout(event: RequestEvent): Promise<void> {
 
 /** Renames an account. The platform refuses a guest: it keeps its generated name until it links an account. */
 export async function savePlayerName(event: RequestEvent, name: string): Promise<void> {
-  await call(event, '/players/me', {
-    method: 'PATCH',
-    secret: secretOrEnded(event.cookies),
-    body: { name },
-  })
+  await call(event, secretOrEnded(event.cookies), (options) =>
+    platform.players.me.$patch({ json: { name } }, options),
+  )
 }
 
 /** Sets the player's preset avatar (guests too). Returns it as the platform saved it. */
 export async function savePlayerAvatar(event: RequestEvent, avatar: Avatar): Promise<Avatar> {
-  const { player } = await call<{ player: Me }>(event, '/players/me/avatar', {
-    method: 'PUT',
-    secret: secretOrEnded(event.cookies),
-    body: avatar,
-  })
+  const { player } = await call(event, secretOrEnded(event.cookies), (options) =>
+    platform.players.me.avatar.$put({ json: avatar }, options),
+  )
 
   return player.avatar
 }
 
 /** A fresh play token. */
 export async function playToken(event: RequestEvent): Promise<string> {
-  const { token } = await call<{ token: string }>(event, '/play-tokens', {
-    method: 'POST',
-    secret: secretOrEnded(event.cookies),
-  })
+  const { token } = await call(event, secretOrEnded(event.cookies), (options) =>
+    platform['play-tokens'].$post({}, options),
+  )
 
   return token
 }
 
-type Room = { id: string; code: string; game: string }
+type Room = Data<typeof platform.rooms.$post>['room']
 
-export type Visibility = 'public' | 'private'
+export type Visibility = Room['visibility']
 
 /** Opens a new table: the platform picks the code. Public tables are listed in the lobby; private ones need an invite. */
 export async function createRoom(
@@ -288,43 +304,36 @@ export async function createRoom(
   visibility: Visibility,
   name: string | null = null,
 ): Promise<Room> {
-  const { room } = await call<{ room: Room }>(event, '/rooms', {
-    method: 'POST',
-    secret: secretOrEnded(event.cookies),
-    body: { game, visibility, name: name ?? undefined },
-  })
+  const { room } = await call(event, secretOrEnded(event.cookies), (options) =>
+    platform.rooms.$post({ json: { game, visibility, name: name ?? undefined } }, options),
+  )
 
   return room
 }
 
 /** Which game a table code belongs to, if this player may enter it (else a PlatformError). */
 export async function roomGame(event: RequestEvent, code: string): Promise<string> {
-  const path = `/rooms/${encodeURIComponent(code)}`
-  const { room } = await call<{ room: { game: string } }>(event, path, {
-    method: 'GET',
-    secret: signedIn(event),
-  })
+  const { room } = await call(event, signedIn(event), (options) =>
+    platform.rooms[':code'].$get({ param: { code: segment(code) } }, options),
+  )
 
   return room.game
 }
 
 /** The table's invite link token, the same one until it is reset. */
 export async function createInvite(event: RequestEvent, code: string): Promise<{ token: string }> {
-  const path = `/rooms/${encodeURIComponent(code)}/invites`
-  const { invite } = await call<{ invite: { token: string } }>(event, path, {
-    method: 'POST',
-    secret: secretOrEnded(event.cookies),
-  })
+  const { invite } = await call(event, secretOrEnded(event.cookies), (options) =>
+    platform.rooms[':code'].invites.$post({ param: { code: segment(code) } }, options),
+  )
 
   return invite
 }
 
 /** Kills the table's invite link; only its opener may. */
 export async function resetInviteLink(event: RequestEvent, code: string): Promise<void> {
-  await call(event, `/rooms/${encodeURIComponent(code)}/invites/link`, {
-    method: 'DELETE',
-    secret: secretOrEnded(event.cookies),
-  })
+  await call(event, secretOrEnded(event.cookies), (options) =>
+    platform.rooms[':code'].invites.link.$delete({ param: { code: segment(code) } }, options),
+  )
 }
 
 /** Redeems an invite link token: this player may now enter the table. */
@@ -332,11 +341,9 @@ export async function redeemInvite(
   event: RequestEvent,
   invite: string,
 ): Promise<{ code: string; game: string }> {
-  const { room } = await call<{ room: { code: string; game: string } }>(event, '/invites/redeem', {
-    method: 'POST',
-    secret: secretOrEnded(event.cookies),
-    body: { invite },
-  })
+  const { room } = await call(event, secretOrEnded(event.cookies), (options) =>
+    platform.invites.redeem.$post({ json: { invite } }, options),
+  )
 
   return room
 }
@@ -345,13 +352,16 @@ export async function redeemInvite(
  * The room behind a code, if this player may enter it. Asked before every room token, so a code typed into
  * the URL can't create a room, and a room of another game is not found.
  */
-export async function roomFor(event: RequestEvent, game: string, code: string): Promise<Room> {
+export async function roomFor(
+  event: RequestEvent,
+  game: string,
+  code: string,
+): Promise<EnterableRoom> {
   const secret = secretOrNameFirst(event.cookies)
 
-  const { room } = await call<{ room: Room }>(event, `/rooms/${encodeURIComponent(code)}`, {
-    method: 'GET',
-    secret,
-  })
+  const { room } = await call(event, secret, (options) =>
+    platform.rooms[':code'].$get({ param: { code: segment(code) } }, options),
+  )
 
   if (room.game !== game) {
     throw new PlatformError(404, 'not_found', 'There is no table with that code.')
@@ -360,81 +370,20 @@ export async function roomFor(event: RequestEvent, game: string, code: string): 
   return room
 }
 
-export type Tournament = {
-  id: string
-  name: string
-  startsAt: string
-  registrationClosesAt: string
-  playersPerRoom: number
-  /** Fewest players it runs with, else it is cancelled when sign-up closes; null for no minimum. */
-  minPlayers: number | null
-  /** Most sign-ups, which closes sign-up; null for a tournament that takes anyone. */
-  maxPlayers: number | null
-  /** How it is played; a label until matchmaking for it exists. */
-  format: TournamentFormat | null
-  /** Arena and Swiss: how many rounds it plays; null for a knockout. */
-  rounds: number | null
-  description: string | null
-  /** By finishing place, 1st first; nothing is paid out by the platform. */
-  prizes: TournamentPrize[]
-  registrationOpensAt: string
-  /** Names of the first few to sign up, in the order they did. */
-  players: string[]
-  /** In coins; 0 is free. Nothing is charged. */
-  fee: number
-  registered: number
-  joined: boolean
-}
+type EnterableRoom = Data<(typeof platform.rooms)[':code']['$get']>['room']
 
-export type TournamentFormat = 'arena' | 'knockout' | 'swiss'
+type Tournaments = Data<typeof platform.tournaments.$get>
 
-/** One row of a tournament's standings; the final places once it finished. */
-export type Standing = {
-  place: number
-  playerId: string
-  name: string
-  points: number
-  wins: number
-  /** The furthest round they were seated in; in a knockout, below the current round means out. */
-  lastRound: number
-  /** A bot account the platform signed up to fill the tables. */
-  bot: boolean
-}
-
+export type Tournament = Tournaments['tournaments'][number]
+export type TournamentFormat = NonNullable<Tournament['format']>
+export type TournamentPrize = Tournament['prizes'][number]
 /** A tournament that is playing, or finished within the last day, as the lobby shows it. */
-export type LiveTournament = {
-  id: string
-  name: string
-  format: TournamentFormat | null
-  /** Arena and Swiss: rounds in all; null for a knockout. */
-  rounds: number | null
-  /** The latest round, and when its tables start. */
-  round: number
-  roundStartsAt: string
-  roundStarted: boolean
-  /** When round 1 started; with `endedAt`, how long it ran. */
-  startsAt: string
-  endedAt: string | null
-  /** How many sat down in round 1. */
-  players: number
-  prizes: TournamentPrize[]
-  /** The top of the standings (or the winners). */
-  top: Standing[]
-  me: Standing | null
-  /** The player's table in the latest round, if they have one. */
-  table: { code: string; started: boolean; closed: boolean } | null
-}
-
-export type TournamentPrize = { place: number; coins: number; extra: string | null }
-
-export type TournamentTable = {
-  code: string
-  game: string
-  seat: number | null
-  /** Its match began: withdrawing is no longer possible, the player leaves from the table. */
-  started: boolean
-  tournament: { id: string; name: string; startsAt: string }
-}
+export type LiveTournament = Tournaments['live'][number]
+/** One row of a tournament's standings; the final places once it finished. */
+export type Standing = Data<
+  (typeof platform.tournaments)[':id']['standings']['$get']
+>['standings'][number]
+export type TournamentTable = Data<typeof platform.players.me.rooms.$get>['rooms'][number]
 
 /** A game's tournaments open for sign-up, and the tournament tables this player sits at. Empty before they chose a name. */
 export async function tournamentsFor(
@@ -447,17 +396,12 @@ export async function tournamentsFor(
     return none
   }
 
-  const query = `game=${encodeURIComponent(game)}`
-  const get = { method: 'GET', secret }
+  const query = { game }
 
   try {
     const [{ tournaments, live }, { rooms }] = await Promise.all([
-      call<{ tournaments: Tournament[]; live: LiveTournament[] }>(
-        event,
-        `/tournaments?${query}`,
-        get,
-      ),
-      call<{ rooms: TournamentTable[] }>(event, `/players/me/rooms?${query}`, get),
+      call(event, secret, (options) => platform.tournaments.$get({ query }, options)),
+      call(event, secret, (options) => platform.players.me.rooms.$get({ query }, options)),
     ])
 
     return { tournaments, live, tables: rooms }
@@ -481,11 +425,7 @@ export async function pausedGames(event: RequestEvent): Promise<Record<string, b
   }
 
   try {
-    const { games } = await call<{ games: { slug: string; maintenance: boolean }[] }>(
-      event,
-      '/games',
-      { method: 'GET', secret },
-    )
+    const { games } = await call(event, secret, (options) => platform.games.$get({}, options))
 
     const paused: Record<string, boolean> = {}
     for (const entry of games) {
@@ -515,19 +455,16 @@ export async function underMaintenance(event: RequestEvent, game: string): Promi
 export async function joinTournament(event: RequestEvent, id: string): Promise<void> {
   const secret = secretOrNameFirst(event.cookies)
 
-  await call(event, `/tournaments/${encodeURIComponent(id)}/registration`, {
-    method: 'POST',
-    secret,
-  })
+  await call(event, secret, (options) =>
+    platform.tournaments[':id'].registration.$post({ param: { id: segment(id) } }, options),
+  )
 }
 
 /** A tournament's standings: worked out from the matches so far, or its final places once it finished. */
 export async function tournamentStandings(event: RequestEvent, id: string): Promise<Standing[]> {
   const secret = secretOrNameFirst(event.cookies)
-  const { standings } = await call<{ standings: Standing[] }>(
-    event,
-    `/tournaments/${encodeURIComponent(id)}/standings`,
-    { method: 'GET', secret },
+  const { standings } = await call(event, secret, (options) =>
+    platform.tournaments[':id'].standings.$get({ param: { id: segment(id) } }, options),
   )
 
   return standings
@@ -537,10 +474,9 @@ export async function tournamentStandings(event: RequestEvent, id: string): Prom
 export async function leaveTournament(event: RequestEvent, id: string): Promise<void> {
   const secret = secretOrNameFirst(event.cookies)
 
-  await call(event, `/tournaments/${encodeURIComponent(id)}/registration`, {
-    method: 'DELETE',
-    secret,
-  })
+  await call(event, secret, (options) =>
+    platform.tournaments[':id'].registration.$delete({ param: { id: segment(id) } }, options),
+  )
 }
 
 /** Reads a JSON `{ name }` body, or stops with 400. */
@@ -554,177 +490,90 @@ export async function readName(request: Request): Promise<string> {
   return name
 }
 
+type MatchPage = Data<typeof platform.players.me.matches.$get>
+
 /** One of the player's finished matches, as their history lists it. */
-export type MatchSummary = {
-  id: string
-  game: string
-  roomCode: string
-  startedAt: string
-  endedAt: string
-  endReason: 'finished' | 'terminated'
-  players: number
-  seat: number
-  placement: number
-  score: number
-}
+export type MatchSummary = MatchPage['matches'][number]
 
 /** The player's finished matches, newest first, a page at a time; `game` keeps one game. */
 export async function myMatches(
   event: RequestEvent,
   cursor: string | null,
   game: string | null = null,
-): Promise<{ matches: MatchSummary[]; nextCursor: string | null }> {
-  const query = new URLSearchParams()
-  if (cursor) {
-    query.set('cursor', cursor)
-  }
+): Promise<MatchPage> {
+  const query = { cursor: cursor ?? undefined, game: game ?? undefined }
 
-  if (game) {
-    query.set('game', game)
-  }
-
-  const search = query.size > 0 ? `?${query}` : ''
-
-  return call(event, `/players/me/matches${search}`, { method: 'GET', secret: signedIn(event) })
+  return call(event, signedIn(event), (options) =>
+    platform.players.me.matches.$get({ query }, options),
+  )
 }
+
+type MyStats = Data<typeof platform.players.me.stats.$get>
 
 /**
  * The player's record in one game: finished matches played and won, wins in a row (best and still going), their
  * average place, and their rounds. What a round won means is the game's (see the catalog's `roundsWon`); `won` is
  * null for a game the platform can't count rounds for.
  */
-export type GameStats = {
-  game: string
-  played: number
-  wins: number
-  bestStreak: number
-  currentStreak: number
-  averagePlace: number
-  rounds: { played: number; won: number | null }
-}
+export type GameStats = MyStats['games'][number]
 
 /** The signed-in player's record per game, for their profile. */
-export async function myStats(event: RequestEvent): Promise<{ games: GameStats[] }> {
-  return call(event, '/players/me/stats', { method: 'GET', secret: signedIn(event) })
+export async function myStats(event: RequestEvent): Promise<MyStats> {
+  return call(event, signedIn(event), (options) => platform.players.me.stats.$get({}, options))
 }
 
 /** A match's rounds, running or finished. Matches are public: any player may look. */
-export async function matchRounds(event: RequestEvent, matchId: string): Promise<MatchRounds> {
-  const path = `/matches/${encodeURIComponent(matchId)}/rounds`
+export type MatchRounds = Data<(typeof platform.matches)[':id']['rounds']['$get']>
 
-  return call(event, path, { method: 'GET', secret: signedIn(event) })
+export async function matchRounds(event: RequestEvent, matchId: string): Promise<MatchRounds> {
+  return call(event, signedIn(event), (options) =>
+    platform.matches[':id'].rounds.$get({ param: { id: segment(matchId) } }, options),
+  )
 }
+
+type Coins = Data<typeof platform.players.me.coins.$get>
 
 /** What changed a player's coins: a fee, refund, prize, bonus or an admin's change with its note. */
-export type CoinChange = {
-  id: string
-  amount: number
-  balanceAfter: number
-  reason:
-    | 'signup_bonus'
-    | 'admin_grant'
-    | 'admin_take'
-    | 'tournament_fee'
-    | 'tournament_refund'
-    | 'tournament_prize'
-  note: string | null
-  at: string
-  tournament: { id: string; name: string; cancelled: boolean } | null
-}
+export type CoinChange = Coins['history'][number]
 
 /** The player's coins and their history, newest first, a page at a time: `before` is the last change shown. */
-export async function coinsOf(
-  event: RequestEvent,
-  before: string | null = null,
-): Promise<{ balance: number; history: CoinChange[] }> {
-  const query = before ? `?before=${encodeURIComponent(before)}` : ''
-
-  return call(event, `/players/me/coins${query}`, { method: 'GET', secret: signedIn(event) })
+export async function coinsOf(event: RequestEvent, before: string | null = null): Promise<Coins> {
+  return call(event, signedIn(event), (options) =>
+    platform.players.me.coins.$get({ query: { before: before ?? undefined } }, options),
+  )
 }
+
+type MyTournaments = Data<typeof platform.players.me.tournaments.$get>
 
 /** One tournament the player is or was in, as their profile lists it. */
-export type MyTournament = {
-  id: string
-  game: string
-  name: string
-  format: TournamentFormat | null
-  status: 'upcoming' | 'live' | 'finished' | 'cancelled'
-  startsAt: string
-  endedAt: string | null
-  entry: 'registered' | 'withdrawn' | 'disqualified'
-  players: number
-  /** Live: the Stage being played. Finished: the last Stage they sat in. */
-  stage: number | null
-  place: number | null
-  /** What their place wins, never whether it was paid out yet. */
-  prize: { coins: number; extra: string | null } | null
-}
-
-export type TournamentRecord = {
-  played: number
-  podiums: number
-  bestPlace: number | null
-  prizeCoins: number
-}
+export type MyTournament = MyTournaments['tournaments'][number]
+export type TournamentRecord = MyTournaments['record']
 
 /** The tournaments the player is or was in, newest first, with their record over all of them. */
-export async function myTournaments(
-  event: RequestEvent,
-): Promise<{ tournaments: MyTournament[]; record: TournamentRecord }> {
-  return call(event, '/players/me/tournaments', { method: 'GET', secret: signedIn(event) })
+export async function myTournaments(event: RequestEvent): Promise<MyTournaments> {
+  return call(event, signedIn(event), (options) =>
+    platform.players.me.tournaments.$get({}, options),
+  )
 }
 
 /** The tournament tables the player sits at right now, in any game. */
 export async function mySeats(event: RequestEvent): Promise<TournamentTable[]> {
-  const { rooms } = await call<{ rooms: TournamentTable[] }>(event, '/players/me/rooms', {
-    method: 'GET',
-    secret: signedIn(event),
-  })
+  const { rooms } = await call(event, signedIn(event), (options) =>
+    platform.players.me.rooms.$get({ query: {} }, options),
+  )
 
   return rooms
 }
 
-/** One table of a tournament round, its players best finish first; an unplayed seat has no placement. */
-export type BoardTable = {
-  code: string
-  startedAt: string | null
-  closedAt: string | null
-  closeReason: string | null
-  players: {
-    playerId: string
-    name: string
-    bot: boolean
-    seat: number | null
-    placement: number | null
-  }[]
-}
-
 /** A tournament's own page: what it is, every round's tables (the bracket), and the standings. */
-export type TournamentBoard = {
-  tournament: {
-    id: string
-    game: string
-    name: string
-    format: TournamentFormat | null
-    rounds: number | null
-    /** Seats at each table. */
-    playersPerRoom: number
-    startsAt: string
-    endedAt: string | null
-    cancelled: boolean
-    players: number
-    prizes: TournamentPrize[]
-  }
-  rounds: { round: number; startsAt: string; endedAt: string | null; tables: BoardTable[] }[]
-  standings: Standing[]
-  me: Standing | null
-}
+export type TournamentBoard = Data<(typeof platform.tournaments)[':id']['$get']>
+/** One table of a tournament round, its players best finish first; an unplayed seat has no placement. */
+export type BoardTable = TournamentBoard['rounds'][number]['tables'][number]
 
 export async function tournamentBoard(event: RequestEvent, id: string): Promise<TournamentBoard> {
-  return call(event, `/tournaments/${encodeURIComponent(id)}`, {
-    method: 'GET',
-    secret: signedIn(event),
-  })
+  return call(event, signedIn(event), (options) =>
+    platform.tournaments[':id'].$get({ param: { id: segment(id) } }, options),
+  )
 }
 
 /** The player's secret, or a 401 the browser sees like any other platform answer. */
