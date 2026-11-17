@@ -80,6 +80,9 @@
         return `Refund · ${name}${cancelled}`
       case 'tournament_prize':
         return `Prize · ${name}`
+      // Only bot accounts get these (tournament fees for bots); listed so every reason has a label.
+      case 'bot_funding':
+        return 'Bot funding'
     }
   }
 

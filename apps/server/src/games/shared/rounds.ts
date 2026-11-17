@@ -1,7 +1,7 @@
 // Round history (docs/architecture/fairness.md): the room cuts each round out of the move log when it closes and
 // sends it to the platform (POST /v1/matches/:id/rounds), so a match shows its rounds, seeds revealed, while it
 // is still played.
-import { clientSeedOf } from './fairness'
+import { clientSeedOf } from 'contracts/fairness/fairness'
 import type { LogEntry, LogEvent } from './match'
 
 /**

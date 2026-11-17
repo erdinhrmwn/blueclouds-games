@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { LIMIT } from 'server/games/bust-31/rules'
-  import { BURST_AT } from 'server/games/cloudburst/rules'
+  import { LIMIT } from 'contracts/rooms/bust-31'
+  import { BURST_AT } from 'contracts/rooms/cloudburst'
   import { cardFace } from '#lib/rounds.ts'
 
   /**

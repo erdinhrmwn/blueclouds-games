@@ -201,6 +201,12 @@ async function inviteLink(sql: SQL, roomId: string, playerId: string): Promise<s
   throw new Error(`no invite link after ${CODE_TRIES} tries`)
 }
 
+/** A table just opened, with what its opener chose. */
+export interface OpenedRoom extends Room {
+  visibility: Visibility
+  name: string | null
+}
+
 /** A player opens a new table: the platform picks its code. The opener is its first member. */
 export async function openRoom(
   sql: SQL,
@@ -208,7 +214,7 @@ export async function openRoom(
   visibility: Visibility,
   playerId: string,
   name: string | null = null,
-) {
+): Promise<OpenedRoom> {
   await requirePlayable(sql, game)
 
   const room = await sql.begin(async (tx) => {
@@ -227,7 +233,11 @@ export async function openRoom(
  * Anyone who may enter an open table can invite: they get the room's live link, made on first ask.
  * Tournament tables have no invites.
  */
-export async function createInvite(sql: SQL, code: string, playerId: string) {
+export async function createInvite(
+  sql: SQL,
+  code: string,
+  playerId: string,
+): Promise<{ token: string }> {
   const room = await enterable(sql, code, playerId)
   if (room.tournament) {
     throw new ApiError('forbidden', 403, "Tournament tables can't be shared.")
@@ -255,7 +265,11 @@ export async function resetInviteLink(sql: SQL, code: string, playerId: string):
 }
 
 /** A link token: the player becomes a member of its room and gets the room to go to. */
-export async function redeemInvite(sql: SQL, invite: string, playerId: string) {
+export async function redeemInvite(
+  sql: SQL,
+  invite: string,
+  playerId: string,
+): Promise<{ code: string; game: string }> {
   const [row] = await sql`
 		SELECT r.id, r.code, r.game_slug AS game
 		FROM room_invites i

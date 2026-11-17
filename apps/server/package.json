@@ -3,10 +3,6 @@
   "version": "0.0.1",
   "private": true,
   "type": "module",
-  "exports": {
-    ".": "./src/registry.ts",
-    "./games/*": "./src/games/*.ts"
-  },
   "scripts": {
     "dev": "bun --env-file=../../.env scripts/dev.ts",
     "start": "bun --env-file=../../.env src/index.ts",
@@ -14,6 +10,8 @@
     "check": "tsc --noEmit"
   },
   "dependencies": {
+    "contracts": "workspace:*",
+    "hono": "^4.13.18",
     "jose": "^6.2.17",
     "pino": "^9.14.0",
     "rivetkit": "3.0.7",
@@ -22,6 +20,7 @@
   "devDependencies": {
     "@types/bun": "latest",
     "pino-pretty": "^13.2.0",
+    "platform": "workspace:*",
     "typescript": "^6.0.3"
   }
 }

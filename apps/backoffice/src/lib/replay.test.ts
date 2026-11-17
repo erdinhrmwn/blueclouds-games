@@ -1,111 +1,42 @@
 import { describe, expect, test } from 'bun:test'
-// The real rules and log code, so the replay is checked against what the room actually records.
-import { chooseBotCard } from '../../../server/src/games/bust-31/bots'
-import { logEvents, type MatchState } from '../../../server/src/games/bust-31/match'
-import {
-  addPlayer,
-  createGame,
-  type Game,
-  playCard,
-  startGame,
-} from '../../../server/src/games/bust-31/rules'
-import {
-  fairRng,
-  matchSeeds,
-  newCommitment,
-  seedsForRound,
-} from '../../../server/src/games/shared/fair-rng'
-import {
-  checkMatch,
-  type MatchSeeds,
-  proofsFromLog,
-} from '../../../server/src/games/shared/fairness'
-import { type LogEntry, stamp } from '../../../server/src/games/shared/match'
-import { closedRounds } from '../../../server/src/games/shared/rounds'
-import { type LogEvent, replay } from './replay.ts'
+import { checkMatch, proofsFromLog } from 'contracts/fairness/fairness'
+// Real games, logged by the room's own code (apps/server/scripts/match-fixtures.ts).
+import fixtures from 'contracts/fixtures/bust-31-matches.json'
+import { type MatchLog, replay } from './replay.ts'
 
-/** A full 4-player bot game, shuffled and logged the way the room does it (fairness events included). */
-function playedGame() {
-  let game = createGame()
-  for (let i = 0; i < 4; i++) {
-    game = addPlayer(game, `bot-${i}`, `Bot ${i}`, true)
-  }
-
-  let match: MatchState = { id: 'm', startedAt: new Date(0).toISOString(), out: [], seq: 0 }
-  let seeds: MatchSeeds = { ...matchSeeds(newCommitment()), matchId: 'm' }
-  let pending: LogEntry[] = []
-  const rng = fairRng(
-    (round) => {
-      const result = seedsForRound(seeds, round)
-      seeds = result.seeds
-      if (result.started) {
-        const { roundId, serverSeedHash } = seeds.current!
-        pending.push({ type: 'fairness', data: { round, roundId, serverSeedHash } })
-      }
-
-      return seeds
-    },
-    (record) => {
-      pending.push({ type: 'shuffle', data: record })
-      seeds = { ...seeds, last: record }
-    },
-  )
-  const events: LogEvent[] = []
-  // As the room does: a closed round reveals its seed after its moves.
-  const revealsOf = (moves: LogEntry[], finished: boolean) =>
-    closedRounds(moves, seeds.current?.round ?? null, finished).map((round) => {
-      const seed = [seeds.previous, seeds.current].find((held) => held?.round === round)!
-      return { type: 'reveal', data: { round, serverSeed: seed.serverSeed } }
-    })
-  const step = (next: Game) => {
-    const moves = logEvents(game, next, true)
-    const entries = [...pending, ...moves, ...revealsOf(moves, next.phase === 'finished')]
-    pending = []
-    const stamped = stamp(match, entries, events.length * 1000)
-    match = stamped.match
-    events.push(...stamped.events)
-    game = next
-  }
-
-  game = { ...game, hostId: 'bot-0' }
-  step(startGame(game, 'bot-0', rng))
-  while (game.phase === 'playing') {
-    const player = game.players[game.turn]!
-    step(playCard(game, player.id, chooseBotCard(player.hand, game.total)!.id, rng))
-  }
-
-  const seats = game.players.map((player) => ({ seat: player.seat, name: player.name }))
-  return { game: game, log: { logVersion: 1, events }, seats }
+interface PlayedGame {
+  log: MatchLog
+  seats: { seat: number; name: string }[]
+  winner: string
+  lives: number[]
 }
+
+const games = fixtures.matches as PlayedGame[]
 
 describe('Bust 31 replay', () => {
   test('a whole game replays without a single mismatch and ends like the real one', () => {
-    for (let run = 0; run < 20; run++) {
-      const { game, log, seats } = playedGame()
+    for (const { log, seats, winner, lives } of games) {
       const steps = replay('bust-31', log, seats)
       expect(steps.filter((step) => step.mismatch)).toEqual([])
       const last = steps.findLast((step) => step.event.type === 'finished')!
-      expect(last.text).toBe(
-        `${game.players.find((player) => player.id === game.winnerId)!.name} wins.`,
-      )
+      expect(last.text).toBe(`${winner} wins.`)
       expect(steps.at(-1)!.text).toMatch(/^Round \d+ server seed revealed: /)
-      expect(last.state!.seats.map((seat) => seat.lives)).toEqual(
-        game.players.map((player) => Math.max(0, player.lives)),
-      )
+      expect(last.state!.seats.map((seat) => seat.lives)).toEqual(lives)
     }
   })
 
   test('every round of a played game checks out with its own revealed seed', async () => {
-    const { log } = playedGame()
-    const proofs = proofsFromLog('m', log.events)
-    const deals = log.events.filter((event) => event.type === 'deal')
+    for (const { log } of games) {
+      const proofs = proofsFromLog(fixtures.matchId, log.events)
+      const deals = log.events.filter((event) => event.type === 'deal')
 
-    expect(proofs.length).toBe(deals.length)
-    expect((await checkMatch(proofs)).ok).toBe(true)
+      expect(proofs.length).toBe(deals.length)
+      expect((await checkMatch(proofs)).ok).toBe(true)
+    }
   })
 
   test('a tampered log is flagged', () => {
-    const { log, seats } = playedGame()
+    const { log, seats } = games[0]!
     const i = log.events.findIndex((event) => event.type === 'play')
     const tampered = log.events.map((event, j) =>
       j === i ? { ...event, data: { ...event.data, total: 99 } } : event,

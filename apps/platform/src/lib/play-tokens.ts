@@ -1,6 +1,6 @@
 import { createPrivateKey } from 'node:crypto'
+import type { Avatar } from 'contracts/avatars'
 import { SignJWT } from 'jose'
-import type { Avatar } from '../services/players'
 
 /** Room actors only accept tokens with this audience. */
 export const PLAY_TOKEN_AUDIENCE = 'blueclouds-rooms'

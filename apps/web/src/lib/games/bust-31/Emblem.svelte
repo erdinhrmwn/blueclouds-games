@@ -1,6 +1,6 @@
 <script lang="ts">
   import EmblemTile, { arc } from '#lib/components/EmblemTile.svelte'
-  import { LIMIT } from 'server/games/bust-31/rules'
+  import { LIMIT } from 'contracts/rooms/bust-31'
 
   /** Bust 31's emblem: the oxblood back with a 0–31 gauge (red zone at the end) round the 31. */
   let {

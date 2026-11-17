@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Bust31Connection } from './connection.svelte.ts'
   import { dealCards, placeCard, seatRect, shake, whenDealt } from '#lib/motion.ts'
-  import type { Card } from 'server/games/bust-31/rules'
+  import type { Card } from 'contracts/rooms/bust-31'
   import { untrack } from 'svelte'
   import { prefersReducedMotion } from 'svelte/motion'
   import BustStamp from './BustStamp.svelte'
@@ -12,7 +12,7 @@
   import PlayingCard from './PlayingCard.svelte'
   import Seat from '#lib/components/Seat.svelte'
   import HandBar from '#lib/components/HandBar.svelte'
-  import { DEAL, HAND_SIZE, MAX_PLAYERS, START_LIVES } from 'server/games/bust-31/rules'
+  import { DEAL, HAND_SIZE, MAX_PLAYERS, START_LIVES } from 'contracts/rooms/bust-31'
   import Dealer from '#lib/components/Dealer.svelte'
   import Deck from '#lib/components/Deck.svelte'
   import DealerLine from '#lib/components/DealerLine.svelte'

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Card } from 'server/games/bust-31/rules'
+  import type { Card } from 'contracts/rooms/bust-31'
   import { placeCard, seatRect } from '#lib/motion.ts'
   import { prefersReducedMotion } from 'svelte/motion'
   import PlayingCard from './PlayingCard.svelte'

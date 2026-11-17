@@ -1,5 +1,5 @@
+import { SUITS } from 'contracts/rooms/cloudburst'
 import { z } from 'zod'
-import { SUITS } from './rules'
 
 export const PlayInput = z.object({
   cardId: z.string().min(1).max(24),

@@ -38,6 +38,7 @@ export const LogEvent = z.object({
     )
     .optional(),
 })
+export type LogEvent = z.output<typeof LogEvent>
 
 const MatchLog = z.object({
   logVersion: z.number().int().min(1),
@@ -242,6 +243,20 @@ export async function recordMatch(sql: SQL, match: MatchReport): Promise<boolean
   })
 }
 
+/**
+ * The player's record in one game. What a round won means is the game's; `won` is null for a game the platform
+ * can't count rounds for.
+ */
+export interface GameStats {
+  game: string
+  played: number
+  wins: number
+  bestStreak: number
+  currentStreak: number
+  averagePlace: number
+  rounds: { played: number; won: number | null }
+}
+
 type StatsRow = {
   game: string
   played: number
@@ -258,7 +273,7 @@ type StatsRow = {
  * row and the one still going, their average place, and their rounds (Bust 31: survived, Cloudburst: went out
  * first). Matches an admin terminated count for none of them.
  */
-export async function stats(sql: SQL, playerId: string) {
+export async function stats(sql: SQL, playerId: string): Promise<{ games: GameStats[] }> {
   // How a round counts as won for a seat, read from the round's stored result. A game left out reports no
   // round record (null).
   // ponytail: game rules spelled out in SQL. Fine for a handful of games; once games multiply, have each room
@@ -339,13 +354,33 @@ export async function stats(sql: SQL, playerId: string) {
   }
 }
 
+/** One of the player's finished matches, as their history lists it. */
+export interface MatchSummary {
+  id: string
+  game: string
+  roomCode: string
+  startedAt: string
+  endedAt: string
+  endReason: 'finished' | 'terminated'
+  players: number
+  seat: number
+  placement: number
+  score: number
+}
+
+/** A page of the player's history; `nextCursor` is null on the last page. */
+export interface MatchPage {
+  matches: MatchSummary[]
+  nextCursor: string | null
+}
+
 /** The player's own history, newest first, of one game or all. Cursor = last match id of the previous page. */
 export async function history(
   sql: SQL,
   playerId: string,
   cursor: string | undefined,
   game: string | undefined,
-) {
+): Promise<MatchPage> {
   const afterCursor = cursor ? sql`AND mp.match_id < ${cursor}` : sql``
   const ofGame = game ? sql`AND m.game_slug = ${game}` : sql``
 

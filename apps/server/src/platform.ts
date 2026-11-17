@@ -1,6 +1,8 @@
+import { AVATAR_COLORS, AVATAR_ICONS, type Avatar, NO_AVATAR } from 'contracts/avatars'
+import { type ClientRequestOptions, hc, type InferRequestType } from 'hono/client'
 import { importJWK, jwtVerify } from 'jose'
+import type { AppType } from 'platform/rpc'
 import { z } from 'zod'
-import { AVATAR_COLORS, AVATAR_ICONS, type Avatar, NO_AVATAR } from './games/shared/avatars'
 
 /**
  * Everything the actor server needs from the BlueClouds Platform, in one place, so another
@@ -105,20 +107,24 @@ export async function verifyPlayToken(token: unknown): Promise<Identity | null> 
  * Sends a finished match. "sent": stored (or already stored, the platform is idempotent by matchId).
  * "rejected": the platform will never accept this body, so retrying is pointless. "retry": try again later.
  */
-export function reportMatch(report: { matchId: string }): Promise<SendResult> {
-  return send('/matches', report)
+export function reportMatch(report: MatchReportBody): Promise<SendResult> {
+  return send(() => platform().matches.$post({ json: report }, requestOptions()))
 }
 
 /** Sends a closed round of a running or finished match (rounds.ts); answered like `reportMatch`. */
-export function reportRound(matchId: string, round: { round: number }): Promise<SendResult> {
-  return send(`/matches/${matchId}/rounds`, round)
+export function reportRound(matchId: string, round: RoundReportBody): Promise<SendResult> {
+  const param = { id: encodeURIComponent(matchId) }
+
+  return send(() =>
+    platform().matches[':id'].rounds.$post({ param, json: round }, requestOptions()),
+  )
 }
 
 export type SendResult = { result: 'sent' | 'rejected' | 'retry'; detail?: string }
 
-async function send(path: string, body: unknown): Promise<SendResult> {
+async function send(request: () => Promise<Answer>): Promise<SendResult> {
   try {
-    const res = await callPlatform('POST', path, body)
+    const res = await request()
     if (res.ok) {
       return { result: 'sent' }
     }
@@ -166,29 +172,46 @@ const TournamentRoom = z.object({
 })
 export type RoomSeats = z.output<typeof TournamentRoom>
 
-async function callPlatform(method: string, path: string, body?: unknown): Promise<Response> {
+/** The platform's API, typed by its routes (AppType). Made on first use, once the config is loaded. */
+let client: ReturnType<typeof createClient> | undefined
+
+function createClient() {
   const { PLATFORM_URL, PLATFORM_SERVER_KEY } = config ?? loadPlatformConfig()
 
-  return fetch(`${PLATFORM_URL}/v1${path}`, {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${PLATFORM_SERVER_KEY}`,
-    },
-    body: body === undefined ? undefined : JSON.stringify(body),
-    signal: AbortSignal.timeout(PLATFORM_TIMEOUT_MS),
-  })
+  return hc<AppType>(PLATFORM_URL, {
+    headers: { Authorization: `Bearer ${PLATFORM_SERVER_KEY}` },
+  }).v1
 }
 
+function platform(): ReturnType<typeof createClient> {
+  client ??= createClient()
+  return client
+}
+
+/** The parts of an answer read here, whatever route it came from. */
+type Answer = Pick<Response, 'ok' | 'status' | 'text'>
+
+/** Per request: each call gets its own timeout. */
+const requestOptions = (): ClientRequestOptions => ({
+  init: { signal: AbortSignal.timeout(PLATFORM_TIMEOUT_MS) },
+})
+
+/** What the platform's report routes take, from their own schemas. */
+type MatchReportBody = InferRequestType<ReturnType<typeof platform>['matches']['$post']>['json']
+type RoundReportBody = InferRequestType<
+  ReturnType<typeof platform>['matches'][':id']['rounds']['$post']
+>['json']
+
 /** Status and the start of the body, for logs. */
-async function failureDetail(res: Response): Promise<string> {
+async function failureDetail(res: Answer): Promise<string> {
   const body = await res.text().catch(() => '')
   return `${res.status} ${body}`.slice(0, MAX_DETAIL_LENGTH)
 }
 
 /** The room's tournament, start time and seats. Null if the platform doesn't know the room; throws if it can't be reached. */
 export async function fetchRoomSeats(code: string): Promise<RoomSeats | null> {
-  const res = await callPlatform('GET', `/rooms/${encodeURIComponent(code)}/seats`)
+  const param = { code: encodeURIComponent(code) }
+  const res = await platform().rooms[':code'].seats.$get({ param }, requestOptions())
   if (res.status === 404) {
     return null
   }
@@ -197,22 +220,23 @@ export async function fetchRoomSeats(code: string): Promise<RoomSeats | null> {
     throw new Error(`room seats: ${res.status}`)
   }
 
-  const body = (await res.json()) as { data: { room: unknown } }
+  // Parsed, not trusted: a platform one deploy behind or ahead may send another shape.
+  const body = RoomSeatsAnswer.parse(await res.json())
   return TournamentRoom.parse(body.data.room)
 }
 
-const VipIds = z.object({ vipIds: z.array(z.uuid()) })
+const RoomSeatsAnswer = z.object({ data: z.object({ room: z.unknown() }) })
+const VipIds = z.object({ data: z.object({ vipIds: z.array(z.uuid()) }) })
 
 /** Which of these players are VIP right now. Throws if the platform can't be reached. */
 export async function fetchVipIds(ids: string[]): Promise<Set<string>> {
-  const query = ids.map(encodeURIComponent).join(',')
-  const res = await callPlatform('GET', `/players/vips?ids=${query}`)
+  const query = { ids: ids.join(',') }
+  const res = await platform().players.vips.$get({ query }, requestOptions())
   if (!res.ok) {
     throw new Error(`vip lookup: ${res.status}`)
   }
 
-  const body = (await res.json()) as { data: unknown }
-  const { vipIds } = VipIds.parse(body.data)
+  const { vipIds } = VipIds.parse(await res.json()).data
 
   return new Set(vipIds)
 }
@@ -227,10 +251,13 @@ export async function markRoom(
   reason: 'not_enough_players' | 'terminated' = 'not_enough_players',
 ): Promise<{ ok: boolean; detail?: string }> {
   try {
-    const path = `/rooms/${encodeURIComponent(code)}/${change}`
-    const body = change === 'close' ? { reason } : undefined
+    const room = platform().rooms[':code']
+    const param = { code: encodeURIComponent(code) }
+    const res =
+      change === 'close'
+        ? await room.close.$post({ param, json: { reason } }, requestOptions())
+        : await room.start.$post({ param }, requestOptions())
 
-    const res = await callPlatform('POST', path, body)
     if (res.ok) {
       return { ok: true }
     }

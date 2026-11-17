@@ -1,7 +1,8 @@
 import type { SQL } from 'bun'
+import type { TournamentFormat } from 'contracts/rooms/room'
 import { ApiError } from '../lib/http'
 import { type FinalPlace, finalPlaces, pointsPlaces } from './tournament-rounds'
-import { roundSeats, signUpOrderOf } from './tournaments'
+import { roundSeats, signUpOrderOf, type TournamentPrize } from './tournaments'
 
 /** A finished tournament stays in its game's lobby this long, with its winners (phase 5 design). */
 const FINISHED_SHOWN = '24 hours'
@@ -29,7 +30,7 @@ export type Standing = {
 type LiveRow = {
   id: string
   name: string
-  format: 'arena' | 'knockout' | 'swiss' | null
+  format: TournamentFormat | null
   rounds: number | null
   round: number
   round_starts_at: Date
@@ -37,7 +38,7 @@ type LiveRow = {
   starts_at: Date
   ended_at: Date | null
   players: number
-  prizes: { place: number; coins: number; extra: string | null }[]
+  prizes: TournamentPrize[]
   table_code: string | null
   table_started: boolean | null
   table_closed: boolean | null
@@ -118,11 +119,39 @@ async function namesOf(
   )
 }
 
+/** A tournament that is playing, or finished within the last day, as the lobby shows it. */
+export interface LiveTournament {
+  id: string
+  name: string
+  format: TournamentFormat | null
+  /** Arena and Swiss: rounds in all; null for a knockout. */
+  rounds: number | null
+  /** The latest round, and when its tables start. */
+  round: number
+  roundStartsAt: string
+  roundStarted: boolean
+  /** When round 1 started; with `endedAt`, how long it ran. */
+  startsAt: string
+  endedAt: string | null
+  /** How many sat down in round 1. */
+  players: number
+  prizes: TournamentPrize[]
+  /** The top of the standings (or the winners). */
+  top: Standing[]
+  me: Standing | null
+  /** The player's table in the latest round, if they have one. */
+  table: { code: string; started: boolean; closed: boolean } | null
+}
+
 /**
  * A game's tournaments that are playing, or finished within FINISHED_SHOWN: the round, when it starts, the top of
  * the standings, and the caller's own place and current table.
  */
-export async function listLive(sql: SQL, game: string, playerId: string) {
+export async function listLive(
+  sql: SQL,
+  game: string,
+  playerId: string,
+): Promise<LiveTournament[]> {
   const rows = (await sql`
 		SELECT
 			t.id,
@@ -227,11 +256,44 @@ export type BoardTable = {
   }[]
 }
 
+/** One round of the bracket: when it ran and its tables. */
+export interface BoardRound {
+  round: number
+  startsAt: string
+  endedAt: string | null
+  tables: BoardTable[]
+}
+
+/** A tournament's own page: what it is, every round's tables (the bracket), and the standings. */
+export interface TournamentBoard {
+  tournament: {
+    id: string
+    game: string
+    name: string
+    format: TournamentFormat | null
+    rounds: number | null
+    /** Seats at each table. */
+    playersPerRoom: number
+    startsAt: string
+    endedAt: string | null
+    cancelled: boolean
+    players: number
+    prizes: TournamentPrize[]
+  }
+  rounds: BoardRound[]
+  standings: Standing[]
+  me: Standing | null
+}
+
 /**
  * Everything the tournament page shows: the tournament as the lobby lists it, every round with its tables and who
  * finished where (the bracket), and the standings. Only distributed tournaments have rounds.
  */
-export async function tournamentBoard(sql: SQL, tournamentId: string, playerId: string) {
+export async function tournamentBoard(
+  sql: SQL,
+  tournamentId: string,
+  playerId: string,
+): Promise<TournamentBoard> {
   const [tournament] = await sql`
 		SELECT
 			t.id,

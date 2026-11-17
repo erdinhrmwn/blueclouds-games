@@ -1,8 +1,16 @@
 import type { SQL } from 'bun'
+import {
+  type AdminActions,
+  type AdminParams,
+  isGameSlug,
+  type KickResult,
+  ROOM_ACTORS,
+  ROOM_LIST_ACTOR,
+  type RoomSummary,
+  type TerminateResult,
+  tournamentListKey,
+} from 'contracts/rooms/room'
 import { ActorError, createClient } from 'rivetkit/client'
-import type { registry } from 'server'
-import type { KickResult, TerminateResult } from 'server/games/shared/room'
-import { type RoomSummary, tournamentListKey } from 'server/games/shared/schema'
 import { RIVET_ENDPOINT, RIVET_TOKEN } from '$app/env/private'
 import { type Admin, audit } from './auth.ts'
 import { log } from './log.ts'
@@ -12,7 +20,8 @@ import { isUuid } from './players.ts'
 const ENGINE_TIMEOUT_MS = 3_000
 
 // The engine signed in with the admin token, like the web app's server: the room lists, and the admin actions.
-const engine = createClient<typeof registry>({
+// Untyped: the backoffice never imports the game server; the room contracts (contracts/rooms) type what it reads.
+const engine = createClient({
   endpoint: RIVET_ENDPOINT,
   namespace: 'default',
   token: RIVET_TOKEN,
@@ -42,7 +51,11 @@ async function withTimeout<T>(promise: Promise<T>): Promise<T> {
 /** One room list from the engine, or null when it can't be reached in time. */
 async function readList(key: string): Promise<RoomSummary[] | null> {
   try {
-    return await withTimeout(engine.roomList.getOrCreate([key]).list())
+    return await withTimeout(
+      engine
+        .getOrCreate(ROOM_LIST_ACTOR, [key])
+        .action<[], RoomSummary[]>({ name: 'list', args: [] }),
+    )
   } catch (err) {
     log.warn({ msg: 'live tables: room list unreachable', key, err })
     return null
@@ -92,20 +105,24 @@ export type LiveTable = {
   seats: { seat: number | null; name: string; playerId: string | null; bot: boolean }[]
 }
 
-/** The admin actions every game's room actor has; the room checks the admin token it is sent. */
-type AdminRoom = {
-  adminKick(input: { seat: number; reason: string }): Promise<KickResult>
-  adminTerminate(input: { reason: string }): Promise<TerminateResult>
-}
-
 // The rooms are reached with the admin token as connection params, the only proof of an admin a room accepts.
-const ADMIN_PARAMS = { params: { adminKey: RIVET_TOKEN } }
+const ADMIN_PARAMS: { params: AdminParams } = { params: { adminKey: RIVET_TOKEN } }
 
-/** Each game's room actor, by game slug. `get`, not `getOrCreate`: an admin action never makes a room. */
-const ROOMS = new Map<string, (code: string) => AdminRoom>([
-  ['bust-31', (code) => engine.bust31Room.get([code], ADMIN_PARAMS) as unknown as AdminRoom],
-  ['cloudburst', (code) => engine.cloudburstRoom.get([code], ADMIN_PARAMS) as unknown as AdminRoom],
-])
+/**
+ * A game's room, by game slug and code, with its admin actions (AdminActions). `get`, not `getOrCreate`: an
+ * admin action never makes a room. Null for a game without rooms.
+ */
+function adminRoom(game: string, code: string): AdminActions | null {
+  if (!isGameSlug(game)) {
+    return null
+  }
+
+  const room = engine.get(ROOM_ACTORS[game], [code], ADMIN_PARAMS)
+  return {
+    adminKick: (input) => room.action({ name: 'adminKick', args: [input] }),
+    adminTerminate: (input) => room.action({ name: 'adminTerminate', args: [input] }),
+  }
+}
 
 export const ROOM_CODE = /^[A-Z0-9]{4,8}$/
 
@@ -119,15 +136,15 @@ export class TableActionError extends Error {}
 async function askRoom<T>(
   game: string,
   code: string,
-  ask: (room: AdminRoom) => Promise<T>,
+  ask: (room: AdminActions) => Promise<T>,
 ): Promise<T> {
-  const room = ROOMS.get(game)
-  if (!room || !ROOM_CODE.test(code)) {
+  const room = ROOM_CODE.test(code) ? adminRoom(game, code) : null
+  if (!room) {
     throw new TableActionError('That table does not exist.')
   }
 
   try {
-    return await withTimeout(ask(room(code)))
+    return await withTimeout(ask(room))
   } catch (err) {
     log.warn({ msg: 'live tables: admin action failed', game, code, err })
     // A rule the room enforces (a UserError, group "user") is worded for people; anything else is not shown.

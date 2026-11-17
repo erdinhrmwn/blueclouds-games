@@ -1,8 +1,8 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 import type { SQL } from 'bun'
-import { resetTestDatabase } from '../../../../platform/src/test-helpers'
 import { type Admin, createAdmin } from './auth'
 import { listGames, setMaintenance } from './games'
+import { resetTestDatabase } from './test-database'
 import { createTournament, TournamentError } from './tournaments'
 
 let sql: SQL

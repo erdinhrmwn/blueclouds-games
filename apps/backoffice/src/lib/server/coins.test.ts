@@ -1,9 +1,9 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import type { SQL } from 'bun'
-import { balanceOf, moveCoins } from '../../../../platform/src/services/coins'
-import { resetTestDatabase } from '../../../../platform/src/test-helpers'
 import { type Admin, createAdmin } from './auth'
+import { balanceOf, moveCoins } from './coins'
 import { adjustCoins } from './players'
+import { resetTestDatabase } from './test-database'
 import { cancelTournament, payPrizes, plannedPayouts } from './tournaments'
 
 let sql: SQL

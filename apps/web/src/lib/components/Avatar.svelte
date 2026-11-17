@@ -1,5 +1,5 @@
 <script lang="ts" module>
-  import type { Avatar, AvatarColor } from 'server/games/shared/avatars'
+  import type { Avatar, AvatarColor } from 'contracts/avatars'
 
   /** The 12 preset colours (FigCraft page "Brand · Avatars"): deep tones, so the paper icon always reads. */
   export const AVATAR_TONES: Record<AvatarColor, string> = {
@@ -19,7 +19,7 @@
 </script>
 
 <script lang="ts">
-  import { defaultAvatarColor } from 'server/games/shared/avatars'
+  import { defaultAvatarColor } from 'contracts/avatars'
   import AvatarGlyph from './AvatarGlyph.svelte'
 
   /**

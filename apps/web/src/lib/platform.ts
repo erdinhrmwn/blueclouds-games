@@ -1,4 +1,4 @@
-import type { Avatar } from 'server/games/shared/avatars'
+import type { Avatar } from 'contracts/avatars'
 import type {
   CoinChange,
   LiveTournament,

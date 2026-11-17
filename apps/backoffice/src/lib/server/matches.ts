@@ -1,5 +1,5 @@
 import type { SQL } from 'bun'
-import { checkMatch, proofsFromLog } from 'server/games/shared/fairness'
+import { checkMatch, proofsFromLog } from 'contracts/fairness/fairness'
 import type { MatchLog } from '../replay.ts'
 import { isUuid, PAGE_SIZE } from './players.ts'
 

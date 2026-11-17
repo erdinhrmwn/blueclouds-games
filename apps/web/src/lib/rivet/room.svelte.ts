@@ -1,89 +1,37 @@
-import type { TournamentFormat } from '#lib/platform.ts'
+import {
+  type BaseView,
+  type ClosedEvent,
+  type RoomActions,
+  TABLE_CLOSED,
+} from 'contracts/rooms/room'
+import type { ActorConnRaw } from 'rivetkit/client'
 import { playToken } from '#lib/player.svelte.ts'
 import { RoomRefused, roomClient } from '#lib/rivet/client.ts'
 
 type Status = 'connecting' | 'connected' | 'reconnecting' | 'error' | 'refused'
 type RoomClient = Awaited<ReturnType<typeof roomClient>>['client']
-
-/** The code a room refuses with once an admin terminated the table or kicked this player (TABLE_CLOSED in the server). */
-const TABLE_CLOSED = 'table_closed'
+/**
+ * An untyped connection. Its type drops `on` because the actor definition is unknown here, but every connection
+ * has it (ActorConnRaw); the listeners below type their own payloads from the contract.
+ */
+type Conn = ReturnType<ReturnType<RoomClient['getForId']>['connect']> & Pick<ActorConnRaw, 'on'>
+/** A room's actions as the contract lists them; each one takes plain data and returns a promise. */
+type ActionMap<Actions> = Record<keyof Actions, (...args: never[]) => Promise<unknown>>
 
 /** A refusal for good: the table is closed to this player, so reconnecting is pointless. */
 const isTableClosed = (err: unknown) =>
   typeof err === 'object' && err !== null && 'code' in err && err.code === TABLE_CLOSED
-/** Every game's room actor has these actions; games add their own on top (see `call`). */
-type Conn = {
-  join(): Promise<{ playerId: string; view: never; hand: never }>
-  start(): Promise<void>
-  addBot(seat: number): Promise<void>
-  takeSeat(seat: number): Promise<void>
-  removeBot(id: string): Promise<void>
-  kick(seat: number): Promise<void>
-  reset(): Promise<void>
-  leave(): Promise<void>
-  on(event: string, fn: (data: never) => void): () => void
-  onOpen(fn: () => void): () => void
-  onClose(fn: () => void): () => void
-  onError(fn: (e: unknown) => void): () => void
-  dispose(): Promise<void>
-}
-
-/** What every game's public view has, for the shared lobby and room frame. */
-export type BaseView = {
-  phase: 'lobby' | 'playing' | 'finished'
-  hostId: string | null
-  players: {
-    id: string
-    name: string
-    bot: boolean
-    seat: number
-    away: boolean
-    vip: boolean
-  }[]
-  turnPlayerId: string | null
-  turn: { left: number; total: number } | null
-  round: number
-  /** The table's own name, picked when it was opened; null (or missing from older rooms) for none. */
-  roomName?: string | null
-  /** Set at a tournament table: it starts by itself. Times are ms from when the view was sent. */
-  tournament: {
-    /** Present from rooms made after tournament rounds; older ones leave it out. */
-    id?: string
-    name: string
-    /** Arena, Knockout or Swiss; null or missing from older rooms. */
-    format?: TournamentFormat | null
-    /** Arena and Swiss: how many rounds it plays; null for Knockout, missing from older rooms. */
-    rounds?: number | null
-    /** Everyone still signed up to the tournament, all tables; null or missing from older rooms. */
-    registered?: number | null
-    /** The tournament round this table plays in. */
-    round?: number
-    startsIn: number
-    waitEndsIn: number
-    seats: number
-    closed: boolean
-  } | null
-  /**
-   * Provably fair rounds: the hash of the round being played (in the lobby: of the next match's first round)
-   * and of the round after it, both locked in before they are dealt; while a match is played also its id and the
-   * client seed of its last shuffle. Null for a match started before provably fair shuffles.
-   */
-  fairness: {
-    matchId: string | null
-    /** The last match played at this table, whose rounds the dialog still shows once it ended. */
-    lastMatchId: string | null
-    round: number
-    serverSeedHash: string
-    clientSeed: string | null
-    nextServerSeedHash: string | null
-  } | null
-}
 
 /**
  * The only place the web app talks to a room actor. Components read its reactive fields.
- * `actor` is the room actor's name in the registry (e.g. `bust31Room`).
+ * `actor` is the room actor's name in the registry (e.g. `bust31Room`); `Actions` is its contract, so a
+ * game's own moves are typed too (see `call`).
  */
-export class RoomConnection<View extends BaseView, Hand> {
+export class RoomConnection<
+  View extends BaseView,
+  Hand,
+  Actions extends RoomActions<View, Hand> & ActionMap<Actions> = RoomActions<View, Hand>,
+> {
   view = $state<View | null>(null)
   /** Local epoch ms when the current human turn runs out, or null when no timer runs. */
   turnEndsAt = $state<number | null>(null)
@@ -133,19 +81,18 @@ export class RoomConnection<View extends BaseView, Hand> {
       }
     }
 
-    // ponytail: the actor is picked by name, so its typed actions are lost; `Conn` lists the shared ones.
-    const handles = client as unknown as Record<string, RoomClient['bust31Room']>
-    const handle = handles[this.actor]!
-    const conn = handle.getForId(actorId, { getParams }).connect() as unknown as Conn
+    // The client is untyped (web never imports the game server); `call` and the listeners below
+    // take their types from the room's contract instead.
+    const conn: Conn = client.getForId(this.actor, actorId, { getParams }).connect() as Conn
     this.#conn = conn
 
     this.#stop.push(
-      conn.on('view', (view: View) => this.#setView(view)),
-      conn.on('hand', (hand: Hand) => {
+      conn.on<[View]>('view', (view) => this.#setView(view)),
+      conn.on<[Hand]>('hand', (hand) => {
         this.hand = hand
       }),
       // Sent just before the room closes this connection for good: kicked, or the table was terminated.
-      conn.on('closed', (closed: { message: string }) => this.#closed(closed.message)),
+      conn.on<[ClosedEvent]>('closed', (closed) => this.#closed(closed.message)),
       conn.onOpen(() => {
         this.status = 'connected'
         void this.#join()
@@ -192,10 +139,10 @@ export class RoomConnection<View extends BaseView, Hand> {
   // Rejoining as the same player is idempotent, so it is safe on every reconnect.
   #join = () =>
     this.#run(async () => {
-      const res = await this.#connection.join()
+      const res = await this.#shared('join')
       this.playerId = res.playerId
-      this.#setView(res.view as View)
-      this.hand = res.hand as Hand
+      this.#setView(res.view)
+      this.hand = res.hand
     })
 
   // The server sends time left, not a timestamp, so a wrong device clock can't skew the countdown.
@@ -212,23 +159,28 @@ export class RoomConnection<View extends BaseView, Hand> {
     this.waitEndsAt = view.tournament ? now + view.tournament.waitEndsIn : null
   }
 
-  start = () => this.#run(() => this.#connection.start())
-  addBot = (seat: number) => this.#run(() => this.#connection.addBot(seat))
-  takeSeat = (seat: number) => this.#run(() => this.#connection.takeSeat(seat))
-  removeBot = (id: string) => this.#run(() => this.#connection.removeBot(id))
-  kick = (seat: number) => this.#run(() => this.#connection.kick(seat))
-  reset = () => this.#run(() => this.#connection.reset())
-  leave = () => this.#run(() => this.#connection.leave())
+  start = () => this.#run(() => this.#shared('start'))
+  addBot = (seat: number) => this.#run(() => this.#shared('addBot', seat))
+  takeSeat = (seat: number) => this.#run(() => this.#shared('takeSeat', seat))
+  removeBot = (id: string) => this.#run(() => this.#shared('removeBot', id))
+  kick = (seat: number) => this.#run(() => this.#shared('kick', seat))
+  reset = () => this.#run(() => this.#shared('reset'))
+  leave = () => this.#run(() => this.#shared('leave'))
 
-  /** Calls a game-specific action, with the same busy and error handling as the shared ones. */
-  protected call(action: string, ...args: unknown[]): Promise<void> {
-    return this.#run(() => {
-      const actions = this.#connection as unknown as Record<
-        string,
-        (...args: unknown[]) => Promise<unknown>
-      >
-      return actions[action]!(...args)
-    })
+  /** Calls one of the game's own actions, with the same busy and error handling as the shared ones. */
+  protected call<Name extends keyof Actions & string>(
+    name: Name,
+    ...args: Parameters<Actions[Name]>
+  ): Promise<void> {
+    return this.#run(() => this.#connection.action({ name, args }))
+  }
+
+  /** One of the actions every room has, typed by the contract. */
+  #shared<Name extends keyof RoomActions<View, Hand>>(
+    name: Name,
+    ...args: Parameters<RoomActions<View, Hand>[Name]>
+  ): Promise<Awaited<ReturnType<RoomActions<View, Hand>[Name]>>> {
+    return this.#connection.action({ name, args })
   }
 
   async #run(fn: () => Promise<unknown>): Promise<void> {

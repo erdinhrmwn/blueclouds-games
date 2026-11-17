@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { GameEntry } from '#lib/games/catalog.ts'
   import GamePage from '#lib/components/GamePage.svelte'
-  import { LIMIT } from 'server/games/bust-31/rules'
+  import { LIMIT } from 'contracts/rooms/bust-31'
 
   let { game, maintenance }: { game: GameEntry; maintenance: boolean } = $props()
 </script>

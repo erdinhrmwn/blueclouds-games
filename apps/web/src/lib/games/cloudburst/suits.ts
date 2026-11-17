@@ -1,4 +1,4 @@
-import type { Suit } from 'server/games/cloudburst/rules'
+import type { Suit } from 'contracts/rooms/cloudburst'
 
 export const SUIT_NAME: Record<Suit, string> = {
   sun: 'Sun',

@@ -1,6 +1,5 @@
+import { isGameSlug, ROOM_ACTORS, ROOM_LIST_ACTOR, type RoomSummary } from 'contracts/rooms/room'
 import { createClient } from 'rivetkit/client'
-import type { registry } from 'server'
-import type { RoomSummary } from 'server/games/shared/schema'
 import { RIVET_ENDPOINT, RIVET_TOKEN } from '$app/env/private'
 import { PUBLIC_RIVET_ENDPOINT } from '$app/env/public'
 
@@ -9,23 +8,15 @@ const TOKEN_SECONDS = 15 * 60
 
 // The engine as this server reaches it, signed in with the admin token. Not as URL credentials:
 // rivetkit also reads RIVET_TOKEN from env and refuses a token given both ways.
-const admin = createClient<typeof registry>({
+// Untyped: web never imports the game server; the room contracts (contracts/rooms) type what it reads.
+const admin = createClient({
   endpoint: RIVET_ENDPOINT ?? PUBLIC_RIVET_ENDPOINT,
   namespace: 'default',
   token: RIVET_TOKEN,
   devtools: false,
 })
 
-/** The parts of a room handle this file uses; the same for every game. */
-type RoomHandle = Pick<ReturnType<typeof admin.bust31Room.getOrCreate>, 'resolve' | 'issueToken'>
-
-/** Each game's room actor, by game slug. */
-const ROOMS = new Map<string, (code: string) => RoomHandle>([
-  ['bust-31', (code: string) => admin.bust31Room.getOrCreate([code])],
-  ['cloudburst', (code: string) => admin.cloudburstRoom.getOrCreate([code])],
-])
-
-export const hasRooms = (game: string) => ROOMS.has(game)
+export const hasRooms = isGameSlug
 
 /**
  * Creates the room if needed and returns a token that reaches only that room's actor.
@@ -36,7 +27,11 @@ export async function issueRoomToken(
   game: string,
   code: string,
 ): Promise<{ actorId: string; token: string }> {
-  const room = ROOMS.get(game)!(code)
+  if (!isGameSlug(game)) {
+    throw new Error(`No rooms for game ${game}`)
+  }
+
+  const room = admin.getOrCreate(ROOM_ACTORS[game], [code])
   const actorId = await room.resolve()
   const { token } = await room.issueToken({
     subject: 'browser',
@@ -46,5 +41,6 @@ export async function issueRoomToken(
   return { actorId, token }
 }
 
+/** The room list's `list` action (RoomListActions). */
 export const listRooms = (game: string): Promise<RoomSummary[]> =>
-  admin.roomList.getOrCreate([game]).list()
+  admin.getOrCreate(ROOM_LIST_ACTOR, [game]).action({ name: 'list', args: [] })

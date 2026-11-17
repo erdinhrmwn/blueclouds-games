@@ -5,7 +5,7 @@
     type AvatarColor,
     type AvatarIcon,
     defaultAvatarColor,
-  } from 'server/games/shared/avatars'
+  } from 'contracts/avatars'
   import { saveAvatar } from '#lib/platform.ts'
   import { player } from '#lib/player.svelte.ts'
   import Avatar, { AVATAR_TONES } from './Avatar.svelte'

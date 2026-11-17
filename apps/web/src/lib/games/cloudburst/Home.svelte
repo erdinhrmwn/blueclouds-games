@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { GameEntry } from '#lib/games/catalog.ts'
   import GamePage from '#lib/components/GamePage.svelte'
-  import { BURST_AT, HAND_SIZE } from 'server/games/cloudburst/rules'
+  import { BURST_AT, HAND_SIZE } from 'contracts/rooms/cloudburst'
 
   let { game, maintenance }: { game: GameEntry; maintenance: boolean } = $props()
 </script>

@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import type { SQL } from 'bun'
-import { resetTestDatabase } from '../../../../platform/src/test-helpers'
 import { type Admin, createAdmin } from './auth'
+import { resetTestDatabase } from './test-database'
 import {
   assignPlayer,
   cancelTournament,

@@ -1,11 +1,12 @@
 import { describe, expect, test } from 'bun:test'
+import type { Card } from 'contracts/rooms/bust-31'
 import { z } from 'zod'
 import { newCommitment } from '../shared/fair-rng'
 import { type LogEntry, stamp } from '../shared/match'
 import { kickPlayer, markAway, markBack, randomRng } from '../shared/table'
 import { chooseBotCard } from './bots'
 import { buildReport, logEvents, type MatchState, noteMove } from './match'
-import { addPlayer, type Card, createGame, type Game, playCard, startGame } from './rules'
+import { addPlayer, createGame, type Game, playCard, startGame } from './rules'
 
 function table(lives: Record<string, number>, winnerId: string | null): Game {
   let game = createGame()

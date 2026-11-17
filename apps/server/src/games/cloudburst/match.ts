@@ -1,3 +1,4 @@
+import type { Card } from 'contracts/rooms/cloudburst'
 import {
   type LogEntry,
   type LogEvent,
@@ -9,7 +10,7 @@ import {
   reportedSeat,
 } from '../shared/match'
 import type { RoundResult } from '../shared/rounds'
-import { type Card, type Game, placements } from './rules'
+import { type Game, placements } from './rules'
 
 /** Bump when a rule change makes old results incomparable to new ones. */
 /** 2: Downpour (+2) and Tempest (+4) joined the deck. */

@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { type Card, DEAL, LIMIT, START_LIVES } from 'contracts/rooms/bust-31'
 import {
   markAway,
   markBack,
@@ -12,16 +13,12 @@ import { chooseBotCard } from './bots'
 import {
   addPlayer,
   buildDeck,
-  type Card,
   createGame,
-  DEAL,
   dealPauseMs,
   type Game,
-  LIMIT,
   playCard,
   publicView,
   resetToLobby,
-  START_LIVES,
   startGame,
   TEN_TOTAL,
 } from './rules'

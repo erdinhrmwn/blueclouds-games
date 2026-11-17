@@ -11,7 +11,7 @@ mock.module('../../platform', () => ({
   fetchVipIds: async () => new Set(),
 }))
 const room = await import('./room')
-const { checkMatch, proofsFromLog } = await import('./fairness')
+const { checkMatch, proofsFromLog } = await import('contracts/fairness/fairness')
 const { chooseBotCard } = await import('../bust-31/bots')
 const match = await import('../bust-31/match')
 const rules = await import('../bust-31/rules')

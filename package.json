@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "workspaces": [
-    "apps/*"
+    "apps/*",
+    "contracts"
   ],
   "scripts": {
     "dev": "bun run --parallel --no-exit-on-error dev:server dev:web dev:platform",
@@ -11,8 +12,8 @@
     "dev:web": "bun run --filter web dev",
     "dev:platform": "bun run --filter platform dev",
     "dev:backoffice": "bun run --filter backoffice dev",
-    "test": "bun run --filter server test && bun run --filter platform test && bun run --filter backoffice test",
-    "check": "prettier --check \"**/*.{ts,js,svelte,json}\" && biome check --diagnostic-level=error && bun run --filter '*' check",
+    "test": "bun run --filter contracts test && bun run --filter server test && bun run --filter platform test && bun run --filter backoffice test",
+    "check": "prettier --check \"**/*.{ts,js,svelte,json}\" && biome check --diagnostic-level=error && bun scripts/check-boundaries.ts && bun run --filter '*' check",
     "format": "biome check --write && prettier --write \"**/*.{ts,js,svelte,json}\"",
     "lint": "biome check"
   },

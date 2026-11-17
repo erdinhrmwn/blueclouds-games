@@ -203,12 +203,32 @@ export async function recordRound(sql: SQL, matchId: string, round: RoundReport)
   })
 }
 
+/** A closed round as the platform keeps it: its result, its revealed seed and every shuffle. */
+export interface ClosedRound {
+  id: string
+  round: number
+  startedAt: string
+  endedAt: string
+  result: Record<string, unknown>
+  /** Every move from the round's deal on, as the match's move log has them (`t`: ms since the match start). */
+  events: LogEvent[]
+  serverSeedHash: string
+  serverSeed: string
+  shuffles: { nonce: number; clientSeed: string; deck: string[] }[]
+}
+
+/** A match's closed rounds; `players` is who sat in each seat, once the match is reported. */
+export interface MatchRounds {
+  match: { id: string; game: string; finished: boolean; players: { seat: number; name: string }[] }
+  rounds: ClosedRound[]
+}
+
 type RoundRow = {
   id: string
   round: number
   game_slug: string
   result: Record<string, unknown>
-  events: unknown[]
+  events: LogEvent[]
   started_at: Date
   ended_at: Date
   server_seed_hash: string
@@ -220,7 +240,7 @@ type RoundRow = {
  * A match's closed rounds, oldest first, running or finished, each with its revealed seed and shuffles, and who
  * sat in each seat once the match is reported.
  */
-export async function matchRounds(sql: SQL, matchId: string) {
+export async function matchRounds(sql: SQL, matchId: string): Promise<MatchRounds | null> {
   const [match] = await sql`
 		SELECT game_slug
 		FROM matches

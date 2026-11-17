@@ -58,11 +58,13 @@ export function createApp(deps: Deps) {
     return ok(c, { status: 'ok' })
   })
 
-  app.route('/v1', playerRoutes(deps.sql, deps.signer, deps.config.serverKey))
-  app.route('/v1', matchRoutes(deps.sql, deps.config.serverKey))
-  app.route('/v1', roomRoutes(deps.sql, deps.config.serverKey))
-  app.route('/v1', tournamentRoutes(deps.sql))
-  app.route('/v1', gameRoutes(deps.sql))
+  // One chain, so its type (AppType) carries every route for the typed clients (hc).
+  const routes = app
+    .route('/v1', playerRoutes(deps.sql, deps.signer, deps.config.serverKey))
+    .route('/v1', matchRoutes(deps.sql, deps.config.serverKey))
+    .route('/v1', roomRoutes(deps.sql, deps.config.serverKey))
+    .route('/v1', tournamentRoutes(deps.sql))
+    .route('/v1', gameRoutes(deps.sql))
 
   app.notFound((c) => fail(c, new ApiError('not_found', 404, 'Not found.')))
 
@@ -88,5 +90,8 @@ export function createApp(deps: Deps) {
     return fail(c, new ApiError('internal', 500, 'Something went wrong. Try again later.'))
   })
 
-  return app
+  return routes
 }
+
+/** Every route with its input and response types, for `hc<AppType>()` in the web app and the game server. */
+export type AppType = ReturnType<typeof createApp>

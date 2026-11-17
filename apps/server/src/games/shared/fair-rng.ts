@@ -13,7 +13,7 @@ import {
   nextNonce,
   type RoundSeed,
   type ShuffleRecord,
-} from './fairness'
+} from 'contracts/fairness/fairness'
 import type { Rng } from './table'
 
 /** The next match, fixed before anyone sits down for it: its id and the commitment of its first round. */
