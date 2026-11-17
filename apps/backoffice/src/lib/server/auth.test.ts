@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import type { SQL } from 'bun'
-import { resetTestDatabase } from '../../../../platform/src/test-helpers'
 import { changeOwnPassword, createAdmin, login, logout, sessionAdmin } from './auth'
+import { resetTestDatabase } from './test-database'
 
 // Runs against the platform's test database (DATABASE_TEST_NAME), migrated fresh.
 let sql: SQL

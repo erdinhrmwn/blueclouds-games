@@ -1,7 +1,5 @@
 import type { SQL } from 'bun'
 import { z } from 'zod'
-import { moveCoins, refundEveryone, refundSignUp } from '../../../../platform/src/services/coins.ts'
-import { DistributeError, distributeIn } from '../../../../platform/src/services/tournaments.ts'
 import {
   FEE_MAX,
   MAX_PLAYERS_LIMIT,
@@ -13,6 +11,8 @@ import {
 import { TOURNAMENT_FORMATS, type TournamentFormat } from '../tournament-status.ts'
 import type { Admin } from './auth.ts'
 import { audit } from './auth.ts'
+import { moveCoins, refundEveryone, refundSignUp } from './coins.ts'
+import { DistributeError, distributeIn } from './distribute.ts'
 import { isUuid } from './players.ts'
 
 /** Most player ids one paste may register. */

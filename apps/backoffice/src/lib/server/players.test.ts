@@ -1,6 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import type { SQL } from 'bun'
-import { resetTestDatabase } from '../../../../platform/src/test-helpers'
 import { type Admin, createAdmin } from './auth'
 import {
   disablePlayer,
@@ -11,6 +10,7 @@ import {
   revokeVip,
   searchPlayers,
 } from './players'
+import { resetTestDatabase } from './test-database'
 
 let sql: SQL
 const everyone: PlayerFilter = { q: '', type: '', status: '' }

@@ -1,6 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import type { SQL } from 'bun'
-import { resetTestDatabase } from '../../../../platform/src/test-helpers'
 import {
   addAdmin,
   changeRole,
@@ -10,6 +9,7 @@ import {
   resetAdminPassword,
 } from './admins'
 import { type Admin, createAdmin, login } from './auth'
+import { resetTestDatabase } from './test-database'
 
 let sql: SQL
 let root: Admin

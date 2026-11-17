@@ -1,6 +1,7 @@
 import { error, fail } from '@sveltejs/kit'
 import { listAudit, NO_AUDIT_FILTER } from '#lib/server/audit-log.ts'
 import { auditIp } from '#lib/server/auth.ts'
+import { balanceOf, coinHistory } from '#lib/server/coins.ts'
 import { sql } from '#lib/server/db.ts'
 import {
   adjustCoins,
@@ -13,7 +14,6 @@ import {
   REASON_MAX,
   revokeVip,
 } from '#lib/server/players.ts'
-import { balanceOf, coinHistory } from '../../../../../platform/src/services/coins.ts'
 import type { Actions, PageServerLoad } from './$types'
 
 const AUDIT_ROWS = 10

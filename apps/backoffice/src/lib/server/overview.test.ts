@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import type { SQL } from 'bun'
-import { resetTestDatabase, room } from '../../../../platform/src/test-helpers'
 import { CHART_DAYS, matchesPerDay, overviewStats } from './overview'
+import { resetTestDatabase, room } from './test-database'
 
 let sql: SQL
 

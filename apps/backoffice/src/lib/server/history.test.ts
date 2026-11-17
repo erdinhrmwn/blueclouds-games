@@ -1,10 +1,10 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import type { SQL } from 'bun'
-import { resetTestDatabase, room } from '../../../../platform/src/test-helpers'
 import { listAudit, NO_AUDIT_FILTER } from './audit-log'
 import { createAdmin } from './auth'
 import { listMatches, matchDetail, matchGames, matchLog } from './matches'
 import { disablePlayer, playerDetail } from './players'
+import { resetTestDatabase, room } from './test-database'
 
 let sql: SQL
 let rina: string
