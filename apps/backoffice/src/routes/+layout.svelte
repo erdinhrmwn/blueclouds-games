@@ -7,8 +7,17 @@
 
   let { data, children }: LayoutProps = $props()
 
-  type NavItem = { href: string; label: string; icon: IconName; ownerOnly?: boolean }
-  type NavGroup = { label: string | null; items: NavItem[] }
+  interface NavItem {
+    href: string
+    label: string
+    icon: IconName
+    ownerOnly?: boolean
+  }
+
+  interface NavGroup {
+    label: string | null
+    items: NavItem[]
+  }
 
   const NAV: NavGroup[] = [
     {

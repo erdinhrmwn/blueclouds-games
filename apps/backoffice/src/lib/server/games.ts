@@ -1,7 +1,7 @@
 import type { SQL } from 'bun'
 import { type Admin, audit } from './auth.ts'
 
-export type GameRow = {
+export interface GameRow {
   slug: string
   name: string
   minPlayers: number

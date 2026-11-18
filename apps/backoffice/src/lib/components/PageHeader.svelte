@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte'
 
-  type Props = {
+  interface Props {
     title: string
     description?: string
     /** The list page a detail page belongs to, shown as a breadcrumb above the title. */

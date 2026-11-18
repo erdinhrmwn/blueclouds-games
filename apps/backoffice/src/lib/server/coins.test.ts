@@ -4,7 +4,8 @@ import { type Admin, createAdmin } from './auth'
 import { balanceOf, moveCoins } from './coins'
 import { adjustCoins } from './players'
 import { resetTestDatabase } from './test-database'
-import { cancelTournament, payPrizes, plannedPayouts } from './tournaments'
+import { payPrizes } from './tournament-prizes'
+import { cancelTournament, plannedPayouts } from './tournaments'
 
 let sql: SQL
 let admin: Admin

@@ -1,6 +1,7 @@
 import { fail, redirect } from '@sveltejs/kit'
 import { auditIp } from '#lib/server/auth.ts'
 import { sql } from '#lib/server/db.ts'
+import { listGames } from '#lib/server/games.ts'
 import {
   createTournament,
   listTournaments,
@@ -10,20 +11,10 @@ import {
 } from '#lib/server/tournaments.ts'
 import type { Actions, PageServerLoad } from './$types'
 
-type GameOption = { slug: string; name: string; minPlayers: number; maxPlayers: number }
-
 export const load: PageServerLoad = async () => {
-  const gamesQuery = sql`
-		SELECT slug, name, min_players AS "minPlayers", max_players AS "maxPlayers"
-		FROM games
-		ORDER BY name`
+  const [tournaments, games] = await Promise.all([listTournaments(sql), listGames(sql)])
 
-  const [tournaments, games] = await Promise.all([listTournaments(sql), gamesQuery])
-
-  return {
-    tournaments,
-    games: [...games] as GameOption[],
-  }
+  return { tournaments, games }
 }
 
 export const actions: Actions = {

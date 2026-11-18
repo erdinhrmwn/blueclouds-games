@@ -1,7 +1,7 @@
 import { replayBust31 } from './games/bust-31.ts'
 
 /** One event of a match's move log, as the room sent it (docs/architecture/match-log.md). */
-export type LogEvent = {
+export interface LogEvent {
   seq: number
   t: number
   type: string
@@ -9,14 +9,25 @@ export type LogEvent = {
   data?: Record<string, unknown>
 }
 
-export type MatchLog = { logVersion: number; events: LogEvent[] }
+export interface MatchLog {
+  logVersion: number
+  events: LogEvent[]
+}
 
-export type ReplaySeat = { seat: number; name: string | null }
+export interface ReplaySeat {
+  seat: number
+  name: string | null
+}
 
 /** One seat at the table after a step. Cards are labels such as "7", "0", "-5", "Reverse". */
-export type SeatState = { seat: number; lives: number; hand: string[]; away: boolean }
+export interface SeatState {
+  seat: number
+  lives: number
+  hand: string[]
+  away: boolean
+}
 
-export type TableState = {
+export interface TableState {
   round: number
   total: number
   limit: number
@@ -28,7 +39,12 @@ export type TableState = {
 }
 
 /** What the timeline shows for one event. `mismatch` is set when the replay disagrees with what the server logged. */
-export type Step = { event: LogEvent; text: string; state: TableState | null; mismatch?: string }
+export interface Step {
+  event: LogEvent
+  text: string
+  state: TableState | null
+  mismatch?: string
+}
 
 /** Games with their own renderer. Any other game falls back to the raw events. */
 const RENDERERS: Record<string, (log: MatchLog, seats: ReplaySeat[]) => Step[]> = {

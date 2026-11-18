@@ -5,7 +5,7 @@
 
   dayjs.extend(durationPlugin)
 
-  type Props = {
+  interface Props {
     steps: Step[]
     /** A seat's player name, for the table view. */
     nameOf: (seat: number) => string
@@ -123,6 +123,7 @@
       End: () => goTo(last),
       ' ': togglePlay,
     }
+
     const action = actions[event.key]
     if (!action) {
       return

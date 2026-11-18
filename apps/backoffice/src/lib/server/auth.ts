@@ -6,7 +6,11 @@ export const ADMIN_ROLES = ['owner', 'admin', 'viewer'] as const
 /** owner: manages admins and everything else; admin: players and tournaments; viewer: reads only. */
 export type AdminRole = (typeof ADMIN_ROLES)[number]
 
-export type Admin = { id: string; username: string; role: AdminRole }
+export interface Admin {
+  id: string
+  username: string
+  role: AdminRole
+}
 
 /** The first admin. Always an owner, and never disabled (both enforced by the database). */
 export const ROOT = 'root'

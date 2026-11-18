@@ -15,7 +15,7 @@ export const canEdit = (admin: Admin | null) => !!admin && admin.role !== 'viewe
 export const isAdminRole = (value: string): value is AdminRole =>
   ADMIN_ROLES.some((role) => role === value)
 
-export type AdminRow = {
+export interface AdminRow {
   id: string
   username: string
   role: AdminRole
