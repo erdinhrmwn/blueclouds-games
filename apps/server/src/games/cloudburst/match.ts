@@ -31,7 +31,7 @@ export function buildReport(
   events: LogEvent[],
   end: MatchEnd = 'finished',
 ): MatchReport {
-  if (end === 'finished' && (game.phase !== 'finished' || !game.winnerId)) {
+  if (end === 'finished' && game.phase !== 'finished') {
     throw new Error('buildReport needs a finished game')
   }
 
@@ -150,7 +150,7 @@ export function logEvents(before: Game, after: Game, auto = false): LogEntry[] {
 
   if (after.phase === 'finished') {
     const points = Object.fromEntries(after.players.map((player) => [player.seat, player.points]))
-    entries.push({ type: 'finished', data: { winner: seatOf(after.winnerId!), points } })
+    entries.push({ type: 'finished', data: { winner: seatOf(after.winnerId), points } })
   }
 
   return entries

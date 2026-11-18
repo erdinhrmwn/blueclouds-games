@@ -15,12 +15,12 @@ function table(lives: Record<string, number>, winnerId: string | null): Game {
   game = addPlayer(game, 'a', 'Ann')
   game = addPlayer(game, 'bot-1', 'Bot Rain', true)
   game = addPlayer(game, 'c', 'Cy')
-  return {
-    ...game,
-    phase: winnerId ? 'finished' : 'playing',
-    winnerId,
-    players: game.players.map((player) => ({ ...player, lives: lives[player.id]! })),
+  const players = game.players.map((player) => ({ ...player, lives: lives[player.id]! }))
+  if (winnerId) {
+    return { ...game, players, phase: 'finished', winnerId }
   }
+
+  return { ...game, players, phase: 'playing', winnerId: null }
 }
 
 const start: MatchState = { id: 'm1', startedAt: '2026-11-11T10:00:00.000Z', out: [], seq: 0 }

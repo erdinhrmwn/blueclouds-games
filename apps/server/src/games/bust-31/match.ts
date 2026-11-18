@@ -38,7 +38,7 @@ export function buildReport(
   events: LogEvent[],
   end: MatchEnd = 'finished',
 ): MatchReport {
-  if (end === 'finished' && (game.phase !== 'finished' || !game.winnerId)) {
+  if (end === 'finished' && game.phase !== 'finished') {
     throw new Error('buildReport needs a finished game')
   }
 

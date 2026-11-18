@@ -260,7 +260,7 @@ describe('away and VIP players', () => {
   test("a player who left mid-game keeps the seat and isn't taken back to the lobby; only the marked one is VIP", () => {
     const game = markAway(twoPlayerGame(), 'b')
     expect(game.players.find((player) => player.id === 'b')?.away).toBe(true)
-    const done = { ...game, phase: 'finished' as const }
+    const done: Game = { ...game, phase: 'finished', winnerId: 'a' }
     expect(resetToLobby(done, 'a').players.map((player) => player.id)).toEqual(['a'])
     expect(markBack(game, 'b').players.find((player) => player.id === 'b')?.away).toBe(false)
 

@@ -3,8 +3,8 @@
 
 import type { Avatar } from 'contracts/avatars'
 import type { Card, GameEvent } from 'contracts/rooms/bust-31'
-import type { Phase } from 'contracts/rooms/room'
 import type { MatchState as SharedMatch } from '../../core/domain/match'
+import type { Finished, InLobby, InPlay } from '../../core/domain/table'
 
 export interface Player {
   id: string
@@ -20,8 +20,8 @@ export interface Player {
   avatar?: Avatar
 }
 
-export interface Game {
-  phase: Phase
+/** What a game holds in every phase. */
+interface GameState {
   hostId: string | null
   players: Player[]
   deck: Card[]
@@ -33,11 +33,17 @@ export interface Game {
   /** Cards the player on turn still has to play this turn: 2 after a Double, otherwise 1. */
   playsLeft: number
   round: number
-  winnerId: string | null
   lastEvent: GameEvent | null
   /** Counts every deal and play, never resets: identifies a game position for timers. */
   moves: number
 }
+
+export interface LobbyGame extends GameState, InLobby {}
+export interface PlayingGame extends GameState, InPlay {}
+export interface FinishedGame extends GameState, Finished {}
+
+/** The game in one of its phases: only a finished game has a winner. */
+export type Game = LobbyGame | PlayingGame | FinishedGame
 
 /** The match in progress. `out` lists player ids in the order they were eliminated. */
 export interface MatchState extends SharedMatch {

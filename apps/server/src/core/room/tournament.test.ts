@@ -76,7 +76,7 @@ function runner(c: RoomCtx<Game, MatchState>) {
     game: {
       start: () => {
         calls.started += 1
-        c.vars.game = { ...c.vars.game, phase: 'playing' as const }
+        c.vars.game = { ...c.vars.game, phase: 'playing', winnerId: null }
       },
       commit: async () => {
         calls.commits += 1

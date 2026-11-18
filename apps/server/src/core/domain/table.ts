@@ -36,6 +36,24 @@ export interface Table<P extends Seated = Seated> {
   moves: number
 }
 
+/** A table in the lobby: nobody has won. */
+export interface InLobby {
+  phase: 'lobby'
+  winnerId: null
+}
+
+/** A match being played: nobody has won yet. */
+export interface InPlay {
+  phase: 'playing'
+  winnerId: null
+}
+
+/** A match that ended: it always has a winner. */
+export interface Finished {
+  phase: 'finished'
+  winnerId: string
+}
+
 /** What the room needs from every game: the shared table, plus the round being played and whose turn it is. */
 export interface GameTable<P extends Seated = Seated> extends Table<P> {
   /** 0 before the first deal. */

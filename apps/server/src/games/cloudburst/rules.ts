@@ -19,7 +19,7 @@ import {
 import type { TurnClock } from 'contracts/rooms/room'
 import { type Rng, RuleError } from '../../core/domain/table'
 import { nextIndex, seatPlayer, shuffle } from '../../core/rules/table'
-import type { Action, Game, Player } from './domain'
+import type { Action, Game, Player, PlayingGame } from './domain'
 
 const COPIES_PER_CARD = 2
 const HIGHEST_NUMBER = 8
@@ -102,20 +102,20 @@ export function startGame(game: Game, byId: string | null, rng: Rng): Game {
   }
 
   const players = game.players.map((player) => ({ ...player, points: 0, hand: [] }))
-  const dealt = dealRound({ ...game, players, round: 0, winnerId: null }, rng)
+  const playing: PlayingGame = { ...game, players, round: 0, phase: 'playing', winnerId: null }
+  const dealt = dealRound(playing, rng)
 
-  return {
-    ...dealt,
-    phase: 'playing',
-    moves: game.moves + 1,
-  }
+  return { ...dealt, moves: game.moves + 1 }
 }
 
-function currentPlayer(game: Game, playerId: string): Player {
+/** Throws unless a match is being played; from here on `game` is a PlayingGame. */
+function requirePlaying(game: Game): asserts game is PlayingGame {
   if (game.phase !== 'playing') {
     throw new RuleError('The game has not started yet.')
   }
+}
 
+function currentPlayer(game: PlayingGame, playerId: string): Player {
   const current = game.players[game.turn]
   if (current?.id !== playerId) {
     throw new RuleError('It is not your turn yet.')
@@ -125,6 +125,7 @@ function currentPlayer(game: Game, playerId: string): Player {
 }
 
 export function playCard(game: Game, playerId: string, input: PlayInput, rng: Rng): Game {
+  requirePlaying(game)
   const current = currentPlayer(game, playerId)
   const card = current.hand.find((held) => held.id === input.cardId)
   if (!card) {
@@ -252,6 +253,7 @@ function forceDraw(game: Game, seatIndex: number, count: number, rng: Rng): Game
 
 /** Draws one card. Afterwards the player may play that card (if it fits) or pass. */
 export function drawCard(game: Game, playerId: string, rng: Rng): Game {
+  requirePlaying(game)
   const current = currentPlayer(game, playerId)
   if (game.drew) {
     throw new RuleError('You already drew this turn. Play the card or pass.')
@@ -287,6 +289,7 @@ export function drawCard(game: Game, playerId: string, rng: Rng): Game {
 
 /** Ends your turn without playing. Only after drawing. */
 export function pass(game: Game, playerId: string): Game {
+  requirePlaying(game)
   currentPlayer(game, playerId)
   if (!game.drew) {
     throw new RuleError('Draw a card first, or play one.')
@@ -304,7 +307,7 @@ export function pass(game: Game, playerId: string): Game {
 }
 
 /** Someone went out: everyone else takes a point per card left. Then a new round, or the end of the match. */
-function endRound(game: Game, outId: string, card: Card, rng: Rng): Game {
+function endRound(game: PlayingGame, outId: string, card: Card, rng: Rng): Game {
   const gained: Record<string, number> = {}
   const left: Record<string, Card[]> = {}
   const players = game.players.map((player) => {
@@ -343,7 +346,7 @@ function endRound(game: Game, outId: string, card: Card, rng: Rng): Game {
 }
 
 /** A fresh deal from the full deck. The first turn moves one seat clockwise each round. */
-function dealRound(game: Game, rng: Rng): Game {
+function dealRound(game: PlayingGame, rng: Rng): PlayingGame {
   const round = game.round + 1
   let deck = shuffle(buildDeck(), rng, round)
   const players = game.players.map((player) => {

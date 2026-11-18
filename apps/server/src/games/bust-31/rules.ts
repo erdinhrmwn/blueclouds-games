@@ -14,7 +14,7 @@ import {
 import type { TurnClock } from 'contracts/rooms/room'
 import { type Rng, RuleError } from '../../core/domain/table'
 import { nextIndex, seatPlayer, shuffle } from '../../core/rules/table'
-import type { Action, Game, Player } from './domain'
+import type { Action, Game, Player, PlayingGame } from './domain'
 
 /** How long a human has to play before a card is played for them. */
 export const TURN_MS = 20_000
@@ -105,9 +105,10 @@ export function startGame(game: Game, byId: string | null, rng: Rng): Game {
   }
 
   const players = game.players.map((player) => ({ ...player, lives: START_LIVES, hand: [] }))
-  const dealt = dealRound({ ...game, players, round: 0, winnerId: null }, 0, rng)
+  const playing: PlayingGame = { ...game, players, round: 0, phase: 'playing', winnerId: null }
+  const dealt = dealRound(playing, 0, rng)
 
-  return { ...dealt, phase: 'playing', lastEvent: { type: 'started' }, moves: game.moves + 1 }
+  return { ...dealt, lastEvent: { type: 'started' }, moves: game.moves + 1 }
 }
 
 export function playCard(game: Game, playerId: string, cardId: string, rng: Rng): Game {
@@ -200,7 +201,7 @@ function swapHands(players: Player[], seatA: number, seatB: number): Player[] {
 
 /** The total went over LIMIT: the player loses a life, then a new round, or the end of the match. */
 function bust(
-  game: Game,
+  game: PlayingGame,
   current: Player,
   card: Card,
   total: number,
@@ -266,7 +267,7 @@ export function resetToLobby(game: Game, byId: string): Game {
   }
 }
 
-function dealRound(game: Game, starter: number, rng: Rng): Game {
+function dealRound(game: PlayingGame, starter: number, rng: Rng): PlayingGame {
   const round = game.round + 1
   let deck = shuffle(buildDeck(), rng, round)
   const players = game.players.map((player) => {

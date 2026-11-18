@@ -3,8 +3,8 @@
 
 import type { Avatar } from 'contracts/avatars'
 import type { Card, GameEvent, PlayInput, Suit } from 'contracts/rooms/cloudburst'
-import type { Phase } from 'contracts/rooms/room'
 import type { MatchState as SharedMatch } from '../../core/domain/match'
+import type { Finished, InLobby, InPlay } from '../../core/domain/table'
 
 export interface Player {
   id: string
@@ -20,8 +20,8 @@ export interface Player {
   points: number
 }
 
-export interface Game {
-  phase: Phase
+/** What a game holds in every phase. */
+interface GameState {
   hostId: string | null
   players: Player[]
   deck: Card[]
@@ -35,13 +35,19 @@ export interface Game {
   /** The current player drew this turn: they may play only that card (`drawnId`), or pass. */
   drew: boolean
   drawnId: string | null
-  winnerId: string | null
   lastEvent: GameEvent | null
   /** Counts every change; clients use it to spot a new event. */
   moves: number
   /** Changes whenever a new turn starts (not on a draw): keys the turn timer. */
   turnKey: number
 }
+
+export interface LobbyGame extends GameState, InLobby {}
+export interface PlayingGame extends GameState, InPlay {}
+export interface FinishedGame extends GameState, Finished {}
+
+/** The game in one of its phases: only a finished game has a winner. */
+export type Game = LobbyGame | PlayingGame | FinishedGame
 
 /** Cloudburst keeps nothing of its own in the match record. */
 export type MatchState = SharedMatch
