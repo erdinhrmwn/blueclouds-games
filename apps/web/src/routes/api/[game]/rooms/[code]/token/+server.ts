@@ -1,7 +1,8 @@
 import { json } from '@sveltejs/kit'
 import { isRoomCode } from '#lib/guest.ts'
 import { log } from '#lib/server/log.ts'
-import { apiError, BUSY_MESSAGE, failure, roomFor } from '#lib/server/platform.ts'
+import { apiError, BUSY_MESSAGE, failure } from '#lib/server/platform/client.ts'
+import { roomFor } from '#lib/server/platform/rooms.ts'
 import { hasRooms, issueRoomToken } from '#lib/server/rivet.ts'
 import type { RequestHandler } from './$types'
 

@@ -4,14 +4,9 @@ import { z } from 'zod'
 import type { AppEnv } from '../app'
 import { ok, validate } from '../lib/http'
 import { playerAuth } from '../middleware/auth'
+import { myTournaments, seatedRooms } from '../services/player-tournaments'
 import { listLive, standingsOf, tournamentBoard } from '../services/tournament-live'
-import {
-  joinTournament,
-  leaveTournament,
-  listOpen,
-  myTournaments,
-  seatedRooms,
-} from '../services/tournaments'
+import { joinTournament, leaveTournament, listOpen } from '../services/tournament-signups'
 
 const GameQuery = z.object({ game: z.string().regex(/^[a-z0-9-]{2,32}$/, 'Unknown game.') })
 const OptionalGame = z.object({ game: GameQuery.shape.game.optional() })

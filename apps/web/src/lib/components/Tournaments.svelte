@@ -157,7 +157,10 @@
   })
 
   /** `dot`: the colour of the dot beside the label. The chip itself is always dark, so it reads on any felt. */
-  type Status = { label: string; dot: string }
+  interface Status {
+    label: string
+    dot: string
+  }
 
   const SIGN_UP_OPEN: Status = { label: 'Sign-up open', dot: 'bg-go' }
   const STARTING_SOON: Status = { label: 'Starting soon', dot: 'bg-brass' }

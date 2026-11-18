@@ -1,4 +1,4 @@
-import { pausedGames } from '#lib/server/platform.ts'
+import { pausedGames } from '#lib/server/platform/rooms.ts'
 import type { PageServerLoad } from './$types'
 
 /** The games paused for maintenance: the lobby opens no new tables for them. */

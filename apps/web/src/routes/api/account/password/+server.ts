@@ -1,5 +1,6 @@
 import { json } from '@sveltejs/kit'
-import { changePassword, failure } from '#lib/server/platform.ts'
+import { failure } from '#lib/server/platform/client.ts'
+import { changePassword } from '#lib/server/platform/session.ts'
 import type { RequestHandler } from './$types'
 
 /** Changes the signed-in account's password. Every other device is signed out; this one stays in. */

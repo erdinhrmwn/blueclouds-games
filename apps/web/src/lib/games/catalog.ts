@@ -10,7 +10,7 @@ import CloudburstFan from './cloudburst/Fan.svelte'
 import CloudburstHome from './cloudburst/Home.svelte'
 import CloudburstRoom from './cloudburst/Room.svelte'
 
-export type GameEntry = {
+export interface GameEntry {
   slug: string
   name: string
   tagline: string

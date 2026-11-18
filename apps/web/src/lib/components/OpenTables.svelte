@@ -20,7 +20,12 @@
 
   let list = $state<RoomList | null>(null)
 
-  type Status = { label: string; tone: string; open: boolean; rank: number }
+  interface Status {
+    label: string
+    tone: string
+    open: boolean
+    rank: number
+  }
 
   const AVAILABLE: Status = {
     label: 'Available',

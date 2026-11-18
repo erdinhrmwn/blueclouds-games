@@ -72,8 +72,14 @@
       : [],
   )
 
-  type Moment = { label: string; at: string }
-  type Step = Moment & { state: 'done' | 'next' | 'later' }
+  interface Moment {
+    label: string
+    at: string
+  }
+
+  interface Step extends Moment {
+    state: 'done' | 'next' | 'later'
+  }
 
   /** Sign-up opening, closing, tables handed out, first round: what's done, what's next, what follows. */
   const schedule = $derived.by((): Step[] => {

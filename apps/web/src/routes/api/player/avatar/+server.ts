@@ -6,7 +6,8 @@ import {
   type AvatarColor,
   type AvatarIcon,
 } from 'contracts/avatars'
-import { failure, savePlayerAvatar } from '#lib/server/platform.ts'
+import { failure } from '#lib/server/platform/client.ts'
+import { savePlayerAvatar } from '#lib/server/platform/session.ts'
 import type { RequestHandler } from './$types'
 
 const isColor = (value: unknown): value is AvatarColor =>

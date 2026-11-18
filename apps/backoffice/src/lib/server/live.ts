@@ -28,7 +28,7 @@ const engine = createClient({
   devtools: false,
 })
 
-export type OpenTables = {
+export interface OpenTables {
   game: string
   gameName: string
   /** null when the engine could not be reached. */
@@ -87,7 +87,7 @@ export async function tournamentRounds(games: { slug: string }[]): Promise<Map<s
 }
 
 /** One row of the Live tables list: an open table from the engine or a tournament table from the database. */
-export type LiveTable = {
+export interface LiveTable {
   code: string
   game: string
   gameName: string

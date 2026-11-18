@@ -1,11 +1,11 @@
+import { PlatformError } from '#lib/server/platform/client.ts'
 import {
   myMatches,
-  mySeats,
   myStats,
   myTournaments,
-  PlatformError,
   type TournamentRecord,
-} from '#lib/server/platform.ts'
+} from '#lib/server/platform/history.ts'
+import { mySeats } from '#lib/server/platform/tournaments.ts'
 import type { PageServerLoad } from './$types'
 
 /** How many finished matches the profile lists; the rest are on the history page. */

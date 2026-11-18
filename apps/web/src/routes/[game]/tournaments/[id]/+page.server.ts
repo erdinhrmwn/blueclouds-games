@@ -1,6 +1,7 @@
 import { error } from '@sveltejs/kit'
 import { gameBySlug } from '#lib/games/catalog.ts'
-import { PlatformError, tournamentBoard } from '#lib/server/platform.ts'
+import { PlatformError } from '#lib/server/platform/client.ts'
+import { tournamentBoard } from '#lib/server/platform/tournaments.ts'
 import type { PageServerLoad } from './$types'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i

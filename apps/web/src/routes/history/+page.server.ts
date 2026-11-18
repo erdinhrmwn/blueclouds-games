@@ -1,6 +1,7 @@
 import { error } from '@sveltejs/kit'
 import { gameBySlug } from '#lib/games/catalog.ts'
-import { myMatches, PlatformError } from '#lib/server/platform.ts'
+import { PlatformError } from '#lib/server/platform/client.ts'
+import { myMatches } from '#lib/server/platform/history.ts'
 import type { PageServerLoad } from './$types'
 
 /** The player's finished matches, newest first; `?game=` keeps one game, `?cursor=` pages back. */

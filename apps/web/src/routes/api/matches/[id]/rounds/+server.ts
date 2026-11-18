@@ -1,5 +1,6 @@
 import { json } from '@sveltejs/kit'
-import { failure, matchRounds } from '#lib/server/platform.ts'
+import { failure } from '#lib/server/platform/client.ts'
+import { matchRounds } from '#lib/server/platform/history.ts'
 import type { RequestHandler } from './$types'
 
 /** A match's rounds for the Fair play dialog, read while the match is played. */

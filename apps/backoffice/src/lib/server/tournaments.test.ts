@@ -4,18 +4,20 @@ import { type Admin, createAdmin } from './auth'
 import { resetTestDatabase } from './test-database'
 import {
   assignPlayer,
-  cancelTournament,
-  createTournament,
   disqualifyPlayer,
-  distributeNow,
-  NewTournament,
   parseIds,
-  prizeRows,
   registerPlayers,
-  tournamentDetail,
-  tournamentTables,
   unassignPlayer,
   unregisterPlayer,
+} from './tournament-players'
+import {
+  cancelTournament,
+  createTournament,
+  distributeNow,
+  NewTournament,
+  prizeRows,
+  tournamentDetail,
+  tournamentTables,
 } from './tournaments'
 
 let sql: SQL

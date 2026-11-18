@@ -1,6 +1,7 @@
 import { json } from '@sveltejs/kit'
 import { isRoomCode } from '#lib/guest.ts'
-import { apiError, failure, roomGame } from '#lib/server/platform.ts'
+import { apiError, failure } from '#lib/server/platform/client.ts'
+import { roomGame } from '#lib/server/platform/rooms.ts'
 import type { RequestHandler } from './$types'
 
 /** Which game a table code belongs to, so a code typed on the landing page can find its table. */

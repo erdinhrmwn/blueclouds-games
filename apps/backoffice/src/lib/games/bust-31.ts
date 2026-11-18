@@ -15,11 +15,55 @@ const MINUS_VALUE = 5
 const TEN_TOTAL = 10
 const DOUBLE_PLAYS = 2
 
-type ReplayCard = {
+interface ReplayCard {
   value: number
   label: string
   effect: 'none' | 'reverse' | 'swap' | 'ten' | 'double'
 }
+
+/** Who made a play or bust: the player, or the server for them. */
+type MoveBy = 'player' | 'bot' | 'timeout' | 'away'
+
+interface DealData {
+  round: number
+  starter: number
+  /** Cards dealt, by seat; seats already out get none. */
+  hands: Record<number, string[]>
+  deck: string[]
+}
+
+interface PlayData {
+  card: string
+  total: number
+  drew: string | null
+  /** Swap: the seat that traded hands with the player. */
+  swapped?: number
+  by: MoveBy
+}
+
+interface BustData {
+  card: string
+  total: number
+  lives: number
+  eliminated: boolean
+  by: MoveBy
+}
+
+interface KickedData {
+  by: 'host' | 'admin'
+  reason?: string
+}
+
+/** The Bust 31 entries a log holds and their data, as apps/server/src/games/bust-31/match.ts writes them. */
+type Bust31Entry =
+  | { type: 'deal'; data: DealData }
+  | { type: 'reshuffle'; data: { deck: string[] } }
+  | { type: 'play'; data: PlayData }
+  | { type: 'bust'; data: BustData }
+  | { type: 'away' | 'back'; data: undefined }
+  | { type: 'finished'; data: { winner: number } }
+  | { type: 'kicked'; data: KickedData }
+  | { type: 'terminated'; data: { reason: string } }
 
 /**
  * Card ids say what the card is: n7-2 is a 7, z-0 a zero, m-1 a minus five, r-3 a reverse,
@@ -55,7 +99,7 @@ function cardOf(id: string): ReplayCard {
   return { value: 0, label: '0', effect: 'none' }
 }
 
-const BY: Record<string, string> = {
+const BY: Partial<Record<MoveBy, string>> = {
   timeout: ' (time ran out, played for them)',
   away: ' (away, played for them)',
 }
@@ -114,10 +158,10 @@ export function replayBust31(log: MatchLog, seats: ReplaySeat[]): Step[] {
   })
 
   return log.events.map((event: LogEvent): Step => {
-    const data = (event.data ?? {}) as Record<string, any>
+    // The server writes each entry's data for its type, so the type says what the data holds.
+    const entry = event as Bust31Entry
     const who = name(event.seat)
     const player = event.seat === undefined ? undefined : table.get(event.seat)
-    const playedBy = BY[data.by] ?? ''
 
     const mismatches: string[] = []
     const expect = (what: string, logged: unknown, replayed: unknown) => {
@@ -128,49 +172,50 @@ export function replayBust31(log: MatchLog, seats: ReplaySeat[]): Step[] {
 
     let text: string
 
-    switch (event.type) {
+    switch (entry.type) {
       case 'deal': {
-        round = data.round
-        deck = [...data.deck]
+        round = entry.data.round
+        deck = [...entry.data.deck]
         pile = []
         total = 0
         direction = 1
         playsLeft = 1
-        turn = data.starter
+        turn = entry.data.starter
 
         for (const [seat, state] of table) {
-          state.hand = [...(data.hands[seat] ?? [])]
+          state.hand = [...(entry.data.hands[seat] ?? [])]
         }
 
-        text = `Round ${round} dealt. ${name(data.starter)} starts.`
+        text = `Round ${round} dealt. ${name(entry.data.starter)} starts.`
         break
       }
 
       case 'reshuffle':
-        deck = [...data.deck]
+        deck = [...entry.data.deck]
         pile = []
         text = 'The deck ran out. The pile was shuffled into a new deck.'
         break
       case 'play':
       case 'bust': {
-        const card = cardOf(data.card)
+        const card = cardOf(entry.data.card)
+        const playedBy = BY[entry.data.by] ?? ''
 
-        if (!player?.hand.includes(data.card)) {
-          mismatches.push(`${data.card} was not in ${who}'s hand`)
+        if (!player?.hand.includes(entry.data.card)) {
+          mismatches.push(`${entry.data.card} was not in ${who}'s hand`)
         }
 
         if (player) {
-          player.hand = player.hand.filter((id) => id !== data.card)
+          player.hand = player.hand.filter((id) => id !== entry.data.card)
         }
 
         expect('Turn', event.seat, turn)
         total = card.effect === 'ten' ? TEN_TOTAL : Math.max(0, total + card.value)
-        expect('Total', data.total, total)
-        pile.push(data.card)
+        expect('Total', entry.data.total, total)
+        pile.push(entry.data.card)
 
-        if (event.type === 'play') {
+        if (entry.type === 'play') {
           const drew = deck.shift() ?? null
-          expect('Card drawn', data.drew, drew)
+          expect('Card drawn', entry.data.drew, drew)
 
           if (player && drew) {
             player.hand.push(drew)
@@ -183,7 +228,7 @@ export function replayBust31(log: MatchLog, seats: ReplaySeat[]): Step[] {
           const next = nextAlive(event.seat!)
           let swapText = ''
           if (card.effect === 'swap') {
-            expect('Swapped with', data.swapped, next)
+            expect('Swapped with', entry.data.swapped, next)
 
             const other = table.get(next)
             if (player && other) {
@@ -211,11 +256,11 @@ export function replayBust31(log: MatchLog, seats: ReplaySeat[]): Step[] {
           player.lives = Math.max(0, player.lives - 1)
         }
 
-        expect('Lives', data.lives, player?.lives)
+        expect('Lives', entry.data.lives, player?.lives)
         turn = null
 
         const lifeWord = player?.lives === 1 ? 'life' : 'lives'
-        const left = data.eliminated ? 'and is out' : `${player?.lives} ${lifeWord} left`
+        const left = entry.data.eliminated ? 'and is out' : `${player?.lives} ${lifeWord} left`
         text = `${who} went over ${LIMIT} with ${card.label}. Total ${total}, ${left}.${playedBy}`
         break
       }
@@ -236,18 +281,18 @@ export function replayBust31(log: MatchLog, seats: ReplaySeat[]): Step[] {
         break
       case 'finished':
         turn = null
-        text = `${name(data.winner)} wins.`
+        text = `${name(entry.data.winner)} wins.`
         break
       case 'kicked': {
-        const by = data.by === 'host' ? 'the host' : 'an admin'
-        const reason = data.reason ? ` Reason: ${data.reason}` : ''
+        const by = entry.data.by === 'host' ? 'the host' : 'an admin'
+        const reason = entry.data.reason ? ` Reason: ${entry.data.reason}` : ''
         text = `${who} was kicked by ${by}. Their turns are played for them.${reason}`
         break
       }
 
       case 'terminated':
         turn = null
-        text = `An admin terminated the table. Reason: ${data.reason}`
+        text = `An admin terminated the table. Reason: ${entry.data.reason}`
         break
       default:
         text = fairnessText(event) ?? `${event.type} ${JSON.stringify(event.data ?? {})}`

@@ -16,7 +16,7 @@ const FALLBACK_ERROR = 'Something went wrong. Try again.'
 
 const messageOf = (err: unknown) => (err instanceof Error ? err.message : FALLBACK_ERROR)
 
-type Me = {
+interface Me {
   id?: string
   name: string
   username: string | null
@@ -70,7 +70,10 @@ export async function refreshCoins(): Promise<void> {
 }
 
 /** What a failed account form shows: one message per field, or one for the whole form. */
-export type FormErrors = { form?: string; fields: Record<string, string> }
+export interface FormErrors {
+  form?: string
+  fields: Record<string, string>
+}
 
 function signedIn(me: Me): void {
   loadPlayer(me)

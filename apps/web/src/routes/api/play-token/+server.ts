@@ -1,5 +1,6 @@
 import { json } from '@sveltejs/kit'
-import { failure, playToken } from '#lib/server/platform.ts'
+import { failure } from '#lib/server/platform/client.ts'
+import { playToken } from '#lib/server/platform/session.ts'
 import type { RequestHandler } from './$types'
 
 /** A 15-minute token for connecting to a room. */

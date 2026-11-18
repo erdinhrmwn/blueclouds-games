@@ -3,7 +3,7 @@ import type { SQL } from 'bun'
 /** Days of matches the overview chart shows, ending today (UTC). */
 export const CHART_DAYS = 14
 
-export type OverviewStats = {
+export interface OverviewStats {
   players: {
     /** People, not bots. */
     total: number
@@ -56,7 +56,7 @@ export async function overviewStats(sql: SQL): Promise<OverviewStats> {
   return { players, matches, tournaments } as OverviewStats
 }
 
-export type MatchDay = {
+export interface MatchDay {
   /** "2026-11-12", a UTC day. */
   day: string
   matches: number

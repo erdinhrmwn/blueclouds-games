@@ -1,6 +1,6 @@
 import { checkRound, type RoundCheck } from 'contracts/fairness/fairness'
 import { SUIT_TEXT } from '#lib/games/cloudburst/suits.ts'
-import type { MatchRounds } from '#lib/server/platform.ts'
+import type { MatchRounds } from '#lib/server/platform/history.ts'
 
 /** A closed round as the platform keeps it: its result, its revealed seed and every shuffle. */
 export type Round = MatchRounds['rounds'][number]
@@ -51,7 +51,11 @@ export function roundSummary(
 }
 
 /** A card of a revealed deck, drawn small: the mark on its face and its ink. */
-export type CardFace = { mark: string; spoken: string; ink: string }
+export interface CardFace {
+  mark: string
+  spoken: string
+  ink: string
+}
 
 const BUST_FACES: Record<string, CardFace> = {
   z: { mark: '0', spoken: 'zero', ink: 'text-[#3d5a6c]' },

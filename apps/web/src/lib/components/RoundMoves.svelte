@@ -17,7 +17,7 @@
   } = $props()
 
   /** `tone`: bad news (a bust) in ember, the round's winner (went out) in brass. */
-  type Line = {
+  interface Line {
     seq: number
     time: string
     who: string | null

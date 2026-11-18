@@ -15,8 +15,15 @@ import { playerRoutes } from './routes/players'
 import { roomRoutes } from './routes/rooms'
 import { tournamentRoutes } from './routes/tournaments'
 
-export type Deps = { sql: SQL; config: Config; signer: Signer }
-export type AppEnv = { Variables: RequestIdVariables }
+export interface Deps {
+  sql: SQL
+  config: Config
+  signer: Signer
+}
+
+export interface AppEnv {
+  Variables: RequestIdVariables
+}
 
 const MAX_BODY_BYTES = 16 * 1024
 /** Match reports carry the whole move log (a 6-player Bust 31 match is about 25 KB). */

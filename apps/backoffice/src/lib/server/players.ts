@@ -12,7 +12,7 @@ const PLAYER_MATCHES_LIMIT = 20
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 export const isUuid = (value: string) => UUID.test(value)
 
-export type PlayerRow = {
+export interface PlayerRow {
   id: string
   name: string
   createdAt: Date
@@ -44,7 +44,7 @@ const PLAYER_COLUMNS = (sql: SQL) => sql`
 export const PLAYER_TYPES = ['normal', 'vip', 'bot'] as const
 export const PLAYER_STATUSES = ['active', 'disabled'] as const
 
-export type PlayerFilter = {
+export interface PlayerFilter {
   /** Part of a name or username, or an exact id. */
   q: string
   /** Empty for every type. */
@@ -122,7 +122,7 @@ function like(sql: SQL, term: string) {
   return sql`(display_name ILIKE ${pattern} OR username ILIKE ${pattern})`
 }
 
-export type PlayerMatch = {
+export interface PlayerMatch {
   id: string
   game: string
   gameName: string
@@ -134,7 +134,7 @@ export type PlayerMatch = {
 }
 
 /** Matches a player sat in, and how many of them they won (placed first in a match played to the end). */
-export type PlayerStats = {
+export interface PlayerStats {
   played: number
   won: number
 }

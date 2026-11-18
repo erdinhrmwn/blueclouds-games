@@ -24,8 +24,13 @@ apps/web/src/
   lib/games/bust-31/   # game UI: Home, Room, Lobby, Table, cards, connection to its actor
   lib/components/      # shared table pieces: Stage (fixed-ratio screen), Felt, Seat
   lib/rivet/client.ts  # typed Rivet client for one room, with tokens from our server
-  lib/platform.ts      # browser side: calls our /api routes
-  lib/server/platform.ts # server side: calls the platform, keeps the player secret in an httpOnly cookie
+  lib/platform.ts      # browser side: calls our /api routes (room tokens: lib/rivet/client.ts)
+  lib/server/platform/ # server side: calls the platform over the internal network
+    client.ts          # PlatformClient: one typed request, its envelope, PlatformError, error answers
+    session.ts         # the player secret (httpOnly cookie), who they are, their account
+    rooms.ts           # opening and entering tables, invites, games under maintenance
+    tournaments.ts     # a game's tournaments, sign-up, standings, a tournament's page
+    history.ts         # matches, stats, a match's rounds, coins, the player's tournaments
   lib/guest.ts         # table code check (who you are comes from the server, see +layout.server.ts)
   lib/player.svelte.ts # player name shared by the name dialog; play tokens for rooms
   lib/motion.ts        # shared animations

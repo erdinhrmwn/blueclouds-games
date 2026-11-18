@@ -4,17 +4,19 @@ import { sql } from '#lib/server/db.ts'
 import { isUuid } from '#lib/server/players.ts'
 import {
   assignPlayer,
-  cancelTournament,
   disqualifyPlayer,
-  distributeNow,
   parseIds,
-  payPrizes,
   REASON_MAX,
   registerPlayers,
-  TournamentError,
-  tournamentDetail,
   unassignPlayer,
   unregisterPlayer,
+} from '#lib/server/tournament-players.ts'
+import { payPrizes } from '#lib/server/tournament-prizes.ts'
+import {
+  cancelTournament,
+  distributeNow,
+  TournamentError,
+  tournamentDetail,
 } from '#lib/server/tournaments.ts'
 import type { Actions, PageServerLoad } from './$types'
 

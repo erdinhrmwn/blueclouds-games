@@ -52,9 +52,14 @@ apps/backoffice/
     lib/server/players.ts # search, detail, disable/enable (+ players.test.ts)
     lib/server/matches.ts # match list with filters, match detail, move log
     lib/replay.ts         # turns a move log into timeline steps; per-game renderers in lib/games/
+    lib/server/tournaments.ts        # create, edit, cancel, list and detail
+    lib/server/tournament-players.ts # sign-ups and seats: register, assign, disqualify
+    lib/server/tournament-prizes.ts  # pay out prizes once
+    lib/server/games.ts   # games and their maintenance
+    lib/server/coins.ts, distribute.ts # copies of platform functions (scripts/check-boundaries.ts keeps them equal)
     lib/server/audit-log.ts
     lib/server/history.test.ts
-    routes/              # login, logout, players, matches, audit
+    routes/              # pages and form actions only; every query lives in lib/server/
   scripts/admin-create.ts
 ```
 

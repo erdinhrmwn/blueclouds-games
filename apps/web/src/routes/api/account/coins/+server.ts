@@ -1,5 +1,6 @@
 import { json } from '@sveltejs/kit'
-import { coinsOf, failure } from '#lib/server/platform.ts'
+import { failure } from '#lib/server/platform/client.ts'
+import { coinsOf } from '#lib/server/platform/history.ts'
 import type { RequestHandler } from './$types'
 
 /** The player's coin balance and what changed it; `?before=` pages back (the platform checks the id). */

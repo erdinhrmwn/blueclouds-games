@@ -35,12 +35,18 @@
 
   /** Paid places, 1st first; three to start with, as most tournaments pay a podium. */
   const STARTING_PLACES = 3
-  type PrizeRow = { key: number; coins: string; extra: string }
+  interface PrizeRow {
+    key: number
+    coins: string
+    extra: string
+  }
+
   let nextKey = 0
   const newRow = (coins = '', extra = ''): PrizeRow => {
     nextKey += 1
     return { key: nextKey, coins, extra }
   }
+
   let prizes = $state<PrizeRow[]>(Array.from({ length: STARTING_PLACES }, () => newRow()))
 
   // A refused form comes back with what was typed.

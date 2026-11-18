@@ -30,10 +30,15 @@ function newInviteToken(): string {
   return Buffer.from(bytes).toString('hex')
 }
 
-export type Room = { id: string; code: string; game: string }
+export interface Room {
+  id: string
+  code: string
+  game: string
+}
+
 export type Visibility = 'public' | 'private'
 
-type Access = {
+interface Access {
   id: string
   code: string
   game: string

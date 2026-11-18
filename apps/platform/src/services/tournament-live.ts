@@ -2,7 +2,8 @@ import type { SQL } from 'bun'
 import type { TournamentFormat } from 'contracts/rooms/room'
 import { ApiError } from '../lib/http'
 import { type FinalPlace, finalPlaces, pointsPlaces } from './tournament-rounds'
-import { roundSeats, signUpOrderOf, type TournamentPrize } from './tournaments'
+import type { TournamentPrize } from './tournament-signups'
+import { roundSeats, signUpOrderOf } from './tournaments'
 
 /** A finished tournament stays in its game's lobby this long, with its winners (phase 5 design). */
 const FINISHED_SHOWN = '24 hours'
@@ -15,7 +16,7 @@ const CARD_PLACES = 3
 /** Most rows the Detail's standings list. */
 const STANDINGS_LIMIT = 200
 
-export type Standing = {
+export interface Standing {
   place: number
   playerId: string
   name: string
@@ -27,7 +28,7 @@ export type Standing = {
   bot: boolean
 }
 
-type LiveRow = {
+interface LiveRow {
   id: string
   name: string
   format: TournamentFormat | null
@@ -242,7 +243,7 @@ export async function listLive(
 }
 
 /** One table of a round, with its players best finish first; a seat that wasn't played has no placement. */
-export type BoardTable = {
+export interface BoardTable {
   code: string
   startedAt: string | null
   closedAt: string | null

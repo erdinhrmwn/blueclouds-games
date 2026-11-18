@@ -223,7 +223,7 @@ export interface MatchRounds {
   rounds: ClosedRound[]
 }
 
-type RoundRow = {
+interface RoundRow {
   id: string
   round: number
   game_slug: string

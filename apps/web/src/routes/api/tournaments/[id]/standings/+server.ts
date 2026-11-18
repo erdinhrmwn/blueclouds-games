@@ -1,5 +1,6 @@
 import { json } from '@sveltejs/kit'
-import { apiError, failure, tournamentStandings } from '#lib/server/platform.ts'
+import { apiError, failure } from '#lib/server/platform/client.ts'
+import { tournamentStandings } from '#lib/server/platform/tournaments.ts'
 import type { RequestHandler } from './$types'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i

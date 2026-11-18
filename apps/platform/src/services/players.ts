@@ -7,7 +7,7 @@ import { grantSignupBonus } from './coins'
 import { deleteGuestIfUnused } from './guests'
 
 /** A guest has a generated `guest_…` username and no password: it exists only in the browser that holds its secret. */
-export type Player = {
+export interface Player {
   id: string
   name: string
   username: string | null
@@ -16,7 +16,7 @@ export type Player = {
   createdAt: string
 }
 
-export type PlayerRow = {
+export interface PlayerRow {
   id: string
   display_name: string
   username: string | null
@@ -28,7 +28,10 @@ export type PlayerRow = {
 }
 
 /** A player as the API returns it, with the secret when one was just made for this device. */
-type SignedIn = { player: Player; playerSecret?: string }
+interface SignedIn {
+  player: Player
+  playerSecret?: string
+}
 
 const PLAYER_COLUMNS = (sql: SQL) =>
   sql`p.id, p.display_name, p.username, p.is_guest, p.avatar_color, p.avatar_icon, p.created_at, p.disabled_at`

@@ -6,7 +6,10 @@ import { hashSecret } from '../lib/secrets'
 import { findBySecret, type Player, toPlayer } from '../services/players'
 
 /** The signed-in player and the secret they signed in with (logout revokes that one). */
-export type PlayerVariables = { player: Player; playerSecret: string }
+export interface PlayerVariables {
+  player: Player
+  playerSecret: string
+}
 
 export function bearer(header: string | undefined): string | null {
   const match = header?.match(/^Bearer (\S+)$/)

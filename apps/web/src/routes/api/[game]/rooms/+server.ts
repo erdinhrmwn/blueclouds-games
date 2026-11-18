@@ -1,12 +1,7 @@
 import { json } from '@sveltejs/kit'
 import { log } from '#lib/server/log.ts'
-import {
-  apiError,
-  BUSY_MESSAGE,
-  createRoom,
-  failure,
-  type Visibility,
-} from '#lib/server/platform.ts'
+import { apiError, BUSY_MESSAGE, failure } from '#lib/server/platform/client.ts'
+import { createRoom, type Visibility } from '#lib/server/platform/rooms.ts'
 import { hasRooms, listRooms } from '#lib/server/rivet.ts'
 import type { RequestHandler } from './$types'
 

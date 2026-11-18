@@ -23,7 +23,11 @@ export function formatLabel(value: TournamentFormat): string {
 }
 
 /** `bad` marks the ones that need an admin, `running` the ones players can sign up for or are playing in. */
-export type TournamentStatus = { label: string; bad?: boolean; running?: boolean }
+export interface TournamentStatus {
+  label: string
+  bad?: boolean
+  running?: boolean
+}
 
 /** Where a tournament is in its life, from its timestamps. */
 export function tournamentStatus(

@@ -1,5 +1,9 @@
 /** Someone at a table, as the Live tables cards show them. Open tables have no player ids. */
-export type SlotPlayer = { name: string; playerId: string | null; bot: boolean }
+export interface SlotPlayer {
+  name: string
+  playerId: string | null
+  bot: boolean
+}
 
 /**
  * Lays players out over a table's seats: each one in their own seat, and anyone without a seat yet (a tournament

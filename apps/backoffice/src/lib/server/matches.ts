@@ -3,7 +3,7 @@ import { checkMatch, proofsFromLog } from 'contracts/fairness/fairness'
 import type { MatchLog } from '../replay.ts'
 import { isUuid, PAGE_SIZE } from './players.ts'
 
-export type MatchFilter = {
+export interface MatchFilter {
   game: string
   player: string
   from: string
@@ -13,7 +13,7 @@ export type MatchFilter = {
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/
 
-export type MatchRow = {
+export interface MatchRow {
   id: string
   game: string
   gameName: string
@@ -106,7 +106,7 @@ export async function matchGames(sql: SQL): Promise<{ slug: string; name: string
   return rows as { slug: string; name: string }[]
 }
 
-export type Seat = {
+export interface Seat {
   seat: number
   playerId: string | null
   name: string | null
@@ -116,7 +116,7 @@ export type Seat = {
 }
 
 /** Where the match was played: a tournament table, or an open table and who opened it (both null when the platform made it). */
-export type MatchTable = {
+export interface MatchTable {
   tournamentId: string | null
   tournamentName: string | null
   openedByPlayerId: string | null

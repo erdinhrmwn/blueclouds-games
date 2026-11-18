@@ -1,7 +1,7 @@
 import type { SQL } from 'bun'
 import { isUuid, PAGE_SIZE } from './players.ts'
 
-export type AuditRow = {
+export interface AuditRow {
   id: string
   createdAt: Date
   admin: string | null
@@ -19,7 +19,7 @@ export type AuditRow = {
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/
 
-export type AuditFilter = {
+export interface AuditFilter {
   /** An admin's username; empty for everyone. */
   admin: string
   /** One action, e.g. 'player.disable'; empty for all. */

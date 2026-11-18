@@ -1,11 +1,19 @@
 import type { SQL } from 'bun'
 import { ApiError } from '../lib/http'
 
-export type GameStatus = {
+export interface GameStatus {
   slug: string
   name: string
   minPlayers: number
   maxPlayers: number
+  maintenance: boolean
+}
+
+interface GameStatusRow {
+  slug: string
+  name: string
+  min_players: number
+  max_players: number
   maintenance: boolean
 }
 
@@ -21,7 +29,7 @@ export async function listGames(sql: SQL): Promise<GameStatus[]> {
 		FROM games
 		ORDER BY name`
 
-  return rows.map((row: any) => ({
+  return rows.map((row: GameStatusRow) => ({
     slug: row.slug,
     name: row.name,
     minPlayers: row.min_players,
