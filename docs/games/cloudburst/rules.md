@@ -121,10 +121,10 @@ Only what both games do the same way is shared, with no generic game engine:
 
 | Shared piece | Where |
 |---|---|
-| Seats (add, take seat, remove, free seats, next seat in a direction) | `apps/server/src/games/shared/table.ts` |
-| Turn clock, bot think time, away autoplay, leave after 15 s, commit + broadcast, match result outbox | `apps/server/src/games/shared/room.ts` |
-| Match id, move log stamping, report shape | `apps/server/src/games/shared/match.ts` |
-| Room list (one actor per game, `roomList.getOrCreate([slug])`) | `apps/server/src/games/shared/directory.ts` |
+| Seats (add, take seat, remove, free seats, next seat in a direction) | `apps/server/src/core/rules/table.ts` |
+| Turn clock, bot think time, away autoplay, leave after 15 s, commit + broadcast, match result outbox | `apps/server/src/core/room/` (`create-room.ts`, `turn.ts`, `commit.ts`) |
+| Match id, move log stamping, report shape | `apps/server/src/core/rules/match.ts` |
+| Room list (one actor per game, `roomList.getOrCreate([slug])`) | `apps/server/src/room-list.ts` |
 | Room tokens and room list on the web server, by game slug | `apps/web/src/lib/server/rivet.ts`, `/api/:game/rooms`, `/api/:game/rooms/:code/token` |
 | Web: connection, lobby, room frame, felt, seat, dealer, join panel, open tables | `apps/web/src/lib/rivet/room.svelte.ts`, `apps/web/src/lib/components/` |
 

@@ -1,16 +1,18 @@
+// Cloudburst, layer 2 (rules): the move log and the match result, from the game's states. Pure.
+
 import type { Card } from 'contracts/rooms/cloudburst'
-import {
-  type LogEntry,
-  type LogEvent,
-  type MatchEnd,
-  type MatchReport,
-  type MatchState,
-  moveBy,
-  placementsInOrder,
-  reportedSeat,
-} from '../shared/match'
-import type { RoundResult } from '../shared/rounds'
-import { type Game, placements } from './rules'
+import type { PlayerId } from '../../core/domain/ids'
+import type {
+  LogEntry,
+  LogEvent,
+  MatchEnd,
+  MatchReport,
+  MatchState,
+  RoundResult,
+} from '../../core/domain/match'
+import { moveBy, placementsInOrder, reportedSeat } from '../../core/rules/match'
+import type { Game } from './domain'
+import { placements } from './rules'
 
 /** Bump when a rule change makes old results incomparable to new ones. */
 /** 2: Downpour (+2) and Tempest (+4) joined the deck. */
@@ -30,7 +32,7 @@ export function buildReport(
   events: LogEvent[],
   end: MatchEnd = 'finished',
 ): MatchReport {
-  if (end === 'finished' && (game.phase !== 'finished' || !game.winnerId)) {
+  if (end === 'finished' && game.phase !== 'finished') {
     throw new Error('buildReport needs a finished game')
   }
 
@@ -55,7 +57,7 @@ export function buildReport(
 }
 
 /** Where everyone stands mid-game: fewest points first, then by seat. */
-function standings(game: Game): Map<string, number> {
+function standings(game: Game): Map<PlayerId, number> {
   const bestFirst = [...game.players].sort((a, b) => a.points - b.points || a.seat - b.seat)
 
   return placementsInOrder(bestFirst)
@@ -73,6 +75,7 @@ export function logEvents(before: Game, after: Game, auto = false): LogEntry[] {
   }
 
   const event = after.lastEvent
+  // Event ids come from contracts as plain strings: a lookup only.
   const seatOf = (id: string) => after.players.find((player) => player.id === id)!.seat
   const mover = before.phase === 'playing' ? before.players[before.turn] : undefined
   const by = mover ? moveBy(mover, auto) : 'player'
@@ -149,7 +152,7 @@ export function logEvents(before: Game, after: Game, auto = false): LogEntry[] {
 
   if (after.phase === 'finished') {
     const points = Object.fromEntries(after.players.map((player) => [player.seat, player.points]))
-    entries.push({ type: 'finished', data: { winner: seatOf(after.winnerId!), points } })
+    entries.push({ type: 'finished', data: { winner: seatOf(after.winnerId), points } })
   }
 
   return entries

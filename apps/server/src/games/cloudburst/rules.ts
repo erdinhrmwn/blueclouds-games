@@ -1,7 +1,7 @@
-// "Cloudburst": pure game rules, no Rivet. Every function returns a new state
-// or throws RuleError, so the actor can forward the message to the player.
+// Cloudburst, layer 2 (rules): pure game rules, no Rivet. Every function returns a new state or throws RuleError,
+// so the room can forward the message to the player.
 // Rules and their reasons: docs/games/cloudburst/rules.md.
-import { type Avatar, NO_AVATAR } from 'contracts/avatars'
+import { NO_AVATAR } from 'contracts/avatars'
 import {
   ACTIONS,
   BURST_AT,
@@ -11,15 +11,16 @@ import {
   type GameEvent,
   HAND_SIZE,
   isWild,
-  MAX_PLAYERS,
   MIN_PLAYERS,
   type PlayInput,
   type PublicView,
   SUITS,
-  type Suit,
 } from 'contracts/rooms/cloudburst'
 import type { TurnClock } from 'contracts/rooms/room'
-import { nextIndex, type Rng, RuleError, seatPlayer, shuffle } from '../shared/table'
+import type { PlayerId } from '../../core/domain/ids'
+import { type Rng, RuleError } from '../../core/domain/table'
+import { nextIndex, seatPlayer, shuffle } from '../../core/rules/table'
+import type { Action, Game, Player, PlayingGame } from './domain'
 
 const COPIES_PER_CARD = 2
 const HIGHEST_NUMBER = 8
@@ -31,42 +32,6 @@ export const FORCED_DRAW = { downpour: 2, tempest: 4 } as const
 const DEAL_SETTLE_MS = 100
 /** How long a human has to move before the server moves for them. */
 export const TURN_MS = 20_000
-
-export interface Player {
-  id: string
-  name: string
-  bot: boolean
-  /** Fixed chair at the table, 0 to SEATS - 1. Turns go up the seat numbers (clockwise). */
-  seat: number
-  away?: boolean
-  vip?: boolean
-  avatar?: Avatar
-  hand: Card[]
-  /** Points so far this match: one per card left when someone else went out. Fewest wins. */
-  points: number
-}
-
-export interface Game {
-  phase: 'lobby' | 'playing' | 'finished'
-  hostId: string | null
-  players: Player[]
-  deck: Card[]
-  discard: Card[]
-  /** The suit to follow: the top card's, or the one its player chose for a Rainbow. */
-  suit: Suit
-  turn: number // index into players
-  direction: 1 | -1
-  round: number
-  /** The current player drew this turn: they may play only that card (`drawnId`), or pass. */
-  drew: boolean
-  drawnId: string | null
-  winnerId: string | null
-  lastEvent: GameEvent | null
-  /** Counts every change; clients use it to spot a new event. */
-  moves: number
-  /** Changes whenever a new turn starts (not on a draw): keys the turn timer. */
-  turnKey: number
-}
 
 export function createGame(): Game {
   return {
@@ -115,7 +80,13 @@ export function buildDeck(): Card[] {
 }
 
 /** Sits a new player in `seat`, or in the first free one when no seat is given. */
-export function addPlayer(game: Game, id: string, name: string, bot = false, seat?: number): Game {
+export function addPlayer(
+  game: Game,
+  id: PlayerId,
+  name: string,
+  bot = false,
+  seat?: number,
+): Game {
   if (game.players.some((player) => player.id === id)) {
     return game
   }
@@ -124,7 +95,7 @@ export function addPlayer(game: Game, id: string, name: string, bot = false, sea
   return { ...seated, lastEvent: { type: 'joined', playerId: id } }
 }
 
-export function startGame(game: Game, byId: string, rng: Rng): Game {
+export function startGame(game: Game, byId: PlayerId | null, rng: Rng): Game {
   if (game.hostId !== byId) {
     throw new RuleError('Only the host can start the game.')
   }
@@ -138,20 +109,20 @@ export function startGame(game: Game, byId: string, rng: Rng): Game {
   }
 
   const players = game.players.map((player) => ({ ...player, points: 0, hand: [] }))
-  const dealt = dealRound({ ...game, players, round: 0, winnerId: null }, rng)
+  const playing: PlayingGame = { ...game, players, round: 0, phase: 'playing', winnerId: null }
+  const dealt = dealRound(playing, rng)
 
-  return {
-    ...dealt,
-    phase: 'playing',
-    moves: game.moves + 1,
-  }
+  return { ...dealt, moves: game.moves + 1 }
 }
 
-function currentPlayer(game: Game, playerId: string): Player {
+/** Throws unless a match is being played; from here on `game` is a PlayingGame. */
+function requirePlaying(game: Game): asserts game is PlayingGame {
   if (game.phase !== 'playing') {
     throw new RuleError('The game has not started yet.')
   }
+}
 
+function currentPlayer(game: PlayingGame, playerId: PlayerId): Player {
   const current = game.players[game.turn]
   if (current?.id !== playerId) {
     throw new RuleError('It is not your turn yet.')
@@ -160,7 +131,8 @@ function currentPlayer(game: Game, playerId: string): Player {
   return current
 }
 
-export function playCard(game: Game, playerId: string, input: PlayInput, rng: Rng): Game {
+export function playCard(game: Game, playerId: PlayerId, input: PlayInput, rng: Rng): Game {
+  requirePlaying(game)
   const current = currentPlayer(game, playerId)
   const card = current.hand.find((held) => held.id === input.cardId)
   if (!card) {
@@ -287,7 +259,8 @@ function forceDraw(game: Game, seatIndex: number, count: number, rng: Rng): Game
 }
 
 /** Draws one card. Afterwards the player may play that card (if it fits) or pass. */
-export function drawCard(game: Game, playerId: string, rng: Rng): Game {
+export function drawCard(game: Game, playerId: PlayerId, rng: Rng): Game {
+  requirePlaying(game)
   const current = currentPlayer(game, playerId)
   if (game.drew) {
     throw new RuleError('You already drew this turn. Play the card or pass.')
@@ -322,7 +295,8 @@ export function drawCard(game: Game, playerId: string, rng: Rng): Game {
 }
 
 /** Ends your turn without playing. Only after drawing. */
-export function pass(game: Game, playerId: string): Game {
+export function pass(game: Game, playerId: PlayerId): Game {
+  requirePlaying(game)
   currentPlayer(game, playerId)
   if (!game.drew) {
     throw new RuleError('Draw a card first, or play one.')
@@ -340,7 +314,7 @@ export function pass(game: Game, playerId: string): Game {
 }
 
 /** Someone went out: everyone else takes a point per card left. Then a new round, or the end of the match. */
-function endRound(game: Game, outId: string, card: Card, rng: Rng): Game {
+function endRound(game: PlayingGame, outId: PlayerId, card: Card, rng: Rng): Game {
   const gained: Record<string, number> = {}
   const left: Record<string, Card[]> = {}
   const players = game.players.map((player) => {
@@ -379,7 +353,7 @@ function endRound(game: Game, outId: string, card: Card, rng: Rng): Game {
 }
 
 /** A fresh deal from the full deck. The first turn moves one seat clockwise each round. */
-function dealRound(game: Game, rng: Rng): Game {
+function dealRound(game: PlayingGame, rng: Rng): PlayingGame {
   const round = game.round + 1
   let deck = shuffle(buildDeck(), rng, round)
   const players = game.players.map((player) => {
@@ -410,7 +384,7 @@ function dealRound(game: Game, rng: Rng): Game {
 }
 
 /** Host sends everyone back to the lobby after a finished game. */
-export function resetToLobby(game: Game, byId: string): Game {
+export function resetToLobby(game: Game, byId: PlayerId): Game {
   if (game.hostId !== byId) {
     throw new RuleError('Only the host can start over.')
   }
@@ -434,7 +408,7 @@ export function resetToLobby(game: Game, byId: string): Game {
 }
 
 /** Places by points, fewest first; equal points share a place (1st is never shared). */
-export function placements(game: Game): Map<string, number> {
+export function placements(game: Game): Map<PlayerId, number> {
   const placeOf = (player: Player) => {
     const ahead = game.players.filter((other) => other.points < player.points).length
     return 1 + ahead
@@ -480,7 +454,7 @@ export function publicView(game: Game, turn: TurnClock | null = null): PublicVie
 }
 
 /** Your own hand, plus the card you just drew (the only one you may play now). */
-export function handOf(game: Game, playerId: string): { cards: Card[]; drawnId: string | null } {
+export function handOf(game: Game, playerId: PlayerId): { cards: Card[]; drawnId: string | null } {
   const myTurn = game.phase === 'playing' && game.players[game.turn]?.id === playerId
   const me = game.players.find((player) => player.id === playerId)
 
@@ -507,4 +481,26 @@ export function dealPauseMs(game: Game): number {
   const dealMs = game.players.length * HAND_SIZE * DEAL.stepMs + DEAL.flightMs
 
   return summaryMs + dealMs + DEAL_SETTLE_MS
+}
+
+/** A player's move, whichever it is. */
+export function applyAction(game: Game, playerId: PlayerId, action: Action, rng: Rng): Game {
+  switch (action.type) {
+    case 'play':
+      return playCard(game, playerId, action.input, rng)
+    case 'draw':
+      return drawCard(game, playerId, rng)
+    case 'pass':
+      return pass(game, playerId)
+  }
+}
+
+/** A move made for a human (timeout or away) is marked, so the table can say so. */
+export function markAuto(game: Game): Game {
+  const event = game.lastEvent
+  if (event?.type !== 'played' && event?.type !== 'drew' && event?.type !== 'passed') {
+    return game
+  }
+
+  return { ...game, lastEvent: { ...event, auto: true } }
 }

@@ -70,10 +70,10 @@ def shuffle(server_seed, match_id, round, nonce, cards):
 
 ## Code
 
-- `apps/server/src/games/shared/fairness.ts`: the algorithm, `checkRound`, `checkMatch` and `proofsFromLog`, Web Crypto only (room tests, backoffice, browser).
-- `apps/server/src/games/shared/fair-rng.ts`: the room's synchronous side (Node `crypto`): new round seeds, starting a round on its commitment (`seedsForRound`) and the shuffler the rules use.
-- `apps/server/src/games/shared/rounds.ts`: which rounds a change closes and the round report cut out of the log.
-- `apps/server/src/games/shared/room.ts`: `beginMatch`, `withRng`, the fairness entries and round outbox in `commitRoom`, `fairnessView`.
+- `contracts/fairness/fairness.ts`: the algorithm, `checkRound`, `checkMatch` and `proofsFromLog`, Web Crypto only (room tests, backoffice, browser).
+- `apps/server/src/core/rules/fair-rng.ts`: the room's synchronous side (Node `crypto`): new round seeds, starting a round on its commitment (`seedsForRound`) and the shuffler the rules use.
+- `apps/server/src/core/rules/rounds.ts`: which rounds a change closes and the round report cut out of the log.
+- `apps/server/src/core/room/commit.ts`: `beginMatch`, `withRng`, the fairness entries and round outbox in `commitRoom`; `fairnessView` is in `core/rules/views.ts`.
 - `apps/platform/src/services/rounds.ts`: storing and reading rounds.
 - A pinned test in `fairness.test.ts` fails if the algorithm ever changes, because that would break the check of every round already played.
 

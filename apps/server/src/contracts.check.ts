@@ -4,10 +4,9 @@ import type * as Bust31 from 'contracts/rooms/bust-31'
 import type * as Cloudburst from 'contracts/rooms/cloudburst'
 import type { AdminActions, RoomListActions, RoomSummary } from 'contracts/rooms/room'
 import type { ActorConn } from 'rivetkit/client'
-import type { bust31Room } from './games/bust-31/actor'
-import type { cloudburstRoom } from './games/cloudburst/actor'
-import type { roomList } from './games/shared/directory'
-import type { RoomSummary as ReportedSummary } from './games/shared/schema'
+import type { bust31Room } from './games/bust-31/room'
+import type { cloudburstRoom } from './games/cloudburst/room'
+import type { RoomSummary as ReportedSummary, roomList } from './room-list'
 
 /** Fails to compile unless `Actual` offers everything `Contract` promises. */
 type Keeps<Contract, Actual extends Contract> = Actual

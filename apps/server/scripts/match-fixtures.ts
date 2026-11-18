@@ -3,12 +3,15 @@
 //   bun apps/server/scripts/match-fixtures.ts
 
 import type { MatchSeeds } from 'contracts/fairness/fairness'
+import { toMatchId, toPlayerId } from '../src/core/domain/ids'
+import type { LogEntry } from '../src/core/domain/match'
+import { fairRng, matchSeeds, newCommitment, seedsForRound } from '../src/core/rules/fair-rng'
+import { stamp } from '../src/core/rules/match'
+import { closedRounds } from '../src/core/rules/rounds'
 import { chooseBotCard } from '../src/games/bust-31/bots'
-import { logEvents, type MatchState } from '../src/games/bust-31/match'
-import { addPlayer, createGame, type Game, playCard, startGame } from '../src/games/bust-31/rules'
-import { fairRng, matchSeeds, newCommitment, seedsForRound } from '../src/games/shared/fair-rng'
-import { type LogEntry, stamp } from '../src/games/shared/match'
-import { closedRounds } from '../src/games/shared/rounds'
+import type { Game, MatchState } from '../src/games/bust-31/domain'
+import { logEvents } from '../src/games/bust-31/match'
+import { addPlayer, createGame, playCard, startGame } from '../src/games/bust-31/rules'
 
 const GAMES = 3
 const OUT = new URL('../../../contracts/fixtures/bust-31-matches.json', import.meta.url)
@@ -17,10 +20,15 @@ const OUT = new URL('../../../contracts/fixtures/bust-31-matches.json', import.m
 function playedGame() {
   let game = createGame()
   for (let i = 0; i < 4; i++) {
-    game = addPlayer(game, `bot-${i}`, `Bot ${i}`, true)
+    game = addPlayer(game, toPlayerId(`bot-${i}`), `Bot ${i}`, true)
   }
 
-  let match: MatchState = { id: 'm', startedAt: new Date(0).toISOString(), out: [], seq: 0 }
+  let match: MatchState = {
+    id: toMatchId('m'),
+    startedAt: new Date(0).toISOString(),
+    out: [],
+    seq: 0,
+  }
   let seeds: MatchSeeds = { ...matchSeeds(newCommitment()), matchId: 'm' }
   let pending: LogEntry[] = []
   const rng = fairRng(
@@ -56,8 +64,9 @@ function playedGame() {
     game = next
   }
 
-  game = { ...game, hostId: 'bot-0' }
-  step(startGame(game, 'bot-0', rng))
+  const host = toPlayerId('bot-0')
+  game = { ...game, hostId: host }
+  step(startGame(game, host, rng))
   while (game.phase === 'playing') {
     const player = game.players[game.turn]!
     step(playCard(game, player.id, chooseBotCard(player.hand, game.total)!.id, rng))

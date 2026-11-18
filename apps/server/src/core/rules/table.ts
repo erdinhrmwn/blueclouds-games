@@ -1,37 +1,10 @@
-// Pure table rules every game shares: seats, host, shuffling. No Rivet here.
+// Layer 2, rules: the table every game shares (seats, host, away players, tags, shuffling). Pure: no Rivet,
+// no I/O.
 
 import type { Avatar } from 'contracts/avatars'
 import { SEATS } from 'contracts/rooms/room'
-
-/**
- * Shuffles a deck for a round (being dealt or played), which is part of its client seed. Injected: a room
- * shuffles provably fair (fair-rng.ts), tests pass `randomRng` with a fixed number.
- */
-export type Rng = { shuffle: <T extends { id: string }>(items: T[], round: number) => T[] }
-
-/** A rule was broken; the actor forwards the message to the player. */
-export class RuleError extends Error {}
-
-/** What the shared helpers need from a player. Turns go up the seat numbers (clockwise). */
-export type Seated = {
-  id: string
-  name: string
-  bot: boolean
-  seat: number
-  away?: boolean
-  /** A VIP account, as its play token said when it sat down. */
-  vip?: boolean
-  /** The look picked on the platform, as its play token said when it sat down or last came back. */
-  avatar?: Avatar
-}
-
-/** What the shared helpers need from a game. */
-export type Table<P extends Seated = Seated> = {
-  phase: 'lobby' | 'playing' | 'finished'
-  hostId: string | null
-  players: P[]
-  moves: number
-}
+import type { PlayerId } from '../domain/ids'
+import { type Rng, RuleError, type Seated, type Table } from '../domain/table'
 
 export function shuffle<T extends { id: string }>(items: T[], rng: Rng, round: number): T[] {
   return rng.shuffle(items, round)
@@ -100,7 +73,7 @@ export function seatPlayer<G extends Table<P>, P extends Seated>(
 }
 
 /** Moves a player to an empty chair. Lobby only, so the turn order never changes mid-game. */
-export function takeSeat<G extends Table>(game: G, id: string, seat: number): G {
+export function takeSeat<G extends Table>(game: G, id: PlayerId, seat: number): G {
   if (game.phase !== 'lobby') {
     throw new RuleError('Seats are locked while a game is running.')
   }
@@ -116,7 +89,7 @@ export function takeSeat<G extends Table>(game: G, id: string, seat: number): G 
 }
 
 /** Only allowed in the lobby; mid-game seats stay so the turn order holds. */
-export function removePlayer<G extends Table>(game: G, id: string): G {
+export function removePlayer<G extends Table>(game: G, id: PlayerId): G {
   if (game.phase !== 'lobby') {
     return game
   }
@@ -136,7 +109,7 @@ export function removePlayer<G extends Table>(game: G, id: string): G {
  * Takes a kicked human off the table. In the lobby their chair empties. Mid-game the chair stays, so the turn order
  * holds, and is played for them like an away player's; going back to the lobby drops it. The host role moves on.
  */
-export function kickPlayer<G extends Table>(game: G, id: string): G {
+export function kickPlayer<G extends Table>(game: G, id: PlayerId): G {
   if (game.phase === 'lobby') {
     return removePlayer(game, id)
   }
@@ -152,12 +125,12 @@ export function kickPlayer<G extends Table>(game: G, id: string): G {
 }
 
 /** A human who closed the game mid-match: their turns are played for them until they return. */
-export const markAway = <G extends Table>(game: G, id: string): G => withAway(game, id, true)
+export const markAway = <G extends Table>(game: G, id: PlayerId): G => withAway(game, id, true)
 
 /** The away player is back and plays their own turns again. */
-export const markBack = <G extends Table>(game: G, id: string): G => withAway(game, id, false)
+export const markBack = <G extends Table>(game: G, id: PlayerId): G => withAway(game, id, false)
 
-function withAway<G extends Table>(game: G, id: string, away: boolean): G {
+function withAway<G extends Table>(game: G, id: PlayerId, away: boolean): G {
   return {
     ...game,
     players: game.players.map((player) =>
@@ -167,7 +140,7 @@ function withAway<G extends Table>(game: G, id: string, away: boolean): G {
 }
 
 /** Shows the player as a VIP at the table. */
-export function markVip<G extends Table>(game: G, id: string): G {
+export function markVip<G extends Table>(game: G, id: PlayerId): G {
   return {
     ...game,
     players: game.players.map((player) => (player.id === id ? { ...player, vip: true } : player)),
@@ -175,7 +148,7 @@ export function markVip<G extends Table>(game: G, id: string): G {
 }
 
 /** Shows the player's avatar. Returns the same game when it is already shown. */
-export function showAvatar<G extends Table>(game: G, id: string, avatar: Avatar): G {
+export function showAvatar<G extends Table>(game: G, id: PlayerId, avatar: Avatar): G {
   const current = game.players.find((player) => player.id === id)
   if (!current) {
     return game
@@ -193,7 +166,7 @@ export function showAvatar<G extends Table>(game: G, id: string, avatar: Avatar)
 }
 
 /** Shows exactly the humans in `vipIds` as VIPs. Returns the same game when no tag changes. */
-export function showVips<G extends Table>(game: G, vipIds: Set<string>): G {
+export function showVips<G extends Table>(game: G, vipIds: Set<PlayerId>): G {
   const changed = game.players.some(
     (player) => !player.bot && !!player.vip !== vipIds.has(player.id),
   )
@@ -226,4 +199,14 @@ export function nextIndex<P>(
   }
 
   return from
+}
+
+const BOT_NAMES = ['Bot Cloud', 'Bot Rain', 'Bot Thunder', 'Bot Rainbow', 'Bot Wind']
+
+/** A name for a new bot that nobody at the table has yet. */
+export function botName(players: { name: string }[]): string {
+  const used = new Set(players.map((player) => player.name))
+  const free = BOT_NAMES.find((name) => !used.has(name))
+
+  return free ?? `Bot ${players.length + 1}`
 }

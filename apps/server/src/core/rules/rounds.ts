@@ -2,28 +2,7 @@
 // sends it to the platform (POST /v1/matches/:id/rounds), so a match shows its rounds, seeds revealed, while it
 // is still played.
 import { clientSeedOf } from 'contracts/fairness/fairness'
-import type { LogEntry, LogEvent } from './match'
-
-/**
- * A closed round, as the platform takes it: its result (the game's own summary), every move from its deal on (the
- * move log's own events, `t` counted from the match start) and its fairness.
- */
-export type RoundReport = {
-  roundId: string
-  game: string
-  roomCode: string
-  round: number
-  serverSeedHash: string
-  serverSeed: string
-  shuffles: { nonce: number; clientSeed: string; deck: string[] }[]
-  result: Record<string, unknown>
-  events: LogEvent[]
-  startedAt: string
-  endedAt: string
-}
-
-/** The game's summary of a round, from its events (the deal up to the next deal). */
-export type RoundResult = (events: LogEvent[]) => Record<string, unknown>
+import type { LogEntry, LogEvent, MatchInfo, RoundReport, RoundResult } from '../domain/match'
 
 /** The fairness entries (fairness.ts): kept out of the events a game summarises. */
 const FAIRNESS_TYPES = ['fairness', 'shuffle', 'reveal']
@@ -59,7 +38,7 @@ export function closedRounds(
 export function roundReport(
   log: LogEvent[],
   round: number,
-  match: { id: string; game: string; roomCode: string; startedAt: string },
+  match: MatchInfo,
   roundResult: RoundResult,
 ): RoundReport | null {
   const ofRound = (event: LogEvent, type: string) =>
