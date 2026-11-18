@@ -19,7 +19,7 @@ Set in the root `.env`; checked at startup.
 
 Four layers. Each one imports only from the layers above it in this list (and from `contracts/`), never below:
 
-1. **Domain** (`core/domain/`): types only. The shared table, match and room records, the `GameDefinition` every game implements, and the ports (interfaces) the room needs from the outside world: `PlatformPort`, `RoomStorePort`, `RoomListPort`.
+1. **Domain** (`core/domain/`): types only. Branded ids (`PlayerId`, `MatchId`, branded once where they enter the server), the shared table with one shape per phase (`InLobby`, `InPlay`, `Finished`: only a finished game has a winner), match and room records, the `GameDefinition` every game implements, and the ports (interfaces) the room needs from the outside world: `PlatformPort`, `RoomStorePort`, `RoomListPort`.
 2. **Rules** (`core/rules/`, and each game's `rules.ts`, `bots.ts`, `match.ts`): pure functions. No Rivet, no I/O, no clock unless passed in.
 3. **Room** (`core/room/`, and each game's `room.ts`): the Rivet actor. Validates input, calls the rules, saves, broadcasts, schedules. It sees the outside world only through the ports.
 4. **Adapters** (`core/adapters/`): the ports' implementations: the room's SQLite, the platform's HTTP API, the room lists, the logger. `create-room.ts` is the one place that wires them in.
@@ -31,7 +31,8 @@ apps/server/src/
   room-list.ts           # room list actor ("Open tables"), one instance per game slug
   contracts.check.ts     # compile-time proof that the actors match contracts/rooms
   core/
-    domain/              # table.ts, match.ts, room.ts, game.ts (GameDefinition), ports.ts
+    domain/              # ids.ts (PlayerId, MatchId), table.ts (phases), match.ts, room.ts,
+                         # game.ts (GameDefinition), ports.ts
     rules/               # table.ts (seats, shuffle), match.ts (log, report), rounds.ts, fair-rng.ts,
                          # turn.ts (turn clock plan), tournament.ts, views.ts, listing.ts
     room/

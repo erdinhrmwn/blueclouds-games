@@ -1,6 +1,7 @@
 // Layer 3, room: every change to a room ends in a commit (log it, save it, show it), and every match starts on
 // the seeds the room committed to before it.
 
+import type { PlayerId } from '../domain/ids'
 import type {
   LogEntry,
   LogEvent,
@@ -43,7 +44,7 @@ export interface CommitSteps<G extends GameTable, M extends MatchState> {
   /** What everyone sees. */
   view(): unknown
   /** What one player sees of their own cards. */
-  handOf(playerId: string): unknown
+  handOf(playerId: PlayerId): unknown
 }
 
 /**

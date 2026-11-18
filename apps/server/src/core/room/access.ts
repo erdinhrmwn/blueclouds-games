@@ -4,6 +4,7 @@
 import { createHash, timingSafeEqual } from 'node:crypto'
 import { TABLE_CLOSED } from 'contracts/rooms/room'
 import { UserError } from 'rivetkit'
+import type { PlayerId } from '../domain/ids'
 import type { PlatformPort } from '../domain/ports'
 import type { Identity } from '../domain/room'
 import { RuleError } from '../domain/table'
@@ -59,7 +60,7 @@ function isAdminConn(conn: RoomConn | undefined): boolean {
 }
 
 /** Throws when an admin terminated the table, or kicked this player off it. */
-function refuseIfClosed(c: RoomCtx, playerId: string): void {
+function refuseIfClosed(c: RoomCtx, playerId: PlayerId): void {
   if (c.vars.terminated) {
     throw new UserError(TERMINATED_MESSAGE, { code: TABLE_CLOSED })
   }
@@ -147,7 +148,7 @@ export function requireAdmin(c: ActionCtx): void {
 }
 
 /** The player a connection sits as, if they joined the table. */
-export function playerOf(c: RoomCtx, conn: RoomConn): string | undefined {
+export function playerOf(c: RoomCtx, conn: RoomConn): PlayerId | undefined {
   const id = c.vars.who[conn.id]?.id
   if (!id) {
     return undefined
@@ -157,7 +158,7 @@ export function playerOf(c: RoomCtx, conn: RoomConn): string | undefined {
   return seated ? id : undefined
 }
 
-export function requirePlayer(c: ActionCtx): string {
+export function requirePlayer(c: ActionCtx): PlayerId {
   const id = playerOf(c, c.conn)
   if (!id) {
     throw new UserError('Join the table first.', { code: 'not_joined' })
@@ -167,7 +168,7 @@ export function requirePlayer(c: ActionCtx): string {
   return id
 }
 
-export function requireHost(c: ActionCtx): string {
+export function requireHost(c: ActionCtx): PlayerId {
   const me = requirePlayer(c)
   if (c.vars.game.hostId !== me) {
     throw new UserError('Only the host can do that.', { code: 'rule' })

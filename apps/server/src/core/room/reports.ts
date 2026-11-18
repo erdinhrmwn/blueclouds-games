@@ -1,6 +1,7 @@
 // Layer 3, room: the outbox. Closed rounds and finished results wait in the room's store until the platform has
 // them, retried with backoff; the platform ignores duplicates.
 
+import type { MatchId } from '../domain/ids'
 import type { PlatformPort, RoomStorePort } from '../domain/ports'
 import type { RoomCtx } from './context'
 
@@ -87,8 +88,8 @@ export async function sendReports(c: RoomCtx, ports: ReportPorts): Promise<void>
 }
 
 /** Sends queued rounds in order. Returns the matches with a round still waiting: their later rounds wait too. */
-async function sendRounds(c: RoomCtx, ports: ReportPorts, retry: Retry): Promise<Set<string>> {
-  const waiting = new Set<string>()
+async function sendRounds(c: RoomCtx, ports: ReportPorts, retry: Retry): Promise<Set<MatchId>> {
+  const waiting = new Set<MatchId>()
 
   for (const queued of await ports.store.queuedRounds()) {
     if (waiting.has(queued.matchId)) {

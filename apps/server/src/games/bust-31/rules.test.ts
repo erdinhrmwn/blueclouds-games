@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { type Card, DEAL, LIMIT, START_LIVES } from 'contracts/rooms/bust-31'
+import { toPlayerId } from '../../core/domain/ids'
 import { RuleError } from '../../core/domain/table'
 import {
   markAway,
@@ -23,6 +24,13 @@ import {
   TEN_TOTAL,
 } from './rules'
 
+const A = toPlayerId('a')
+const B = toPlayerId('b')
+const BOT = toPlayerId('bot')
+const BOT1 = toPlayerId('bot1')
+const C = toPlayerId('c')
+const G = toPlayerId('g')
+
 const rng = randomRng(() => 0.42)
 const card = (kind: Card['kind'], value: number, id = `${kind}${value}`): Card => ({
   id,
@@ -32,17 +40,17 @@ const card = (kind: Card['kind'], value: number, id = `${kind}${value}`): Card =
 
 function twoPlayerGame(): Game {
   let game = createGame()
-  game = addPlayer(game, 'a', 'Ann')
-  game = addPlayer(game, 'b', 'Bob')
-  return startGame(game, 'a', rng)
+  game = addPlayer(game, A, 'Ann')
+  game = addPlayer(game, B, 'Bob')
+  return startGame(game, A, rng)
 }
 
 function threePlayerGame(): Game {
   let game = createGame()
-  game = addPlayer(game, 'a', 'Ann')
-  game = addPlayer(game, 'b', 'Bob')
-  game = addPlayer(game, 'c', 'Cleo')
-  return startGame(game, 'a', rng)
+  game = addPlayer(game, A, 'Ann')
+  game = addPlayer(game, B, 'Bob')
+  game = addPlayer(game, C, 'Cleo')
+  return startGame(game, A, rng)
 }
 
 /** Puts a fixed hand on the current player so tests control the play. */
@@ -56,45 +64,45 @@ function withHand(game: Game, hand: Card[], total = game.total): Game {
 
 describe('lobby', () => {
   test('first player hosts, joining twice is a no-op, start needs the host and two players, no joining after', () => {
-    let game = addPlayer(createGame(), 'a', 'Ann')
-    game = addPlayer(game, 'a', 'Ann')
-    expect(game.hostId).toBe('a')
+    let game = addPlayer(createGame(), A, 'Ann')
+    game = addPlayer(game, A, 'Ann')
+    expect(game.hostId).toBe(A)
     expect(game.players).toHaveLength(1)
-    expect(() => startGame(game, 'a', rng)).toThrow(RuleError)
+    expect(() => startGame(game, A, rng)).toThrow(RuleError)
 
-    const two = addPlayer(game, 'b', 'Bob')
-    expect(() => startGame(two, 'b', rng)).toThrow('host')
-    expect(() => addPlayer(twoPlayerGame(), 'c', 'Cleo')).toThrow(RuleError)
+    const two = addPlayer(game, B, 'Bob')
+    expect(() => startGame(two, B, rng)).toThrow('host')
+    expect(() => addPlayer(twoPlayerGame(), C, 'Cleo')).toThrow(RuleError)
   })
 })
 
 describe('seats', () => {
   test('players fill the first free seat, a bot can take a chosen one, a full table has none', () => {
-    let game = addPlayer(createGame(), 'a', 'Ann')
-    game = addPlayer(game, 'bot', 'Bot', true, 4)
-    game = addPlayer(game, 'b', 'Bob')
+    let game = addPlayer(createGame(), A, 'Ann')
+    game = addPlayer(game, BOT, 'Bot', true, 4)
+    game = addPlayer(game, B, 'Bob')
     expect(game.players.map((player) => [player.id, player.seat])).toEqual([
-      ['a', 0],
-      ['b', 1],
-      ['bot', 4],
+      [A, 0],
+      [B, 1],
+      [BOT, 4],
     ])
-    expect(() => addPlayer(game, 'c', 'Cleo', false, 4)).toThrow('taken')
-    expect(() => addPlayer(game, 'c', 'Cleo', false, 6)).toThrow('does not exist')
+    expect(() => addPlayer(game, C, 'Cleo', false, 4)).toThrow('taken')
+    expect(() => addPlayer(game, C, 'Cleo', false, 6)).toThrow('does not exist')
 
     for (const id of ['c', 'd', 'e']) {
-      game = addPlayer(game, id, id)
+      game = addPlayer(game, toPlayerId(id), id)
     }
 
-    expect(() => addPlayer(game, 'g', 'g')).toThrow('full')
+    expect(() => addPlayer(game, G, 'g')).toThrow('full')
   })
 
   test('moving seats keeps players in seat order, so turns follow the table', () => {
-    let game = addPlayer(addPlayer(addPlayer(createGame(), 'a', 'Ann'), 'b', 'Bob'), 'c', 'Cleo')
-    game = takeSeat(game, 'a', 5)
-    expect(game.players.map((player) => player.id)).toEqual(['b', 'c', 'a'])
-    const started = startGame(game, 'a', rng)
-    expect(started.players[started.turn]!.id).toBe('b')
-    expect(() => takeSeat(started, 'b', 3)).toThrow('locked')
+    let game = addPlayer(addPlayer(addPlayer(createGame(), A, 'Ann'), B, 'Bob'), C, 'Cleo')
+    game = takeSeat(game, A, 5)
+    expect(game.players.map((player) => player.id)).toEqual([B, C, A])
+    const started = startGame(game, A, rng)
+    expect(started.players[started.turn]!.id).toBe(B)
+    expect(() => takeSeat(started, B, 3)).toThrow('locked')
   })
 })
 
@@ -250,7 +258,7 @@ describe('playing', () => {
     expect(done.phase).toBe('finished')
     expect(done.winnerId).not.toBe(loser)
 
-    const lobby = resetToLobby(done, 'a')
+    const lobby = resetToLobby(done, A)
     expect(lobby.phase).toBe('lobby')
     expect(lobby.players.every((player) => player.lives === START_LIVES)).toBe(true)
   })
@@ -258,13 +266,13 @@ describe('playing', () => {
 
 describe('away and VIP players', () => {
   test("a player who left mid-game keeps the seat and isn't taken back to the lobby; only the marked one is VIP", () => {
-    const game = markAway(twoPlayerGame(), 'b')
+    const game = markAway(twoPlayerGame(), B)
     expect(game.players.find((player) => player.id === 'b')?.away).toBe(true)
-    const done: Game = { ...game, phase: 'finished', winnerId: 'a' }
-    expect(resetToLobby(done, 'a').players.map((player) => player.id)).toEqual(['a'])
-    expect(markBack(game, 'b').players.find((player) => player.id === 'b')?.away).toBe(false)
+    const done: Game = { ...game, phase: 'finished', winnerId: A }
+    expect(resetToLobby(done, A).players.map((player) => player.id)).toEqual([A])
+    expect(markBack(game, B).players.find((player) => player.id === 'b')?.away).toBe(false)
 
-    const shown = publicView(markVip(twoPlayerGame(), 'b')).players.map((player) => [
+    const shown = publicView(markVip(twoPlayerGame(), B)).players.map((player) => [
       player.id,
       player.vip,
     ])
@@ -313,17 +321,17 @@ describe('move counter', () => {
       rng,
     )
     expect(afterBust.moves).toBe(2)
-    expect(resetToLobby(afterBust, 'a').moves).toBe(2)
+    expect(resetToLobby(afterBust, A).moves).toBe(2)
   })
 })
 
 describe('bot', () => {
   test('a bot never becomes host, and host passes to a human', () => {
-    let game = addPlayer(createGame(), 'bot1', 'Bot', true)
-    game = addPlayer(game, 'a', 'Ann')
-    game = addPlayer(game, 'b', 'Bob')
-    expect(game.hostId).toBe('a')
-    expect(removePlayer(game, 'a').hostId).toBe('b')
+    let game = addPlayer(createGame(), BOT1, 'Bot', true)
+    game = addPlayer(game, A, 'Ann')
+    game = addPlayer(game, B, 'Bob')
+    expect(game.hostId).toBe(A)
+    expect(removePlayer(game, A).hostId).toBe(B)
   })
 
   test('plays the biggest safe number, saves the Ten and -5 for emergencies, else the smallest card', () => {

@@ -2,6 +2,7 @@
 // came (bot accounts always come), and closes when too few did.
 
 import { UserError } from 'rivetkit'
+import { type PlayerId, toPlayerId } from '../domain/ids'
 import type { MatchState } from '../domain/match'
 import type { PlatformPort } from '../domain/ports'
 import type { Identity, TournamentRoom } from '../domain/room'
@@ -15,7 +16,7 @@ export interface TournamentSteps {
   start(): void
   commit(): Promise<void>
   /** Sits a bot account at its seat; the room then plays it like any bot. */
-  seatBot(id: string, name: string, seat: number | null): void
+  seatBot(id: PlayerId, name: string, seat: number | null): void
 }
 
 /** The room's tournament and whether it is listed: the known answer, else asked from the platform. */
@@ -158,7 +159,8 @@ export async function tournamentTick<G extends GameTable, M extends MatchState>(
   for (const [id, name] of Object.entries(bots)) {
     const sitting = c.vars.game.players.some((player) => player.id === id)
     if (!sitting) {
-      steps.seatBot(id, name, seated.seats[id] ?? null)
+      // The platform's id, kept as a record key (which only holds plain strings).
+      steps.seatBot(toPlayerId(id), name, seated.seats[id] ?? null)
     }
   }
 

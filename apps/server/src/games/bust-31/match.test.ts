@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { Card } from 'contracts/rooms/bust-31'
 import { z } from 'zod'
+import { type PlayerId, toMatchId, toPlayerId } from '../../core/domain/ids'
 import type { LogEntry } from '../../core/domain/match'
 import { newCommitment } from '../../core/rules/fair-rng'
 import { stamp } from '../../core/rules/match'
@@ -10,11 +11,15 @@ import type { Game, MatchState } from './domain'
 import { buildReport, logEvents, noteMove } from './match'
 import { addPlayer, createGame, playCard, startGame } from './rules'
 
-function table(lives: Record<string, number>, winnerId: string | null): Game {
+const A = toPlayerId('a')
+const BOT_1 = toPlayerId('bot-1')
+const C = toPlayerId('c')
+
+function table(lives: Record<string, number>, winnerId: PlayerId | null): Game {
   let game = createGame()
-  game = addPlayer(game, 'a', 'Ann')
-  game = addPlayer(game, 'bot-1', 'Bot Rain', true)
-  game = addPlayer(game, 'c', 'Cy')
+  game = addPlayer(game, A, 'Ann')
+  game = addPlayer(game, BOT_1, 'Bot Rain', true)
+  game = addPlayer(game, C, 'Cy')
   const players = game.players.map((player) => ({ ...player, lives: lives[player.id]! }))
   if (winnerId) {
     return { ...game, players, phase: 'finished', winnerId }
@@ -23,18 +28,23 @@ function table(lives: Record<string, number>, winnerId: string | null): Game {
   return { ...game, players, phase: 'playing', winnerId: null }
 }
 
-const start: MatchState = { id: 'm1', startedAt: '2026-11-11T10:00:00.000Z', out: [], seq: 0 }
+const start: MatchState = {
+  id: toMatchId('m1'),
+  startedAt: '2026-11-11T10:00:00.000Z',
+  out: [],
+  seq: 0,
+}
 
 test('placements follow the elimination order, winner first', () => {
   // Cy goes out first; the bot goes out on the final move, which also ends the game.
   const cyOut = table({ a: 2, 'bot-1': 1, c: 0 }, null)
   const match = noteMove(start, cyOut)
-  expect(match.out).toEqual(['c'])
+  expect(match.out).toEqual([C])
   // noteMove counts a player out once.
-  expect(noteMove(match, cyOut).out).toEqual(['c'])
+  expect(noteMove(match, cyOut).out).toEqual([C])
   const report = buildReport(
     match,
-    table({ a: 2, 'bot-1': 0, c: 0 }, 'a'),
+    table({ a: 2, 'bot-1': 0, c: 0 }, A),
     'ABCD',
     '2026-11-11T10:05:00.000Z',
     [],
@@ -75,14 +85,14 @@ test('a finished report still needs a winner', () => {
 
 test('a kick in the lobby empties the chair; mid-game it is played for them and the host moves on', () => {
   let lobby = createGame()
-  lobby = addPlayer(lobby, 'a', 'Ann')
-  lobby = addPlayer(lobby, 'c', 'Cy')
-  expect(kickPlayer(lobby, 'c').players.map((player) => player.id)).toEqual(['a'])
+  lobby = addPlayer(lobby, A, 'Ann')
+  lobby = addPlayer(lobby, C, 'Cy')
+  expect(kickPlayer(lobby, C).players.map((player) => player.id)).toEqual([A])
 
-  const playing = startGame(lobby, 'a', rng)
-  const kicked = kickPlayer(playing, 'a')
+  const playing = startGame(lobby, A, rng)
+  const kicked = kickPlayer(playing, A)
   expect(kicked.players.find((player) => player.id === 'a')).toMatchObject({ away: true })
-  expect(kicked.hostId).toBe('c')
+  expect(kicked.hostId).toBe(C)
   expect(kicked.players).toHaveLength(2)
 })
 
@@ -98,9 +108,9 @@ const card = (kind: Card['kind'], value: number, id: string): Card => ({ id, kin
 /** Two players, Ann to move with a fixed hand. */
 function started(): Game {
   let game = createGame()
-  game = addPlayer(game, 'a', 'Ann')
-  game = addPlayer(game, 'bot-1', 'Bot Rain', true)
-  return startGame(game, 'a', rng)
+  game = addPlayer(game, A, 'Ann')
+  game = addPlayer(game, BOT_1, 'Bot Rain', true)
+  return startGame(game, A, rng)
 }
 
 const withHand = (game: Game, hand: Card[], total = game.total): Game => ({
@@ -111,8 +121,8 @@ const withHand = (game: Game, hand: Card[], total = game.total): Game => ({
 
 describe('logEvents', () => {
   test('start deals: every alive hand and the deck order', () => {
-    const lobby = addPlayer(addPlayer(createGame(), 'a', 'Ann'), 'bot-1', 'Bot Rain', true)
-    const game = startGame(lobby, 'a', rng)
+    const lobby = addPlayer(addPlayer(createGame(), A, 'Ann'), BOT_1, 'Bot Rain', true)
+    const game = startGame(lobby, A, rng)
     const [deal] = logEvents(lobby, game)
     expect(deal).toEqual({
       type: 'deal',
@@ -130,7 +140,7 @@ describe('logEvents', () => {
 
   test('a play records the card, the new total and the card drawn', () => {
     const game = withHand(started(), [card('number', 7, 'n7-0')], 10)
-    const next = playCard(game, 'a', 'n7-0', rng)
+    const next = playCard(game, A, 'n7-0', rng)
     expect(logEvents(game, next)).toEqual([
       {
         type: 'play',
@@ -143,7 +153,7 @@ describe('logEvents', () => {
 
   test('a Swap records the seat it traded with, and the drawn card that went to that seat', () => {
     const game = withHand(started(), [card('swap', 0, 's-0')], 10)
-    const next = playCard(game, 'a', 's-0', rng)
+    const next = playCard(game, A, 's-0', rng)
     const [play] = logEvents(game, next)
 
     expect(play).toEqual({
@@ -159,7 +169,7 @@ describe('logEvents', () => {
       deck: [],
       discard: [card('number', 5, 'n5-0'), card('number', 6, 'n6-0')],
     }
-    const entries = logEvents(game, playCard(game, 'a', 'n2-0', rng))
+    const entries = logEvents(game, playCard(game, A, 'n2-0', rng))
     expect(entries.map((entry) => entry.type)).toEqual(['reshuffle', 'play'])
     expect([...(entries[0]!.data!.deck as string[])].sort()).toEqual(['n5-0', 'n6-0'])
     expect(entries[1]!.data!.drew).toBe((entries[0]!.data!.deck as string[])[0])
@@ -167,7 +177,7 @@ describe('logEvents', () => {
 
   test('a bust is followed by the new deal; the last bust ends the match', () => {
     const game = withHand(started(), [card('number', 9, 'n9-0')], 30)
-    const next = playCard(game, 'a', 'n9-0', rng)
+    const next = playCard(game, A, 'n9-0', rng)
     expect(logEvents(game, next).map((event) => event.type)).toEqual(['bust', 'deal'])
     expect(logEvents(game, next)[0]).toEqual({
       type: 'bust',
@@ -179,7 +189,7 @@ describe('logEvents', () => {
       ...game,
       players: game.players.map((player) => (player.id === 'a' ? { ...player, lives: 1 } : player)),
     }
-    const end = playCard(last, 'a', 'n9-0', rng)
+    const end = playCard(last, A, 'n9-0', rng)
     expect(logEvents(last, end, true)).toEqual([
       {
         type: 'bust',
@@ -192,21 +202,21 @@ describe('logEvents', () => {
 
   test('bots, away players and lobby changes', () => {
     const game = started()
-    const away = markAway(game, 'a')
+    const away = markAway(game, A)
     expect(logEvents(game, away)).toEqual([{ type: 'away', seat: 0 }])
-    expect(logEvents(away, markBack(away, 'a'))).toEqual([{ type: 'back', seat: 0 }])
+    expect(logEvents(away, markBack(away, A))).toEqual([{ type: 'back', seat: 0 }])
     const botTurn = { ...game, turn: 1 }
     const bot = botTurn.players[1]!
     const played = playCard(botTurn, bot.id, chooseBotCard(bot.hand, 0)!.id, rng)
     expect(logEvents(botTurn, played, true)[0]!.data!.by).toBe('bot')
-    expect(logEvents(createGame(), addPlayer(createGame(), 'a', 'Ann'))).toEqual([])
+    expect(logEvents(createGame(), addPlayer(createGame(), A, 'Ann'))).toEqual([])
   })
 
   test('a whole bot game logs every move in order', () => {
     let game = createGame()
-    game = addPlayer(game, 'a', 'Ann')
+    game = addPlayer(game, A, 'Ann')
     for (let i = 1; i < 6; i++) {
-      game = addPlayer(game, `bot-${i}`, `Bot ${i}`, true)
+      game = addPlayer(game, toPlayerId(`bot-${i}`), `Bot ${i}`, true)
     }
 
     const entries: LogEntry[] = []
@@ -215,7 +225,7 @@ describe('logEvents', () => {
       game = next
     }
 
-    step(startGame(game, 'a', randomRng()))
+    step(startGame(game, A, randomRng()))
     while (game.phase === 'playing') {
       const player = game.players[game.turn]!
       step(playCard(game, player.id, chooseBotCard(player.hand, game.total)!.id, randomRng()))

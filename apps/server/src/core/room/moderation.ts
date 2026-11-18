@@ -3,6 +3,7 @@
 
 import { type KickResult, TABLE_CLOSED, type TerminateResult } from 'contracts/rooms/room'
 import { UserError } from 'rivetkit'
+import type { PlayerId } from '../domain/ids'
 import type { LogEntry, MatchState } from '../domain/match'
 import type { PlatformPort } from '../domain/ports'
 import type { CurrentTurn, Termination } from '../domain/room'
@@ -13,12 +14,17 @@ import { KICKED_MESSAGE, playerOf, TERMINATED_MESSAGE } from './access'
 import { type RoomConn, type RoomCtx, roomCode } from './context'
 
 /** Who asked for a kick: an admin (with a reason for the logs) or the table's host. */
-export type KickedBy = { kind: 'admin'; reason: string } | { kind: 'host'; hostId: string }
+export type KickedBy = { kind: 'admin'; reason: string } | { kind: 'host'; hostId: PlayerId }
 
 /** What a kick or termination did, and what the commit after it logs. */
 export interface Outcome<Result> {
   result: Result
   entries: LogEntry[]
+}
+
+/** A kick: its outcome, and who was kicked (the result reports them as a plain string). */
+export interface Kick extends Outcome<KickResult> {
+  playerId: PlayerId
 }
 
 /**
@@ -66,7 +72,7 @@ export function kickFromTable<G extends GameTable, M extends MatchState>(
   c: RoomCtx<G, M>,
   seat: number,
   by: KickedBy,
-): Outcome<KickResult> {
+): Kick {
   if (c.vars.terminated) {
     throw new UserError('This table is already closed.', { code: TABLE_CLOSED })
   }
@@ -107,14 +113,18 @@ export function kickFromTable<G extends GameTable, M extends MatchState>(
     matchId: c.vars.match?.id ?? null,
   }
 
-  return { result, entries: [{ type: 'kicked', seat: target.seat, data }] }
+  return { result, entries: [{ type: 'kicked', seat: target.seat, data }], playerId: target.id }
 }
 
 /**
  * After a kick is committed: their turn, if it is running, is played at bot speed, and their connections close
  * with the reason. `turn` is the running turn, as for dropIfGone.
  */
-export async function closeKicked(c: RoomCtx, playerId: string, turn: CurrentTurn): Promise<void> {
+export async function closeKicked(
+  c: RoomCtx,
+  playerId: PlayerId,
+  turn: CurrentTurn,
+): Promise<void> {
   if (c.vars.game.phase === 'playing' && turn.playerId === playerId) {
     await c.schedule.after(BOT_THINK_MS[0], 'autoPlay', turn.key)
   }

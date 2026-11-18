@@ -3,6 +3,7 @@
 
 import type { Avatar } from 'contracts/avatars'
 import type { Phase } from 'contracts/rooms/room'
+import type { PlayerId } from './ids'
 
 /**
  * Shuffles a deck for a round (being dealt or played), which is part of its client seed. Injected: a room
@@ -17,7 +18,7 @@ export class RuleError extends Error {}
 
 /** What the shared rules need from a player. Turns go up the seat numbers (clockwise). */
 export interface Seated {
-  id: string
+  id: PlayerId
   name: string
   bot: boolean
   seat: number
@@ -31,7 +32,7 @@ export interface Seated {
 /** What the shared rules need from a game. */
 export interface Table<P extends Seated = Seated> {
   phase: Phase
-  hostId: string | null
+  hostId: PlayerId | null
   players: P[]
   moves: number
 }
@@ -51,7 +52,7 @@ export interface InPlay {
 /** A match that ended: it always has a winner. */
 export interface Finished {
   phase: 'finished'
-  winnerId: string
+  winnerId: PlayerId
 }
 
 /** What the room needs from every game: the shared table, plus the round being played and whose turn it is. */

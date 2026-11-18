@@ -6,12 +6,17 @@ import type { Game, MatchState } from '../../games/bust-31/domain'
 import * as match from '../../games/bust-31/match'
 import * as rules from '../../games/bust-31/rules'
 import { migrateRoom, type SqlDatabase, sqliteRoomStore } from '../adapters/room-store'
+import { toPlayerId } from '../domain/ids'
 import { RuleError } from '../domain/table'
 import { fairnessView } from '../rules/views'
 import { beginMatch, commitRoom, withRng } from './commit'
 import type { RoomCtx } from './context'
 import { fakeLists, fakePlatform } from './fakes'
 import { roomVars } from './state'
+
+const ANN = toPlayerId('ann')
+const BOT_1 = toPlayerId('bot-1')
+const BOT_2 = toPlayerId('bot-2')
 
 // This test is about what the room deals, logs and reports, through the real SQLite store.
 
@@ -38,9 +43,9 @@ function fakeRoom() {
   const db = memoryDatabase()
 
   let game = rules.createGame()
-  game = rules.addPlayer(game, 'ann', 'Ann', false, 0)
-  game = rules.addPlayer(game, 'bot-1', 'Bot Rain', true, 2)
-  game = rules.addPlayer(game, 'bot-2', 'Bot Wind', true, 4)
+  game = rules.addPlayer(game, ANN, 'Ann', false, 0)
+  game = rules.addPlayer(game, BOT_1, 'Bot Rain', true, 2)
+  game = rules.addPlayer(game, BOT_2, 'Bot Wind', true, 4)
 
   const c: RoomCtx<Game, MatchState> = {
     vars: { ...roomVars<Game, MatchState>(game), tournament: null, listed: false },
@@ -86,7 +91,7 @@ test('each round deals from the seed committed before it, and is reported with t
     nextServerSeedHash: null,
   })
 
-  beginMatch(c, { out: [] }, (rng) => rules.startGame(c.vars.game, 'ann', rng))
+  beginMatch(c, { out: [] }, (rng) => rules.startGame(c.vars.game, ANN, rng))
   await commit(c, db)
   expect(c.vars.next.matchId).not.toBe(committed.matchId)
 
@@ -148,7 +153,7 @@ test('each round deals from the seed committed before it, and is reported with t
 
 test('a move the rules refuse takes back its shuffle', () => {
   const { c } = fakeRoom()
-  beginMatch(c, { out: [] }, (rng) => rules.startGame(c.vars.game, 'ann', rng))
+  beginMatch(c, { out: [] }, (rng) => rules.startGame(c.vars.game, ANN, rng))
   const before = { seeds: c.vars.match!.seeds, pending: c.vars.fairLog.length }
 
   // A refused move that would have started round 2 keeps round 2's committed seed for the real one.
@@ -168,7 +173,7 @@ test('a start the rules refuse leaves no match and keeps the commitment', () => 
   const committed = c.vars.next
 
   expect(() =>
-    beginMatch(c, { out: [] }, (rng) => rules.startGame(c.vars.game, 'bot-1', rng)),
+    beginMatch(c, { out: [] }, (rng) => rules.startGame(c.vars.game, BOT_1, rng)),
   ).toThrow()
   expect(c.vars.match).toBeNull()
   expect(c.vars.next).toBe(committed)

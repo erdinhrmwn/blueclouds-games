@@ -3,6 +3,7 @@
 // pass fakes.
 
 import type { RoomSummary, TournamentFormat } from 'contracts/rooms/room'
+import type { MatchId, PlayerId } from './ids'
 import type { LogEvent, MatchReport, RoundReport } from './match'
 import type { Identity, SavedRoom } from './room'
 import type { Table } from './table'
@@ -38,7 +39,7 @@ export interface PlatformTournament {
 }
 
 export interface PlatformSeat {
-  playerId: string
+  playerId: PlayerId
   seat: number | null
   /** A bot account the platform signed up to fill the tables; the room plays its seat. */
   bot: boolean
@@ -63,18 +64,18 @@ export interface PlatformPort {
   verifyPlayToken(token: unknown): Promise<Identity | null>
   /** Idempotent by match id. */
   reportMatch(report: MatchReport): Promise<SendResult>
-  reportRound(matchId: string, round: RoundReport): Promise<SendResult>
+  reportRound(matchId: MatchId, round: RoundReport): Promise<SendResult>
   /** Null when the platform doesn't know the room; throws when it can't be reached. */
   fetchRoomSeats(code: string): Promise<PlatformRoom | null>
   /** Which of these players are VIP right now; throws when the platform can't be reached. */
-  fetchVipIds(ids: string[]): Promise<Set<string>>
+  fetchVipIds(ids: PlayerId[]): Promise<Set<PlayerId>>
   /** A tournament room's match began, or the room closed without one. */
   markRoom(code: string, change: RoomChange, reason?: CloseReason): Promise<MarkResult>
 }
 
 /** A finished match's result waiting in the outbox. */
 export interface QueuedMatch {
-  matchId: string
+  matchId: MatchId
   report: MatchReport
   body: string
   attempts: number
@@ -82,7 +83,7 @@ export interface QueuedMatch {
 
 /** A closed round waiting in the outbox; a match's rounds go out in order, before its result. */
 export interface QueuedRound {
-  matchId: string
+  matchId: MatchId
   round: number
   report: RoundReport
   body: string
@@ -91,11 +92,11 @@ export interface QueuedRound {
 
 /** One commit's writes, all or nothing: the move log never skips or repeats a move. */
 export interface RoomTransaction {
-  appendEvents(matchId: string, events: LogEvent[]): Promise<void>
-  matchLog(matchId: string): Promise<LogEvent[]>
-  queueRound(matchId: string, report: RoundReport): Promise<void>
+  appendEvents(matchId: MatchId, events: LogEvent[]): Promise<void>
+  matchLog(matchId: MatchId): Promise<LogEvent[]>
+  queueRound(matchId: MatchId, report: RoundReport): Promise<void>
   queueMatch(report: MatchReport): Promise<void>
-  clearMatchLog(matchId: string): Promise<void>
+  clearMatchLog(matchId: MatchId): Promise<void>
   saveRoom(room: SavedRoom<Table>): Promise<void>
 }
 
@@ -107,10 +108,10 @@ export interface RoomStorePort {
   hasQueuedReports(): Promise<boolean>
   queuedRounds(): Promise<QueuedRound[]>
   queuedMatches(): Promise<QueuedMatch[]>
-  roundFailed(matchId: string, round: number): Promise<void>
-  roundDone(matchId: string, round: number): Promise<void>
-  matchFailed(matchId: string): Promise<void>
-  matchDone(matchId: string): Promise<void>
+  roundFailed(matchId: MatchId, round: number): Promise<void>
+  roundDone(matchId: MatchId, round: number): Promise<void>
+  matchFailed(matchId: MatchId): Promise<void>
+  matchDone(matchId: MatchId): Promise<void>
 }
 
 /** A game's lists of tables (public, and the backoffice's tournament one), keyed by list key. */

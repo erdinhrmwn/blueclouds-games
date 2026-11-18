@@ -2,6 +2,7 @@
 // round closes or the match ends. Types only.
 
 import type { MatchSeeds } from 'contracts/fairness/fairness'
+import type { MatchId, PlayerId } from './ids'
 
 /** One step of the move log, before it gets its place (`seq`) and time (`t`, ms since the start). */
 export interface LogEntry {
@@ -20,7 +21,7 @@ export interface LogEvent extends LogEntry {
  * shuffles (fairness); matches started before provably fair shuffles have none.
  */
 export interface MatchState {
-  id: string
+  id: MatchId
   startedAt: string
   seq: number
   seeds?: MatchSeeds
@@ -34,7 +35,7 @@ export type MatchEnd = 'finished' | 'terminated'
 
 /** How one seat is reported: a bot a host added has no account; everyone else reports under their own id. */
 export interface ReportedSeat {
-  playerId: string | null
+  playerId: PlayerId | null
   bot: boolean
   botName?: string
 }
@@ -50,7 +51,7 @@ export interface ReportedPlayer extends ReportedSeat {
  * placed by the standings when it stopped, and counts no win.
  */
 export interface MatchReport {
-  matchId: string
+  matchId: MatchId
   game: string
   roomCode: string
   rulesVersion: number
@@ -66,7 +67,7 @@ export interface MatchReport {
 
 /** The match a closed round belongs to. */
 export interface MatchInfo {
-  id: string
+  id: MatchId
   game: string
   roomCode: string
   startedAt: string

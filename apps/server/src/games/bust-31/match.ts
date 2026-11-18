@@ -1,6 +1,7 @@
 // Bust 31, layer 2 (rules): the move log and the match result, from the game's states. Pure.
 
 import type { Card } from 'contracts/rooms/bust-31'
+import type { PlayerId } from '../../core/domain/ids'
 import type {
   LogEntry,
   LogEvent,
@@ -65,8 +66,8 @@ export function buildReport(
 }
 
 /** The winner 1st, then the players out, the last one out first. */
-function finishedPlacements(game: Game, out: string[]): Map<string, number> {
-  const placeOf = (id: string) => {
+function finishedPlacements(game: Game, out: PlayerId[]): Map<PlayerId, number> {
+  const placeOf = (id: PlayerId) => {
     if (id === game.winnerId) {
       return 1
     }
@@ -78,7 +79,7 @@ function finishedPlacements(game: Game, out: string[]): Map<string, number> {
 }
 
 /** Where everyone stands mid-game: players still in by lives (then seat), then the players out, last out first. */
-function standings(game: Game, out: string[]): Map<string, number> {
+function standings(game: Game, out: PlayerId[]): Map<PlayerId, number> {
   const stillIn = game.players
     .filter((player) => !out.includes(player.id))
     .sort((a, b) => b.lives - a.lives || a.seat - b.seat)

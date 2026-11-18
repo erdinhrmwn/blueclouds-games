@@ -1,14 +1,20 @@
 import { beforeEach, expect, test } from 'bun:test'
 import type { Game, MatchState } from '../../games/bust-31/domain'
 import { addPlayer, createGame } from '../../games/bust-31/rules'
+import { type PlayerId, toPlayerId } from '../domain/ids'
 import { markVip, showAvatar, showVips } from '../rules/table'
 import type { RoomConn, RoomCtx } from './context'
 import { fakePlatform } from './fakes'
 import { roomVars } from './state'
 import { refreshVips, VIP_REFRESH_MS } from './vip'
 
+const ANN = toPlayerId('ann')
+const BEN = toPlayerId('ben')
+const BOT = toPlayerId('bot')
+const NOBODY = toPlayerId('nobody')
+
 // The platform is a fake: these tests are about which tags change and when the check runs again.
-let vipIds = new Set<string>()
+let vipIds = new Set<PlayerId>()
 let platformDown = false
 const platform = fakePlatform({
   fetchVipIds: async () => {
@@ -38,9 +44,9 @@ function connection(id: string): RoomConn {
 function room(connections: number): FakeRoom {
   const scheduled: number[] = []
   let game = createGame()
-  game = addPlayer(game, 'ann', 'Ann')
-  game = addPlayer(game, 'ben', 'Ben')
-  game = addPlayer(game, 'bot', 'Bot Rain', true)
+  game = addPlayer(game, ANN, 'Ann')
+  game = addPlayer(game, BEN, 'Ben')
+  game = addPlayer(game, BOT, 'Bot Rain', true)
 
   const ids = Array.from({ length: connections }, (_, index) => `conn${index}`)
 
@@ -64,21 +70,21 @@ const vipsOf = (c: FakeRoom) =>
   c.vars.game.players.filter((player) => player.vip).map((player) => player.id)
 
 beforeEach(() => {
-  vipIds = new Set()
+  vipIds = new Set<PlayerId>()
   platformDown = false
 })
 
 test('a grant and a revoke both reach the seated tags, bots are left alone; no change sends nothing', async () => {
   const c = room(1)
-  c.vars.game = markVip(c.vars.game, 'ben')
-  vipIds = new Set(['ann'])
+  c.vars.game = markVip(c.vars.game, BEN)
+  vipIds = new Set([ANN])
 
   expect(await refreshVips(c, DUE, platform)).toBe(true)
-  expect(vipsOf(c)).toEqual(['ann'])
+  expect(vipsOf(c)).toEqual([ANN])
   expect(c.vars.game.players.find((player) => player.id === 'bot')?.vip).toBeUndefined()
 
   const unchanged = room(1)
-  unchanged.vars.game = markVip(unchanged.vars.game, 'ann')
+  unchanged.vars.game = markVip(unchanged.vars.game, ANN)
   expect(await refreshVips(unchanged, DUE, platform)).toBe(false)
   expect(showVips(unchanged.vars.game, vipIds)).toBe(unchanged.vars.game)
 })
@@ -96,7 +102,7 @@ test('keeps checking while someone is connected or the platform is down; stops w
 
   // A timer from before a sleep is ignored.
   const stale = room(1)
-  vipIds = new Set(['ann'])
+  vipIds = new Set([ANN])
   expect(await refreshVips(stale, DUE - 1, platform)).toBe(false)
   expect(vipsOf(stale)).toEqual([])
   expect(stale.scheduled).toHaveLength(0)
@@ -109,11 +115,11 @@ test('keeps checking while someone is connected or the platform is down; stops w
 
 test("a player's avatar is shown, and an unchanged one keeps the same game", () => {
   let game = createGame()
-  game = addPlayer(game, 'ann', 'Ann')
+  game = addPlayer(game, ANN, 'Ann')
   const kite = { color: 'storm', icon: 'kite' } as const
 
-  const shown = showAvatar(game, 'ann', kite)
+  const shown = showAvatar(game, ANN, kite)
   expect(shown.players[0]!.avatar).toEqual(kite)
-  expect(showAvatar(shown, 'ann', { ...kite })).toBe(shown)
-  expect(showAvatar(shown, 'nobody', kite)).toBe(shown)
+  expect(showAvatar(shown, ANN, { ...kite })).toBe(shown)
+  expect(showAvatar(shown, NOBODY, kite)).toBe(shown)
 })

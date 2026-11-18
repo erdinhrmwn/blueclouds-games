@@ -1,4 +1,6 @@
 import { describe, expect, test } from 'bun:test'
+import { toMatchId } from '../domain/ids'
+import type { MatchInfo } from '../domain/match'
 import { closedRounds, roundReport } from './rounds'
 
 const event = (seq: number, time: number, type: string, data?: Record<string, unknown>) => ({
@@ -24,7 +26,12 @@ const log = [
   event(10, 12000, 'finished', { winner: 0 }),
 ]
 
-const match = { id: 'm', game: 'bust-31', roomCode: 'R1', startedAt: '2026-11-13T08:00:00.000Z' }
+const match: MatchInfo = {
+  id: toMatchId('m'),
+  game: 'bust-31',
+  roomCode: 'R1',
+  startedAt: '2026-11-13T08:00:00.000Z',
+}
 const bustOf = (events: { type: string; seat?: number }[]) => ({
   seat: events.find((event) => event.type === 'bust')?.seat ?? null,
 })

@@ -2,6 +2,7 @@
 // (games/<slug>/definition.ts); the room layer runs any game through it.
 
 import type { GameSlug, TurnClock } from 'contracts/rooms/room'
+import type { PlayerId } from './ids'
 import type { LogEntry, LogEvent, MatchEnd, MatchReport, MatchState, RoundResult } from './match'
 import type { GameTable, Rng } from './table'
 
@@ -17,12 +18,12 @@ export interface GameDefinition<G extends GameTable, M extends MatchState, Actio
   /** Fills in what a game saved by older code misses; runs on every wake. */
   upgrade?(game: G): G
 
-  addPlayer(game: G, id: string, name: string, bot: boolean, seat?: number): G
+  addPlayer(game: G, id: PlayerId, name: string, bot: boolean, seat?: number): G
   /** `byId` must be the host; null when the room starts a tournament table with no host. */
-  startGame(game: G, byId: string | null, rng: Rng): G
-  resetToLobby(game: G, byId: string): G
+  startGame(game: G, byId: PlayerId | null, rng: Rng): G
+  resetToLobby(game: G, byId: PlayerId): G
   /** A player's move. Throws RuleError when the rules refuse it. */
-  applyAction(game: G, playerId: string, action: Action, rng: Rng): G
+  applyAction(game: G, playerId: PlayerId, action: Action, rng: Rng): G
   /** The move the server makes for the player on turn (a bot, or a human out of time); null when there is none. */
   autoAction(game: G): Action | null
   /** Marks the last move as made for a human by the server, so the table can say so. */
@@ -38,7 +39,7 @@ export interface GameDefinition<G extends GameTable, M extends MatchState, Actio
   dealPauseMs(game: G): number
 
   publicView(game: G, clock: TurnClock | null): View
-  handOf(game: G, playerId: string): Hand
+  handOf(game: G, playerId: PlayerId): Hand
 
   /** What changed between two states, for the move log. */
   logEvents(before: G, after: G, auto: boolean): LogEntry[]

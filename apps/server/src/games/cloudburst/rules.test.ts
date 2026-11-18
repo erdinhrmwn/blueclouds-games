@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { BURST_AT, type Card, fits, HAND_SIZE } from 'contracts/rooms/cloudburst'
+import { toMatchId, toPlayerId } from '../../core/domain/ids'
 import type { LogEntry } from '../../core/domain/match'
 import { RuleError } from '../../core/domain/table'
 import { randomRng } from '../../core/rules/table'
@@ -20,6 +21,10 @@ import {
   startGame,
 } from './rules'
 
+const A = toPlayerId('a')
+const B = toPlayerId('b')
+const P0 = toPlayerId('p0')
+
 const rng = randomRng(() => 0.42)
 const num = (suit: Card['suit'], value: number, copy = 0): Card => ({
   id: `${suit}-${value}-${copy}`,
@@ -39,10 +44,10 @@ const tempest: Card = { id: 'tempest-0', kind: 'tempest', suit: null, value: 0 }
 function table(playerCount = 3): Game {
   let game = createGame()
   for (const id of ['a', 'b', 'c', 'd'].slice(0, playerCount)) {
-    game = addPlayer(game, id, id.toUpperCase())
+    game = addPlayer(game, toPlayerId(id), id.toUpperCase())
   }
 
-  return startGame(game, 'a', rng)
+  return startGame(game, A, rng)
 }
 
 /** Sets hands (by player index), the pile top and the suit, so a test controls the play. */
@@ -101,9 +106,9 @@ describe('a round', () => {
       [[num('sun', 6), num('rain', 1)], [num('wind', 2)], [num('wind', 3)]],
       num('sun', 5),
     )
-    expect(() => playCard(game, 'a', { cardId: 'rain-1-0' }, rng)).toThrow(RuleError)
-    expect(() => playCard(game, 'b', { cardId: 'wind-2-0' }, rng)).toThrow(RuleError)
-    game = playCard(game, 'a', { cardId: 'sun-6-0' }, rng)
+    expect(() => playCard(game, A, { cardId: 'rain-1-0' }, rng)).toThrow(RuleError)
+    expect(() => playCard(game, B, { cardId: 'wind-2-0' }, rng)).toThrow(RuleError)
+    game = playCard(game, A, { cardId: 'sun-6-0' }, rng)
     expect(game.turn).toBe(1)
     expect(game.suit).toBe('sun')
     expect(game.players[0]!.hand).toHaveLength(1)
@@ -111,17 +116,17 @@ describe('a round', () => {
 
   test('Calm skips the next player; with two players you go again', () => {
     let game = setup(table(), [[act('sun', 'calm'), num('sun', 1)]], num('sun', 5))
-    game = playCard(game, 'a', { cardId: 'sun-calm-0' }, rng)
+    game = playCard(game, A, { cardId: 'sun-calm-0' }, rng)
     expect(game.turn).toBe(2)
     expect(game.lastEvent).toMatchObject({ type: 'played', skipped: 'b' })
     let two = setup(table(2), [[act('sun', 'calm'), num('sun', 1)]], num('sun', 5))
-    two = playCard(two, 'a', { cardId: 'sun-calm-0' }, rng)
+    two = playCard(two, A, { cardId: 'sun-calm-0' }, rng)
     expect(two.turn).toBe(0)
   })
 
   test('Swirl reverses the order', () => {
     let game = setup(table(), [[act('sun', 'swirl'), num('sun', 1)]], num('sun', 5))
-    game = playCard(game, 'a', { cardId: 'sun-swirl-0' }, rng)
+    game = playCard(game, A, { cardId: 'sun-swirl-0' }, rng)
     expect(game.direction).toBe(-1)
     expect(game.turn).toBe(2)
   })
@@ -132,8 +137,8 @@ describe('a round', () => {
       [[act('sun', 'gust'), num('rain', 1), num('wind', 8)], [num('storm', 3)]],
       num('sun', 5),
     )
-    expect(() => playCard(game, 'a', { cardId: 'sun-gust-0' }, rng)).toThrow(RuleError)
-    game = playCard(game, 'a', { cardId: 'sun-gust-0', giveId: 'wind-8-0' }, rng)
+    expect(() => playCard(game, A, { cardId: 'sun-gust-0' }, rng)).toThrow(RuleError)
+    game = playCard(game, A, { cardId: 'sun-gust-0', giveId: 'wind-8-0' }, rng)
     expect(game.players[0]!.hand.map((card) => card.id)).toEqual(['rain-1-0'])
     expect(game.players[1]!.hand.map((card) => card.id)).toEqual(['storm-3-0', 'wind-8-0'])
     expect(game.lastEvent).toMatchObject({ type: 'played', gaveTo: 'b' })
@@ -143,8 +148,8 @@ describe('a round', () => {
 
   test('Rainbow needs a suit, and the next player must follow it', () => {
     let game = setup(table(), [[rainbow, num('sun', 1)]], num('sun', 5))
-    expect(() => playCard(game, 'a', { cardId: 'rainbow-0' }, rng)).toThrow(RuleError)
-    game = playCard(game, 'a', { cardId: 'rainbow-0', suit: 'storm' }, rng)
+    expect(() => playCard(game, A, { cardId: 'rainbow-0' }, rng)).toThrow(RuleError)
+    game = playCard(game, A, { cardId: 'rainbow-0', suit: 'storm' }, rng)
     expect(game.suit).toBe('storm')
   })
 
@@ -155,7 +160,7 @@ describe('a round', () => {
       num('sun', 5),
     )
     const drawn = game.deck.slice(0, 2).map((card) => card.id)
-    game = playCard(game, 'a', { cardId: 'sun-downpour-0' }, rng)
+    game = playCard(game, A, { cardId: 'sun-downpour-0' }, rng)
     expect(game.players[1]!.hand.map((card) => card.id)).toEqual(['rain-downpour-0', ...drawn])
     expect(game.turn).toBe(2)
     expect(game.lastEvent).toMatchObject({ type: 'played', skipped: 'b', forced: 2 })
@@ -165,8 +170,8 @@ describe('a round', () => {
 
   test('Tempest needs a suit, then the next player draws 4 and loses their turn', () => {
     let game = setup(table(), [[tempest, num('sun', 1)], [num('rain', 2)]], num('sun', 5))
-    expect(() => playCard(game, 'a', { cardId: 'tempest-0' }, rng)).toThrow(RuleError)
-    game = playCard(game, 'a', { cardId: 'tempest-0', suit: 'wind' }, rng)
+    expect(() => playCard(game, A, { cardId: 'tempest-0' }, rng)).toThrow(RuleError)
+    game = playCard(game, A, { cardId: 'tempest-0', suit: 'wind' }, rng)
     expect(game.suit).toBe('wind')
     expect(game.players[1]!.hand).toHaveLength(5)
     expect(game.turn).toBe(2)
@@ -180,7 +185,7 @@ describe('a round', () => {
       deck: [num('wind', 3, 1)],
       discard: [num('rain', 4, 1), num('storm', 6, 1), num('sun', 5)],
     }
-    const after = playCard(game, 'a', { cardId: 'sun-downpour-0' }, rng)
+    const after = playCard(game, A, { cardId: 'sun-downpour-0' }, rng)
     expect(after.players[1]!.hand.slice(-2).map((card) => card.id)[0]).toBe('wind-3-1')
     expect(after.lastEvent).toMatchObject({ forced: 2 })
     expect(after.discard.map((card) => card.id)).toEqual(['sun-downpour-0'])
@@ -190,7 +195,7 @@ describe('a round', () => {
 
     let drawing = setup(table(), [[num('rain', 1)]], num('sun', 5))
     drawing = { ...drawing, deck: [], discard: [num('wind', 1), num('wind', 2), num('sun', 5)] }
-    drawing = drawCard(drawing, 'a', rng)
+    drawing = drawCard(drawing, A, rng)
     expect(drawing.discard.map((card) => card.id)).toEqual(['sun-5-0'])
     expect(drawing.players[0]!.hand).toHaveLength(2)
     expect(drawing.deck).toHaveLength(1)
@@ -200,17 +205,17 @@ describe('a round', () => {
     let game = setup(table(), [[num('rain', 1)]], num('sun', 5))
     game = { ...game, deck: [num('sun', 2), ...game.deck] }
     const key = game.turnKey
-    game = drawCard(game, 'a', rng)
+    game = drawCard(game, A, rng)
     expect(game.turnKey).toBe(key)
-    expect(handOf(game, 'a').drawnId).toBe('sun-2-0')
-    expect(() => drawCard(game, 'a', rng)).toThrow(RuleError)
-    expect(() => playCard(game, 'a', { cardId: 'rain-1-0' }, rng)).toThrow(RuleError)
-    const played = playCard(game, 'a', { cardId: 'sun-2-0' }, rng)
+    expect(handOf(game, A).drawnId).toBe('sun-2-0')
+    expect(() => drawCard(game, A, rng)).toThrow(RuleError)
+    expect(() => playCard(game, A, { cardId: 'rain-1-0' }, rng)).toThrow(RuleError)
+    const played = playCard(game, A, { cardId: 'sun-2-0' }, rng)
     expect(played.turn).toBe(1)
-    const passed = pass(game, 'a')
+    const passed = pass(game, A)
     expect(passed.turn).toBe(1)
     expect(passed.turnKey).toBe(key + 1)
-    expect(() => pass(passed, 'b')).toThrow(RuleError)
+    expect(() => pass(passed, B)).toThrow(RuleError)
   })
 })
 
@@ -221,7 +226,7 @@ describe('rounds and points', () => {
       [[num('sun', 6)], [num('rain', 1), num('rain', 2)], [num('wind', 3)]],
       num('sun', 5),
     )
-    game = playCard(game, 'a', { cardId: 'sun-6-0' }, rng)
+    game = playCard(game, A, { cardId: 'sun-6-0' }, rng)
     expect(game.players.map((player) => player.points)).toEqual([0, 2, 1])
     expect(game.lastEvent).toMatchObject({
       type: 'roundEnd',
@@ -244,12 +249,12 @@ describe('rounds and points', () => {
       ...game,
       players: game.players.map((player, i) => ({ ...player, points: [3, BURST_AT - 1, 3][i]! })),
     }
-    game = playCard(game, 'a', { cardId: 'sun-6-0' }, rng)
+    game = playCard(game, A, { cardId: 'sun-6-0' }, rng)
     expect(game.phase).toBe('finished')
-    expect(game.winnerId).toBe('a')
+    expect(game.winnerId).toBe(A)
     expect([...placements(game).values()]).toEqual([1, 3, 2])
     const report = buildReport(
-      { id: 'm', startedAt: '2026-11-11T00:00:00.000Z', seq: 0 },
+      { id: toMatchId('m'), startedAt: '2026-11-11T00:00:00.000Z', seq: 0 },
       game,
       'ABCD',
       '2026-11-11T00:10:00.000Z',
@@ -268,7 +273,7 @@ describe('rounds and points', () => {
       ...game,
       players: game.players.map((player, i) => ({ ...player, points: [4, BURST_AT - 1, 3][i]! })),
     }
-    game = playCard(game, 'a', { cardId: 'sun-6-0' }, rng)
+    game = playCard(game, A, { cardId: 'sun-6-0' }, rng)
     expect(game.phase).toBe('playing')
     expect(game.lastEvent).toMatchObject({ type: 'roundEnd', tie: true })
   })
@@ -282,7 +287,7 @@ describe('rounds and points', () => {
         points: player.id === 'a' ? 0 : BURST_AT,
       })),
     }
-    game = resetToLobby(playCard(game, 'a', { cardId: 'sun-6-0' }, rng), 'a')
+    game = resetToLobby(playCard(game, A, { cardId: 'sun-6-0' }, rng), A)
     expect(game.phase).toBe('lobby')
     expect(game.players.map((player) => player.points)).toEqual([0, 0, 0])
   })
@@ -303,7 +308,7 @@ describe('bots', () => {
     expect(chooseBotMove(game)).toEqual({ type: 'play', input: { cardId: 'rain-4-0' } })
     game = setup(table(), [[num('rain', 1)]], num('sun', 5))
     expect(chooseBotMove(game)).toEqual({ type: 'draw' })
-    expect(chooseBotMove(drawCard({ ...game, deck: [num('wind', 8)] }, 'a', rng))).toEqual({
+    expect(chooseBotMove(drawCard({ ...game, deck: [num('wind', 8)] }, A, rng))).toEqual({
       type: 'pass',
     })
   })
@@ -334,11 +339,11 @@ describe('bots', () => {
       let game = createGame()
       const playerCount = 2 + (run % 5)
       for (let i = 0; i < playerCount; i++) {
-        game = addPlayer(game, `p${i}`, `P${i}`, i > 0)
+        game = addPlayer(game, toPlayerId(`p${i}`), `P${i}`, i > 0)
       }
 
       const lobby = game
-      game = startGame(game, 'p0', random)
+      game = startGame(game, P0, random)
       const log: LogEntry[] = logEvents(lobby, game)
       let steps = 0
       while (game.phase === 'playing' && steps < 5000) {

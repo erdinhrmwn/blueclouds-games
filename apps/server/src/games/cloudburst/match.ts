@@ -1,6 +1,7 @@
 // Cloudburst, layer 2 (rules): the move log and the match result, from the game's states. Pure.
 
 import type { Card } from 'contracts/rooms/cloudburst'
+import type { PlayerId } from '../../core/domain/ids'
 import type {
   LogEntry,
   LogEvent,
@@ -56,7 +57,7 @@ export function buildReport(
 }
 
 /** Where everyone stands mid-game: fewest points first, then by seat. */
-function standings(game: Game): Map<string, number> {
+function standings(game: Game): Map<PlayerId, number> {
   const bestFirst = [...game.players].sort((a, b) => a.points - b.points || a.seat - b.seat)
 
   return placementsInOrder(bestFirst)
@@ -74,6 +75,7 @@ export function logEvents(before: Game, after: Game, auto = false): LogEntry[] {
   }
 
   const event = after.lastEvent
+  // Event ids come from contracts as plain strings: a lookup only.
   const seatOf = (id: string) => after.players.find((player) => player.id === id)!.seat
   const mover = before.phase === 'playing' ? before.players[before.turn] : undefined
   const by = mover ? moveBy(mover, auto) : 'player'

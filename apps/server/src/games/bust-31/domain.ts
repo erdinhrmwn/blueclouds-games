@@ -3,11 +3,12 @@
 
 import type { Avatar } from 'contracts/avatars'
 import type { Card, GameEvent } from 'contracts/rooms/bust-31'
+import type { PlayerId } from '../../core/domain/ids'
 import type { MatchState as SharedMatch } from '../../core/domain/match'
 import type { Finished, InLobby, InPlay } from '../../core/domain/table'
 
 export interface Player {
-  id: string
+  id: PlayerId
   name: string
   lives: number
   hand: Card[]
@@ -22,7 +23,7 @@ export interface Player {
 
 /** What a game holds in every phase. */
 interface GameState {
-  hostId: string | null
+  hostId: PlayerId | null
   players: Player[]
   deck: Card[]
   discard: Card[]
@@ -47,7 +48,7 @@ export type Game = LobbyGame | PlayingGame | FinishedGame
 
 /** The match in progress. `out` lists player ids in the order they were eliminated. */
 export interface MatchState extends SharedMatch {
-  out: string[]
+  out: PlayerId[]
 }
 
 /** Plays a card from your hand. */

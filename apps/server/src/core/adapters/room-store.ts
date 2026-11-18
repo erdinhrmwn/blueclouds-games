@@ -1,6 +1,7 @@
 // Layer 4, adapter: the room's own SQLite (the actor's `c.db`), behind RoomStorePort. One JSON row for the whole
 // room (a few KB), the move log of the running match, and the outbox of rounds and results for the platform.
 
+import { toMatchId } from '../domain/ids'
 import type { LogEvent, MatchReport, RoundReport } from '../domain/match'
 import type { QueuedMatch, QueuedRound, RoomStorePort, RoomTransaction } from '../domain/ports'
 
@@ -112,7 +113,7 @@ export function sqliteRoomStore(database: SqlDatabase): RoomStorePort {
       )
 
       return rows.map((row): QueuedRound => ({
-        matchId: row.match_id,
+        matchId: toMatchId(row.match_id),
         round: row.round,
         report: JSON.parse(row.body) as RoundReport,
         body: row.body,
@@ -127,7 +128,7 @@ export function sqliteRoomStore(database: SqlDatabase): RoomStorePort {
       )
 
       return rows.map((row): QueuedMatch => ({
-        matchId: row.match_id,
+        matchId: toMatchId(row.match_id),
         report: JSON.parse(row.body) as MatchReport,
         body: row.body,
         attempts: row.attempts,

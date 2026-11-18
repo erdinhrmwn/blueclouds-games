@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, setSystemTime, test } from 'bun:test'
 import { NO_AVATAR } from 'contracts/avatars'
 import type { Game, MatchState } from '../../games/bust-31/domain'
 import { addPlayer, createGame } from '../../games/bust-31/rules'
+import { type PlayerId, toPlayerId } from '../domain/ids'
 import type { PlatformRoom, PlatformSeat } from '../domain/ports'
 import { LATE_GRACE_MS } from '../rules/tournament'
 import { requireOpenTable } from './access'
@@ -23,11 +24,12 @@ const platform = fakePlatform({
 })
 
 const START = Date.parse('2026-11-11T20:00:00Z')
-const ANN = '01900000-0000-7000-8000-0000000000a1'
-const BEN = '01900000-0000-7000-8000-0000000000b2'
-const CY = '01900000-0000-7000-8000-0000000000c3'
+const ANN = toPlayerId('01900000-0000-7000-8000-0000000000a1')
+const BEN = toPlayerId('01900000-0000-7000-8000-0000000000b2')
+const CY = toPlayerId('01900000-0000-7000-8000-0000000000c3')
+const DEE = toPlayerId('01900000-0000-7000-8000-0000000000ff')
 
-const seat = (playerId: string, chair: number, botName?: string): PlatformSeat => ({
+const seat = (playerId: PlayerId, chair: number, botName?: string): PlatformSeat => ({
   playerId,
   seat: chair,
   bot: botName !== undefined,
@@ -81,14 +83,14 @@ function runner(c: RoomCtx<Game, MatchState>) {
       commit: async () => {
         calls.commits += 1
       },
-      seatBot: (id: string, name: string, chair: number | null) => {
+      seatBot: (id: PlayerId, name: string, chair: number | null) => {
         c.vars.game = addPlayer(c.vars.game, id, name, true, chair ?? undefined)
       },
     },
   }
 }
 
-const sit = (c: RoomCtx<Game, MatchState>, ...ids: string[]) => {
+const sit = (c: RoomCtx<Game, MatchState>, ...ids: PlayerId[]) => {
   ids.forEach((id, index) => {
     c.vars.game = addPlayer(c.vars.game, id, `P${index}`, false, index)
   })
@@ -109,7 +111,7 @@ test('only assigned players sit, each on their own seat; host controls are off',
     seatFor(
       c,
       {
-        id: '01900000-0000-7000-8000-0000000000ff',
+        id: DEE,
         name: 'Dee',
         vip: false,
         avatar: NO_AVATAR,

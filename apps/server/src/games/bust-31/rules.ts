@@ -12,6 +12,7 @@ import {
   START_LIVES,
 } from 'contracts/rooms/bust-31'
 import type { TurnClock } from 'contracts/rooms/room'
+import type { PlayerId } from '../../core/domain/ids'
 import { type Rng, RuleError } from '../../core/domain/table'
 import { nextIndex, seatPlayer, shuffle } from '../../core/rules/table'
 import type { Action, Game, Player, PlayingGame } from './domain'
@@ -80,7 +81,13 @@ export function totalAfter(total: number, card: Card): number {
 }
 
 /** Sits a new player in `seat`, or in the first free one when no seat is given. */
-export function addPlayer(game: Game, id: string, name: string, bot = false, seat?: number): Game {
+export function addPlayer(
+  game: Game,
+  id: PlayerId,
+  name: string,
+  bot = false,
+  seat?: number,
+): Game {
   if (game.players.some((player) => player.id === id)) {
     return game
   }
@@ -91,7 +98,7 @@ export function addPlayer(game: Game, id: string, name: string, bot = false, sea
   return { ...seated, lastEvent: { type: 'joined', playerId: id } }
 }
 
-export function startGame(game: Game, byId: string | null, rng: Rng): Game {
+export function startGame(game: Game, byId: PlayerId | null, rng: Rng): Game {
   if (game.hostId !== byId) {
     throw new RuleError('Only the host can start the game.')
   }
@@ -111,7 +118,7 @@ export function startGame(game: Game, byId: string | null, rng: Rng): Game {
   return { ...dealt, lastEvent: { type: 'started' }, moves: game.moves + 1 }
 }
 
-export function playCard(game: Game, playerId: string, cardId: string, rng: Rng): Game {
+export function playCard(game: Game, playerId: PlayerId, cardId: string, rng: Rng): Game {
   if (game.phase !== 'playing') {
     throw new RuleError('The game has not started yet.')
   }
@@ -245,7 +252,7 @@ function bust(
 }
 
 /** Host sends everyone back to the lobby after a finished game. */
-export function resetToLobby(game: Game, byId: string): Game {
+export function resetToLobby(game: Game, byId: PlayerId): Game {
   if (game.hostId !== byId) {
     throw new RuleError('Only the host can start over.')
   }
@@ -353,12 +360,12 @@ export function dealPauseMs(game: Game): number {
   return bustStampMs + dealMs + DEAL_SETTLE_MS
 }
 
-export function handOf(game: Game, playerId: string): Card[] {
+export function handOf(game: Game, playerId: PlayerId): Card[] {
   return game.players.find((player) => player.id === playerId)?.hand ?? []
 }
 
 /** A player's move, whichever it is. */
-export function applyAction(game: Game, playerId: string, action: Action, rng: Rng): Game {
+export function applyAction(game: Game, playerId: PlayerId, action: Action, rng: Rng): Game {
   switch (action.type) {
     case 'play':
       return playCard(game, playerId, action.cardId, rng)

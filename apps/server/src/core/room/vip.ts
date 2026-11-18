@@ -1,6 +1,7 @@
 // Layer 3, room: VIP tags follow the platform. While anyone is connected the room asks again every so often, so a
 // grant or revoke reaches seated players' tags.
 
+import type { PlayerId } from '../domain/ids'
 import type { MatchState } from '../domain/match'
 import type { PlatformPort } from '../domain/ports'
 import type { GameTable } from '../domain/table'
@@ -48,7 +49,7 @@ export async function refreshVips<G extends GameTable, M extends MatchState>(
     return false
   }
 
-  let vipIds: Set<string>
+  let vipIds: Set<PlayerId>
   try {
     vipIds = await platform.fetchVipIds(humanIds)
   } catch (err) {

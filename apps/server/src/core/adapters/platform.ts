@@ -3,6 +3,7 @@ import { type ClientRequestOptions, hc } from 'hono/client'
 import { importJWK, jwtVerify } from 'jose'
 import type { AppType } from 'platform/rpc'
 import { z } from 'zod'
+import { type MatchId, type PlayerId, toPlayerId } from '../domain/ids'
 import type { MatchReport, RoundReport } from '../domain/match'
 import type {
   CloseReason,
@@ -44,8 +45,11 @@ const MAX_DETAIL_LENGTH = 500
 /** Statuses for a body the platform will never accept, so retrying is pointless. */
 const REJECTED_STATUSES = [400, 409, 422]
 
+/** A player's account id, as the platform sends it. */
+const PlayerIdSchema = z.uuid().transform(toPlayerId)
+
 const Claims = z.object({
-  sub: z.uuid(),
+  sub: PlayerIdSchema,
   name: z.string().trim().min(1).max(20),
   // Tokens signed before the platform added it have no flag.
   vip: z.boolean().default(false),
@@ -119,7 +123,7 @@ function reportMatch(report: MatchReport): Promise<SendResult> {
 }
 
 /** Sends a closed round of a running or finished match (rounds.ts); answered like `reportMatch`. */
-function reportRound(matchId: string, round: RoundReport): Promise<SendResult> {
+function reportRound(matchId: MatchId, round: RoundReport): Promise<SendResult> {
   const param = { id: encodeURIComponent(matchId) }
 
   return send(() =>
@@ -167,7 +171,7 @@ const TournamentRoom = z.object({
     .nullable(),
   seats: z.array(
     z.object({
-      playerId: z.uuid(),
+      playerId: PlayerIdSchema,
       seat: z.number().int().min(0).nullable(),
       /** A bot account the platform signed up to fill the tables; the room plays its seat. */
       bot: z.boolean().default(false),
@@ -224,10 +228,10 @@ async function fetchRoomSeats(code: string): Promise<PlatformRoom | null> {
 }
 
 const RoomSeatsAnswer = z.object({ data: z.object({ room: z.unknown() }) })
-const VipIds = z.object({ data: z.object({ vipIds: z.array(z.uuid()) }) })
+const VipIds = z.object({ data: z.object({ vipIds: z.array(PlayerIdSchema) }) })
 
 /** Which of these players are VIP right now. Throws if the platform can't be reached. */
-async function fetchVipIds(ids: string[]): Promise<Set<string>> {
+async function fetchVipIds(ids: PlayerId[]): Promise<Set<PlayerId>> {
   const query = { ids: ids.join(',') }
   const res = await platform().players.vips.$get({ query }, requestOptions())
   if (!res.ok) {

@@ -2,6 +2,7 @@
 
 import type { MatchSeeds } from 'contracts/fairness/fairness'
 import type { Phase } from 'contracts/rooms/room'
+import type { PlayerId } from '../domain/ids'
 import type {
   LogEntry,
   LogEvent,
@@ -10,6 +11,7 @@ import type {
   MoveBy,
   ReportedSeat,
 } from '../domain/match'
+import type { Seated } from '../domain/table'
 
 /** `auto` is true when the server made the move (a bot, a timeout, or an away player). */
 export function moveBy(mover: { bot: boolean; away?: boolean }, auto: boolean): MoveBy {
@@ -28,7 +30,7 @@ export function moveBy(mover: { bot: boolean; away?: boolean }, auto: boolean): 
  * Placements from a best-first order of players: 1, 2, 3, … with no shared place, so a terminated match still has
  * exactly one first place. Players the order leaves out are not expected.
  */
-export function placementsInOrder(bestFirst: { id: string }[]): Map<string, number> {
+export function placementsInOrder(bestFirst: { id: PlayerId }[]): Map<PlayerId, number> {
   return new Map(bestFirst.map((player, index) => [player.id, index + 1]))
 }
 
@@ -53,7 +55,7 @@ export function stamp<M extends MatchState>(
  * the platform signed up for a tournament is a player like anyone: it reports under its own id, so its finish
  * counts in the tournament and its prize can be paid.
  */
-export function reportedSeat(player: { id: string; name: string; bot: boolean }): ReportedSeat {
+export function reportedSeat(player: Seated): ReportedSeat {
   const tableBot = player.bot && player.id.startsWith('bot-')
   if (tableBot) {
     return { playerId: null, bot: true, botName: player.name }

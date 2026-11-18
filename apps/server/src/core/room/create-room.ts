@@ -8,6 +8,7 @@ import { db } from 'rivetkit/db'
 import { type AdapterCtx, roomPorts } from '../adapters/ports'
 import { migrateRoom } from '../adapters/room-store'
 import type { GameDefinition } from '../domain/game'
+import { type PlayerId, toPlayerId } from '../domain/ids'
 import type { LogEntry, MatchState } from '../domain/match'
 import type { RoomPorts } from '../domain/ports'
 import type { CurrentTurn } from '../domain/room'
@@ -138,7 +139,7 @@ export function createRoom<
   }
 
   /** Starts the match; `by` must be the host. */
-  const begin = (c: RoomCtx<G, M>, by: string | null) => {
+  const begin = (c: RoomCtx<G, M>, by: PlayerId | null) => {
     beginMatch(c, game.newMatch(), (rng) => game.startGame(c.vars.game, by, rng))
   }
 
@@ -146,7 +147,7 @@ export function createRoom<
   const tournamentSteps = (c: Ctx) => ({
     start: () => begin(c, c.vars.game.hostId),
     commit: () => commit(c),
-    seatBot: (id: string, name: string, seat: number | null) => {
+    seatBot: (id: PlayerId, name: string, seat: number | null) => {
       c.vars.game = apply(() => game.addPlayer(c.vars.game, id, name, true, seat ?? undefined))
     },
   })
@@ -245,7 +246,7 @@ export function createRoom<
         requireOpenTable(c)
         requireHost(c)
         const seat = parseSeat(seatInput)
-        const botId = `bot-${crypto.randomUUID()}`
+        const botId = toPlayerId(`bot-${crypto.randomUUID()}`)
         const name = botName(c.vars.game.players)
 
         c.vars.game = apply(() => game.addPlayer(c.vars.game, botId, name, true, seat))
@@ -264,7 +265,7 @@ export function createRoom<
       removeBot: async (c: Act, botId: unknown) => {
         requireOpenTable(c)
         requireHost(c)
-        const id = BotIdInput.parse(botId)
+        const id = toPlayerId(BotIdInput.parse(botId))
         const bot = c.vars.game.players.find((player) => player.id === id)
         if (!bot?.bot) {
           throw new UserError('Bot not found.', { code: 'rule' })
@@ -282,7 +283,7 @@ export function createRoom<
 
         const kick = kickFromTable(c, seat, { kind: 'host', hostId })
         await commit(c, false, kick.entries)
-        await closeKicked(c, kick.result.playerId, currentTurn(c))
+        await closeKicked(c, kick.playerId, currentTurn(c))
       },
 
       /** Backoffice only: kicks a player off the table, in the lobby or mid-game. */
@@ -298,7 +299,7 @@ export function createRoom<
           reason: parsed.data.reason,
         })
         await commit(c, false, kick.entries)
-        await closeKicked(c, kick.result.playerId, currentTurn(c))
+        await closeKicked(c, kick.playerId, currentTurn(c))
 
         return kick.result
       },

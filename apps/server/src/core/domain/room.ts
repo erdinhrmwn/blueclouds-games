@@ -3,12 +3,13 @@
 import type { Avatar } from 'contracts/avatars'
 import type { RoundSeed } from 'contracts/fairness/fairness'
 import type { TournamentFormat } from 'contracts/rooms/room'
+import type { MatchId, PlayerId } from './ids'
 import type { LogEntry, MatchState } from './match'
 import type { Table } from './table'
 
 /** Who a connection is, from its play token. */
 export interface Identity {
-  id: string
+  id: PlayerId
   name: string
   vip: boolean
   avatar: Avatar
@@ -23,7 +24,7 @@ export interface TurnTimer {
 
 /** The running turn: whose it is and its key, for scheduling a move made for them. */
 export interface CurrentTurn {
-  playerId: string | null
+  playerId: PlayerId | null
   key: number
 }
 
@@ -55,7 +56,7 @@ export interface Termination {
 
 /** The next match, fixed before anyone sits down for it: its id and the commitment of its first round. */
 export interface NextMatch {
-  matchId: string
+  matchId: MatchId
   firstRound: RoundSeed
 }
 
@@ -72,11 +73,11 @@ export interface SavedRoom<G extends Table, M extends MatchState = MatchState> {
   match: M | null
   tournament?: TournamentRoom | null
   listed?: boolean
-  kicked?: string[]
+  kicked?: PlayerId[]
   terminated?: Termination | null
   next?: NextMatch
   /** The last match played here, so the table can still show its rounds once it ended. */
-  lastMatchId?: string | null
+  lastMatchId?: MatchId | null
   /** The table's own name, from the platform (null: none was picked). */
   roomName?: string | null
 }
@@ -91,7 +92,7 @@ export interface RoomVars<G extends Table, M extends MatchState = MatchState> ex
   G,
   M
 > {
-  kicked: string[]
+  kicked: PlayerId[]
   terminated: Termination | null
   next: NextMatch
   who: Record<string, Identity>

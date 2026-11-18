@@ -3,11 +3,12 @@
 
 import type { Avatar } from 'contracts/avatars'
 import type { Card, GameEvent, PlayInput, Suit } from 'contracts/rooms/cloudburst'
+import type { PlayerId } from '../../core/domain/ids'
 import type { MatchState as SharedMatch } from '../../core/domain/match'
 import type { Finished, InLobby, InPlay } from '../../core/domain/table'
 
 export interface Player {
-  id: string
+  id: PlayerId
   name: string
   bot: boolean
   /** Fixed chair at the table, 0 to SEATS - 1. Turns go up the seat numbers (clockwise). */
@@ -22,7 +23,7 @@ export interface Player {
 
 /** What a game holds in every phase. */
 interface GameState {
-  hostId: string | null
+  hostId: PlayerId | null
   players: Player[]
   deck: Card[]
   discard: Card[]

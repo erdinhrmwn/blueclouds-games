@@ -14,6 +14,7 @@ import {
   type RoundSeed,
   type ShuffleRecord,
 } from 'contracts/fairness/fairness'
+import { toMatchId } from '../domain/ids'
 import type { NextMatch } from '../domain/room'
 import type { Rng } from '../domain/table'
 
@@ -28,7 +29,7 @@ export function newRoundSeed(): RoundSeed {
 }
 
 export function newCommitment(): NextMatch {
-  return { matchId: Bun.randomUUIDv7(), firstRound: newRoundSeed() }
+  return { matchId: toMatchId(Bun.randomUUIDv7()), firstRound: newRoundSeed() }
 }
 
 /** A match's seeds before its first deal: round 1 plays on the commitment the table showed in the lobby. */

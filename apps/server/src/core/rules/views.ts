@@ -3,6 +3,7 @@
 
 import { clientSeedOf } from 'contracts/fairness/fairness'
 import type { FairnessView, TournamentView, TurnClock } from 'contracts/rooms/room'
+import type { MatchId } from '../domain/ids'
 import type { MatchState } from '../domain/match'
 import type { NextMatch, TournamentRoom, TurnTimer } from '../domain/room'
 import { LATE_GRACE_MS } from './tournament'
@@ -46,7 +47,7 @@ export function tournamentView(
 export interface FairnessState {
   match: MatchState | null
   next: NextMatch
-  lastMatchId?: string | null
+  lastMatchId?: MatchId | null
 }
 
 /**

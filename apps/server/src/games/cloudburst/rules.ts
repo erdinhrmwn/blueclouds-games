@@ -17,6 +17,7 @@ import {
   SUITS,
 } from 'contracts/rooms/cloudburst'
 import type { TurnClock } from 'contracts/rooms/room'
+import type { PlayerId } from '../../core/domain/ids'
 import { type Rng, RuleError } from '../../core/domain/table'
 import { nextIndex, seatPlayer, shuffle } from '../../core/rules/table'
 import type { Action, Game, Player, PlayingGame } from './domain'
@@ -79,7 +80,13 @@ export function buildDeck(): Card[] {
 }
 
 /** Sits a new player in `seat`, or in the first free one when no seat is given. */
-export function addPlayer(game: Game, id: string, name: string, bot = false, seat?: number): Game {
+export function addPlayer(
+  game: Game,
+  id: PlayerId,
+  name: string,
+  bot = false,
+  seat?: number,
+): Game {
   if (game.players.some((player) => player.id === id)) {
     return game
   }
@@ -88,7 +95,7 @@ export function addPlayer(game: Game, id: string, name: string, bot = false, sea
   return { ...seated, lastEvent: { type: 'joined', playerId: id } }
 }
 
-export function startGame(game: Game, byId: string | null, rng: Rng): Game {
+export function startGame(game: Game, byId: PlayerId | null, rng: Rng): Game {
   if (game.hostId !== byId) {
     throw new RuleError('Only the host can start the game.')
   }
@@ -115,7 +122,7 @@ function requirePlaying(game: Game): asserts game is PlayingGame {
   }
 }
 
-function currentPlayer(game: PlayingGame, playerId: string): Player {
+function currentPlayer(game: PlayingGame, playerId: PlayerId): Player {
   const current = game.players[game.turn]
   if (current?.id !== playerId) {
     throw new RuleError('It is not your turn yet.')
@@ -124,7 +131,7 @@ function currentPlayer(game: PlayingGame, playerId: string): Player {
   return current
 }
 
-export function playCard(game: Game, playerId: string, input: PlayInput, rng: Rng): Game {
+export function playCard(game: Game, playerId: PlayerId, input: PlayInput, rng: Rng): Game {
   requirePlaying(game)
   const current = currentPlayer(game, playerId)
   const card = current.hand.find((held) => held.id === input.cardId)
@@ -252,7 +259,7 @@ function forceDraw(game: Game, seatIndex: number, count: number, rng: Rng): Game
 }
 
 /** Draws one card. Afterwards the player may play that card (if it fits) or pass. */
-export function drawCard(game: Game, playerId: string, rng: Rng): Game {
+export function drawCard(game: Game, playerId: PlayerId, rng: Rng): Game {
   requirePlaying(game)
   const current = currentPlayer(game, playerId)
   if (game.drew) {
@@ -288,7 +295,7 @@ export function drawCard(game: Game, playerId: string, rng: Rng): Game {
 }
 
 /** Ends your turn without playing. Only after drawing. */
-export function pass(game: Game, playerId: string): Game {
+export function pass(game: Game, playerId: PlayerId): Game {
   requirePlaying(game)
   currentPlayer(game, playerId)
   if (!game.drew) {
@@ -307,7 +314,7 @@ export function pass(game: Game, playerId: string): Game {
 }
 
 /** Someone went out: everyone else takes a point per card left. Then a new round, or the end of the match. */
-function endRound(game: PlayingGame, outId: string, card: Card, rng: Rng): Game {
+function endRound(game: PlayingGame, outId: PlayerId, card: Card, rng: Rng): Game {
   const gained: Record<string, number> = {}
   const left: Record<string, Card[]> = {}
   const players = game.players.map((player) => {
@@ -377,7 +384,7 @@ function dealRound(game: PlayingGame, rng: Rng): PlayingGame {
 }
 
 /** Host sends everyone back to the lobby after a finished game. */
-export function resetToLobby(game: Game, byId: string): Game {
+export function resetToLobby(game: Game, byId: PlayerId): Game {
   if (game.hostId !== byId) {
     throw new RuleError('Only the host can start over.')
   }
@@ -401,7 +408,7 @@ export function resetToLobby(game: Game, byId: string): Game {
 }
 
 /** Places by points, fewest first; equal points share a place (1st is never shared). */
-export function placements(game: Game): Map<string, number> {
+export function placements(game: Game): Map<PlayerId, number> {
   const placeOf = (player: Player) => {
     const ahead = game.players.filter((other) => other.points < player.points).length
     return 1 + ahead
@@ -447,7 +454,7 @@ export function publicView(game: Game, turn: TurnClock | null = null): PublicVie
 }
 
 /** Your own hand, plus the card you just drew (the only one you may play now). */
-export function handOf(game: Game, playerId: string): { cards: Card[]; drawnId: string | null } {
+export function handOf(game: Game, playerId: PlayerId): { cards: Card[]; drawnId: string | null } {
   const myTurn = game.phase === 'playing' && game.players[game.turn]?.id === playerId
   const me = game.players.find((player) => player.id === playerId)
 
@@ -477,7 +484,7 @@ export function dealPauseMs(game: Game): number {
 }
 
 /** A player's move, whichever it is. */
-export function applyAction(game: Game, playerId: string, action: Action, rng: Rng): Game {
+export function applyAction(game: Game, playerId: PlayerId, action: Action, rng: Rng): Game {
   switch (action.type) {
     case 'play':
       return playCard(game, playerId, action.input, rng)
