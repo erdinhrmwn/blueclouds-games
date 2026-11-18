@@ -46,7 +46,7 @@ export const MAX_BOTS = 5
 /** Bots only top up a tournament whose people already fill this share of it (Erdin, 2026-11-14). */
 export const BOTS_FROM_SHARE = 0.8
 
-export type BotInput = {
+export interface BotInput {
   /** Everyone signed up so far, bots included. */
   registered: number
   /** Those who aren't bots. */

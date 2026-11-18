@@ -28,7 +28,7 @@ const Env = DbEnv.extend({
 })
 
 /** Connection options in the shape `new SQL(...)` takes. */
-export type DbConfig = {
+export interface DbConfig {
   hostname: string
   port: number
   username: string
@@ -36,7 +36,7 @@ export type DbConfig = {
   database: string
 }
 
-export type Config = {
+export interface Config {
   db: DbConfig
   playTokenPrivateKey: string
   serverKey: string

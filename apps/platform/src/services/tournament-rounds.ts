@@ -9,7 +9,7 @@
  */
 
 /** One player's seat in one round, and where they finished at that table; null when they didn't play it. */
-export type RoundSeat = {
+export interface RoundSeat {
   playerId: string
   round: number
   placement: number | null
@@ -17,7 +17,7 @@ export type RoundSeat = {
   tableSize: number
 }
 
-export type FinalPlace = {
+export interface FinalPlace {
   playerId: string
   place: number
   /** Tables won across every round. */
@@ -41,7 +41,12 @@ export function matchPoints(seat: RoundSeat): number {
 }
 
 /** Running totals per player across every round played so far. */
-type Tally = { playerId: string; points: number; wins: number; placements: number[] }
+interface Tally {
+  playerId: string
+  points: number
+  wins: number
+  placements: number[]
+}
 
 function tally(seats: RoundSeat[]): Map<string, Tally> {
   const totals = new Map<string, Tally>()
@@ -159,13 +164,14 @@ export function finalPlaces(
   /** The one player left standing, when the last round left exactly one: 1st whatever the rest says. */
   championId: string | null = null,
 ): FinalPlace[] {
-  type Run = {
+  interface Run {
     playerId: string
     lastRound: number
     lastPlacement: number | null
     wins: number
     played: boolean
   }
+
   const runs = new Map<string, Run>()
 
   for (const seat of seats) {

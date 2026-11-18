@@ -6,8 +6,12 @@ import { SignJWT } from 'jose'
 export const PLAY_TOKEN_AUDIENCE = 'blueclouds-rooms'
 export const PLAY_TOKEN_TTL_SECONDS = 15 * 60
 
-export type PlayToken = { token: string; expiresAt: string }
-export type Signer = {
+export interface PlayToken {
+  token: string
+  expiresAt: string
+}
+
+export interface Signer {
   sign: (player: { id: string; name: string; vip: boolean; avatar: Avatar }) => Promise<PlayToken>
 }
 

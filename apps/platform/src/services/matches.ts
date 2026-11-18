@@ -257,7 +257,7 @@ export interface GameStats {
   rounds: { played: number; won: number | null }
 }
 
-type StatsRow = {
+interface StatsRow {
   game: string
   played: number
   wins: number
@@ -374,6 +374,19 @@ export interface MatchPage {
   nextCursor: string | null
 }
 
+interface HistoryRow {
+  id: string
+  game_slug: string
+  room_code: string
+  started_at: Date
+  ended_at: Date
+  end_reason: MatchSummary['endReason']
+  seat: number
+  placement: number
+  score: number
+  players: number
+}
+
 /** The player's own history, newest first, of one game or all. Cursor = last match id of the previous page. */
 export async function history(
   sql: SQL,
@@ -413,7 +426,7 @@ export async function history(
   const hasMore = rows.length > HISTORY_PAGE
 
   return {
-    matches: page.map((row: any) => ({
+    matches: page.map((row: HistoryRow) => ({
       id: row.id,
       game: row.game_slug,
       roomCode: row.room_code,

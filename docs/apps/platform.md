@@ -64,7 +64,13 @@ apps/platform/
     routes/         # HTTP only: Zod input schemas, auth, rate limits, status codes, ok(c, …)
       players.ts  rooms.ts  tournaments.ts  matches.ts   (+ *.test.ts, through the HTTP API)
     services/       # business rules + SQL, as plain functions taking `sql` first
-      players.ts  guests.ts  rooms.ts  tournaments.ts  matches.ts
+      players.ts  guests.ts  rooms.ts  matches.ts  rounds.ts  coins.ts  games.ts
+      tournaments.ts         # running them: tables, rounds, the every-minute job
+      tournament-signups.ts  # the lobby's open tournaments, joining and leaving
+      tournament-live.ts     # live board and standings
+      tournament-rounds.ts   # points and final places (pure)
+      tournament-bots.ts     # filling tournaments with bots
+      player-tournaments.ts  # a player's seats and tournament history
     middleware/     # auth.ts (player secret, server key), rate-limit.ts
     jobs/           # index.ts: Bun.cron schedules, tournament job (every minute), guest sweep (daily)
     lib/            # http.ts (envelope, ApiError, parse), log.ts, secrets.ts, play-tokens.ts
@@ -80,4 +86,5 @@ Rules of the layout:
 - There is no repository layer: the queries are short and each runs in one place, so it would only pass calls through. If one service's SQL grows large, give that service its own file of queries.
 - A schema the service also depends on lives with the service (`MatchReport` in `services/matches.ts`, since the stored hash is built from it); every other input schema lives in its route.
 - No index files: import the file you need.
+- Query rows are typed with a snake_case `interface …Row` next to the query, never `any`.
 - To add an endpoint: put the handler in `routes/<feature>.ts`, its logic in `services/<feature>.ts`, and a test next to the route. A new feature gets one file in each folder and is mounted in `app.ts`.

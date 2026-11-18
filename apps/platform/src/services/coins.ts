@@ -124,6 +124,23 @@ export interface CoinChange {
   tournament: { id: string; name: string; cancelled: boolean } | null
 }
 
+/** A coin_ledger row as coinHistory reads it. Bun returns bigint columns as strings. */
+interface LedgerColumns {
+  id: string
+  amount: string
+  balance_after: string
+  reason: CoinReason
+  note: string | null
+  created_at: Date
+}
+
+/** The LEFT JOIN on tournaments: all three columns are set, or all are null. */
+type LedgerTournament =
+  | { tournament_id: string; tournament_name: string; tournament_cancelled: boolean }
+  | { tournament_id: null; tournament_name: null; tournament_cancelled: null }
+
+type LedgerRow = LedgerColumns & LedgerTournament
+
 /** A player's coin history, newest first; `before` is the last id of the previous page. */
 export async function coinHistory(
   sql: SQL,
@@ -149,11 +166,11 @@ export async function coinHistory(
 		ORDER BY cl.id DESC
 		LIMIT ${HISTORY_PAGE}`
 
-  return rows.map((row: any) => ({
+  return rows.map((row: LedgerRow) => ({
     id: row.id,
     amount: Number(row.amount),
     balanceAfter: Number(row.balance_after),
-    reason: row.reason as CoinReason,
+    reason: row.reason,
     note: row.note,
     at: row.created_at.toISOString(),
     tournament: row.tournament_id
