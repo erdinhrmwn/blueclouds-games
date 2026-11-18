@@ -1,6 +1,6 @@
 <script lang="ts">
   import { gameBySlug } from '#lib/games/catalog.ts'
-  import type { MyTournament, TournamentRecord } from '#lib/server/platform.ts'
+  import type { MyTournament, TournamentRecord } from '#lib/server/platform/history.ts'
   import { FORMATS, ordinal } from '#lib/tournament-formats.ts'
   import { day } from '#lib/when.ts'
 

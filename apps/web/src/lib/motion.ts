@@ -69,18 +69,21 @@ export function shake(node: HTMLElement | undefined): void {
   node.animate(frames, { duration: SHAKE_MS, easing: 'ease-out' })
 }
 
-type Countdown = { ms: number; total: number } | null
+interface Countdown {
+  ms: number
+  total: number
+}
 
 /**
  * Drains a timer ring (stroke-dashoffset) every frame with the Web Animations API.
  * A new value restarts the animation only when the deadline really moved, so the frequent
  * re-renders around it (seconds label ticking, server echoes) never make it jump.
  */
-export function countdown(node: Element, params: Countdown) {
+export function countdown(node: Element, params: Countdown | null) {
   let anim: Animation | undefined
   let endsAt = 0
 
-  function run(timer: Countdown) {
+  function run(timer: Countdown | null) {
     if (!timer) {
       anim?.cancel()
       anim = undefined

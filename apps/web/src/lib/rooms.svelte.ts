@@ -1,7 +1,10 @@
 import type { RoomSummary } from 'contracts/rooms/room'
+import { fetchOpenTables } from '#lib/platform.ts'
 
 /** A table as the public list shows it: the API leaves out who sits where. `game` says which game it plays. */
-export type OpenTable = Omit<RoomSummary, 'seats'> & { game: string }
+export interface OpenTable extends Omit<RoomSummary, 'seats'> {
+  game: string
+}
 
 // ponytail: polling, one request per game, because browsers can't reach the room list actor. Fine for a
 // handful of games; if it needs to be instant or the games grow many, stream one list from our server (SSE).
@@ -24,14 +27,8 @@ export class RoomList {
   }
 
   async #loadGame(game: string): Promise<OpenTable[]> {
-    const url = `/api/${encodeURIComponent(game)}/rooms`
-    const res = await fetch(url, { cache: 'no-store' })
-    if (!res.ok) {
-      throw new Error(`room list ${game} ${res.status}`)
-    }
-
-    const body = (await res.json()) as { rooms: Omit<OpenTable, 'game'>[] }
-    return body.rooms.map((room) => ({ ...room, game }))
+    const { rooms } = await fetchOpenTables(game)
+    return rooms.map((room) => ({ ...room, game }))
   }
 
   async #load() {

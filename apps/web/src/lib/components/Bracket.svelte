@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { BoardTable, TournamentBoard } from '#lib/server/platform.ts'
+  import type { BoardTable, TournamentBoard } from '#lib/server/platform/tournaments.ts'
   import { avatarTone, coins, ordinal } from '#lib/tournament-formats.ts'
 
   /**
@@ -103,7 +103,10 @@
   }
 
   // Lines between columns, measured from the cards once they are laid out.
-  type Point = { x: number; y: number }
+  interface Point {
+    x: number
+    y: number
+  }
   let canvas = $state<HTMLDivElement>()
   let paths = $state<{ d: string; strong: boolean }[]>([])
   let size = $state({ width: 0, height: 0 })

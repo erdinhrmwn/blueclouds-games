@@ -1,5 +1,6 @@
 import { json } from '@sveltejs/kit'
-import { failure, register } from '#lib/server/platform.ts'
+import { failure } from '#lib/server/platform/client.ts'
+import { register } from '#lib/server/platform/session.ts'
 import type { RequestHandler } from './$types'
 
 /** Creates an account; the platform checks the fields and answers with one message per field. */

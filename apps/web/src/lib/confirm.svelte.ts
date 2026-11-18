@@ -2,7 +2,7 @@
  * The site's own "are you sure?" dialog, in place of the browser's confirm(): one question at a time,
  * answered by ConfirmDialog.svelte (mounted once in the root layout).
  */
-export type Question = {
+export interface Question {
   title: string
   body: string
   /** The button that does it ("Kick", "Withdraw"); a danger button unless `tone` says otherwise. */

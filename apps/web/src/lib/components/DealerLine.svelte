@@ -15,7 +15,10 @@
   const HISTORY_SIZE = 2
   const MOTION_MS = 220
 
-  type Entry = { id: number; text: string }
+  interface Entry {
+    id: number
+    text: string
+  }
   let entries = $state<Entry[]>([])
   let lastKey = -1
 

@@ -1,5 +1,6 @@
 import { error } from '@sveltejs/kit'
-import { matchRounds, PlatformError } from '#lib/server/platform.ts'
+import { PlatformError } from '#lib/server/platform/client.ts'
+import { matchRounds } from '#lib/server/platform/history.ts'
 import type { PageServerLoad } from './$types'
 
 /** One match's rounds, running or finished. Matches are public: any player may open one. */

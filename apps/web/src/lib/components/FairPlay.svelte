@@ -4,7 +4,7 @@
   import type { BaseView } from 'contracts/rooms/room'
   import type { RoomConnection } from '#lib/rivet/room.svelte.ts'
   import { type Round, roundSummary, verifyRound } from '#lib/rounds.ts'
-  import type { MatchRounds } from '#lib/server/platform.ts'
+  import { fetchMatchRounds, PlatformError } from '#lib/platform.ts'
   import RoundDetail from './RoundDetail.svelte'
   import SeedField from './SeedField.svelte'
 
@@ -41,20 +41,16 @@
     }
 
     try {
-      const res = await fetch(`/api/matches/${matchId}/rounds`)
-      if (res.status === 404) {
+      const body = await fetchMatchRounds(matchId)
+      rounds = [...body.rounds].reverse()
+      await checkAll(matchId, body.rounds)
+    } catch (err) {
+      // No match on record yet: nothing to list.
+      if (err instanceof PlatformError && err.code === 'not_found') {
         rounds = []
         return
       }
 
-      if (!res.ok) {
-        throw new Error(`status ${res.status}`)
-      }
-
-      const body = (await res.json()) as MatchRounds
-      rounds = [...body.rounds].reverse()
-      await checkAll(matchId, body.rounds)
-    } catch {
       roundsError = 'Could not load the rounds.'
     }
   }

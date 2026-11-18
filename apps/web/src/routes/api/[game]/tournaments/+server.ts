@@ -1,5 +1,6 @@
 import { json } from '@sveltejs/kit'
-import { apiError, failure, tournamentsFor } from '#lib/server/platform.ts'
+import { apiError, failure } from '#lib/server/platform/client.ts'
+import { tournamentsFor } from '#lib/server/platform/tournaments.ts'
 import { hasRooms } from '#lib/server/rivet.ts'
 import type { RequestHandler } from './$types'
 

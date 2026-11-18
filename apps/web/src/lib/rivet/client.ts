@@ -1,7 +1,10 @@
 import { createClient } from 'rivetkit/client'
 import { PUBLIC_RIVET_ENDPOINT } from '$app/env/public'
 
-type RoomAccess = { actorId: string; token: string }
+interface RoomAccess {
+  actorId: string
+  token: string
+}
 
 /** The table exists for someone else, or not at all (a private table without an invite, another tournament's table). */
 export class RoomRefused extends Error {}

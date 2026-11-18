@@ -9,7 +9,7 @@ export function pointsText(points: number): string {
   return points === 1 ? '1 point' : `${points} points`
 }
 
-type Format = {
+interface Format {
   label: string
   note: string
   /** "How it plays" in the Detail dialog, given the players per table and (Arena, Swiss) the stages. */

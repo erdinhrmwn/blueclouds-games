@@ -7,7 +7,7 @@
   import type { Snippet } from 'svelte'
 
   /** What any game shows about a player in a seat. */
-  type SeatPlayer = {
+  interface SeatPlayer {
     id: string
     name: string
     bot: boolean

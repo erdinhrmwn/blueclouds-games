@@ -1,6 +1,7 @@
 import { json } from '@sveltejs/kit'
 import { isRoomCode } from '#lib/guest.ts'
-import { apiError, failure, resetInviteLink } from '#lib/server/platform.ts'
+import { apiError, failure } from '#lib/server/platform/client.ts'
+import { resetInviteLink } from '#lib/server/platform/rooms.ts'
 import type { RequestHandler } from './$types'
 
 /** The table's opener kills its invite link; the next ask makes a new one. */

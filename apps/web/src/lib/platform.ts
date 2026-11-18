@@ -1,12 +1,8 @@
 import type { Avatar } from 'contracts/avatars'
-import type {
-  CoinChange,
-  LiveTournament,
-  Standing,
-  Tournament,
-  TournamentTable,
-  Visibility,
-} from '#lib/server/platform.ts'
+import type { RoomSummary } from 'contracts/rooms/room'
+import type { CoinChange, MatchRounds } from '#lib/server/platform/history.ts'
+import type { Visibility } from '#lib/server/platform/rooms.ts'
+import type { GameTournaments, Standing } from '#lib/server/platform/tournaments.ts'
 
 /** The browser's side of the platform: our own /api routes, which call the platform server to server. */
 
@@ -26,8 +22,10 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 
   let res: Response
   try {
+    // Every answer is live (whose turn, which tables, the player's coins): never from the browser's cache.
     res = await fetch(path, {
       method,
+      cache: 'no-store',
       headers: hasBody ? { 'Content-Type': 'application/json' } : undefined,
       body: hasBody ? JSON.stringify(body) : undefined,
     })
@@ -51,7 +49,9 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 
 const post = <T>(path: string, body: unknown) => request<T>('POST', path, body)
 
-type AccountPlayer = { player: { name: string; username: string | null; guest: boolean } }
+interface AccountPlayer {
+  player: { name: string; username: string | null; guest: boolean }
+}
 
 const invitesPath = (game: string, code: string) =>
   `/api/${encodeURIComponent(game)}/rooms/${encodeURIComponent(code)}/invites`
@@ -82,9 +82,19 @@ export const createInvite = (game: string, code: string) =>
   post<{ token: string }>(invitesPath(game, code), {})
 export const resetInviteLink = (game: string, code: string) =>
   request<{ revoked: true }>('DELETE', `${invitesPath(game, code)}/link`)
+/** A game's public tables; the API leaves out who sits where. */
+export const fetchOpenTables = (game: string) =>
+  request<{ rooms: Omit<RoomSummary, 'seats'>[] }>('GET', `/api/${encodeURIComponent(game)}/rooms`)
+
+// Matches
+
+/** A match's rounds, running or finished (the Fair play dialog). */
+export const fetchMatchRounds = (matchId: string) =>
+  request<MatchRounds>('GET', `/api/matches/${encodeURIComponent(matchId)}/rounds`)
 
 // Tournaments
 
+export type { Visibility } from '#lib/server/platform/rooms.ts'
 export type {
   LiveTournament,
   Standing,
@@ -92,14 +102,10 @@ export type {
   TournamentFormat,
   TournamentPrize,
   TournamentTable,
-  Visibility,
-} from '#lib/server/platform.ts'
+} from '#lib/server/platform/tournaments.ts'
 export const fetchTournaments = (game: string) =>
-  request<{ tournaments: Tournament[]; live: LiveTournament[]; tables: TournamentTable[] }>(
-    'GET',
-    `/api/${encodeURIComponent(game)}/tournaments`,
-  )
-export type { CoinChange } from '#lib/server/platform.ts'
+  request<GameTournaments>('GET', `/api/${encodeURIComponent(game)}/tournaments`)
+export type { CoinChange } from '#lib/server/platform/history.ts'
 export const fetchCoins = (before: string | null = null) =>
   request<{ balance: number; history: CoinChange[] }>(
     'GET',

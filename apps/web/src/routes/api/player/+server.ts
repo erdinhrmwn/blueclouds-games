@@ -1,5 +1,6 @@
 import { json } from '@sveltejs/kit'
-import { failure, readName, savePlayerName } from '#lib/server/platform.ts'
+import { failure } from '#lib/server/platform/client.ts'
+import { readName, savePlayerName } from '#lib/server/platform/session.ts'
 import type { RequestHandler } from './$types'
 
 /** Renames an account (guests keep their generated name). */

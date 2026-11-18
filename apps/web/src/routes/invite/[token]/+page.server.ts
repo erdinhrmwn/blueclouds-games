@@ -1,5 +1,6 @@
 import { redirect } from '@sveltejs/kit'
-import { PlatformError, redeemInvite } from '#lib/server/platform.ts'
+import { PlatformError } from '#lib/server/platform/client.ts'
+import { redeemInvite } from '#lib/server/platform/rooms.ts'
 import type { PageServerLoad } from './$types'
 
 const TOKEN = /^[0-9a-f]{32}$/
