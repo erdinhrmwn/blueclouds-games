@@ -13,16 +13,19 @@ const REFRESH_MS = 5000
 /**
  * The open tables of the given games, refreshed every few seconds. Create it in the browser only.
  * One game failing to answer leaves the others listed; only when every game fails is the list an error.
+ * `onload` hears each new list.
  */
 export class RoomList {
   rooms = $state<OpenTable[]>([])
   status = $state<'loading' | 'ready' | 'error'>('loading')
 
   #games: string[]
+  #onload: (rooms: OpenTable[]) => void
   #timer = setInterval(() => void this.#load(), REFRESH_MS)
 
-  constructor(games: string[]) {
+  constructor(games: string[], onload: (rooms: OpenTable[]) => void = () => {}) {
     this.#games = games
+    this.#onload = onload
     void this.#load()
   }
 
@@ -53,6 +56,7 @@ export class RoomList {
 
     this.rooms = rooms
     this.status = 'ready'
+    this.#onload(rooms)
   }
 
   dispose() {

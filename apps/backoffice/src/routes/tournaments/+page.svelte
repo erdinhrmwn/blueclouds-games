@@ -11,6 +11,7 @@
     TOURNAMENT_TEXT_MAX,
   } from '#lib/limits.ts'
   import { statusTag, TOURNAMENT_FORMATS, tournamentStatus } from '#lib/tournament-status.ts'
+  import { untrack } from 'svelte'
   import type { PageProps } from './$types'
 
   let { data, form }: PageProps = $props()
@@ -47,14 +48,14 @@
     return { key: nextKey, coins, extra }
   }
 
-  let prizes = $state<PrizeRow[]>(Array.from({ length: STARTING_PLACES }, () => newRow()))
-
-  // A refused form comes back with what was typed.
-  $effect(() => {
-    if (form?.prizes) {
-      prizes = form.prizes.map((row) => newRow(row.coins, row.extra))
-    }
-  })
+  // A form refused without JavaScript comes back with what was typed. With it, the rows are never reset, so they
+  // already hold it.
+  const typedPrizes = untrack(() => form?.prizes)
+  let prizes = $state<PrizeRow[]>(
+    typedPrizes
+      ? typedPrizes.map((row) => newRow(row.coins, row.extra))
+      : Array.from({ length: STARTING_PLACES }, () => newRow()),
+  )
 
   function addPlace() {
     prizes.push(newRow())

@@ -10,7 +10,7 @@
   } from '#lib/platform.ts'
   import { player, refreshCoins } from '#lib/player.svelte.ts'
   import { enterTable } from '#lib/tables.ts'
-  import { gameBySlug } from '#lib/games/catalog.ts'
+  import { countByGame, gameBySlug } from '#lib/games/catalog.ts'
   import { coins } from '#lib/tournament-formats.ts'
   import {
     actionOf,
@@ -140,12 +140,7 @@
     open = nextOpen
     live = nextLive
     now = Date.now()
-
-    const perGame: Record<string, number> = {}
-    for (const tournament of [...nextLive, ...nextOpen]) {
-      perGame[tournament.game] = (perGame[tournament.game] ?? 0) + 1
-    }
-    counts = perGame
+    counts = countByGame([...nextLive, ...nextOpen])
   }
 
   /** The card's Join or Leave, for this player's coins and this tournament's request. */
