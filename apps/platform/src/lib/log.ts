@@ -1,11 +1,12 @@
 import { destination as fileDestination, pino } from 'pino'
+import { loadLogConfig } from '../config'
 
 /** Readable lines while developing; JSON lines in production, so logs can be grepped and shipped. */
-const PRETTY = process.env.NODE_ENV !== 'production'
+const config = loadLogConfig()
 
 /** pino-pretty is a devDependency, so it is loaded only when used. */
 async function destination() {
-  if (!PRETTY) {
+  if (!config.pretty) {
     return fileDestination(1)
   }
 
@@ -14,10 +15,10 @@ async function destination() {
   return pretty({ translateTime: 'SYS:HH:MM:ss.l', ignore: 'app' })
 }
 
-/** LOG_LEVEL picks the least severe level written (default info); pino throws at startup on an unknown level. */
+/** LOG_LEVEL picks the least severe level written (default info); an unknown level fails at startup. */
 export const log = pino(
   {
-    level: process.env.LOG_LEVEL ?? 'info',
+    level: config.level,
     base: { app: 'platform' },
     timestamp: pino.stdTimeFunctions.isoTime,
     formatters: {

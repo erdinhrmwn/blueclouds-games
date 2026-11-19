@@ -1,4 +1,5 @@
 import { SQL } from 'bun'
+import { must } from 'contracts/must'
 import { exportJWK, generateKeyPair } from 'jose'
 import { createApp } from './app'
 import { type Config, loadDbConfig } from './config'
@@ -83,7 +84,7 @@ export async function setupTestApp() {
   })
   const config: Config = {
     db,
-    playTokenPrivateKey: (await exportJWK(privateKey)).d!,
+    playTokenPrivateKey: must((await exportJWK(privateKey)).d, 'private key'),
     serverKey: SERVER_KEY,
     host: '127.0.0.1',
     port: 0,

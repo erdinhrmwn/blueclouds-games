@@ -2,6 +2,7 @@
 // the round's server seed revealed, so a match shows its rounds while it is still played. Rounds are public,
 // like matches.
 import type { SQL } from 'bun'
+import { must } from 'contracts/must'
 import { z } from 'zod'
 import { ApiError } from '../lib/http'
 import { LogEvent } from './matches'
@@ -93,12 +94,12 @@ export async function recordRound(sql: SQL, matchId: string, round: RoundReport)
 
   return sql.begin(async (tx) => {
     const storedHash = async () => {
-      const [row] = await tx`
+      const [row] = await tx<{ body_hash: Uint8Array }[]>`
 				SELECT body_hash
 				FROM match_rounds
 				WHERE match_id = ${matchId} AND round = ${round.round}`
 
-      return row?.body_hash as Uint8Array | undefined
+      return row?.body_hash
     }
 
     const answerRetry = (existing: Uint8Array | undefined) => {
@@ -246,7 +247,7 @@ export async function matchRounds(sql: SQL, matchId: string): Promise<MatchRound
 		FROM matches
 		WHERE id = ${matchId}`
 
-  const rows = (await sql`
+  const rows = await sql<RoundRow[]>`
 		SELECT
 			r.id,
 			r.round,
@@ -265,21 +266,21 @@ export async function matchRounds(sql: SQL, matchId: string): Promise<MatchRound
 		JOIN round_fairness f ON f.round_id = r.id
 		WHERE r.match_id = ${matchId}
 		GROUP BY r.id
-		ORDER BY r.round`) as RoundRow[]
+		ORDER BY r.round`
 
   if (!match && rows.length === 0) {
     return null
   }
 
   // Who sat where, once the match is reported; a running match has no seats here yet.
-  const players = (await sql`
+  const players = await sql<{ seat: number; name: string }[]>`
 		SELECT
 			mp.seat,
 			coalesce(p.display_name, mp.bot_name) AS name
 		FROM match_players mp
 		LEFT JOIN players p ON p.id = mp.player_id
 		WHERE mp.match_id = ${matchId}
-		ORDER BY mp.seat`) as { seat: number; name: string }[]
+		ORDER BY mp.seat`
 
   const rounds = rows.map((row) => ({
     id: row.id,
@@ -300,7 +301,7 @@ export async function matchRounds(sql: SQL, matchId: string): Promise<MatchRound
   return {
     match: {
       id: matchId,
-      game: match?.game_slug ?? rows[0]!.game_slug,
+      game: match?.game_slug ?? must(rows[0], 'round').game_slug,
       finished: Boolean(match),
       players,
     },

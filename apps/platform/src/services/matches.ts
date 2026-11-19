@@ -1,4 +1,5 @@
 import type { SQL } from 'bun'
+import { must } from 'contracts/must'
 import { z } from 'zod'
 import { ApiError } from '../lib/http'
 import { closeRoom } from './tournaments'
@@ -138,11 +139,11 @@ export async function recordMatch(sql: SQL, match: MatchReport): Promise<boolean
 
   return sql.begin(async (tx) => {
     const storedHash = async () => {
-      const [row] = await tx`
+      const [row] = await tx<{ body_hash: Uint8Array }[]>`
 				SELECT body_hash
 				FROM matches
 				WHERE id = ${match.matchId}`
-      return row?.body_hash as Uint8Array | undefined
+      return row?.body_hash
     }
 
     /** A retry of a stored match: fine when the body is the same, a conflict otherwise. */
@@ -199,7 +200,7 @@ export async function recordMatch(sql: SQL, match: MatchReport): Promise<boolean
 
     // A concurrent retry got there first.
     if (inserted.length === 0) {
-      return answerRetry((await storedHash())!)
+      return answerRetry(must(await storedHash(), 'stored match hash'))
     }
 
     const playerIds = humanPlayerIds(match.players)

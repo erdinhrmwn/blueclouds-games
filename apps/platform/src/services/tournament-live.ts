@@ -59,7 +59,7 @@ export async function standingsOf(sql: SQL, tournamentId: string): Promise<Stand
   }
 
   if (tournament.ended_at) {
-    const rows = await sql`
+    const rows = await sql<Standing[]>`
 			SELECT
 				tr.place,
 				tr.player_id AS "playerId",
@@ -74,7 +74,7 @@ export async function standingsOf(sql: SQL, tournamentId: string): Promise<Stand
 			ORDER BY tr.place
 			LIMIT ${STANDINGS_LIMIT}`
 
-    return [...rows] as Standing[]
+    return [...rows]
   }
 
   const [seats, signUpOrder] = await Promise.all([
@@ -153,7 +153,7 @@ export async function listLive(
   game: string,
   playerId: string,
 ): Promise<LiveTournament[]> {
-  const rows = (await sql`
+  const rows = await sql<LiveRow[]>`
 		SELECT
 			t.id,
 			t.name,
@@ -213,7 +213,7 @@ export async function listLive(
 			AND t.distributed_at IS NOT NULL
 			AND (t.ended_at IS NULL OR t.ended_at > now() - ${FINISHED_SHOWN}::interval)
 		ORDER BY t.ended_at NULLS FIRST, t.starts_at
-		LIMIT ${LIVE_LIMIT}`) as LiveRow[]
+		LIMIT ${LIVE_LIMIT}`
 
   return Promise.all(
     rows.map(async (row) => {

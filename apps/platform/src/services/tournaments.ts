@@ -2,6 +2,7 @@
 // every-minute job. Signing up: tournament-signups.ts. A player's own tournaments: player-tournaments.ts.
 
 import type { SQL, TransactionSQL } from 'bun'
+import { must } from 'contracts/must'
 import { log } from '../lib/log'
 import { refundEveryone } from './coins'
 import { insertRoom } from './rooms'
@@ -114,8 +115,8 @@ function shuffle<T>(items: T[]): T[] {
   const random = crypto.getRandomValues(new Uint32Array(out.length))
 
   for (let i = out.length - 1; i > 0; i--) {
-    const j = random[i]! % (i + 1)
-    ;[out[i], out[j]] = [out[j]!, out[i]!]
+    const j = must(random[i]) % (i + 1)
+    ;[out[i], out[j]] = [must(out[j]), must(out[i])]
   }
 
   return out
@@ -377,7 +378,7 @@ export async function advanceTournament(
   if (isKnockout) {
     const winners = tableWinners(seats, round).filter((playerId) => playable.has(playerId))
     next = winners.length >= 2 ? shuffle(winners) : []
-    const champion = winners.length === 1 ? winners[0]! : null
+    const champion = winners.length === 1 ? must(winners[0]) : null
     places = () => finalPlaces(seats, signUpOrder, champion)
   } else {
     // Arena and Swiss: everyone who sat down and may still play goes on, until the last round.

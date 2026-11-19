@@ -3,6 +3,7 @@
 // backoffice runs it for an admin and the platform's job runs it at the start time; the tournament row lock and
 // distributed_at keep the two from both distributing.
 import type { SQL } from 'bun'
+import { must } from 'contracts/must'
 
 /** No 0/O or 1/I, so a code read aloud or copied by hand stays right. */
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
@@ -79,8 +80,8 @@ function shuffle<T>(items: T[]): T[] {
   const random = crypto.getRandomValues(new Uint32Array(out.length))
 
   for (let i = out.length - 1; i > 0; i--) {
-    const j = random[i]! % (i + 1)
-    ;[out[i], out[j]] = [out[j]!, out[i]!]
+    const j = must(random[i]) % (i + 1)
+    ;[out[i], out[j]] = [must(out[j]), must(out[i])]
   }
 
   return out
@@ -95,18 +96,17 @@ function spreadBots(tables: string[][], isBot: (playerId: string) => boolean): s
   const everyone = tables.flat()
   const bots = everyone.filter((playerId) => isBot(playerId))
   const people = everyone.filter((playerId) => !isBot(playerId))
-  const sizes = tables.map((table) => table.length)
-  const botsAt = sizes.map(() => 0)
+  const seats = tables.map((table) => ({ size: table.length, bots: 0 }))
 
   // Deal bots round the tables; a table keeps a seat for a person while people remain to take it.
+  const keptForPeople = people.length > 0 ? 1 : 0
   let dealt = 0
   while (dealt < bots.length) {
     let placedThisPass = false
 
-    for (let index = 0; index < sizes.length && dealt < bots.length; index += 1) {
-      const room = botsAt[index]! < sizes[index]! - (people.length > 0 ? 1 : 0)
-      if (room) {
-        botsAt[index]! += 1
+    for (const table of seats) {
+      if (dealt < bots.length && table.bots < table.size - keptForPeople) {
+        table.bots += 1
         dealt += 1
         placedThisPass = true
       }
@@ -114,35 +114,22 @@ function spreadBots(tables: string[][], isBot: (playerId: string) => boolean): s
 
     // Every table kept its last seat for a person: those seats go to bots too.
     if (!placedThisPass) {
-      for (let index = 0; index < sizes.length && dealt < bots.length; index += 1) {
-        if (botsAt[index]! < sizes[index]!) {
-          botsAt[index]! += 1
+      for (const table of seats) {
+        if (dealt < bots.length && table.bots < table.size) {
+          table.bots += 1
           dealt += 1
         }
       }
     }
   }
 
-  let nextBot = 0
-  let nextPerson = 0
+  const botsLeft = [...bots]
+  const peopleLeft = [...people]
 
-  return sizes.map((size, index) => {
-    const table: string[] = []
-
-    for (let seat = 0; seat < botsAt[index]!; seat += 1) {
-      table.push(bots[nextBot]!)
-      nextBot += 1
-    }
-
-    while (table.length < size && nextPerson < people.length) {
-      table.push(people[nextPerson]!)
-      nextPerson += 1
-    }
-
-    while (table.length < size) {
-      table.push(bots[nextBot]!)
-      nextBot += 1
-    }
+  return seats.map(({ size, bots: botCount }) => {
+    const table = botsLeft.splice(0, botCount)
+    table.push(...peopleLeft.splice(0, size - table.length))
+    table.push(...botsLeft.splice(0, size - table.length))
 
     return table
   })
