@@ -6,7 +6,12 @@
    * per point up to the limit. Brass fills the pips up to the total; the last stretch before the limit is the danger
    * zone, outlined in ember, and the number turns ember once the total is in it.
    */
-  let { total, limit }: { total: number; limit: number } = $props()
+  interface Props {
+    total: number
+    limit: number
+  }
+
+  let { total, limit }: Props = $props()
 
   /** Points within this distance of the limit count as danger. */
   const DANGER = 6

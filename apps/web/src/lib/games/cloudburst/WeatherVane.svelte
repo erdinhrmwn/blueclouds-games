@@ -8,7 +8,13 @@
    * Cloudburst's centre: a weather ring round the pile, one quarter per suit, the suit to follow lit; and beside it
    * what may be played next: that suit, or the card one step either side, or the same action.
    */
-  let { suit, top, children }: { suit: Suit; top: Card | null; children: Snippet } = $props()
+  interface Props {
+    suit: Suit
+    top: Card | null
+    children: Snippet
+  }
+
+  let { suit, top, children }: Props = $props()
 
   /** Each suit's quarter of the ring, clockwise from the top: Sun north, Rain east, Wind south, Storm west. */
   const QUARTER: Record<Suit, number> = { sun: 0, rain: 1, wind: 2, storm: 3 }

@@ -6,7 +6,12 @@
    * One line of text that scrolls slowly back and forth when it is wider than its box, and sits still
    * when it fits. Hovering or focusing it pauses the scroll; reduced motion cuts it with an ellipsis.
    */
-  let { text, class: cls = '' }: { text: string; class?: string } = $props()
+  interface Props {
+    text: string
+    class?: string
+  }
+
+  let { text, class: cls = '' }: Props = $props()
 
   /** Pixels per second, and the rest at each end before it turns back. */
   const SPEED = 30

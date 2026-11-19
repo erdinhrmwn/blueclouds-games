@@ -6,6 +6,12 @@ interface RoomAccess {
   token: string
 }
 
+/** A Rivet client and the actor of the one room it may reach. */
+export interface RoomClient {
+  client: ReturnType<typeof createClient>
+  actorId: string
+}
+
 /** The table exists for someone else, or not at all (a private table without an invite, another tournament's table). */
 export class RoomRefused extends Error {}
 
@@ -29,7 +35,7 @@ async function roomAccess(game: string, code: string): Promise<RoomAccess> {
  * A Rivet client for one room. Our server issues its engine tokens, and each one reaches only
  * that room's actor; the engine's admin token never reaches the browser.
  */
-export async function roomClient(game: string, code: string) {
+export async function roomClient(game: string, code: string): Promise<RoomClient> {
   const first = await roomAccess(game, code)
 
   // The first token is used once; every later one is fetched fresh.

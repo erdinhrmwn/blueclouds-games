@@ -13,21 +13,16 @@
    * dealt and every move) and its fairness (its revealed seed, the hash shown before it, and every shuffle with
    * its client seed and deck). `check` is this browser's own check of it.
    */
-  let {
-    game,
-    round,
-    check,
-    nameOf,
-    onback,
-    onclose,
-  }: {
+  interface Props {
     game: string
     round: Round | null
     check: RoundCheck | null
     nameOf: (seat: number) => string | null
     onback: () => void
     onclose: () => void
-  } = $props()
+  }
+
+  let { game, round, check, nameOf, onback, onclose }: Props = $props()
 
   const TABS = [
     { id: 'round', label: 'Round' },

@@ -7,7 +7,11 @@
    * A preset avatar icon (FigCraft page "Brand · Avatars") on a 24 grid, in currentColor. Inner details
    * (pips, facets, veins) are cut out in `--avatar-tile`, the tile's own colour.
    */
-  let { icon }: { icon: AvatarIcon } = $props()
+  interface Props {
+    icon: AvatarIcon
+  }
+
+  let { icon }: Props = $props()
 </script>
 
 {#if icon === 'cloud'}

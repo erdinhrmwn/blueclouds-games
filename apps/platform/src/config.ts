@@ -27,6 +27,12 @@ const Env = DbEnv.extend({
   PLATFORM_PORT: z.coerce.number().int().min(1).max(65535).default(3000),
 })
 
+const LogEnv = z.object({
+  /** The least severe level written. */
+  LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
+  NODE_ENV: z.string().optional(),
+})
+
 /** Connection options in the shape `new SQL(...)` takes. */
 export interface DbConfig {
   hostname: string
@@ -42,6 +48,12 @@ export interface Config {
   serverKey: string
   host: string
   port: number
+}
+
+export interface LogConfig {
+  level: z.output<typeof LogEnv>['LOG_LEVEL']
+  /** Readable lines while developing; JSON lines in production. */
+  pretty: boolean
 }
 
 type RawEnv = Record<string, string | undefined>
@@ -82,4 +94,11 @@ export function loadConfig(env: RawEnv = process.env): Config {
     host: parsed.PLATFORM_HOST,
     port: parsed.PLATFORM_PORT,
   }
+}
+
+/** Only the log settings: the logger loads before the rest of the config, in tests too. */
+export function loadLogConfig(env: RawEnv = process.env): LogConfig {
+  const parsed = check(LogEnv, env, 'log config')
+
+  return { level: parsed.LOG_LEVEL, pretty: parsed.NODE_ENV !== 'production' }
 }

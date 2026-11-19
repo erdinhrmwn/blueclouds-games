@@ -6,20 +6,16 @@
    * A tournament's standings as a table: place, player, then points and wins (Arena, Swiss) or how far they got
    * (Knockout). The viewer's own row is tinted. Long lists show the top and a button for the rest.
    */
-  let {
-    standings,
-    byPoints,
-    round,
-    finished,
-    myId,
-  }: {
+  interface Props {
     standings: Standing[]
     byPoints: boolean
     /** The latest round; in a knockout, anyone whose last round is below it is out. */
     round: number
     finished: boolean
     myId: string | null
-  } = $props()
+  }
+
+  let { standings, byPoints, round, finished, myId }: Props = $props()
 
   const SHOWN_FIRST = 10
   let showAll = $state(false)

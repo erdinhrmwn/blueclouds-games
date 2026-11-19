@@ -7,7 +7,11 @@
   import { logOut, player } from '#lib/player.svelte.ts'
 
   /** The header's account menu: your name opens it, with Profile and Log out inside. */
-  let { onError }: { onError: (message: string | null) => void } = $props()
+  interface Props {
+    onError: (message: string | null) => void
+  }
+
+  let { onError }: Props = $props()
 
   const GUEST_LOGOUT_WARNING = 'Guest names aren’t saved. Make an account to keep yours.'
 

@@ -1,5 +1,6 @@
 import type { SQL } from 'bun'
 import type { Avatar } from 'contracts/avatars'
+import { must } from 'contracts/must'
 import { ApiError } from '../lib/http'
 import type { PlayToken, Signer } from '../lib/play-tokens'
 import { hashSecret, newSecret, SECRET_PATTERN } from '../lib/secrets'
@@ -57,7 +58,7 @@ const GUEST_NUMBER_TRIES = 5
 /** A random 6-digit number, 100000-999999. */
 function guestNumber(): string {
   const [random] = crypto.getRandomValues(new Uint32Array(1))
-  return String(100_000 + (random! % 900_000))
+  return String(100_000 + (must(random) % 900_000))
 }
 
 /** Above this many tracked usernames, expired windows are swept so the map cannot grow forever. */
@@ -110,11 +111,11 @@ export async function findBySecret(sql: SQL, secret: string | null): Promise<Pla
     return null
   }
 
-  const [row] = (await sql`
+  const [row] = await sql<(PlayerRow & { revoked_at: Date | null })[]>`
 		SELECT ${PLAYER_COLUMNS(sql)}, s.revoked_at
 		FROM player_secrets s
 		JOIN players p ON p.id = s.player_id
-		WHERE s.secret_hash = ${hashSecret(secret)}`) as (PlayerRow & { revoked_at: Date | null })[]
+		WHERE s.secret_hash = ${hashSecret(secret)}`
 
   if (row?.disabled_at) {
     throw new ApiError('forbidden', 403, 'This player has been disabled.')
@@ -178,7 +179,7 @@ export async function register(
     if (current) {
       // The guest becomes the account and gets the account's coins in the same step.
       const row = await sql.begin(async (tx) => {
-        const [updated] = await tx`
+        const [updated] = await tx<PlayerRow[]>`
 					UPDATE players
 					SET display_name = ${name}, username = ${username}, password_hash = ${passwordHash}
 					WHERE id = ${current.id} AND is_guest
@@ -189,7 +190,7 @@ export async function register(
         }
 
         await grantSignupBonus(tx, updated.id)
-        return updated as PlayerRow
+        return updated
       })
 
       return { player: toPlayer(row) }
@@ -197,16 +198,17 @@ export async function register(
 
     const secret = newSecret()
     const row = await sql.begin(async (tx) => {
-      const [player] = await tx`
+      const [inserted] = await tx<PlayerRow[]>`
 				INSERT INTO players (display_name, username, password_hash)
 				VALUES (${name}, ${username}, ${passwordHash})
 				${RETURNING(tx)}`
+      const player = must(inserted, 'new player')
       await tx`
 				INSERT INTO player_secrets (secret_hash, player_id)
 				VALUES (${hashSecret(secret)}, ${player.id})`
       await grantSignupBonus(tx, player.id)
 
-      return player as PlayerRow
+      return player
     })
 
     return { player: toPlayer(row), playerSecret: secret }
@@ -231,10 +233,10 @@ export async function login(
     throw new ApiError('rate_limited', 429, 'Too many wrong passwords. Try again in 15 minutes.')
   }
 
-  const [row] = (await sql`
+  const [row] = await sql<(PlayerRow & { password_hash: string | null })[]>`
 		SELECT id, display_name, username, is_guest, avatar_color, avatar_icon, created_at, disabled_at, password_hash
 		FROM players
-		WHERE username = ${username}`) as (PlayerRow & { password_hash: string | null })[]
+		WHERE username = ${username}`
 
   dummyHash ??= Bun.password.hash('not-a-real-password')
   const hashToCheck = row?.password_hash ?? (await dummyHash)
@@ -277,10 +279,10 @@ export async function changePassword(
     throw new ApiError('rate_limited', 429, 'Too many wrong passwords. Try again in 15 minutes.')
   }
 
-  const [row] = (await sql`
+  const [row] = await sql<{ password_hash: string | null }[]>`
 		SELECT password_hash
 		FROM players
-		WHERE id = ${player.id}`) as { password_hash: string | null }[]
+		WHERE id = ${player.id}`
 
   const valid =
     !!row?.password_hash && (await Bun.password.verify(input.currentPassword, row.password_hash))
@@ -353,12 +355,12 @@ export async function setAvatar(sql: SQL, playerId: string, avatar: Avatar): Pro
  * Counts as the player being seen.
  */
 export async function issuePlayToken(sql: SQL, signer: Signer, player: Player): Promise<PlayToken> {
-  const [row] = (await sql`
+  const [row] = await sql<{ is_vip: boolean }[]>`
 		UPDATE players
 		SET last_seen_at = now()
 		WHERE id = ${player.id}
 		RETURNING is_vip
-	`) as { is_vip: boolean }[]
+	`
 
   const vip = row?.is_vip ?? false
 
@@ -367,12 +369,12 @@ export async function issuePlayToken(sql: SQL, signer: Signer, player: Player): 
 
 /** Which of these players are VIP, for the seat tags at a table. */
 export async function vipIds(sql: SQL, ids: string[]): Promise<string[]> {
-  const rows = (await sql`
+  const rows = await sql<{ id: string }[]>`
 		SELECT id
 		FROM players
 		WHERE id IN ${sql(ids)}
 			AND is_vip
-	`) as { id: string }[]
+	`
 
   return rows.map((row) => row.id)
 }

@@ -2,7 +2,9 @@
 
 import { type Cookies, error, type RequestEvent } from '@sveltejs/kit'
 import type { Avatar } from 'contracts/avatars'
+import { z } from 'zod'
 import { dev } from '$app/env'
+import { readJson } from '../body.ts'
 import { type Data, PlatformError, platform, platformClient } from './client.ts'
 
 const SECRET_COOKIE = 'player_secret'
@@ -222,13 +224,14 @@ export async function playToken(event: RequestEvent): Promise<string> {
   return token
 }
 
+const NameBody = z.object({ name: z.string().trim().min(1).max(NAME_MAX) })
+
 /** Reads a JSON `{ name }` body, or stops with 400. */
 export async function readName(request: Request): Promise<string> {
-  const body = (await request.json().catch(() => null)) as { name?: unknown } | null
-  const name = typeof body?.name === 'string' ? body.name.trim() : ''
-  if (name.length < 1 || name.length > NAME_MAX) {
+  const body = await readJson(request, NameBody)
+  if (!body) {
     error(400, `Enter a name of 1-${NAME_MAX} characters.`)
   }
 
-  return name
+  return body.name
 }

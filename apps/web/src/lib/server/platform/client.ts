@@ -94,14 +94,14 @@ function envelopeOf<T>(res: Answer<T>): Promise<Envelope<T> | null> {
 export const segment = (value: string) => encodeURIComponent(value)
 
 /** An error answer in the same `{ error: { code, message } }` shape as `failure`. */
-export function apiError(status: number, code: string, message: string) {
+export function apiError(status: number, code: string, message: string): Response {
   return json({ error: { code, message } }, { status })
 }
 
 export const BUSY_MESSAGE = 'The game server is busy. Try again in a moment.'
 
 /** Same `{ error: { code, message } }` shape for every failure the browser sees. */
-export function failure(err: unknown) {
+export function failure(err: unknown): Response {
   if (!(err instanceof PlatformError)) {
     throw err
   }

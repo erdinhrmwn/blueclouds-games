@@ -9,11 +9,13 @@
    * Opening a table: which game, its name and who may join. The opener becomes its host. `game` is picked when the
    * dialog opens (the first game when left out); `paused` lists the games under maintenance, which open no tables.
    */
-  let {
-    open = $bindable(false),
-    game = null,
-    paused = {},
-  }: { open?: boolean; game?: string | null; paused?: Record<string, boolean> } = $props()
+  interface Props {
+    open?: boolean
+    game?: string | null
+    paused?: Record<string, boolean>
+  }
+
+  let { open = $bindable(false), game = null, paused = {} }: Props = $props()
 
   const NAME_MAX = 32
 

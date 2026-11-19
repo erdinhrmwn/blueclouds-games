@@ -72,7 +72,7 @@ export async function insertRoom(
   const adminId = room.adminId ?? null
 
   for (let i = 0; i < CODE_TRIES; i++) {
-    const [row] = await sql`
+    const [row] = await sql<Room[]>`
 			INSERT INTO rooms (
 				game_slug,
 				code,
@@ -97,7 +97,7 @@ export async function insertRoom(
 			RETURNING id, code, game_slug AS game`
 
     if (row) {
-      return row as Room
+      return row
     }
   }
 
@@ -275,7 +275,7 @@ export async function redeemInvite(
   invite: string,
   playerId: string,
 ): Promise<{ code: string; game: string }> {
-  const [row] = await sql`
+  const [row] = await sql<{ id: string; code: string; game: string }[]>`
 		SELECT r.id, r.code, r.game_slug AS game
 		FROM room_invites i
 		JOIN rooms r ON r.id = i.room_id
@@ -292,12 +292,63 @@ export async function redeemInvite(
 		VALUES (${row.id}, ${playerId})
 		ON CONFLICT DO NOTHING`
 
-  return { code: row.code as string, game: row.game as string }
+  return { code: row.code, game: row.game }
+}
+
+interface RoomSeatsRow {
+  code: string
+  game: string
+  visibility: Visibility
+  room_name: string | null
+  started_at: Date | null
+  closed_at: Date | null
+  tournament_round: number | null
+  tournament_id: string | null
+  name: string | null
+  format: 'arena' | 'knockout' | 'swiss' | null
+  rounds: number | null
+  starts_at: Date | null
+  cancelled_at: Date | null
+  /** count(*): Bun returns bigint as text. */
+  registered: string | null
+  min_players: number
+}
+
+export interface RoomSeat {
+  playerId: string
+  seat: number
+  bot: boolean
+  name: string
+}
+
+export interface RoomTournament {
+  id: string
+  name: string | null
+  format: RoomSeatsRow['format']
+  /** Arena and Swiss: how many rounds it plays; null for Knockout (until one is left). */
+  rounds: number | null
+  /** Everyone still signed up to the tournament, not only this table. */
+  registered: number
+  round: number | null
+  startsAt: string | null
+  cancelled: boolean
+}
+
+export interface RoomSeats {
+  code: string
+  game: string
+  visibility: Visibility
+  name: string | null
+  minPlayers: number
+  startedAt: string | null
+  closedAt: string | null
+  tournament: RoomTournament | null
+  seats: RoomSeat[]
 }
 
 /** For the room actor: its tournament, start time and who sits where. */
-export async function roomSeats(sql: SQL, code: string) {
-  const [row] = await sql`
+export async function roomSeats(sql: SQL, code: string): Promise<RoomSeats> {
+  const [row] = await sql<RoomSeatsRow[]>`
 		SELECT
 			r.code,
 			r.game_slug AS game,
@@ -332,7 +383,7 @@ export async function roomSeats(sql: SQL, code: string) {
   }
 
   const seats = row.tournament_id
-    ? await sql`
+    ? await sql<RoomSeat[]>`
 				SELECT ra.player_id AS "playerId", ra.seat, pl.is_bot AS bot, pl.display_name AS name
 				FROM room_assignments ra
 				JOIN rooms r ON r.id = ra.room_id
@@ -348,10 +399,8 @@ export async function roomSeats(sql: SQL, code: string) {
     ? {
         id: row.tournament_id,
         name: row.name,
-        format: row.format ?? null,
-        /** Arena and Swiss: how many rounds it plays; null for Knockout (until one is left). */
-        rounds: row.rounds ?? null,
-        /** Everyone still signed up to the tournament, not only this table. */
+        format: row.format,
+        rounds: row.rounds,
         registered: Number(row.registered),
         round: row.tournament_round,
         startsAt: toIso(row.starts_at),
@@ -373,8 +422,11 @@ export async function roomSeats(sql: SQL, code: string) {
 }
 
 /** The tournament room's match began. Idempotent. */
-export async function startRoom(sql: SQL, code: string) {
-  const [row] = await sql`
+export async function startRoom(
+  sql: SQL,
+  code: string,
+): Promise<{ code: string; startedAt: string }> {
+  const [row] = await sql<{ started_at: Date }[]>`
 		UPDATE rooms
 		SET started_at = coalesce(started_at, now())
 		WHERE code = ${code} AND tournament_id IS NOT NULL
@@ -384,7 +436,7 @@ export async function startRoom(sql: SQL, code: string) {
     throw new ApiError('not_found', 404, 'There is no tournament table with that code.')
   }
 
-  return { code, startedAt: row.started_at.toISOString() as string }
+  return { code, startedAt: row.started_at.toISOString() }
 }
 
 /** The tournament room closed without a match: not enough players showed up, or an admin terminated it. Idempotent. */

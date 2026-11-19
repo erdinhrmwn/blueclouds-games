@@ -24,7 +24,12 @@
 </script>
 
 <script lang="ts">
-  let { name, class: className = 'size-5' }: { name: IconName; class?: string } = $props()
+  interface Props {
+    name: IconName
+    class?: string
+  }
+
+  let { name, class: className = 'size-5' }: Props = $props()
 </script>
 
 <svg

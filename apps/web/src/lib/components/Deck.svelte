@@ -3,7 +3,11 @@
    * The deck, face down in the middle of the table: the dealer deals from it and draws come off it. The table's card
    * back comes from its `table-back-*` utility; the count sits under the stack.
    */
-  let { count }: { count: number } = $props()
+  interface Props {
+    count: number
+  }
+
+  let { count }: Props = $props()
 </script>
 
 <div class="flex flex-col items-center gap-1.5" role="img" aria-label="{count} cards in the deck">

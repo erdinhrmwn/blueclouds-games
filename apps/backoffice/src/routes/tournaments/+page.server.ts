@@ -1,5 +1,5 @@
 import { fail, redirect } from '@sveltejs/kit'
-import { auditIp } from '#lib/server/auth.ts'
+import { auditIp, requireAdmin } from '#lib/server/auth.ts'
 import { sql } from '#lib/server/db.ts'
 import { listGames } from '#lib/server/games.ts'
 import {
@@ -40,7 +40,12 @@ export const actions: Actions = {
 
     let id: string
     try {
-      id = await createTournament(sql, locals.admin!, parsed.data, auditIp(getClientAddress()))
+      id = await createTournament(
+        sql,
+        requireAdmin(locals.admin),
+        parsed.data,
+        auditIp(getClientAddress()),
+      )
     } catch (err) {
       if (err instanceof TournamentError) {
         return fail(400, { values, prizes, error: err.message })

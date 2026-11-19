@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { PageProps } from './$types'
   import Icon from '#lib/components/Icon.svelte'
   import { goto } from '$app/navigation'
   import { page } from '$app/state'
@@ -12,7 +13,7 @@
     playAsGuest,
   } from '#lib/player.svelte.ts'
 
-  let { data } = $props()
+  let { data }: PageProps = $props()
 
   /**
    * First stop for anyone without a player. Playing as a guest is the page; an account is one link away.

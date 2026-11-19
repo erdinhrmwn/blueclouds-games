@@ -12,15 +12,13 @@
    * A game's own page, the same for every game: the game, open or join a table, a card into the lobby (where its
    * tables and tournaments are listed), then how to play.
    */
-  let {
-    game,
-    maintenance,
-    rules,
-  }: {
+  interface Props {
     game: GameEntry
     maintenance: boolean
     rules: Snippet
-  } = $props()
+  }
+
+  let { game, maintenance, rules }: Props = $props()
 
   let opening = $state(false)
   let tables = $state<RoomList | null>(null)

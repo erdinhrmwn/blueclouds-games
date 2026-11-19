@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { PageProps } from './$types'
   import Icon from '#lib/components/Icon.svelte'
   import { goto } from '$app/navigation'
   import { page } from '$app/state'
@@ -14,7 +15,7 @@
   import { when } from '#lib/when.ts'
   import { onMount } from 'svelte'
 
-  let { data } = $props()
+  let { data }: PageProps = $props()
 
   /**
    * Who you are, how you play each game, your tournaments and latest matches. Linking an account here is where a

@@ -15,12 +15,14 @@
   import TournamentLiveDialog from './TournamentLiveDialog.svelte'
 
   /** Everything around a game's table: connecting, the lobby, reconnect and error lines, leaving. */
-  let {
-    game,
-    code,
-    connect,
-    table,
-  }: { game: GameEntry; code: string; connect: () => R; table: Snippet<[R]> } = $props()
+  interface Props {
+    game: GameEntry
+    code: string
+    connect: () => R
+    table: Snippet<[R]>
+  }
+
+  let { game, code, connect, table }: Props = $props()
 
   let room = $state<R | null>(null)
 

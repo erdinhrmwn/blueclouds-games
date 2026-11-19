@@ -1,5 +1,6 @@
 // Bust 31, layer 2 (rules): the move log and the match result, from the game's states. Pure.
 
+import { must } from 'contracts/must'
 import type { Card } from 'contracts/rooms/bust-31'
 import type { PlayerId } from '../../core/domain/ids'
 import type {
@@ -10,6 +11,7 @@ import type {
   RoundResult,
 } from '../../core/domain/match'
 import { moveBy, placementsInOrder, reportedSeat } from '../../core/rules/match'
+import { playerById } from '../../core/rules/table'
 import type { Game, MatchState, Player } from './domain'
 
 /** Bump when a rule change makes old results incomparable to new ones. */
@@ -57,7 +59,7 @@ export function buildReport(
     players: game.players.map((player) => ({
       seat: player.seat,
       ...reportedSeat(player),
-      placement: placement.get(player.id)!,
+      placement: must(placement.get(player.id), 'placement'),
       // Bust 31 scores lives left.
       score: Math.max(0, player.lives),
     })),
@@ -103,7 +105,7 @@ export function logEvents(before: Game, after: Game, auto = false): LogEntry[] {
   const mover = before.phase === 'playing' ? before.players[before.turn] : undefined
 
   if (mover && event?.type !== 'started') {
-    const now = after.players.find((player) => player.id === mover.id)!
+    const now = playerById(after.players, mover.id)
     const by = moveBy(mover, auto)
 
     // "finished" replaces the bust in lastEvent; the card is then the one that left the hand.
@@ -161,7 +163,7 @@ export function logEvents(before: Game, after: Game, auto = false): LogEntry[] {
       type: 'deal',
       data: {
         round: after.round,
-        starter: after.players[after.turn]!.seat,
+        starter: must(after.players[after.turn], 'starter').seat,
         hands,
         deck: ids(after.deck),
       },
@@ -169,7 +171,7 @@ export function logEvents(before: Game, after: Game, auto = false): LogEntry[] {
   }
 
   if (after.phase === 'finished') {
-    const winner = after.players.find((player) => player.id === after.winnerId)!
+    const winner = playerById(after.players, after.winnerId)
     entries.push({ type: 'finished', data: { winner: winner.seat } })
   }
 
@@ -198,7 +200,11 @@ const ids = (cards: Card[]) => cards.map((card) => card.id)
 const hasCard = (cards: Card[], card: Card) => cards.some((other) => other.id === card.id)
 
 /** The card in `from` that is not in `to` (the one just played, when no new hand was dealt). */
-const missing = (from: Card[], to: Card[]) => from.find((card) => !hasCard(to, card))!
+const missing = (from: Card[], to: Card[]) =>
+  must(
+    from.find((card) => !hasCard(to, card)),
+    'played card',
+  )
 
 /** The card a player drew after playing: in their new hand but not their old one. */
 const drawn = (before: Player, after: Player) =>

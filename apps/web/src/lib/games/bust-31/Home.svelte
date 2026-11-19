@@ -3,7 +3,12 @@
   import GamePage from '#lib/components/GamePage.svelte'
   import { LIMIT } from 'contracts/rooms/bust-31'
 
-  let { game, maintenance }: { game: GameEntry; maintenance: boolean } = $props()
+  interface Props {
+    game: GameEntry
+    maintenance: boolean
+  }
+
+  let { game, maintenance }: Props = $props()
 </script>
 
 <GamePage {game} {maintenance}>

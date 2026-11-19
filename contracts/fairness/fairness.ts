@@ -1,3 +1,4 @@
+import { must } from '../must'
 // Provably fair shuffles (docs/architecture/fairness.md). Pure and Web Crypto only, so the room, the backoffice
 // and the player's browser all check a round the same way.
 //
@@ -9,22 +10,32 @@
 // id order, then shuffled Fisher-Yates from the end.
 
 /** What the room commits to before a round is dealt: the round's id and the hash of its server seed. */
-export type RoundCommitment = { roundId: string; serverSeedHash: string }
+export interface RoundCommitment {
+  roundId: string
+  serverSeedHash: string
+}
 
 /** A round's commitment with its seed, kept by the room until the round closes and the seed is revealed. */
-export type RoundSeed = RoundCommitment & { serverSeed: string }
+export interface RoundSeed extends RoundCommitment {
+  serverSeed: string
+}
 
 /** A shuffle's place in the match: the round it deals or reshuffles in, and its count in that round, from 0. */
-export type ShuffleKey = { round: number; nonce: number }
+export interface ShuffleKey {
+  round: number
+  nonce: number
+}
 
 /** One logged shuffle: its place in the match and the cards it produced, top first. */
-export type ShuffleRecord = ShuffleKey & { deck: string[] }
+export interface ShuffleRecord extends ShuffleKey {
+  deck: string[]
+}
 
 /**
  * The seeds of the match being played: the round being played (null before the first deal), the one it was
  * before (its seed is revealed when it closes), the next round's commitment, and the last shuffle's place.
  */
-export type MatchSeeds = {
+export interface MatchSeeds {
   matchId: string
   current: (RoundSeed & { round: number }) | null
   previous: (RoundSeed & { round: number }) | null
@@ -47,7 +58,7 @@ export function nextNonce(last: ShuffleKey | null, round: number): number {
 }
 
 /** Everything that checks one closed round: its revealed seed and its shuffles, in order. */
-export type RoundProof = {
+export interface RoundProof {
   matchId: string
   round: number
   serverSeed: string
@@ -56,7 +67,7 @@ export type RoundProof = {
 }
 
 /** The result of checking a round: the seed against its hash, then each shuffle. */
-export type RoundCheck = {
+export interface RoundCheck {
   round: number
   hashMatches: boolean
   shuffles: { nonce: number; ok: boolean }[]
@@ -108,9 +119,9 @@ export function fisherYates<T>(items: T[], floats: number[]): T[] {
   const out = [...items]
 
   for (let index = out.length - 1; index > 0; index -= 1) {
-    const float = floats[out.length - 1 - index]!
+    const float = must(floats[out.length - 1 - index], 'float for the shuffle')
     const other = Math.floor(float * (index + 1))
-    ;[out[index], out[other]] = [out[other]!, out[index]!]
+    ;[out[index], out[other]] = [must(out[other]), must(out[index])]
   }
 
   return out
@@ -197,7 +208,10 @@ export async function checkMatch(
   return { rounds: checks, ok }
 }
 
-type Event = { type: string; data?: Record<string, unknown> }
+interface Event {
+  type: string
+  data?: Record<string, unknown>
+}
 
 /**
  * The closed rounds of a move log, oldest first: each round's commitment (`fairness`), its shuffles and its

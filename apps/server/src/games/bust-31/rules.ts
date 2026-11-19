@@ -1,6 +1,7 @@
 // Bust 31, layer 2 (rules): pure game rules, no Rivet. Every function returns a new state or throws RuleError, so
 // the room can forward the message to the player. Rules and their reasons: docs/games/bust-31/rules.md.
 import { NO_AVATAR } from 'contracts/avatars'
+import { must } from 'contracts/must'
 import {
   type Card,
   DEAL,
@@ -153,13 +154,14 @@ export function playCard(game: Game, playerId: PlayerId, cardId: string, rng: Rn
   let players = game.players.map((player) =>
     player.id === playerId ? { ...player, hand: newHand } : player,
   )
-  const direction = card.kind === 'reverse' ? (-game.direction as 1 | -1) : game.direction
+  const reversed = game.direction === 1 ? -1 : 1
+  const direction = card.kind === 'reverse' ? reversed : game.direction
   const next = nextAlive(players, game.turn, direction)
 
   const event: GameEvent = { type: 'played', playerId, card, total }
   if (card.kind === 'swap') {
     players = swapHands(players, game.turn, next)
-    event.swappedWith = players[next]!.id
+    event.swappedWith = must(players[next], 'next player').id
   }
 
   // A Double hands the next player two plays (and ends any the player still owed).
@@ -190,8 +192,8 @@ export function playCard(game: Game, playerId: PlayerId, cardId: string, rng: Rn
 
 /** The players at `a` and `b` trade hands. */
 function swapHands(players: Player[], seatA: number, seatB: number): Player[] {
-  const handA = players[seatA]!.hand
-  const handB = players[seatB]!.hand
+  const handA = must(players[seatA], 'player').hand
+  const handB = must(players[seatB], 'player').hand
 
   return players.map((player, index) => {
     if (index === seatA) {
@@ -222,7 +224,7 @@ function bust(
   const alive = players.filter((player) => player.lives > 0)
 
   if (alive.length === 1) {
-    const winnerId = alive[0]!.id
+    const winnerId = must(alive[0], 'winner').id
     return {
       ...game,
       players,

@@ -26,6 +26,6 @@ export const load: PageServerLoad = async ({ url }) => {
     filter,
     admins,
     rows,
-    next: fullPage ? rows.at(-1)!.id : null,
+    next: fullPage ? (rows.at(-1)?.id ?? null) : null,
   }
 }

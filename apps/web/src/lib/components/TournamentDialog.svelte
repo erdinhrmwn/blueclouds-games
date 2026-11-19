@@ -11,15 +11,7 @@
    * A tournament's Detail: a countdown on the game's felt, what it is, the prize podium, its schedule, how its
    * format plays, who's in, and Join or Leave.
    */
-  let {
-    open = $bindable(false),
-    tournament,
-    status,
-    back,
-    full,
-    action,
-    onaction,
-  }: {
+  interface Props {
     open?: boolean
     tournament: Tournament | null
     status: { label: string; dot: string }
@@ -28,7 +20,17 @@
     /** Join or Leave, as the card shows it. */
     action: { label: string; style: string; disabled: boolean }
     onaction: () => void
-  } = $props()
+  }
+
+  let {
+    open = $bindable(false),
+    tournament,
+    status,
+    back,
+    full,
+    action,
+    onaction,
+  }: Props = $props()
 
   let dialog = $state<HTMLDialogElement>()
 

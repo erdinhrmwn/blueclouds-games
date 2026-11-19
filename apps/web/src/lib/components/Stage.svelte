@@ -8,7 +8,11 @@
    * picture: 16:9 on a landscape window, 1:2 on a portrait one, with the room's colour around it.
    * Inside, `wide:` and `tall:` style for the stage in use (`sm:` would follow the window, not the stage).
    */
-  let { children }: { children: Snippet } = $props()
+  interface Props {
+    children: Snippet
+  }
+
+  let { children }: Props = $props()
 
   const measured = $derived(innerWidth.current !== undefined && innerHeight.current !== undefined)
   const windowWidth = $derived(innerWidth.current ?? STAGE.wide.width)

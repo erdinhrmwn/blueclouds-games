@@ -5,12 +5,14 @@
   import PlayingCard from './PlayingCard.svelte'
 
   /** Shown for a moment after someone pushes the total over the limit. */
-  let {
-    card,
-    total,
-    playerId,
-    eliminated,
-  }: { card: Card; total: number; playerId: string; eliminated: boolean } = $props()
+  interface Props {
+    card: Card
+    total: number
+    playerId: string
+    eliminated: boolean
+  }
+
+  let { card, total, playerId, eliminated }: Props = $props()
 </script>
 
 <div

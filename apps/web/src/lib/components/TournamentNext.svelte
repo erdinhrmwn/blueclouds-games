@@ -9,20 +9,16 @@
    * every table of this round is done, so it asks the platform every few seconds until it knows, and calls
    * `onchange` when the answer changes (next table ready, out, tournament over) so the popup can open again.
    */
-  let {
-    game,
-    tournamentId,
-    tournamentName,
-    round,
-    onchange,
-  }: {
+  interface Props {
     game: string
     tournamentId: string
     tournamentName: string
     /** The round this table played. */
     round: number
     onchange: () => void
-  } = $props()
+  }
+
+  let { game, tournamentId, tournamentName, round, onchange }: Props = $props()
 
   const POLL_MS = 5_000
   const TICK_MS = 1_000

@@ -19,22 +19,7 @@
   /** Bots keep the dark tile with the robot; people sit on their own avatar colour. */
   const BOT_TILE = '#2a1d13'
 
-  let {
-    player,
-    isTurn = false,
-    isHost = false,
-    isMe = false,
-    out = false,
-    badge,
-    meter,
-    summary,
-    timeLeft = null,
-    drain = null,
-    action,
-    number,
-    onSit,
-    onAddBot,
-  }: {
+  interface Props {
     player: SeatPlayer | null
     isTurn?: boolean
     isHost?: boolean
@@ -59,7 +44,24 @@
     onSit?: () => void
     /** Empty chair only (host): put a bot here. */
     onAddBot?: () => void
-  } = $props()
+  }
+
+  let {
+    player,
+    isTurn = false,
+    isHost = false,
+    isMe = false,
+    out = false,
+    badge,
+    meter,
+    summary,
+    timeLeft = null,
+    drain = null,
+    action,
+    number,
+    onSit,
+    onAddBot,
+  }: Props = $props()
 
   const initial = $derived(player?.name.trim().charAt(0).toUpperCase() ?? '')
 

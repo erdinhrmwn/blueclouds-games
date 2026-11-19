@@ -14,6 +14,7 @@ import {
   type RoundSeed,
   type ShuffleRecord,
 } from 'contracts/fairness/fairness'
+import { must } from 'contracts/must'
 import { toMatchId } from '../domain/ids'
 import type { NextMatch } from '../domain/room'
 import type { Rng } from '../domain/table'
@@ -96,7 +97,11 @@ export function fairRng(
       const key = { round, nonce: nextNonce(seeds.last, round) }
       const clientSeed = clientSeedOf(seeds.matchId, key)
       const cards = canonical(items)
-      const floats = floatsFor(seeds.current!.serverSeed, clientSeed, floatsNeeded(cards.length))
+      const floats = floatsFor(
+        must(seeds.current, 'server seed').serverSeed,
+        clientSeed,
+        floatsNeeded(cards.length),
+      )
       const out = fisherYates(cards, floats)
 
       done({ ...key, deck: out.map((card) => card.id) })

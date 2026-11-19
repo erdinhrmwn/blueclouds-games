@@ -2,7 +2,12 @@
   import type { Suit } from 'contracts/rooms/cloudburst'
 
   /** Each suit's own mark, so suits never depend on colour alone. Drawn in currentColor. */
-  let { suit, class: cls = 'size-5' }: { suit: Suit; class?: string } = $props()
+  interface Props {
+    suit: Suit
+    class?: string
+  }
+
+  let { suit, class: cls = 'size-5' }: Props = $props()
 </script>
 
 <svg

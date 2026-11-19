@@ -19,14 +19,7 @@
    * A playing or finished tournament's Detail: the round and when it starts (or who won) on the felt, the viewer's
    * own place and table, then the standings, or the podium and the final places.
    */
-  let {
-    open = $bindable(false),
-    tournament,
-    game,
-    back,
-    now,
-    onwithdraw,
-  }: {
+  interface Props {
     open?: boolean
     tournament: LiveTournament | null
     game: string
@@ -35,7 +28,9 @@
     now: number
     /** Gives up a seat whose table hasn't started; the lobby asks first. Left out, there is no Withdraw button. */
     onwithdraw?: (tournament: LiveTournament) => void
-  } = $props()
+  }
+
+  let { open = $bindable(false), tournament, game, back, now, onwithdraw }: Props = $props()
 
   let dialog = $state<HTMLDialogElement>()
   let standings = $state<Standing[]>([])

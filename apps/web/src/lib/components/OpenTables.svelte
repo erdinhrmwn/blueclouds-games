@@ -8,15 +8,13 @@
    * The public tables of every game in `games`, refreshed every few seconds. `game` shows only that game's tables;
    * `counts` reports how many tables each game has, whatever is shown.
    */
-  let {
-    games,
-    game = null,
-    counts = $bindable({}),
-  }: {
+  interface Props {
     games: string[]
     game?: string | null
     counts?: Record<string, number>
-  } = $props()
+  }
+
+  let { games, game = null, counts = $bindable({}) }: Props = $props()
 
   let list = $state<RoomList | null>(null)
 

@@ -38,7 +38,7 @@ export const player = $state({
   name: '',
   username: '',
   guest: false,
-  avatar: { ...NO_AVATAR } as Avatar,
+  avatar: { ...NO_AVATAR },
   /** When the player was made, as ISO text; empty until known. */
   createdAt: '',
   /** Coin balance (virtual coins for tournament fees and prizes). */

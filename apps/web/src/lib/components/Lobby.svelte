@@ -10,17 +10,14 @@
   import Dealer from './Dealer.svelte'
 
   /** Any game's lobby: invites, fixed seats, bots, and the host's Play button. */
-  let {
-    room,
-    code,
-    minPlayers,
-    seats,
-  }: {
+  interface Props {
     room: RoomConnection<BaseView, unknown>
     code: string
     minPlayers: number
     seats: number
-  } = $props()
+  }
+
+  let { room, code, minPlayers, seats }: Props = $props()
 
   const COPIED_NOTE_MS = 1500
 

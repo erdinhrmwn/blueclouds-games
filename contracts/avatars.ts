@@ -1,3 +1,4 @@
+import { must } from './must'
 /**
  * Preset avatars (FigCraft page "Brand · Avatars"): a colour and, optionally, an icon in place of the initial.
  * Owned by the platform: a new name here also needs a migration for the players.avatar_color / avatar_icon checks.
@@ -54,5 +55,5 @@ export function defaultAvatarColor(id: string): AvatarColor {
     sum += letter.codePointAt(0) ?? 0
   }
 
-  return AVATAR_COLORS[sum % AVATAR_COLORS.length]!
+  return must(AVATAR_COLORS[sum % AVATAR_COLORS.length], 'avatar colour')
 }

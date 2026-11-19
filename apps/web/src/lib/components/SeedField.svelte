@@ -1,7 +1,13 @@
 <script lang="ts">
   import Icon from '#lib/components/Icon.svelte'
   /** A seed shown in full with a copy button: the Fair play dialog and a match's history page. */
-  let { id, label, value }: { id: string; label: string; value: string } = $props()
+  interface Props {
+    id: string
+    label: string
+    value: string
+  }
+
+  let { id, label, value }: Props = $props()
 
   /** How long the button shows its "copied" tick. */
   const COPIED_MS = 1500

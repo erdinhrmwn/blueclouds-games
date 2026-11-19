@@ -7,17 +7,14 @@
    * The weather a Rainbow sets. The Rainbow is already chosen, so there is no way back: pick a suit,
    * then Confirm. When the turn's clock runs out, the suit picked so far is played.
    */
-  let {
-    open,
-    nextName,
-    secondsLeft,
-    onpick,
-  }: {
+  interface Props {
     open: boolean
     nextName: string
     secondsLeft: number | null
     onpick: (suit: Suit) => void
-  } = $props()
+  }
+
+  let { open, nextName, secondsLeft, onpick }: Props = $props()
 
   /** Play the picked suit with this many seconds left, before the server plays for the player. */
   const AUTO_PICK_AT_S = 1

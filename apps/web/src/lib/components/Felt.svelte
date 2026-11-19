@@ -6,13 +6,7 @@
    * the other `count - 1` spots follow the U clockwise, from the top of the right arm round to the left one.
    * `children` is the table's centre: it gets the felt's safe zone, which no chair or the dealer reaches.
    */
-  let {
-    count,
-    seat,
-    children,
-    name = '',
-    direction = null,
-  }: {
+  interface Props {
     count: number
     seat: Snippet<[number]>
     children: Snippet
@@ -20,7 +14,9 @@
     name?: string
     /** Chevrons on the rail, for games with a turn order: 1 clockwise, -1 counter-clockwise. */
     direction?: 1 | -1 | null
-  } = $props()
+  }
+
+  let { count, seat, children, name = '', direction = null }: Props = $props()
 
   /** Where the arms of the U start, and where its bottom curve starts, as % of the table's height. */
   const ARM_TOP = 16

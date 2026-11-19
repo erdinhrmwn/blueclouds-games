@@ -27,12 +27,14 @@
    * corners, border and the initial's font size come from `class`, so a seat, a pill and the profile share it.
    * Decorative: the name is always printed or labelled next to it.
    */
-  let {
-    id,
-    name,
-    avatar,
-    class: cls = 'size-8 rounded-lg text-sm',
-  }: { id: string; name: string; avatar: Avatar | null | undefined; class?: string } = $props()
+  interface Props {
+    id: string
+    name: string
+    avatar: Avatar | null | undefined
+    class?: string
+  }
+
+  let { id, name, avatar, class: cls = 'size-8 rounded-lg text-sm' }: Props = $props()
 
   const tone = $derived(AVATAR_TONES[avatar?.color ?? defaultAvatarColor(id)])
   const initial = $derived(name.trim().charAt(0).toUpperCase())

@@ -48,7 +48,7 @@ export async function listAudit(
   filter: AuditFilter,
   limit = PAGE_SIZE,
 ): Promise<AuditRow[]> {
-  const rows = await sql`
+  const rows = await sql<AuditRow[]>`
 		SELECT
 			a.id,
 			a.created_at AS "createdAt",
@@ -72,7 +72,7 @@ export async function listAudit(
 		ORDER BY a.id DESC
 		LIMIT ${limit}`
 
-  return rows as AuditRow[]
+  return rows
 }
 
 /** The filter's conditions joined with AND; each empty or malformed field adds nothing. */

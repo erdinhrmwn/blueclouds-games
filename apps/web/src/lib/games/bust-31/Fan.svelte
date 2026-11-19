@@ -2,7 +2,11 @@
   import PlayingCard from './PlayingCard.svelte'
 
   /** A small fan of sample cards: the game's picture on its home page and the landing page. */
-  let { size = 'md' }: { size?: 'sm' | 'md' } = $props()
+  interface Props {
+    size?: 'sm' | 'md'
+  }
+
+  let { size = 'md' }: Props = $props()
 
   const SAMPLE = [
     { id: 's1', kind: 'number', value: 7 },

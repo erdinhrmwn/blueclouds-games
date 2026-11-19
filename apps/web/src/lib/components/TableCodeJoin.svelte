@@ -2,7 +2,11 @@
   import { enterTable, enterTableByCode } from '#lib/tables.ts'
 
   /** Joining a friend's table by its code. Without a game (the landing page) the code finds its own. */
-  let { game }: { game?: string } = $props()
+  interface Props {
+    game?: string
+  }
+
+  let { game }: Props = $props()
 
   let code = $state('')
   let error = $state<string | null>(null)

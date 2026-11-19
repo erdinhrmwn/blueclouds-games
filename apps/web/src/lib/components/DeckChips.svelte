@@ -2,7 +2,12 @@
   import { cardFace } from '#lib/rounds.ts'
 
   /** A revealed deck drawn as small cards, top first. */
-  let { game, deck }: { game: string; deck: string[] } = $props()
+  interface Props {
+    game: string
+    deck: string[]
+  }
+
+  let { game, deck }: Props = $props()
 </script>
 
 <ol class="flex flex-wrap gap-1.5" aria-label="Deck, top first">

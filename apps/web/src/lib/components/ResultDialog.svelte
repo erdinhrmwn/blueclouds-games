@@ -7,13 +7,7 @@
    * chairs keep their places. It opens once the last card has landed; "See the table" closes it, and the table
    * shows a button to open it again.
    */
-  let {
-    open = $bindable(false),
-    title,
-    winner,
-    details,
-    actions,
-  }: {
+  interface Props {
     open?: boolean
     /** "You won", "You lost this one"… */
     title: string
@@ -22,7 +16,9 @@
     details?: Snippet
     /** What comes next: play again, wait for the host, or the tournament's next round. */
     actions: Snippet
-  } = $props()
+  }
+
+  let { open = $bindable(false), title, winner, details, actions }: Props = $props()
 
   /** Time to see the last card land before the modal covers the table. */
   const OPEN_AFTER_MS = 1_500

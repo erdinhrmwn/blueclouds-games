@@ -151,7 +151,11 @@ export async function listOpen(
 }
 
 /** Signs the player up. Signing up twice is a no-op; a disqualified player can't sign up again. */
-export async function joinTournament(sql: SQL, tournamentId: string, playerId: string) {
+export async function joinTournament(
+  sql: SQL,
+  tournamentId: string,
+  playerId: string,
+): Promise<void> {
   await sql.begin(async (tx) => {
     const tournament = await lockTournament(tx, tournamentId)
     requireOpenRegistration(tournament)
@@ -190,7 +194,11 @@ export async function joinTournament(sql: SQL, tournamentId: string, playerId: s
  * player withdraws: their seat is freed and they can't come back. Refused once their table started; they leave it
  * from the table then. Signing out when not signed up is a no-op.
  */
-export async function leaveTournament(sql: SQL, tournamentId: string, playerId: string) {
+export async function leaveTournament(
+  sql: SQL,
+  tournamentId: string,
+  playerId: string,
+): Promise<void> {
   await sql.begin(async (tx) => {
     const tournament = await lockTournament(tx, tournamentId)
 
@@ -261,12 +269,20 @@ export async function leaveTournament(sql: SQL, tournamentId: string, playerId: 
   })
 }
 
+/** The parts of a locked tournament row a sign-up or withdraw reads. */
+interface LockedTournament {
+  distributed_at: Date | null
+  max_players: number | null
+  fee: number
+  open: boolean
+}
+
 /**
  * The tournament, refused when missing or cancelled. FOR UPDATE holds the row for the transaction, so a distribute
  * run on the same tournament waits, and two sign-ups can't both take its last place.
  */
-async function lockTournament(tx: SQL, tournamentId: string) {
-  const [tournament] = await tx`
+async function lockTournament(tx: SQL, tournamentId: string): Promise<LockedTournament> {
+  const [tournament] = await tx<(LockedTournament & { cancelled_at: Date | null })[]>`
 		SELECT
 			cancelled_at,
 			distributed_at,
@@ -285,12 +301,7 @@ async function lockTournament(tx: SQL, tournamentId: string) {
     throw new ApiError('conflict', 409, 'This tournament was cancelled.')
   }
 
-  return tournament as {
-    distributed_at: Date | null
-    max_players: number | null
-    fee: number
-    open: boolean
-  }
+  return tournament
 }
 
 /** Whether the player ever sat at a table of this tournament that started. */

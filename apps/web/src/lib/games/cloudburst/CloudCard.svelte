@@ -2,15 +2,7 @@
   import type { Card } from 'contracts/rooms/cloudburst'
   import { SUIT_NAME } from './suits.ts'
 
-  let {
-    card,
-    size = 'md',
-    fits = true,
-    disabled = false,
-    selected = false,
-    label,
-    onplay,
-  }: {
+  interface Props {
     card: Card
     /** `xs`: the tiny cards of the round-end reveal at a seat; `pile`: the middle of the table. */
     size?: 'xs' | 'pile' | 'sm' | 'md' | 'lg'
@@ -21,7 +13,17 @@
     /** What the button does, for screen readers ("Play", "Give"). */
     label?: string
     onplay?: (id: string) => void
-  } = $props()
+  }
+
+  let {
+    card,
+    size = 'md',
+    fits = true,
+    disabled = false,
+    selected = false,
+    label,
+    onplay,
+  }: Props = $props()
 
   const WORD = { calm: 'Calm', swirl: 'Swirl', gust: 'Gust', downpour: 'Downpour +2' } as const
   /** Card art file names where they differ from the card's kind. */

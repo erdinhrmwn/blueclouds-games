@@ -15,7 +15,9 @@ export interface Question {
   keep?: string
 }
 
-type Pending = Question & { answer: (yes: boolean) => void }
+interface Pending extends Question {
+  answer: (yes: boolean) => void
+}
 
 export const confirmState = $state<{ current: Pending | null }>({ current: null })
 

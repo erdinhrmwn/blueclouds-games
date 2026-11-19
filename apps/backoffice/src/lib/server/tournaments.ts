@@ -2,6 +2,7 @@
 // tables and cancelling. Players and seats: tournament-players.ts. Paying the prizes: tournament-prizes.ts.
 
 import type { SQL } from 'bun'
+import { must } from 'contracts/must'
 import { z } from 'zod'
 import {
   FEE_MAX,
@@ -156,14 +157,14 @@ const COLUMNS = (sql: SQL) => sql`
 
 /** Newest start first. */
 export async function listTournaments(sql: SQL): Promise<TournamentRow[]> {
-  const rows = await sql`
+  const rows = await sql<TournamentRow[]>`
 		SELECT ${COLUMNS(sql)}
 		FROM tournaments t
 		JOIN games g ON g.slug = t.game_slug
 		ORDER BY t.starts_at DESC
 		LIMIT ${LIST_LIMIT}`
 
-  return rows as TournamentRow[]
+  return rows
 }
 
 /** A `datetime-local` value, read as UTC like every time in the backoffice. */
@@ -181,7 +182,13 @@ const FORMAT_VALUES = TOURNAMENT_FORMATS.map((format) => format.value) as [
  * Prize rows from the form's repeated `prizeCoins` and `prizeExtra` fields, in place order. Rows left fully blank
  * are dropped, so the places that follow move up.
  */
-export function prizeRows(coins: string[], extras: string[]) {
+/** One prize line of the form, as typed; the schema checks the coins. */
+export interface PrizeInput {
+  coins: string
+  extra: string
+}
+
+export function prizeRows(coins: string[], extras: string[]): PrizeInput[] {
   const rows = coins.map((value, index) => ({
     coins: value.trim(),
     extra: (extras[index] ?? '').trim(),
@@ -300,7 +307,7 @@ export async function createTournament(
   }
 
   return sql.begin(async (tx) => {
-    const [row] = await tx`
+    const [inserted] = await tx<{ id: string }[]>`
 			INSERT INTO tournaments (
 				game_slug,
 				name,
@@ -332,6 +339,7 @@ export async function createTournament(
 				${admin.id}
 			)
 			RETURNING id`
+    const row = must(inserted, 'new tournament')
 
     if (input.prizes.length > 0) {
       const prizes = input.prizes.map((prize, index) => ({
@@ -351,26 +359,34 @@ export async function createTournament(
       ip,
     })
 
-    return row.id as string
+    return row.id
   })
 }
 
-export async function tournamentDetail(sql: SQL, id: string) {
+export interface TournamentDetail {
+  tournament: Omit<TournamentRow, 'feesHeld'> & { feesHeld: number }
+  players: Registered[]
+  rooms: TournamentRoom[]
+  results: TournamentResult[]
+  payouts: Payout[]
+}
+
+export async function tournamentDetail(sql: SQL, id: string): Promise<TournamentDetail | null> {
   if (!isUuid(id)) {
     return null
   }
 
-  const [tournament] = (await sql`
+  const [tournament] = await sql<TournamentRow[]>`
 		SELECT ${COLUMNS(sql)}
 		FROM tournaments t
 		JOIN games g ON g.slug = t.game_slug
-		WHERE t.id = ${id}`) as TournamentRow[]
+		WHERE t.id = ${id}`
 
   if (!tournament) {
     return null
   }
 
-  const playersQuery = sql`
+  const playersQuery = sql<Registered[]>`
 		SELECT
 			tp.player_id AS "playerId",
 			p.display_name AS name,
@@ -395,7 +411,7 @@ export async function tournamentDetail(sql: SQL, id: string) {
 		WHERE tp.tournament_id = ${id}
 		ORDER BY latest.code NULLS LAST, latest.seat, p.display_name`
 
-  const roomsQuery = sql`
+  const roomsQuery = sql<TournamentRoom[]>`
 		SELECT
 			r.id,
 			r.code,
@@ -420,7 +436,7 @@ export async function tournamentDetail(sql: SQL, id: string) {
 		WHERE r.tournament_id = ${id}
 		ORDER BY r.tournament_round DESC, r.code`
 
-  const resultsQuery = sql`
+  const resultsQuery = sql<TournamentResult[]>`
 		SELECT
 			tr.place,
 			tr.player_id AS "playerId",
@@ -442,16 +458,26 @@ export async function tournamentDetail(sql: SQL, id: string) {
 
   return {
     tournament: { ...tournament, feesHeld: Number(tournament.feesHeld) },
-    players: [...players] as Registered[],
-    rooms: [...rooms] as TournamentRoom[],
-    results: [...results] as TournamentResult[],
+    players: [...players],
+    rooms: [...rooms],
+    results: [...results],
     payouts,
   }
 }
 
+/** The columns of a locked tournament that the admin's changes read. */
+export interface LockedTournament {
+  name: string
+  distributed_at: Date | null
+  cancelled_at: Date | null
+  ended_at: Date | null
+  players_per_room: number
+  max_players: number | null
+}
+
 /** Locks the tournament for a change and refuses one that is cancelled or already handed out its tables. */
-export async function lockOpen(tx: SQL, id: string) {
-  const [tournament] = await tx`
+export async function lockOpen(tx: SQL, id: string): Promise<LockedTournament> {
+  const [tournament] = await tx<LockedTournament[]>`
 		SELECT name, distributed_at, cancelled_at, ended_at, players_per_room, max_players
 		FROM tournaments
 		WHERE id = ${id}
@@ -538,7 +564,7 @@ export interface TournamentTable {
 
 /** Tournament tables that are handed out and not closed yet, with who is seated at each. */
 export async function tournamentTables(sql: SQL): Promise<TournamentTable[]> {
-  const rows = await sql`
+  const rows = await sql<TournamentTable[]>`
 		SELECT
 			r.id,
 			r.code,
@@ -568,7 +594,7 @@ export async function tournamentTables(sql: SQL): Promise<TournamentTable[]> {
 			AND t.distributed_at IS NOT NULL
 		ORDER BY t.starts_at, r.code`
 
-  return rows as TournamentTable[]
+  return rows
 }
 
 export interface Payout {
@@ -581,7 +607,7 @@ export interface Payout {
 
 /** Who gets which prize: each prize place matched with whoever finished there. Empty until it finished. */
 export async function plannedPayouts(sql: SQL, id: string): Promise<Payout[]> {
-  const rows = await sql`
+  const rows = await sql<Payout[]>`
 		SELECT
 			prize.place,
 			tr.player_id AS "playerId",
@@ -594,5 +620,5 @@ export async function plannedPayouts(sql: SQL, id: string): Promise<Payout[]> {
 		WHERE prize.tournament_id = ${id}
 		ORDER BY prize.place`
 
-  return [...rows] as Payout[]
+  return [...rows]
 }

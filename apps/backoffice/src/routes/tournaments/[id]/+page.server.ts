@@ -1,5 +1,5 @@
 import { error, fail } from '@sveltejs/kit'
-import { auditIp } from '#lib/server/auth.ts'
+import { auditIp, requireAdmin } from '#lib/server/auth.ts'
 import { sql } from '#lib/server/db.ts'
 import { isUuid } from '#lib/server/players.ts'
 import {
@@ -71,7 +71,7 @@ export const actions: Actions = {
 
     const register = async () => {
       const ip = auditIp(getClientAddress())
-      const result = await registerPlayers(sql, locals.admin!, params.id, ids, ip)
+      const result = await registerPlayers(sql, requireAdmin(locals.admin), params.id, ids, ip)
 
       const alreadyNote = result.already ? ` ${result.already} already were.` : ''
       return `Registered ${plural(result.added, 'player')}.${alreadyNote}`
@@ -83,7 +83,7 @@ export const actions: Actions = {
     const data = await request.formData()
     return attempt(async () => {
       const ip = auditIp(getClientAddress())
-      await unregisterPlayer(sql, locals.admin!, params.id, playerIdOf(data), ip)
+      await unregisterPlayer(sql, requireAdmin(locals.admin), params.id, playerIdOf(data), ip)
 
       return 'Player removed from the tournament.'
     })
@@ -91,7 +91,7 @@ export const actions: Actions = {
   distribute: async ({ params, locals, getClientAddress }) =>
     attempt(async () => {
       const ip = auditIp(getClientAddress())
-      const result = await distributeNow(sql, locals.admin!, params.id, ip)
+      const result = await distributeNow(sql, requireAdmin(locals.admin), params.id, ip)
 
       return `Sign-up closed. ${result.players} players got ${plural(result.rooms, 'table')}.`
     }),
@@ -100,7 +100,14 @@ export const actions: Actions = {
     return attempt(async () => {
       const code = field(data, 'room').toUpperCase()
       const ip = auditIp(getClientAddress())
-      const seat = await assignPlayer(sql, locals.admin!, params.id, code, playerIdOf(data), ip)
+      const seat = await assignPlayer(
+        sql,
+        requireAdmin(locals.admin),
+        params.id,
+        code,
+        playerIdOf(data),
+        ip,
+      )
 
       return `Seated at table ${code}, seat ${seat + 1}.`
     })
@@ -109,7 +116,7 @@ export const actions: Actions = {
     const data = await request.formData()
     return attempt(async () => {
       const ip = auditIp(getClientAddress())
-      await unassignPlayer(sql, locals.admin!, params.id, playerIdOf(data), ip)
+      await unassignPlayer(sql, requireAdmin(locals.admin), params.id, playerIdOf(data), ip)
 
       return 'Player taken off their table. They are still registered.'
     })
@@ -122,7 +129,13 @@ export const actions: Actions = {
       async () => {
         const ip = auditIp(getClientAddress())
         const target = { playerId: playerIdOf(data), reason }
-        const { runningTable } = await disqualifyPlayer(sql, locals.admin!, params.id, target, ip)
+        const { runningTable } = await disqualifyPlayer(
+          sql,
+          requireAdmin(locals.admin),
+          params.id,
+          target,
+          ip,
+        )
 
         const kickHint = runningTable
           ? ` Their table ${runningTable} is playing: kick them there from Live tables.`
@@ -135,14 +148,14 @@ export const actions: Actions = {
   cancel: async ({ params, locals, getClientAddress }) =>
     attempt(async () => {
       const ip = auditIp(getClientAddress())
-      await cancelTournament(sql, locals.admin!, params.id, ip)
+      await cancelTournament(sql, requireAdmin(locals.admin), params.id, ip)
 
       return 'Tournament cancelled. Its tables no longer let anyone in, and every fee went back.'
     }),
   payout: async ({ params, locals, getClientAddress }) =>
     attempt(async () => {
       const ip = auditIp(getClientAddress())
-      const paid = await payPrizes(sql, locals.admin!, params.id, ip)
+      const paid = await payPrizes(sql, requireAdmin(locals.admin), params.id, ip)
       const coins = paid.coins.toLocaleString('en')
 
       return `Paid ${coins} coins to ${paid.players} ${paid.players === 1 ? 'player' : 'players'}.`

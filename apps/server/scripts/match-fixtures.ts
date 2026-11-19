@@ -3,6 +3,7 @@
 //   bun apps/server/scripts/match-fixtures.ts
 
 import type { MatchSeeds } from 'contracts/fairness/fairness'
+import { must } from 'contracts/must'
 import { toMatchId, toPlayerId } from '../src/core/domain/ids'
 import type { LogEntry } from '../src/core/domain/match'
 import { fairRng, matchSeeds, newCommitment, seedsForRound } from '../src/core/rules/fair-rng'
@@ -36,7 +37,7 @@ function playedGame() {
       const result = seedsForRound(seeds, round)
       seeds = result.seeds
       if (result.started) {
-        const { roundId, serverSeedHash } = seeds.current!
+        const { roundId, serverSeedHash } = must(seeds.current, 'current seed')
         pending.push({ type: 'fairness', data: { round, roundId, serverSeedHash } })
       }
 
@@ -51,7 +52,10 @@ function playedGame() {
   // As the room does: a closed round reveals its seed after its moves.
   const revealsOf = (moves: LogEntry[], finished: boolean) =>
     closedRounds(moves, seeds.current?.round ?? null, finished).map((round) => {
-      const seed = [seeds.previous, seeds.current].find((held) => held?.round === round)!
+      const seed = must(
+        [seeds.previous, seeds.current].find((held) => held?.round === round),
+        'seed of the round',
+      )
       return { type: 'reveal', data: { round, serverSeed: seed.serverSeed } }
     })
   const step = (next: Game) => {
@@ -68,8 +72,9 @@ function playedGame() {
   game = { ...game, hostId: host }
   step(startGame(game, host, rng))
   while (game.phase === 'playing') {
-    const player = game.players[game.turn]!
-    step(playCard(game, player.id, chooseBotCard(player.hand, game.total)!.id, rng))
+    const player = must(game.players[game.turn], 'player on turn')
+    const card = must(chooseBotCard(player.hand, game.total), 'bot card')
+    step(playCard(game, player.id, card.id, rng))
   }
 
   const seats = game.players.map((player) => ({ seat: player.seat, name: player.name }))

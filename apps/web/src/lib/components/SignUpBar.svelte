@@ -3,20 +3,16 @@
    * How full a tournament is: "5 / 24 players", what it still needs to run (or that you're in), and a bar with a
    * notch at the minimum: below it when sign-up closes, the tournament is cancelled.
    */
-  let {
-    registered,
-    minPlayers,
-    maxPlayers,
-    joined,
-    full,
-  }: {
+  interface Props {
     registered: number
     minPlayers: number | null
     maxPlayers: number | null
     joined: boolean
     /** Sign-up closed because it filled up: the bar turns ember. */
     full: boolean
-  } = $props()
+  }
+
+  let { registered, minPlayers, maxPlayers, joined, full }: Props = $props()
 
   const missing = $derived(minPlayers === null ? 0 : Math.max(minPlayers - registered, 0))
 

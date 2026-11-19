@@ -101,7 +101,12 @@
 </script>
 
 <script lang="ts">
-  let { name, class: cls = 'size-5' }: { name: IconName; class?: string } = $props()
+  interface Props {
+    name: IconName
+    class?: string
+  }
+
+  let { name, class: cls = 'size-5' }: Props = $props()
 
   const shapes: Shape[] = $derived(ICONS[name])
 </script>

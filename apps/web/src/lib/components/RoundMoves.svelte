@@ -6,15 +6,13 @@
    * Everything that happened in a closed round, from its move log: the hands dealt and every move after, with
    * the time since the deal.
    */
-  let {
-    game,
-    events,
-    nameOf,
-  }: {
+  interface Props {
     game: string
     events: RoundEvent[]
     nameOf: (seat: number) => string | null
-  } = $props()
+  }
+
+  let { game, events, nameOf }: Props = $props()
 
   /** `tone`: bad news (a bust) in ember, the round's winner (went out) in brass. */
   interface Line {

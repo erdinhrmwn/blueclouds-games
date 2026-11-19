@@ -32,7 +32,7 @@ export const load: PageServerLoad = async ({ url }) => {
   return {
     filter,
     players,
-    next: fullPage ? players.at(-1)!.id : null,
+    next: fullPage ? (players.at(-1)?.id ?? null) : null,
     paged: !!before,
   }
 }

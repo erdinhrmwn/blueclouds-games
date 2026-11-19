@@ -31,8 +31,28 @@
       "preset": "recommended",
       "style": {
         "useBlockStatements": "error",
-        "noNestedTernary": "error"
+        "noNestedTernary": "error",
+        "noNonNullAssertion": "error",
+        "useConsistentTypeDefinitions": "error"
+      },
+      "suspicious": {
+        "noExplicitAny": "error"
       }
     }
-  }
+  },
+  "overrides": [
+    {
+      "includes": ["**/*.test.ts", "apps/platform/src/test-helpers.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noNonNullAssertion": "off"
+          },
+          "suspicious": {
+            "noExplicitAny": "off"
+          }
+        }
+      }
+    }
+  ]
 }
