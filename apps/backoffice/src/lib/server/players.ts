@@ -1,4 +1,5 @@
 import type { SQL } from 'bun'
+import { must } from 'contracts/must'
 import { REASON_MAX } from '../limits.ts'
 import type { Admin } from './auth.ts'
 import { audit } from './auth.ts'
@@ -64,14 +65,14 @@ export async function searchPlayers(
 ): Promise<PlayerRow[]> {
   const page = before && isUuid(before) ? sql`AND id < ${before}` : sql``
 
-  const rows = await sql`
+  const rows = await sql<PlayerRow[]>`
 		SELECT ${PLAYER_COLUMNS(sql)}
 		FROM players
 		WHERE ${playerConditions(sql, filter)} ${page}
 		ORDER BY id DESC
 		LIMIT ${PAGE_SIZE}`
 
-  return rows as PlayerRow[]
+  return rows
 }
 
 /** The filter's conditions joined with AND; each empty field adds nothing. */
@@ -147,16 +148,16 @@ export async function playerDetail(
     return null
   }
 
-  const [player] = (await sql`
+  const [player] = await sql<PlayerRow[]>`
 		SELECT ${PLAYER_COLUMNS(sql)}
 		FROM players
-		WHERE id = ${id}`) as PlayerRow[]
+		WHERE id = ${id}`
 
   if (!player) {
     return null
   }
 
-  const matches = (await sql`
+  const matches = await sql<PlayerMatch[]>`
 		SELECT
 			m.id,
 			m.game_slug AS game,
@@ -176,17 +177,18 @@ export async function playerDetail(
 		JOIN rooms r ON r.id = m.room_id
 		WHERE mp.player_id = ${id}
 		ORDER BY m.id DESC
-		LIMIT ${PLAYER_MATCHES_LIMIT}`) as PlayerMatch[]
+		LIMIT ${PLAYER_MATCHES_LIMIT}`
 
-  const [stats] = (await sql`
+  const [stats] = await sql<PlayerStats[]>`
 		SELECT
 			count(*)::int AS played,
 			count(*) FILTER (WHERE mp.placement = 1 AND m.end_reason = 'finished')::int AS won
 		FROM match_players mp
 		JOIN matches m ON m.id = mp.match_id
-		WHERE mp.player_id = ${id}`) as PlayerStats[]
+		WHERE mp.player_id = ${id}`
 
-  return { player, matches, stats: stats! }
+  // An aggregate without GROUP BY always answers one row.
+  return { player, matches, stats: must(stats, 'player stats') }
 }
 
 /**

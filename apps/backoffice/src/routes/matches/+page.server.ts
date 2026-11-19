@@ -22,6 +22,6 @@ export const load: PageServerLoad = async ({ url }) => {
     filter,
     games,
     matches,
-    next: fullPage ? matches.at(-1)!.id : null,
+    next: fullPage ? (matches.at(-1)?.id ?? null) : null,
   }
 }

@@ -1,4 +1,5 @@
 import { isIP } from 'node:net'
+import { error } from '@sveltejs/kit'
 import type { SQL } from 'bun'
 
 export const ADMIN_ROLES = ['owner', 'admin', 'viewer'] as const
@@ -13,6 +14,18 @@ export interface Admin {
 }
 
 /** The first admin. Always an owner, and never disabled (both enforced by the database). */
+/**
+ * The signed-in admin of a request. hooks.server.ts already sends anyone without one to /login, so this only
+ * turns that into a type; it refuses the request should a route ever be reached without one.
+ */
+export function requireAdmin(admin: Admin | null): Admin {
+  if (!admin) {
+    error(401, 'Sign in first.')
+  }
+
+  return admin
+}
+
 export const ROOT = 'root'
 
 export const SESSION_COOKIE = 'bo_session'

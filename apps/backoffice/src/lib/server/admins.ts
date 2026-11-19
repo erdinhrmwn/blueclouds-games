@@ -27,7 +27,7 @@ export interface AdminRow {
 }
 
 export async function listAdmins(sql: SQL): Promise<AdminRow[]> {
-  const rows = await sql`
+  const rows = await sql<AdminRow[]>`
 		SELECT
 			a.id,
 			a.username,
@@ -49,7 +49,7 @@ export async function listAdmins(sql: SQL): Promise<AdminRow[]> {
 		FROM admins a
 		ORDER BY a.id`
 
-  return rows as AdminRow[]
+  return rows
 }
 
 function newPassword(): string {

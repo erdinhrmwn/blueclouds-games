@@ -1,5 +1,5 @@
 import { fail } from '@sveltejs/kit'
-import { auditIp } from '#lib/server/auth.ts'
+import { auditIp, requireAdmin } from '#lib/server/auth.ts'
 import { sql } from '#lib/server/db.ts'
 import { listGames, setMaintenance } from '#lib/server/games.ts'
 import type { Actions, PageServerLoad } from './$types'
@@ -18,7 +18,13 @@ async function slugOf(request: Request): Promise<string> {
 export const actions: Actions = {
   start: async ({ request, locals, getClientAddress }) => {
     const slug = await slugOf(request)
-    const done = await setMaintenance(sql, locals.admin!, slug, true, auditIp(getClientAddress()))
+    const done = await setMaintenance(
+      sql,
+      requireAdmin(locals.admin),
+      slug,
+      true,
+      auditIp(getClientAddress()),
+    )
     if (!done) {
       return fail(409, { error: 'This game is already under maintenance.' })
     }
@@ -27,7 +33,13 @@ export const actions: Actions = {
   },
   end: async ({ request, locals, getClientAddress }) => {
     const slug = await slugOf(request)
-    const done = await setMaintenance(sql, locals.admin!, slug, false, auditIp(getClientAddress()))
+    const done = await setMaintenance(
+      sql,
+      requireAdmin(locals.admin),
+      slug,
+      false,
+      auditIp(getClientAddress()),
+    )
     if (!done) {
       return fail(409, { error: 'This game is not under maintenance.' })
     }

@@ -1,5 +1,5 @@
 import { fail } from '@sveltejs/kit'
-import { auditIp } from '#lib/server/auth.ts'
+import { auditIp, requireAdmin } from '#lib/server/auth.ts'
 import { sql } from '#lib/server/db.ts'
 import {
   kickFromLiveTable,
@@ -93,7 +93,7 @@ export const actions: Actions = {
     try {
       const result = await terminateLiveTable(
         sql,
-        locals.admin!,
+        requireAdmin(locals.admin),
         target,
         auditIp(getClientAddress()),
       )
@@ -118,7 +118,7 @@ export const actions: Actions = {
     try {
       const result = await kickFromLiveTable(
         sql,
-        locals.admin!,
+        requireAdmin(locals.admin),
         target,
         auditIp(getClientAddress()),
       )

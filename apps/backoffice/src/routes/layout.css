@@ -7,109 +7,109 @@
  * Accent: the felt green from the game, on primary actions and the current nav item. Brass marks VIP only.
  */
 @theme {
-	--font-sans: 'IBM Plex Sans', system-ui, sans-serif;
-	--font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+  --font-sans: 'IBM Plex Sans', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
 
-	--color-page: #f3f4f1;
-	--color-surface: #ffffff;
-	--color-subtle: #f8f9f7; /* table heads, inset rows */
-	--color-line: #dde1da;
-	--color-ink: #1b201c;
-	--color-muted: #566058; /* 6.2:1 on page */
-	--color-felt: #1d4a3a; /* accent */
-	--color-felt-deep: #10301f; /* sidebar */
-	--color-felt-soft: #e6efe9; /* accent wash behind felt text */
-	--color-brass: #7a5a14; /* VIP text, 6.4:1 on brass-soft */
-	--color-brass-soft: #f6eed9;
-	--color-danger: #b3261e;
-	--color-danger-soft: #fbeceb;
+  --color-page: #f3f4f1;
+  --color-surface: #ffffff;
+  --color-subtle: #f8f9f7; /* table heads, inset rows */
+  --color-line: #dde1da;
+  --color-ink: #1b201c;
+  --color-muted: #566058; /* 6.2:1 on page */
+  --color-felt: #1d4a3a; /* accent */
+  --color-felt-deep: #10301f; /* sidebar */
+  --color-felt-soft: #e6efe9; /* accent wash behind felt text */
+  --color-brass: #7a5a14; /* VIP text, 6.4:1 on brass-soft */
+  --color-brass-soft: #f6eed9;
+  --color-danger: #b3261e;
+  --color-danger-soft: #fbeceb;
 }
 
 @layer base {
-	body {
-		@apply min-h-dvh bg-page font-sans text-ink antialiased;
-	}
+  body {
+    @apply min-h-dvh bg-page font-sans text-ink antialiased;
+  }
 
-	button:not(:disabled),
-	[role='button'] {
-		cursor: pointer;
-	}
+  button:not(:disabled),
+  [role='button'] {
+    cursor: pointer;
+  }
 
-	:focus-visible {
-		@apply outline-2 outline-offset-2 outline-felt;
-	}
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-felt;
+  }
 }
 
 @utility btn {
-	@apply inline-flex min-h-11 items-center justify-center gap-2 rounded-md px-4 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50;
+  @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-md px-4 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50;
 }
 @utility btn-primary {
-	@apply btn bg-felt text-white hover:bg-[#153a2d] active:bg-felt-deep;
+  @apply btn bg-felt text-white hover:bg-[#153a2d] active:bg-felt-deep;
 }
 @utility btn-quiet {
-	@apply btn border border-line bg-surface hover:bg-subtle active:bg-line;
+  @apply btn border border-line bg-surface hover:bg-subtle active:bg-line;
 }
 @utility btn-danger {
-	@apply btn bg-danger text-white hover:bg-[#962019] active:bg-[#7d1a14];
+  @apply btn bg-danger text-white hover:bg-[#962019] active:bg-[#7d1a14];
 }
 @utility field {
-	@apply min-h-11 w-full rounded-md border border-line bg-surface px-3 text-base;
+  @apply min-h-11 w-full rounded-md border border-line bg-surface px-3 text-base;
 }
 @utility label {
-	@apply mb-1.5 block text-sm font-medium;
+  @apply mb-1.5 block text-sm font-medium;
 }
 /* A text link inside content: quiet underline that firms up on hover. */
 @utility link {
-	@apply underline decoration-line underline-offset-2 hover:decoration-ink;
+  @apply underline decoration-line underline-offset-2 hover:decoration-ink;
 }
 
 /* Small word tag on a player or seat (VIP, Away, Turn): a pill, like the seat tags in the game. */
 @utility tag {
-	@apply inline-flex h-5 items-center rounded-full border border-line px-2 text-xs leading-none font-medium whitespace-nowrap;
+  @apply inline-flex h-5 items-center rounded-full border border-line px-2 text-xs leading-none font-medium whitespace-nowrap;
 }
 @utility tag-vip {
-	@apply tag border-brass/30 bg-brass-soft text-brass;
+  @apply tag border-brass/30 bg-brass-soft text-brass;
 }
 @utility tag-good {
-	@apply tag border-felt/20 bg-felt-soft text-felt;
+  @apply tag border-felt/20 bg-felt-soft text-felt;
 }
 @utility tag-bad {
-	@apply tag border-danger/25 bg-danger-soft text-danger;
+  @apply tag border-danger/25 bg-danger-soft text-danger;
 }
 
 /* The one container for a block of content: tables, forms, detail lists. */
 @utility panel {
-	/* clip, not hidden: rounds the table heads off without breaking position: sticky inside. */
-	@apply overflow-clip rounded-xl border border-line bg-surface;
+  /* clip, not hidden: rounds the table heads off without breaking position: sticky inside. */
+  @apply overflow-clip rounded-xl border border-line bg-surface;
 }
 @utility panel-head {
-	@apply flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-line px-5 py-4;
+  @apply flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-line px-5 py-4;
 }
 
 /* Every list of rows in the backoffice: put `data-table` on the <table>, wrap it in a scrolling panel. */
 @utility data-table {
-	/* relative: keeps sr-only labels in cells inside the scroll box instead of widening the page. */
-	@apply relative w-full text-left text-sm;
+  /* relative: keeps sr-only labels in cells inside the scroll box instead of widening the page. */
+  @apply relative w-full text-left text-sm;
 
-	& th {
-		@apply bg-subtle px-4 py-2.5 text-xs font-medium tracking-wide whitespace-nowrap text-muted uppercase;
-	}
-	& td {
-		@apply border-t border-line px-4 py-3;
-	}
-	& tbody tr {
-		@apply transition-colors hover:bg-subtle;
-	}
+  & th {
+    @apply bg-subtle px-4 py-2.5 text-xs font-medium tracking-wide whitespace-nowrap text-muted uppercase;
+  }
+  & td {
+    @apply border-t border-line px-4 py-3;
+  }
+  & tbody tr {
+    @apply transition-colors hover:bg-subtle;
+  }
 }
 
 /* Label and value pairs on a detail page. */
 @utility facts {
-	@apply grid grid-cols-1 gap-x-6 gap-y-1 px-5 py-4 text-sm sm:grid-cols-[10rem_1fr] sm:gap-y-3;
+  @apply grid grid-cols-1 gap-x-6 gap-y-1 px-5 py-4 text-sm sm:grid-cols-[10rem_1fr] sm:gap-y-3;
 
-	& dt {
-		@apply text-muted;
-	}
-	& dd {
-		@apply mb-3 sm:mb-0;
-	}
+  & dt {
+    @apply text-muted;
+  }
+  & dd {
+    @apply mb-3 sm:mb-0;
+  }
 }

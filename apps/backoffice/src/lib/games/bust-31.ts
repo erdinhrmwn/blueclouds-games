@@ -1,3 +1,4 @@
+import { must } from 'contracts/must'
 import {
   fairnessText,
   type LogEvent,
@@ -125,6 +126,8 @@ export function replayBust31(log: MatchLog, seats: ReplaySeat[]): Step[] {
   let deck: string[] = []
   let pile: string[] = []
 
+  const stateOf = (seat: number) => must(table.get(seat), `seat ${seat}`)
+
   const nextAlive = (from: number) => {
     const start = order.indexOf(from)
     const count = order.length
@@ -132,8 +135,8 @@ export function replayBust31(log: MatchLog, seats: ReplaySeat[]): Step[] {
     for (let step = 1; step <= count; step++) {
       // Wraps around both ways: ((x % n) + n) % n is never negative.
       const index = (((start + step * direction) % count) + count) % count
-      const seat = order[index]!
-      if (table.get(seat)!.lives > 0) {
+      const seat = must(order[index], 'seat')
+      if (stateOf(seat).lives > 0) {
         return seat
       }
     }
@@ -147,10 +150,10 @@ export function replayBust31(log: MatchLog, seats: ReplaySeat[]): Step[] {
     limit: LIMIT,
     clockwise: direction === 1,
     turnSeat: turn,
-    pileTop: pile.length ? cardOf(pile.at(-1)!).label : null,
+    pileTop: pile.length ? cardOf(must(pile.at(-1), 'pile top')).label : null,
     deckCount: deck.length,
     seats: order.map((seat): SeatState => {
-      const state = table.get(seat)!
+      const state = stateOf(seat)
       const hand = state.hand.map((id) => cardOf(id).label)
 
       return { seat, lives: state.lives, hand, away: state.away }
@@ -225,7 +228,7 @@ export function replayBust31(log: MatchLog, seats: ReplaySeat[]): Step[] {
             direction = -direction
           }
 
-          const next = nextAlive(event.seat!)
+          const next = nextAlive(must(event.seat, 'seat of the play'))
           let swapText = ''
           if (card.effect === 'swap') {
             expect('Swapped with', entry.data.swapped, next)

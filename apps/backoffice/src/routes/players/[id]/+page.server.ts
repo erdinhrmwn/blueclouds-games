@@ -1,6 +1,6 @@
 import { error, fail } from '@sveltejs/kit'
 import { listAudit, NO_AUDIT_FILTER } from '#lib/server/audit-log.ts'
-import { auditIp } from '#lib/server/auth.ts'
+import { auditIp, requireAdmin } from '#lib/server/auth.ts'
 import { balanceOf, coinHistory } from '#lib/server/coins.ts'
 import { sql } from '#lib/server/db.ts'
 import {
@@ -48,7 +48,7 @@ export const actions: Actions = {
     }
 
     const ip = auditIp(getClientAddress())
-    const done = await disablePlayer(sql, locals.admin!, params.id, reason, ip)
+    const done = await disablePlayer(sql, requireAdmin(locals.admin), params.id, reason, ip)
     if (!done) {
       return fail(409, { reason, error: 'This player is already disabled, or no longer exists.' })
     }
@@ -57,7 +57,7 @@ export const actions: Actions = {
   },
   enable: async ({ params, locals, getClientAddress }) => {
     const ip = auditIp(getClientAddress())
-    const done = await enablePlayer(sql, locals.admin!, params.id, ip)
+    const done = await enablePlayer(sql, requireAdmin(locals.admin), params.id, ip)
     if (!done) {
       return fail(409, { error: 'This player is already active.' })
     }
@@ -66,7 +66,7 @@ export const actions: Actions = {
   },
   grantVip: async ({ params, locals, getClientAddress }) => {
     const ip = auditIp(getClientAddress())
-    const done = await grantVip(sql, locals.admin!, params.id, ip)
+    const done = await grantVip(sql, requireAdmin(locals.admin), params.id, ip)
     if (!done) {
       return fail(409, { error: 'This player is already a VIP.' })
     }
@@ -100,7 +100,7 @@ export const actions: Actions = {
     try {
       const balance = await adjustCoins(
         sql,
-        locals.admin!,
+        requireAdmin(locals.admin),
         params.id,
         amount,
         note,
@@ -117,7 +117,7 @@ export const actions: Actions = {
   },
   revokeVip: async ({ params, locals, getClientAddress }) => {
     const ip = auditIp(getClientAddress())
-    const done = await revokeVip(sql, locals.admin!, params.id, ip)
+    const done = await revokeVip(sql, requireAdmin(locals.admin), params.id, ip)
     if (!done) {
       return fail(409, { error: 'This player is not a VIP.' })
     }

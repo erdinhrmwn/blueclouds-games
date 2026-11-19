@@ -31,7 +31,7 @@ export async function listMatches(
   filter: MatchFilter,
   limit = PAGE_SIZE,
 ): Promise<MatchRow[]> {
-  const rows = await sql`
+  const rows = await sql<MatchRow[]>`
 		SELECT
 			m.id,
 			m.game_slug AS game,
@@ -60,7 +60,7 @@ export async function listMatches(
 		ORDER BY m.id DESC
 		LIMIT ${limit}`
 
-  return rows as MatchRow[]
+  return rows
 }
 
 /** The filter's conditions joined with AND; each empty or malformed field adds nothing. */
@@ -98,12 +98,12 @@ function matchConditions(sql: SQL, filter: MatchFilter) {
 
 /** Every game in the catalog, for the filter. */
 export async function matchGames(sql: SQL): Promise<{ slug: string; name: string }[]> {
-  const rows = await sql`
+  const rows = await sql<{ slug: string; name: string }[]>`
 		SELECT slug, name
 		FROM games
 		ORDER BY name`
 
-  return rows as { slug: string; name: string }[]
+  return rows
 }
 
 export interface Seat {
@@ -160,7 +160,7 @@ export async function matchDetail(sql: SQL, id: string): Promise<MatchDetail | n
     return null
   }
 
-  const seats = (await sql`
+  const seats = await sql<Seat[]>`
 		SELECT
 			mp.seat,
 			mp.player_id AS "playerId",
@@ -171,7 +171,7 @@ export async function matchDetail(sql: SQL, id: string): Promise<MatchDetail | n
 		FROM match_players mp
 		LEFT JOIN players p ON p.id = mp.player_id
 		WHERE mp.match_id = ${id}
-		ORDER BY mp.placement, mp.seat`) as Seat[]
+		ORDER BY mp.placement, mp.seat`
 
   return { ...match, seats }
 }
@@ -182,24 +182,26 @@ export async function matchLog(sql: SQL, id: string): Promise<MatchLog | null> {
     return null
   }
 
-  const [row] = await sql`
+  const [row] = await sql<MatchLog[]>`
 		SELECT log_version AS "logVersion", events
 		FROM match_logs
 		WHERE match_id = ${id}`
 
-  return (row as MatchLog | undefined) ?? null
+  return row ?? null
 }
 
 /**
  * How a match's rounds check against their seeds: null when it has none, else how many rounds and shuffles were
  * checked and which failed, each as "round 2" (its seed) or "round 2 #1" (a shuffle).
  */
-export type FairnessResult = {
+export interface FairnessCheck {
   ok: boolean
   rounds: number
   shuffles: number
   failed: string[]
-} | null
+}
+
+export type FairnessResult = FairnessCheck | null
 
 /**
  * Checks every closed round in the log against the seed it revealed, the way a player can (fairness.ts): the

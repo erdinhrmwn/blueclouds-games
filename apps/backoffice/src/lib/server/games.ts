@@ -11,7 +11,7 @@ export interface GameRow {
 
 /** Every game, with whether it is under maintenance (since when). */
 export async function listGames(sql: SQL): Promise<GameRow[]> {
-  const rows = await sql`
+  const rows = await sql<GameRow[]>`
 		SELECT
 			g.slug,
 			g.name,
@@ -21,7 +21,7 @@ export async function listGames(sql: SQL): Promise<GameRow[]> {
 		FROM games g
 		ORDER BY g.name`
 
-  return rows as GameRow[]
+  return rows
 }
 
 /**
