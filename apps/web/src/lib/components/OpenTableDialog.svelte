@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { must } from 'contracts/must'
   import Icon from '#lib/components/Icon.svelte'
   import { GAMES } from '#lib/games/catalog.ts'
   import type { Visibility } from '#lib/platform.ts'
@@ -20,13 +21,14 @@
   const NAME_MAX = 32
 
   let dialog = $state<HTMLDialogElement>()
-  let chosen = $state(GAMES[0]!.slug)
+  const FIRST_GAME = must(GAMES[0], 'a game in the catalog')
+  let chosen = $state(FIRST_GAME.slug)
   let name = $state('')
   let visibility = $state<Visibility>('public')
   let error = $state<string | null>(null)
   let busy = $state(false)
 
-  const chosenGame = $derived(GAMES.find((entry) => entry.slug === chosen) ?? GAMES[0]!)
+  const chosenGame = $derived(GAMES.find((entry) => entry.slug === chosen) ?? FIRST_GAME)
   const maintenance = $derived(paused[chosen] ?? false)
 
   $effect(() => {
@@ -35,7 +37,7 @@
     }
 
     if (open && !dialog.open) {
-      chosen = game ?? GAMES[0]!.slug
+      chosen = game ?? FIRST_GAME.slug
       name = player.name ? `${player.name}’s table`.slice(0, NAME_MAX) : ''
       error = null
       dialog.showModal()

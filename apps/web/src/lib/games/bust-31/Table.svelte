@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { must } from 'contracts/must'
   import type { Bust31Connection } from './connection.svelte.ts'
   import { dealCards, placeCard, seatRect, shake, whenDealt } from '#lib/motion.ts'
   import type { Card } from 'contracts/rooms/bust-31'
@@ -31,7 +32,8 @@
 
   /** Phones get a smaller pile so the middle of the table stays clear of the seats. */
   const pileSize = 'pile'
-  const view = $derived(room.view!)
+  // The room frame shows the table only once the first view arrived.
+  const view = $derived(must(room.view, 'room view'))
 
   // Fixed chairs: everyone sees the same table, dealer at the head.
   const inSeat = (seat: number) => view.players.find((player) => player.seat === seat) ?? null

@@ -22,18 +22,20 @@
   let overflow = $state(0)
 
   $effect(() => {
-    if (!box || !line) {
+    const outer = box
+    const inner = line
+    if (!outer || !inner) {
       return
     }
 
     const measure = () => {
-      overflow = Math.max(0, line!.scrollWidth - box!.clientWidth)
+      overflow = Math.max(0, inner.scrollWidth - outer.clientWidth)
     }
 
     measure()
 
     const observer = new ResizeObserver(measure)
-    observer.observe(box)
+    observer.observe(outer)
     return () => observer.disconnect()
   })
 

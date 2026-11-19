@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { must } from 'contracts/must'
   import dayjs from 'dayjs'
   import durationPlugin from 'dayjs/plugin/duration'
   import type { Step } from '#lib/replay.ts'
@@ -23,7 +24,8 @@
   let timeline = $state<HTMLOListElement>()
 
   const last = $derived(steps.length - 1)
-  const step = $derived(steps[Math.min(at, last)]!)
+  // The page shows the replay only for a log with steps.
+  const step = $derived(must(steps[Math.min(at, last)], 'replay step'))
   const table = $derived(step.state)
   const flagged = $derived(steps.filter((step) => step.mismatch).length)
   /** Lives a seat starts with: the most anyone has at the first state, for the pips. */
@@ -36,7 +38,7 @@
 
   /** The timeline cut into rounds; steps before the first deal sit under round 0 ("Setup"). */
   const rounds = $derived.by(() => {
-    const groups: { round: number; items: { step: Step; index: number }[] }[] = []
+    const groups: { round: number; start: number; items: { step: Step; index: number }[] }[] = []
 
     steps.forEach((item, index) => {
       const round = item.state?.round ?? 0
@@ -47,7 +49,7 @@
         return
       }
 
-      groups.push({ round, items: [{ step: item, index }] })
+      groups.push({ round, start: index, items: [{ step: item, index }] })
     })
 
     return groups
@@ -284,7 +286,7 @@
         class="mt-2 max-h-[32rem] overflow-y-auto rounded-lg border border-line"
         aria-label="Timeline"
       >
-        {#each rounds as group (group.items[0]!.index)}
+        {#each rounds as group (group.start)}
           <li>
             <p
               class="sticky top-0 border-b border-line bg-subtle px-3 py-1.5 text-xs font-semibold tracking-wide text-muted uppercase"

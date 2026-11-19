@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { must } from 'contracts/must'
   import { ask } from '#lib/confirm.svelte.ts'
   import { untrack } from 'svelte'
   import { createInvite, resetInviteLink } from '#lib/platform.ts'
@@ -21,7 +22,8 @@
 
   const COPIED_NOTE_MS = 1500
 
-  const view = $derived(room.view!)
+  // The room frame shows the lobby only once the first view arrived.
+  const view = $derived(must(room.view, 'room view'))
   const canStart = $derived(view.players.length >= minPlayers)
   /** A tournament table has no host controls: assigned players take their own seat and it starts by itself. */
   const tournament = $derived(view.tournament)

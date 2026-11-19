@@ -219,14 +219,16 @@
             {#if tableLine}<p class="mt-0.5 text-sm text-paper/65">{tableLine}</p>{/if}
           </div>
           {#if onwithdraw && tournament.table && !tournament.table.started}
-            <button class="btn-ghost h-10 rounded-xl" onclick={() => onwithdraw(tournament!)}
+            {@const shown = tournament}
+            <button class="btn-ghost h-10 rounded-xl" onclick={() => onwithdraw(shown)}
               >Withdraw</button
             >
           {/if}
           {#if tournament.table && !tournament.table.closed}
+            {@const code = tournament.table.code}
             <button
               class="btn-brass h-10 rounded-xl"
-              onclick={() => (error = enterTable(game, tournament.table!.code))}>Go to table</button
+              onclick={() => (error = enterTable(game, code))}>Go to table</button
             >
           {/if}
         </section>

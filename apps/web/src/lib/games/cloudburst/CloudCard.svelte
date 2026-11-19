@@ -53,8 +53,9 @@
       return 'Tempest +4'
     }
 
+    // Only the wild cards above have no suit.
     const value = card.kind === 'number' ? card.value : WORD[card.kind]
-    return `${SUIT_NAME[card.suit!]} ${value}`
+    return card.suit === null ? String(value) : `${SUIT_NAME[card.suit]} ${value}`
   })
 </script>
 

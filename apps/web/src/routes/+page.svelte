@@ -32,7 +32,7 @@
    */
   const FAN_SIZE = 5
   const heroFan = Array.from({ length: FAN_SIZE }, (_, index) => ({
-    back: GAMES[index % GAMES.length]!.back,
+    back: GAMES[index % GAMES.length]?.back ?? '',
     offset: index - (FAN_SIZE - 1) / 2,
   }))
 

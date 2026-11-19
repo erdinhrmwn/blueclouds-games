@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { must } from 'contracts/must'
   import Icon from '#lib/components/Icon.svelte'
   import type { RoundCheck } from 'contracts/fairness/fairness'
   import type { Round } from '#lib/rounds.ts'
@@ -53,8 +54,9 @@
     const steps: Record<string, number> = { ArrowRight: 1, ArrowLeft: -1 }
     let next = index
 
-    if (Object.hasOwn(steps, event.key)) {
-      next = (index + steps[event.key]! + TABS.length) % TABS.length
+    const step = Object.hasOwn(steps, event.key) ? steps[event.key] : undefined
+    if (step !== undefined) {
+      next = (index + step + TABS.length) % TABS.length
     } else if (event.key === 'Home') {
       next = 0
     } else if (event.key === 'End') {
@@ -64,7 +66,7 @@
     }
 
     event.preventDefault()
-    tab = TABS[next]!.id
+    tab = must(TABS[next], 'tab').id
     tabButtons[next]?.focus()
   }
 
