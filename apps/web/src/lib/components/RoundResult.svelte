@@ -2,6 +2,7 @@
   import { LIMIT } from 'contracts/rooms/bust-31'
   import { BURST_AT } from 'contracts/rooms/cloudburst'
   import { cardFace } from '#lib/rounds.ts'
+  import { z } from 'zod'
 
   /**
    * What happened in a closed round, from the game's own summary (rounds.ts in the game server). Bust 31: who
@@ -35,6 +36,9 @@
     const key = String(by)
     return Object.hasOwn(BY, key) ? BY[key] : 'played'
   }
+
+  /** Per-seat numbers in the summary; anything else reads as none. */
+  const PerSeat = z.record(z.string(), z.number())
 
   const name = (seat: unknown) => {
     const index = Number(seat)
@@ -70,8 +74,8 @@
       return null
     }
 
-    const left = (result.left ?? {}) as Record<string, number>
-    const points = (result.points ?? {}) as Record<string, number>
+    const left = PerSeat.safeParse(result.left).data ?? {}
+    const points = PerSeat.safeParse(result.points).data ?? {}
     const seats = Object.keys(points)
 
     return seats

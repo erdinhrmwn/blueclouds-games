@@ -43,6 +43,13 @@ describe('Bust 31 replay', () => {
     )
     const steps = replay('bust-31', { ...log, events: tampered }, seats)
     expect(steps[i]!.mismatch).toContain('Total: logged 99')
+
+    const broken = log.events.map((event, j) =>
+      j === i ? { ...event, data: { ...event.data, total: 'lots' } } : event,
+    )
+    const step = replay('bust-31', { ...log, events: broken }, seats)[i]!
+    expect(step.mismatch).toBe('Unreadable play entry')
+    expect(step.text).toStartWith('play ')
   })
 
   test('describes timeouts and away players', () => {
