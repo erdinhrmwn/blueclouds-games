@@ -1,6 +1,5 @@
 <script lang="ts">
   import Dealer from '#lib/components/Dealer.svelte'
-  import Deck from '#lib/components/Deck.svelte'
   import DealerLine from '#lib/components/DealerLine.svelte'
   import Felt from '#lib/components/Felt.svelte'
   import Seat from '#lib/components/Seat.svelte'
@@ -8,7 +7,7 @@
   import WinCascade from '#lib/components/WinCascade.svelte'
   import TournamentNext from '#lib/components/TournamentNext.svelte'
   import ResultDialog from '#lib/components/ResultDialog.svelte'
-  import { dealCards, placeCard, seatRect, shake, whenDealt } from '#lib/motion.ts'
+  import { dealCards, seatRect, whenDealt } from '#lib/motion.ts'
   import {
     type Card,
     DEAL,
@@ -18,13 +17,16 @@
     type Suit,
     SUITS,
   } from 'contracts/rooms/cloudburst'
+  import { must } from 'contracts/must'
   import { prefersReducedMotion } from 'svelte/motion'
-  import CloudCard from './CloudCard.svelte'
+  import CloudHand from './CloudHand.svelte'
   import type { CloudburstConnection } from './connection.svelte.ts'
-  import WeatherVane from './WeatherVane.svelte'
+  import { cardCount, dealerLine, nameIn } from './lines.ts'
+  import Pile from './Pile.svelte'
+  import { Reveal } from './reveal.svelte.ts'
+  import RoundSummary from './RoundSummary.svelte'
+  import SeatMeter from './SeatMeter.svelte'
   import SuitPicker from './SuitPicker.svelte'
-  import { SUIT_NAME } from './suits.ts'
-  import { stage, unscaled } from '#lib/stage.svelte.ts'
 
   interface Props {
     room: CloudburstConnection
@@ -32,14 +34,11 @@
 
   let { room }: Props = $props()
 
-  /** Phones get a smaller pile so the middle of the table stays clear of the seats. */
-  const pileSize = 'pile'
-
-  const view = $derived(room.view!)
+  // The room frame shows the table only once the first view arrived.
+  const view = $derived(must(room.view, 'room view'))
 
   const inSeat = (seat: number) => view.players.find((player) => player.seat === seat) ?? null
-  const nameOf = (id: string | null | undefined) =>
-    view.players.find((player) => player.id === id)?.name ?? '?'
+  const nameOf = (id: string | null | undefined) => nameIn(view, id)
 
   // Your hand, sorted by suit, then numbers before actions; wild cards last.
   const ORDER = {
@@ -84,12 +83,18 @@
     return view.players[index] ?? null
   })
 
-  // A Gust or Rainbow needs a second pick before anything is sent.
-  let pending = $state<{ card: Card; needs: 'give' | 'suit' } | null>(null)
-  $effect(() => {
-    if (!room.myTurn) {
-      pending = null
-    }
+  /** A Gust or Rainbow waiting for its second pick before anything is sent. */
+  interface Pending {
+    card: Card
+    needs: 'give' | 'suit'
+  }
+
+  // Every turn starts, and ends, with nothing waiting. Kept as its own derived so a new view on the same turn
+  // (it changes only when the turn does) leaves the pick alone.
+  const myTurn = $derived(room.myTurn)
+  let pending = $derived.by((): Pending | null => {
+    void myTurn
+    return null
   })
 
   const barLabel = $derived.by(() => {
@@ -159,33 +164,6 @@
 
   const flightFrom = (id: string) => (placing?.id === id ? placing.rect : seatRect(lastPlayer))
 
-  /** A cloud-meter segment: filled, filled and close to bursting, or empty. */
-  const segmentClass = (index: number, points: number) => {
-    if (index >= points) {
-      return 'bg-paper/20'
-    }
-
-    return points >= view.burstAt - 2 ? 'bg-ember' : 'bg-paper/85'
-  }
-
-  /** A steady tilt of -6..6 degrees per card, from a hash of its id. */
-  const tiltOf = (id: string) => {
-    const hash = [...id].reduce((sum, ch) => sum * 31 + ch.charCodeAt(0), 7)
-    return (hash % 13) - 6
-  }
-
-  // Round end: each seat's leftover cards fan open face up over it, then drip one by one into its
-  // cloud meter, filling a segment as each lands. A seat that reaches the burst limit shakes once.
-  // Done well inside DEAL.roundEndMs, before the next deal.
-  const REVEAL = {
-    fanMs: 250,
-    holdMs: 700,
-    spreadMs: 1800,
-    stepMs: 180,
-    fallMs: 380,
-    clearMs: 3600,
-  }
-  const BURST_SHAKE_MS = 900
   const SKIPPED_BADGE_MS = 1600
   /** How long a played card keeps its own flight start after it left your hand. */
   const PLACING_CLEAR_MS = 500
@@ -193,125 +171,7 @@
   const GIVE_FLIGHT_MS = 550
   const CLOCK_TICK_MS = 250
 
-  /** Width of an `xs` card, and of the whole fan so it stays inside a seat on the tall stage. */
-  const FAN = { cardPx: 28, maxPx: 88, stepPx: 14 }
-  const overlap = (count: number) => {
-    const step = Math.min(FAN.stepPx, (FAN.maxPx - FAN.cardPx) / Math.max(1, count - 1))
-    return FAN.cardPx - step
-  }
-
-  /**
-   * Your hand fans out to fit its row: each card shows as much as fits, up to the full overlap look, but never less
-   * than 44px to tap. A hand too long for that scrolls sideways. Card widths match CloudCard's `lg`.
-   */
-  const HAND = {
-    tall: { cardPx: 64, mostShownPx: 44, paddingPx: 16 },
-    wide: { cardPx: 88, mostShownPx: 60, paddingPx: 32 },
-    leastShownPx: 44,
-  }
-  let handWidth = $state(0)
-  const handOverlap = $derived.by(() => {
-    const size = stage.wide ? HAND.wide : HAND.tall
-    const space = handWidth - size.paddingPx - size.cardPx
-    const fits = hand.length > 1 ? Math.floor(space / (hand.length - 1)) : size.mostShownPx
-    const shown = Math.max(HAND.leastShownPx, Math.min(size.mostShownPx, fits))
-
-    return size.cardPx - shown
-  })
-
-  let reveal = $state<{
-    moves: number
-    left: Record<string, Card[]>
-    landed: Record<string, number>
-  } | null>(null)
-  let bursting = $state<string[]>([])
-
-  /** The points a seat's meter shows: during the reveal, the old total plus the drops landed so far. */
-  const shownPoints = (player: (typeof view.players)[number]) => {
-    if (!reveal) {
-      return player.points
-    }
-
-    const stillToLand = reveal.left[player.id]?.length ?? 0
-    const landed = reveal.landed[player.id] ?? 0
-    return player.points - stillToLand + landed
-  }
-
-  function land(playerId: string) {
-    if (!reveal) {
-      return
-    }
-
-    const landed = (reveal.landed[playerId] ?? 0) + 1
-    reveal.landed[playerId] = landed
-
-    // Shake the seat once its last card landed and it reached the burst limit.
-    const player = view.players.find((entry) => entry.id === playerId)
-    if (!player) {
-      return
-    }
-
-    if (landed < (reveal.left[playerId]?.length ?? 0)) {
-      return
-    }
-
-    if (player.points < view.burstAt) {
-      return
-    }
-
-    const seat = document.querySelector<HTMLElement>(`[data-seat="${CSS.escape(playerId)}"]`)
-    shake(seat ?? undefined)
-
-    bursting = [...bursting, playerId]
-    setTimeout(() => {
-      bursting = bursting.filter((id) => id !== playerId)
-    }, BURST_SHAKE_MS)
-  }
-
-  /** One revealed card: fans out from the seat, waits, then falls into its meter segment. */
-  function drip(
-    node: HTMLElement,
-    { playerId, i, n, from }: { playerId: string; i: number; n: number; from: number },
-  ) {
-    const meter = node.closest('[data-meter]')
-    const segmentIndex = Math.min(from + i, view.burstAt - 1)
-    const segment = meter?.querySelector(`[data-seg="${segmentIndex}"]`) ?? meter
-    if (!segment) {
-      return
-    }
-
-    const start = node.getBoundingClientRect()
-    const end = segment.getBoundingClientRect()
-    // Measured on screen, moved inside the scaled stage.
-    const dx = unscaled(end.left + end.width / 2 - (start.left + start.width / 2))
-    const dy = unscaled(end.top + end.height / 2 - (start.top + start.height / 2))
-
-    const fallAt = REVEAL.holdMs + i * Math.min(REVEAL.stepMs, REVEAL.spreadMs / n)
-    const total = fallAt + REVEAL.fallMs
-    const spread = (i - (n - 1) / 2) * 6
-
-    const frames = [
-      {
-        offset: 0,
-        transform: `translateX(${-spread}px) scale(0.6)`,
-        opacity: 0,
-        easing: 'ease-out',
-      },
-      { offset: REVEAL.fanMs / total, transform: 'none', opacity: 1 },
-      {
-        offset: fallAt / total,
-        transform: 'none',
-        opacity: 1,
-        easing: 'cubic-bezier(0.55, 0, 0.9, 0.45)',
-      },
-      { offset: 1, transform: `translate(${dx}px, ${dy}px) scale(0.25)`, opacity: 0 },
-    ]
-
-    const anim = node.animate(frames, { duration: total, fill: 'both' })
-    anim.onfinish = () => land(playerId)
-
-    return { destroy: () => anim.cancel() }
-  }
+  const reveal = new Reveal()
 
   // Table events, each handled once (by `moves`): deals, draws, gusts, skips and the round summary.
   type RoundEnd = Extract<NonNullable<typeof view.lastEvent>, { type: 'roundEnd' }>
@@ -324,22 +184,6 @@
     }
 
     return String(cards)
-  }
-
-  /** "1 card" or "n cards". */
-  const cardCount = (cards: number) => (cards === 1 ? '1 card' : `${cards} cards`)
-
-  /** The end of a play's line when it skips someone, with the cards they draw if any. */
-  const skippedNote = (skippedId: string | undefined, forced: number | undefined) => {
-    if (!skippedId) {
-      return ''
-    }
-
-    if (forced === undefined) {
-      return `. ${nameOf(skippedId)} is skipped`
-    }
-
-    return `. ${nameOf(skippedId)} draws ${cardCount(forced)} and is skipped`
   }
 
   /** A seat's badge and meter in words, for screen readers. */
@@ -403,14 +247,8 @@
       return
     }
 
-    if (event.type === 'roundEnd' && event.left) {
-      const moves = view.moves
-      reveal = { moves, left: event.left, landed: {} }
-      setTimeout(() => {
-        if (reveal?.moves === moves) {
-          reveal = null
-        }
-      }, REVEAL.clearMs)
+    if (event.type === 'roundEnd') {
+      reveal.start(view.moves, event.left)
     }
 
     if (event.type === 'drew' && event.got) {
@@ -440,17 +278,13 @@
     }
   })
 
+  // Once the played card left your hand (the server took it), the pile's flight no longer needs its spot.
   $effect(() => {
-    if (!placing) {
+    const id = placing?.id
+    if (!id || room.hand.cards.some((card) => card.id === id)) {
       return
     }
 
-    const stillInHand = room.hand.cards.some((card) => card.id === placing!.id)
-    if (stillInHand) {
-      return
-    }
-
-    const id = placing.id
     setTimeout(() => {
       if (placing?.id === id) {
         placing = null
@@ -481,55 +315,7 @@
     return { ms: Math.max(0, room.turnEndsAt - Date.now()), total: room.turnTotal }
   })
 
-  /** "Sun 7", "Rain Gust", "a Rainbow" or "a Tempest". */
-  function cardName(card: Card): string {
-    if (card.kind === 'rainbow') {
-      return 'a Rainbow'
-    }
-
-    if (card.kind === 'tempest') {
-      return 'a Tempest'
-    }
-
-    const face =
-      card.kind === 'number' ? String(card.value) : card.kind[0]!.toUpperCase() + card.kind.slice(1)
-    return `${SUIT_NAME[card.suit!]} ${face}`
-  }
-
-  const dealerLine = $derived.by(() => {
-    const event = view.lastEvent
-    if (!event) {
-      return ''
-    }
-
-    const auto = 'auto' in event && event.auto ? ' (time ran out)' : ''
-
-    switch (event.type) {
-      case 'joined':
-        return `${nameOf(event.playerId)} sat down.`
-      case 'dealt':
-        return `Round ${event.round}. Seven cards each.`
-      case 'played': {
-        const nextSuit = event.card.suit === null ? `, ${SUIT_NAME[view.suit]} next` : ''
-        const skip = skippedNote(event.skipped, event.forced)
-        const gift = event.gaveTo ? ` and handed ${nameOf(event.gaveTo)} a card` : ''
-        return `${nameOf(event.playerId)} played ${cardName(event.card)}${nextSuit}${skip}${gift}${auto}.`
-      }
-
-      case 'drew':
-        if (!event.got) {
-          return `The deck is empty. ${nameOf(event.playerId)} can only pass.`
-        }
-
-        return `${nameOf(event.playerId)} drew a card${auto}.`
-      case 'passed':
-        return `${nameOf(event.playerId)} passed${auto}.`
-      case 'roundEnd': {
-        const tie = event.tie ? ' Tie for fewest points: one more round.' : ''
-        return `${nameOf(event.outId)} went out.${tie}`
-      }
-    }
-  })
+  const line = $derived(dealerLine(view))
 
   const standings = $derived([...view.players].sort((a, b) => a.points - b.points))
   const iWon = $derived(view.winnerId !== null && view.winnerId === room.playerId)
@@ -567,21 +353,6 @@
       room.pass()
     }
   }
-
-  // Left and right arrows move along your hand.
-  function arrows(event: KeyboardEvent) {
-    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') {
-      return
-    }
-
-    const handEl = event.currentTarget as HTMLElement
-    const cards = [...handEl.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')]
-    const current = cards.indexOf(document.activeElement as HTMLButtonElement)
-    const step = event.key === 'ArrowRight' ? 1 : -1
-
-    cards[(current + step + cards.length) % cards.length]?.focus()
-    event.preventDefault()
-  }
 </script>
 
 <svelte:window onkeydown={onKey} />
@@ -595,8 +366,7 @@
         {@const player = inSeat(spot - 1)}
         {#snippet cardsBadge()}
           {#if player}
-            {@const left = reveal?.left[player.id] ?? []}
-            {@const cards = reveal ? left.length - (reveal.landed[player.id] ?? 0) : player.cards}
+            {@const cards = reveal.cardsOf(player)}
             <span
               class="flex items-center gap-1 tabular-nums {cards === 1 && skipped !== player.id
                 ? 'text-ember'
@@ -620,47 +390,7 @@
         {/snippet}
         {#snippet meter()}
           {#if player}
-            {@const shown = shownPoints(player)}
-            {@const left = reveal?.left[player.id] ?? []}
-            <span
-              class="relative flex items-center gap-px"
-              class:burst={bursting.includes(player.id)}
-              data-meter
-              role="img"
-              aria-label="{player.points} of {view.burstAt} points"
-            >
-              {#each Array(view.burstAt) as _, i (i)}
-                <span
-                  data-seg={i}
-                  class="h-1.5 w-1 rounded-[1px] wide:h-2 wide:w-[5px] {segmentClass(i, shown)}"
-                ></span>
-              {/each}
-              <span class="ml-1 text-[10px] text-paper/75 tabular-nums wide:text-[11px]"
-                >{shown}</span
-              >
-              {#if left.length}
-                <!-- The hand left at the end of the round, face up; each card drips into the meter. -->
-                <span
-                  class="pointer-events-none absolute bottom-full left-1/2 mb-14 flex -translate-x-1/2 wide:mb-16"
-                  aria-hidden="true"
-                >
-                  {#each left as card, i (i)}
-                    <span
-                      class="shrink-0"
-                      style={i ? `margin-left: -${overlap(left.length)}px` : ''}
-                      use:drip={{
-                        playerId: player.id,
-                        i,
-                        n: left.length,
-                        from: player.points - left.length,
-                      }}
-                    >
-                      <CloudCard {card} size="xs" />
-                    </span>
-                  {/each}
-                </span>
-              {/if}
-            </span>
+            <SeatMeter {player} burstAt={view.burstAt} {reveal} />
           {/if}
         {/snippet}
         <Seat
@@ -685,70 +415,26 @@
     {/if}
     <!-- The pile stays when the table finishes; the result is a popup. -->
     {#if summary && view.phase !== 'finished'}
-      <!-- The round's score sheet, in the ring's place until the next deal: who gained what, and where each stands. -->
-      <div
-        class="summary w-full max-w-52 rounded-xl px-3 py-2.5 wide:max-w-[30rem] wide:px-5 wide:py-4"
-        role="status"
-      >
-        <p class="text-center font-display text-base leading-tight font-bold wide:text-xl">
-          {nameOf(summary.outId)} went out
-        </p>
-        <ol
-          class="mt-2 grid gap-y-0.5 text-xs tabular-nums wide:mt-3 wide:grid-cols-2 wide:gap-x-8 wide:gap-y-1 wide:text-sm"
-        >
-          {#each standings as player (player.id)}
-            {@const close = player.points >= view.burstAt - 2}
-            <li class="flex items-baseline gap-2">
-              <span class="min-w-0 flex-1 truncate text-paper/85">{player.name}</span>
-              <span class="text-paper/55">+{summary.gained[player.id] ?? 0}</span>
-              <span class="w-11 text-right font-semibold {close ? 'text-ember' : 'text-paper'}"
-                >{player.points}/{view.burstAt}</span
-              >
-            </li>
-          {/each}
-        </ol>
-        {#if summary.tie}<p class="mt-2 text-center text-xs text-brass">
-            Tie for fewest points: one more round.
-          </p>{/if}
-      </div>
+      <RoundSummary
+        outName={nameOf(summary.outId)}
+        {standings}
+        gained={summary.gained}
+        burstAt={view.burstAt}
+        tie={summary.tie}
+      />
     {:else}
-      <!-- The weather ring with the pile in it is the hero: on the wide stage between the deck and what to follow,
-				 on the tall one over them. -->
-      <div
-        class="grid grid-cols-2 items-center justify-items-center gap-x-6 gap-y-5 wide:flex wide:gap-10 [&>*:nth-child(2)]:col-span-2 [&>*:nth-child(2)]:row-start-1"
-      >
-        <Deck count={view.deckCount} />
-        <WeatherVane suit={view.suit} top={view.topCard}>
-          <div class="grid h-[3.55rem] w-10 place-items-center wide:h-[4.6rem] wide:w-[3.25rem]">
-            {#each view.pileUnder as card (card.id)}
-              <div
-                class="col-start-1 row-start-1"
-                style="rotate: {tiltOf(card.id)}deg"
-                aria-hidden="true"
-              >
-                <CloudCard {card} size={pileSize} />
-              </div>
-            {/each}
-            {#key view.topCard?.id}
-              {#if view.topCard}
-                <div
-                  class="col-start-1 row-start-1"
-                  in:placeCard|global={{ from: flightFrom(view.topCard.id), tilt: -20 }}
-                >
-                  <div style="rotate: {tiltOf(view.topCard.id)}deg">
-                    <CloudCard card={view.topCard} size={pileSize} />
-                  </div>
-                </div>
-              {/if}
-            {/key}
-          </div>
-        </WeatherVane>
-      </div>
+      <Pile
+        deckCount={view.deckCount}
+        suit={view.suit}
+        topCard={view.topCard}
+        pileUnder={view.pileUnder}
+        {flightFrom}
+      />
     {/if}
   </Felt>
 </div>
 
-<DealerLine text={dealerLine} moveKey={view.moves} />
+<DealerLine text={line} moveKey={view.moves} />
 
 {#if view.phase === 'finished'}
   <div class="flex flex-1 items-center justify-center">
@@ -794,7 +480,7 @@
     open={pending?.needs === 'suit'}
     nextName={next?.name ?? ''}
     {secondsLeft}
-    onpick={(suit) => send(pending!.card, { suit })}
+    onpick={(suit) => pending && send(pending.card, { suit })}
   />
 
   <HandBar active={room.myTurn} label={barLabel} {secondsLeft}>
@@ -814,65 +500,18 @@
       {/if}
     {/snippet}
 
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <!-- On the tall stage the row runs edge to edge, past the stage's gutter, so a full hand of seven fits. -->
-    <div
-      class="hand -mx-4 flex w-[calc(100%+2rem)] justify-center-safe overflow-x-auto px-2 pt-4 pb-2 wide:mx-0 wide:w-full wide:px-4 wide:pt-5"
-      class:pointer-events-none={dealing}
-      bind:clientWidth={handWidth}
-      onkeydown={arrows}
-    >
-      {#each hand as card, index (card.id)}
-        {@const giving = pending?.needs === 'give'}
-        {@const isPending = pending?.card.id === card.id}
-        {@const landed = !dealing || index < dealtCount}
-        <div
-          class="shrink-0 {dealing && landed ? 'dealt-in' : ''}"
-          class:invisible={placing?.id === card.id || !landed}
-          style={index ? `margin-left: -${handOverlap}px` : ''}
-          data-card={card.id}
-        >
-          <CloudCard
-            {card}
-            size="lg"
-            fits={room.myTurn && (giving ? !isPending : playable(card))}
-            selected={isPending || (card.id === room.hand.drawnId && view.drew)}
-            disabled={!canMove || (giving ? isPending : !playable(card))}
-            label={giving ? 'Give' : 'Play'}
-            onplay={() => choose(card)}
-          />
-        </div>
-      {/each}
-    </div>
+    <CloudHand
+      {hand}
+      myTurn={room.myTurn}
+      {canMove}
+      {dealing}
+      {dealtCount}
+      placingId={placing?.id ?? null}
+      pendingId={pending?.card.id ?? null}
+      giving={pending?.needs === 'give'}
+      drawnId={view.drew ? room.hand.drawnId : null}
+      {playable}
+      onchoose={choose}
+    />
   </HandBar>
 {/if}
-
-<style>
-  .hand {
-    scrollbar-width: thin;
-  }
-  .summary {
-    background: rgb(10 8 6 / 0.72);
-    box-shadow: inset 0 0 0 1px rgb(210 165 76 / 0.3);
-  }
-  .suit-ring {
-    transition: color 400ms ease;
-  }
-  /* The meter that reached the limit flashes ember twice. */
-  .burst {
-    animation: flash 450ms ease-in-out 2;
-  }
-  @keyframes flash {
-    50% {
-      filter: brightness(1.5) drop-shadow(0 0 3px var(--color-ember));
-    }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .burst {
-      animation: none;
-    }
-    .suit-ring {
-      transition: none;
-    }
-  }
-</style>
