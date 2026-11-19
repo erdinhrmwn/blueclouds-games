@@ -2,6 +2,7 @@
   import Icon from '#lib/components/Icon.svelte'
   import type { Tournament } from '#lib/platform.ts'
   import { avatarTone, coins, FORMATS, startsIn } from '#lib/tournament-formats.ts'
+  import type { CardAction, Status } from '#lib/tournament-status.ts'
   import { when } from '#lib/when.ts'
   import PrizeFee from './PrizeFee.svelte'
   import SignUpBar from './SignUpBar.svelte'
@@ -14,11 +15,11 @@
   interface Props {
     open?: boolean
     tournament: Tournament | null
-    status: { label: string; dot: string }
+    status: Status
     back: string
     full: boolean
     /** Join or Leave, as the card shows it. */
-    action: { label: string; style: string; disabled: boolean }
+    action: CardAction
     onaction: () => void
   }
 
