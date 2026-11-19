@@ -2,6 +2,7 @@
 // so the room can forward the message to the player.
 // Rules and their reasons: docs/games/cloudburst/rules.md.
 import { NO_AVATAR } from 'contracts/avatars'
+import { must } from 'contracts/must'
 import {
   ACTIONS,
   BURST_AT,
@@ -143,7 +144,7 @@ export function playCard(game: Game, playerId: PlayerId, input: PlayInput, rng: 
     throw new RuleError('After drawing you can only play the card you drew, or pass.')
   }
 
-  const top = game.discard.at(-1)!
+  const top = must(game.discard.at(-1), 'top card')
   if (!fits(card, top, game.suit)) {
     throw new RuleError('That card does not fit the pile.')
   }
@@ -162,12 +163,13 @@ export function playCard(game: Game, playerId: PlayerId, input: PlayInput, rng: 
   // A Gust hands one more card to the next player.
   let give: Card | undefined
   if (card.kind === 'gust' && hand.length > 0) {
-    give = hand.find((held) => held.id === input.giveId)
-    if (!give) {
+    const picked = hand.find((held) => held.id === input.giveId)
+    if (!picked) {
       throw new RuleError('Pick a card to give with the Gust.')
     }
 
-    hand = hand.filter((held) => held.id !== give!.id)
+    give = picked
+    hand = hand.filter((held) => held.id !== picked.id)
   }
 
   const players = game.players.map((player, index) => {
@@ -186,7 +188,8 @@ export function playCard(game: Game, playerId: PlayerId, input: PlayInput, rng: 
     ...game,
     players,
     discard: [...game.discard, card],
-    suit: card.suit ?? input.suit!,
+    // A wild card was refused above without input.suit.
+    suit: must(card.suit ?? input.suit, 'suit'),
     drew: false,
     drawnId: null,
   }
@@ -195,7 +198,8 @@ export function playCard(game: Game, playerId: PlayerId, input: PlayInput, rng: 
     return endRound(played, playerId, card, rng)
   }
 
-  const direction = card.kind === 'swirl' ? (-game.direction as 1 | -1) : game.direction
+  const reversed = game.direction === 1 ? -1 : 1
+  const direction = card.kind === 'swirl' ? reversed : game.direction
   let turn = nextIndex(players, game.turn, direction)
   let skipped: string | undefined
   let forced: number | undefined
@@ -204,11 +208,13 @@ export function playCard(game: Game, playerId: PlayerId, input: PlayInput, rng: 
   // A Downpour or Tempest makes the next player draw and lose their turn.
   if (card.kind === 'downpour' || card.kind === 'tempest') {
     after = forceDraw(after, turn, FORCED_DRAW[card.kind], rng)
-    forced = after.players[turn]!.hand.length - played.players[turn]!.hand.length
+    forced =
+      must(after.players[turn], 'next player').hand.length -
+      must(played.players[turn], 'next player').hand.length
   }
 
   if (card.kind === 'calm' || forced !== undefined) {
-    skipped = after.players[turn]!.id
+    skipped = must(after.players[turn], 'next player').id
     turn = nextIndex(after.players, turn, direction)
   }
 
@@ -221,7 +227,7 @@ export function playCard(game: Game, playerId: PlayerId, input: PlayInput, rng: 
       card,
       ...(skipped ? { skipped } : {}),
       ...(forced !== undefined ? { forced } : {}),
-      ...(give ? { gaveTo: players[nextUp]!.id } : {}),
+      ...(give ? { gaveTo: must(players[nextUp], 'next player').id } : {}),
     },
     moves: game.moves + 1,
     turnKey: game.turnKey + 1,
@@ -346,7 +352,7 @@ function endRound(game: PlayingGame, outId: PlayerId, card: Card, rng: Rng): Gam
   }
 
   if (finished) {
-    return { ...scored, phase: 'finished', winnerId: leaders[0]!.id }
+    return { ...scored, phase: 'finished', winnerId: must(leaders[0], 'leader').id }
   }
 
   return { ...dealRound(scored, rng), lastEvent: roundEnd }
@@ -364,7 +370,7 @@ function dealRound(game: PlayingGame, rng: Rng): PlayingGame {
 
   // A wild card can't start the pile (nobody chose its suit): it stays in the deck.
   const startAt = deck.findIndex((card) => !isWild(card))
-  const start = deck[startAt]!
+  const start = must(deck[startAt], 'start card')
   deck = [...deck.slice(0, startAt), ...deck.slice(startAt + 1)]
 
   return {
@@ -372,7 +378,7 @@ function dealRound(game: PlayingGame, rng: Rng): PlayingGame {
     players,
     deck,
     discard: [start],
-    suit: start.suit!,
+    suit: must(start.suit, 'start suit'),
     direction: 1,
     turn: (round - 1) % players.length,
     round,

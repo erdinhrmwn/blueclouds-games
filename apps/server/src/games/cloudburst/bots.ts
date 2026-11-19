@@ -1,5 +1,6 @@
 // Cloudburst, layer 2 (rules): what the server plays for a bot, or for a human whose time ran out. Pure.
 
+import { must } from 'contracts/must'
 import {
   type Card,
   fits,
@@ -25,8 +26,8 @@ const NEARLY_OUT = 2
  *    fits, or pass.
  */
 export function chooseBotMove(game: Game): Action {
-  const me = game.players[game.turn]!
-  const top = game.discard.at(-1)!
+  const me = must(game.players[game.turn], 'player on turn')
+  const top = must(game.discard.at(-1), 'top card')
 
   // After a draw only the drawn card may be played.
   const canPlay = me.hand.filter((card) => {
@@ -58,7 +59,7 @@ export function chooseBotMove(game: Game): Action {
 
 /** Rules 1–3 above: a stopper when needed, else a card of the most-held suit, else a wild card. */
 function pickCard(game: Game, hand: Card[], canPlay: Card[]): Card {
-  const next = game.players[nextIndex(game.players, game.turn, game.direction)]!
+  const next = must(game.players[nextIndex(game.players, game.turn, game.direction)], 'next player')
   if (next.hand.length <= NEARLY_OUT) {
     for (const kind of STOPPERS) {
       const stopper = canPlay.find((card) => card.kind === kind)
@@ -71,21 +72,25 @@ function pickCard(game: Game, hand: Card[], canPlay: Card[]): Card {
   const count = suitCounts(hand)
   const [bestPlain] = canPlay
     .filter((card) => !isWild(card))
-    .sort((a, b) => count.get(b.suit!)! - count.get(a.suit!)!)
+    .sort((a, b) => heldOf(count, b) - heldOf(count, a))
 
-  return bestPlain ?? canPlay[0]!
+  return bestPlain ?? must(canPlay[0], 'playable card')
 }
 
 function suitCounts(hand: Card[]): Map<Suit, number> {
   const count = new Map(SUITS.map((suit) => [suit, 0]))
   for (const card of hand) {
     if (card.suit) {
-      count.set(card.suit, count.get(card.suit)! + 1)
+      count.set(card.suit, (count.get(card.suit) ?? 0) + 1)
     }
   }
 
   return count
 }
+
+/** How many cards of this card's suit the hand holds; 0 for a wild card. */
+const heldOf = (count: Map<Suit, number>, card: Card): number =>
+  card.suit ? (count.get(card.suit) ?? 0) : 0
 
 function mostHeld(hand: Card[]): Suit | undefined {
   const count = suitCounts(hand)
@@ -101,7 +106,7 @@ function mostHeld(hand: Card[]): Suit | undefined {
 function leastUseful(hand: Card[]): Card {
   const count = suitCounts(hand)
   const plain = hand.filter((card) => !isWild(card))
-  const [fewestHeld] = plain.sort((a, b) => count.get(a.suit!)! - count.get(b.suit!)!)
+  const [fewestHeld] = plain.sort((a, b) => heldOf(count, a) - heldOf(count, b))
 
-  return fewestHeld ?? hand[0]!
+  return fewestHeld ?? must(hand[0], 'card to give')
 }

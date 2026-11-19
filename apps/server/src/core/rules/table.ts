@@ -2,6 +2,7 @@
 // no I/O.
 
 import type { Avatar } from 'contracts/avatars'
+import { must } from 'contracts/must'
 import { SEATS } from 'contracts/rooms/room'
 import type { PlayerId } from '../domain/ids'
 import { type Rng, RuleError, type Seated, type Table } from '../domain/table'
@@ -17,7 +18,7 @@ export function randomRng(next: () => number = Math.random): Rng {
       const out = [...items]
       for (let i = out.length - 1; i > 0; i--) {
         const j = Math.floor(next() * (i + 1))
-        ;[out[i], out[j]] = [out[j]!, out[i]!]
+        ;[out[i], out[j]] = [must(out[j]), must(out[i])]
       }
 
       return out
@@ -182,6 +183,14 @@ export function showVips<G extends Table>(game: G, vipIds: Set<PlayerId>): G {
   }
 }
 
+/** The player with this id, who the caller knows is at the table; throws if they are not. */
+export function playerById<P extends { id: string }>(players: readonly P[], id: string): P {
+  return must(
+    players.find((player) => player.id === id),
+    `player ${id}`,
+  )
+}
+
 /** The next index around the table in `direction` whose player `inPlay` accepts (or `from` if none does). */
 export function nextIndex<P>(
   players: P[],
@@ -193,7 +202,7 @@ export function nextIndex<P>(
   for (let step = 1; step <= count; step++) {
     // Wraps around both ways: ((x % n) + n) % n is never negative.
     const index = (((from + step * direction) % count) + count) % count
-    if (inPlay(players[index]!)) {
+    if (inPlay(must(players[index], 'player'))) {
       return index
     }
   }

@@ -4,6 +4,7 @@
 import { createHash, timingSafeEqual } from 'node:crypto'
 import { TABLE_CLOSED } from 'contracts/rooms/room'
 import { UserError } from 'rivetkit'
+import { loadRivetConfig } from '../../config'
 import type { PlayerId } from '../domain/ids'
 import type { PlatformPort } from '../domain/ports'
 import type { Identity } from '../domain/room'
@@ -44,7 +45,7 @@ export function parseSeat(input: unknown): number {
  * actions). Hashed first, so the comparison takes the same time whatever the length. No token set: never.
  */
 function isAdminKey(key: string): boolean {
-  const expected = process.env.RIVET_TOKEN
+  const expected = loadRivetConfig().adminToken
   if (!expected) {
     return false
   }

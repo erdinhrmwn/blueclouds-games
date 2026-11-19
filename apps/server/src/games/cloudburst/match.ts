@@ -1,5 +1,6 @@
 // Cloudburst, layer 2 (rules): the move log and the match result, from the game's states. Pure.
 
+import { must } from 'contracts/must'
 import type { Card } from 'contracts/rooms/cloudburst'
 import type { PlayerId } from '../../core/domain/ids'
 import type {
@@ -11,6 +12,7 @@ import type {
   RoundResult,
 } from '../../core/domain/match'
 import { moveBy, placementsInOrder, reportedSeat } from '../../core/rules/match'
+import { playerById } from '../../core/rules/table'
 import type { Game } from './domain'
 import { placements } from './rules'
 
@@ -49,7 +51,7 @@ export function buildReport(
     players: game.players.map((player) => ({
       seat: player.seat,
       ...reportedSeat(player),
-      placement: place.get(player.id)!,
+      placement: must(place.get(player.id), 'placement'),
       score: player.points,
     })),
     log: { logVersion: LOG_VERSION, events },
@@ -76,13 +78,14 @@ export function logEvents(before: Game, after: Game, auto = false): LogEntry[] {
 
   const event = after.lastEvent
   // Event ids come from contracts as plain strings: a lookup only.
-  const seatOf = (id: string) => after.players.find((player) => player.id === id)!.seat
+  const seatOf = (id: string) => playerById(after.players, id).seat
   const mover = before.phase === 'playing' ? before.players[before.turn] : undefined
   const by = mover ? moveBy(mover, auto) : 'player'
 
   if (mover && (event?.type === 'played' || event?.type === 'roundEnd')) {
     const card = event.card
-    const cardsLeft = event.type === 'roundEnd' ? 0 : after.players[before.turn]!.hand.length
+    const cardsLeft =
+      event.type === 'roundEnd' ? 0 : must(after.players[before.turn], 'mover').hand.length
     const data: Record<string, unknown> = { card: card.id, left: cardsLeft, by }
 
     if (card.suit === null && event.type === 'played') {
@@ -90,8 +93,8 @@ export function logEvents(before: Game, after: Game, auto = false): LogEntry[] {
     }
 
     if (event.type === 'played' && event.forced !== undefined && event.skipped) {
-      const victim = before.players.find((player) => player.id === event.skipped)!
-      const now = after.players.find((player) => player.id === event.skipped)!
+      const victim = playerById(before.players, event.skipped)
+      const now = playerById(after.players, event.skipped)
       // The drawn cards are appended in draw order.
       const forcedCards = ids(now.hand.slice(victim.hand.length))
       const fromOldDeck = Math.min(before.deck.length, forcedCards.length)
@@ -105,8 +108,8 @@ export function logEvents(before: Game, after: Game, auto = false): LogEntry[] {
     }
 
     if (event.type === 'played' && event.gaveTo) {
-      const receiver = after.players.find((player) => player.id === event.gaveTo)!
-      const had = before.players.find((player) => player.id === event.gaveTo)!.hand
+      const receiver = playerById(after.players, event.gaveTo)
+      const had = playerById(before.players, event.gaveTo).hand
       const given = receiver.hand.find((held) => !had.some((old) => old.id === held.id))
       data.gave = given?.id ?? null
     }
@@ -137,12 +140,12 @@ export function logEvents(before: Game, after: Game, auto = false): LogEntry[] {
   const newRound = event?.type === 'dealt' || event?.type === 'roundEnd'
   if (after.phase === 'playing' && newRound) {
     const hands = Object.fromEntries(after.players.map((player) => [player.seat, ids(player.hand)]))
-    const start = after.discard[0]!.id
+    const start = must(after.discard[0], 'start card').id
     entries.push({
       type: 'deal',
       data: {
         round: after.round,
-        starter: after.players[after.turn]!.seat,
+        starter: must(after.players[after.turn], 'starter').seat,
         start,
         hands,
         deck: ids(after.deck),

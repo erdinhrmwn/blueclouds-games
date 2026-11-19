@@ -2,6 +2,7 @@
 // sends it to the platform (POST /v1/matches/:id/rounds), so a match shows its rounds, seeds revealed, while it
 // is still played.
 import { clientSeedOf } from 'contracts/fairness/fairness'
+import { must } from 'contracts/must'
 import type { LogEntry, LogEvent, MatchInfo, RoundReport, RoundResult } from '../domain/match'
 
 /** The fairness entries (fairness.ts): kept out of the events a game summarises. */
@@ -66,7 +67,7 @@ export function roundReport(
     })
 
   const matchStart = Date.parse(match.startedAt)
-  const firstT = span.at(0)!.t
+  const firstT = must(span.at(0), 'first event of the round').t
   const lastT = Math.max(...span.map((event) => event.t))
 
   return {

@@ -3,6 +3,7 @@ import { type ClientRequestOptions, hc } from 'hono/client'
 import { importJWK, jwtVerify } from 'jose'
 import type { AppType } from 'platform/rpc'
 import { z } from 'zod'
+import { loadPlatformConfig, type PlatformConfig } from '../../config'
 import { type MatchId, type PlayerId, toPlayerId } from '../domain/ids'
 import type { MatchReport, RoundReport } from '../domain/match'
 import type {
@@ -16,28 +17,10 @@ import type {
 import type { Identity } from '../domain/room'
 
 // Layer 4, adapter: PlatformPort over the BlueClouds Platform's HTTP API (Hono RPC client), and play tokens checked
-// with the platform's public key. Reads its config from env on first use.
+// with the platform's public key. Reads its config on first use.
 
 /** Must match the platform's PLAY_TOKEN_AUDIENCE. */
 const PLAY_TOKEN_AUDIENCE = 'blueclouds-rooms'
-
-const Env = z.object({
-  /** Ed25519 public key (32 bytes, base64url) matching the platform's PLAY_TOKEN_PRIVATE_KEY. */
-  PLAY_TOKEN_PUBLIC_KEY: z
-    .string()
-    .regex(
-      /^[A-Za-z0-9_-]{43}$/,
-      'must be a 43-character base64url Ed25519 key; run `bun run --filter platform keys:generate`',
-    ),
-  /** Where the actor server reaches the platform API (server to server, not the public URL). */
-  PLATFORM_URL: z
-    .url()
-    .default('http://127.0.0.1:3000')
-    .transform((url) => url.replace(/\/+$/, '')),
-  /** Bearer key for calls to the platform (match reports, tournament rooms); same value as the platform's. */
-  PLATFORM_SERVER_KEY: z.string().min(32, 'must be at least 32 characters'),
-})
-type Env = z.output<typeof Env>
 
 const PLATFORM_TIMEOUT_MS = 5_000
 const MAX_TOKEN_LENGTH = 2048
@@ -62,24 +45,18 @@ const Claims = z.object({
     .catch(NO_AVATAR),
 })
 
+let config: PlatformConfig | undefined
 let publicKey: Promise<CryptoKey | Uint8Array> | undefined
-let config: Env | undefined
 
-/** Validates the env once; call at boot so a bad config fails fast. */
-export function loadPlatformConfig(env: Record<string, string | undefined> = process.env) {
-  const parsed = Env.safeParse(env)
-  if (!parsed.success) {
-    const issues = parsed.error.issues
-      .map((issue) => `${issue.path.join('.')}: ${issue.message}`)
-      .join('; ')
-    throw new Error(`Invalid actor server config: ${issues}`)
-  }
-
-  const jwk = { kty: 'OKP', crv: 'Ed25519', x: parsed.data.PLAY_TOKEN_PUBLIC_KEY }
-  publicKey = importJWK(jwk, 'EdDSA')
-  config = parsed.data
-
+/** The config, read from env on first use. */
+function settings(): PlatformConfig {
+  config ??= loadPlatformConfig()
   return config
+}
+
+function playTokenKey(): Promise<CryptoKey | Uint8Array> {
+  publicKey ??= importJWK({ kty: 'OKP', crv: 'Ed25519', x: settings().playTokenPublicKey }, 'EdDSA')
+  return publicKey
 }
 
 /** Checks a play token from the platform. Returns who it belongs to, or null if it isn't valid. */
@@ -88,12 +65,10 @@ async function verifyPlayToken(token: unknown): Promise<Identity | null> {
     return null
   }
 
-  if (!publicKey) {
-    loadPlatformConfig()
-  }
+  const key = playTokenKey() // a bad config throws here, not into the catch below
 
   try {
-    const { payload } = await jwtVerify(token, await publicKey!, {
+    const { payload } = await jwtVerify(token, await key, {
       audience: PLAY_TOKEN_AUDIENCE,
       algorithms: ['EdDSA'],
     })
@@ -184,10 +159,10 @@ const TournamentRoom = z.object({
 let client: ReturnType<typeof createClient> | undefined
 
 function createClient() {
-  const { PLATFORM_URL, PLATFORM_SERVER_KEY } = config ?? loadPlatformConfig()
+  const { url, serverKey } = settings()
 
-  return hc<AppType>(PLATFORM_URL, {
-    headers: { Authorization: `Bearer ${PLATFORM_SERVER_KEY}` },
+  return hc<AppType>(url, {
+    headers: { Authorization: `Bearer ${serverKey}` },
   }).v1
 }
 
