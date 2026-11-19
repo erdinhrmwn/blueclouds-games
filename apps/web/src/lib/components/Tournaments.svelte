@@ -32,15 +32,13 @@
    * player's place and table), the ones open for sign-up, then the ones that finished in the last day. `game` shows
    * only that game's; `counts` reports how many each game has, whatever is shown.
    */
-  let {
-    games,
-    game = null,
-    counts = $bindable({}),
-  }: {
+  interface Props {
     games: string[]
     game?: string | null
     counts?: Record<string, number>
-  } = $props()
+  }
+
+  let { games, game = null, counts = $bindable({}) }: Props = $props()
 
   /** A tournament with the game it is played in. */
   type OfGame<T> = T & { game: string }

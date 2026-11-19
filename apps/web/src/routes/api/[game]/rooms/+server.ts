@@ -1,7 +1,9 @@
 import { json } from '@sveltejs/kit'
+import { z } from 'zod'
+import { readJson } from '#lib/server/body.ts'
 import { log } from '#lib/server/log.ts'
 import { apiError, BUSY_MESSAGE, failure } from '#lib/server/platform/client.ts'
-import { createRoom, type Visibility } from '#lib/server/platform/rooms.ts'
+import { createRoom } from '#lib/server/platform/rooms.ts'
 import { hasRooms, listRooms } from '#lib/server/rivet.ts'
 import type { RequestHandler } from './$types'
 
@@ -32,6 +34,13 @@ export const GET: RequestHandler = async ({ params }) => {
 /** A table name: up to this many characters, blank means none. */
 const NAME_MAX = 32
 
+/** Anything but `'public'` opens a private table; a name that isn't text is no name. */
+const NewTable = z.object({
+  visibility: z.enum(['public', 'private']).catch('private'),
+  name: z.string().trim().catch(''),
+})
+const NO_OPTIONS: z.output<typeof NewTable> = { visibility: 'private', name: '' }
+
 /**
  * Opens a new table, private unless `{ visibility: 'public' }`, with an optional `name`. The platform picks the
  * code; the browser never makes one up.
@@ -41,13 +50,7 @@ export const POST: RequestHandler = async (event) => {
     return apiError(404, 'not_found', 'There is no such game.')
   }
 
-  const body = (await event.request.json().catch(() => null)) as {
-    visibility?: unknown
-    name?: unknown
-  } | null
-  const visibility: Visibility = body?.visibility === 'public' ? 'public' : 'private'
-
-  const name = typeof body?.name === 'string' ? body.name.trim() : ''
+  const { visibility, name } = (await readJson(event.request, NewTable)) ?? NO_OPTIONS
   if (name.length > NAME_MAX) {
     return apiError(400, 'invalid', `A table name is at most ${NAME_MAX} characters.`)
   }

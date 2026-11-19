@@ -1,3 +1,4 @@
+import type { ActionReturn } from 'svelte/action'
 import { cubicOut } from 'svelte/easing'
 import { prefersReducedMotion } from 'svelte/motion'
 import type { TransitionConfig } from 'svelte/transition'
@@ -79,7 +80,7 @@ interface Countdown {
  * A new value restarts the animation only when the deadline really moved, so the frequent
  * re-renders around it (seconds label ticking, server echoes) never make it jump.
  */
-export function countdown(node: Element, params: Countdown | null) {
+export function countdown(node: Element, params: Countdown | null): ActionReturn<Countdown | null> {
   let anim: Animation | undefined
   let endsAt = 0
 

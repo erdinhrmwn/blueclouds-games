@@ -1,6 +1,7 @@
 <script lang="ts">
+  import type { PageProps } from './$types'
   /** Only shown when an invite link doesn't work; a working one goes straight to its table. */
-  let { data } = $props()
+  let { data }: PageProps = $props()
 </script>
 
 <svelte:head><title>Invite · BlueClouds Games</title></svelte:head>

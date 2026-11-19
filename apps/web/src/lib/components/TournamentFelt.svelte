@@ -6,16 +6,7 @@
    * The top of a tournament card or its Detail dialog: the game's felt with two of its card backs, the status as a
    * dark chip (it reads on any felt) and when it starts. `children` sits top right, like the dialog's close button.
    */
-  let {
-    label,
-    dot,
-    startsAt,
-    back,
-    countdown,
-    headline,
-    sub,
-    children,
-  }: {
+  interface Props {
     label: string
     /** The dot's colour class, e.g. `bg-go`. */
     dot: string
@@ -29,7 +20,9 @@
     /** The line under the big countdown in place of the start time, e.g. "Night Owls · Arena · 24 players". */
     sub?: string
     children?: Snippet
-  } = $props()
+  }
+
+  let { label, dot, startsAt, back, countdown, headline, sub, children }: Props = $props()
 
   const backsPlace = $derived.by(() => {
     if (countdown) {

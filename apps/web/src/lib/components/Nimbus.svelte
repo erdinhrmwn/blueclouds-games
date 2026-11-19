@@ -4,7 +4,12 @@
    * bow tie (drawn in FigCraft, see design/blueclouds.figcraft). `head` drops the shadow and bow tie for the
    * tiny version in the move log.
    */
-  let { head = false, class: cls = 'size-14' }: { head?: boolean; class?: string } = $props()
+  interface Props {
+    head?: boolean
+    class?: string
+  }
+
+  let { head = false, class: cls = 'size-14' }: Props = $props()
 </script>
 
 <svg viewBox="-32 -32 64 64" class={cls} aria-hidden="true">

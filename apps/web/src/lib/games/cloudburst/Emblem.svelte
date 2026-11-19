@@ -2,11 +2,13 @@
   import EmblemTile, { CLOUD, cloudAt } from '#lib/components/EmblemTile.svelte'
 
   /** Cloudburst's emblem: the deep blue back with a cloud dropping one drop per suit. */
-  let {
-    small = false,
-    label,
-    class: cls,
-  }: { small?: boolean; label?: string; class?: string } = $props()
+  interface Props {
+    small?: boolean
+    label?: string
+    class?: string
+  }
+
+  let { small = false, label, class: cls }: Props = $props()
 
   const DROP = 'M12 3c3.5 4.6 6 8 6 11a6 6 0 0 1-12 0c0-3 2.5-6.4 6-11Z'
   const DROP_GRID = 24

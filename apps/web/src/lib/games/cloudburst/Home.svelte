@@ -3,7 +3,12 @@
   import GamePage from '#lib/components/GamePage.svelte'
   import { BURST_AT, HAND_SIZE } from 'contracts/rooms/cloudburst'
 
-  let { game, maintenance }: { game: GameEntry; maintenance: boolean } = $props()
+  interface Props {
+    game: GameEntry
+    maintenance: boolean
+  }
+
+  let { game, maintenance }: Props = $props()
 </script>
 
 <GamePage {game} {maintenance}>

@@ -8,18 +8,15 @@
    * busted, on which card and total, and the lives they kept. Cloudburst: who went out first, and each seat's
    * cards left and points.
    */
-  let {
-    game,
-    result,
-    events,
-    nameOf,
-  }: {
+  interface Props {
     game: string
     result: Record<string, unknown>
     /** The round's moves: Cloudburst shows the card the winner went out on. */
     events: { type: string; seat?: number; data?: Record<string, unknown> }[]
     nameOf: (seat: number) => string | null
-  } = $props()
+  }
+
+  let { game, result, events, nameOf }: Props = $props()
 
   const BY: Record<string, string> = {
     player: 'played by the player',

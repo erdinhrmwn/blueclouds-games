@@ -3,11 +3,13 @@
   import { LIMIT } from 'contracts/rooms/bust-31'
 
   /** Bust 31's emblem: the oxblood back with a 0–31 gauge (red zone at the end) round the 31. */
-  let {
-    small = false,
-    label,
-    class: cls,
-  }: { small?: boolean; label?: string; class?: string } = $props()
+  interface Props {
+    small?: boolean
+    label?: string
+    class?: string
+  }
+
+  let { small = false, label, class: cls }: Props = $props()
 
   const START = 135
   const SWEEP = 270

@@ -8,11 +8,13 @@
    * The profile's tournaments: the record over all of them, then the latest ones with where the player finished
    * and what that place wins. Payout status never shows here (Erdin, 2026-11-14).
    */
-  let {
-    tournaments,
-    record,
-    mounted,
-  }: { tournaments: MyTournament[]; record: TournamentRecord; mounted: boolean } = $props()
+  interface Props {
+    tournaments: MyTournament[]
+    record: TournamentRecord
+    mounted: boolean
+  }
+
+  let { tournaments, record, mounted }: Props = $props()
 
   const tiles = $derived([
     { label: 'Played', value: String(record.played) },

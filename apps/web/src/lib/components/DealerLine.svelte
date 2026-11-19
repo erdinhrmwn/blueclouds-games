@@ -10,7 +10,12 @@
    * it fading out underneath. `moveKey` (the game's move counter) tells a new move from a re-render,
    * so the same line twice in a row still counts twice; a lower one means a fresh table.
    */
-  let { text, moveKey }: { text: string; moveKey: number } = $props()
+  interface Props {
+    text: string
+    moveKey: number
+  }
+
+  let { text, moveKey }: Props = $props()
 
   const HISTORY_SIZE = 2
   const MOTION_MS = 220

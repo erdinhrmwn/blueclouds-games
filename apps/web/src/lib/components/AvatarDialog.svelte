@@ -12,7 +12,11 @@
   import AvatarGlyph from './AvatarGlyph.svelte'
 
   /** Picking a preset avatar: one of 12 colours and one of 16 icons, or the initial. No uploads. */
-  let { open = $bindable(false) }: { open?: boolean } = $props()
+  interface Props {
+    open?: boolean
+  }
+
+  let { open = $bindable(false) }: Props = $props()
 
   let dialog = $state<HTMLDialogElement>()
   let color = $state<AvatarColor>('rain')

@@ -18,7 +18,11 @@
   import DealerLine from '#lib/components/DealerLine.svelte'
   import TotalTrack from './TotalTrack.svelte'
 
-  let { room }: { room: Bust31Connection } = $props()
+  interface Props {
+    room: Bust31Connection
+  }
+
+  let { room }: Props = $props()
 
   const BUST_STAMP_MS = 1800
   const CLOCK_TICK_MS = 250

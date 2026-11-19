@@ -32,15 +32,7 @@
    * motif in a brass ring. A new game brings its back colour, pattern and motif. `small` is the under-48px
    * drawing: no pattern or ring, a bigger motif. The motif is drawn around (50, 50) at the diameter given.
    */
-  let {
-    back,
-    deep,
-    pattern,
-    small = false,
-    label,
-    class: cls = 'size-12',
-    motif,
-  }: {
+  interface Props {
     back: string
     deep: string
     pattern: 'dots' | 'clouds'
@@ -49,7 +41,9 @@
     label?: string
     class?: string
     motif: Snippet<[number]>
-  } = $props()
+  }
+
+  let { back, deep, pattern, small = false, label, class: cls = 'size-12', motif }: Props = $props()
 
   const STEP = 11
   const MARGIN = 12

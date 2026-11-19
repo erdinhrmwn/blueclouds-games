@@ -4,7 +4,12 @@
   import { CloudburstConnection } from './connection.svelte.ts'
   import Table from './Table.svelte'
 
-  let { game, code }: { game: GameEntry; code: string } = $props()
+  interface Props {
+    game: GameEntry
+    code: string
+  }
+
+  let { game, code }: Props = $props()
 </script>
 
 <RoomFrame {game} {code} connect={() => new CloudburstConnection(code)}>

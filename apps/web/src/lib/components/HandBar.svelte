@@ -7,20 +7,16 @@
    * tall stage they share one line above the cards; on the wide one they flank the cards, the turn on the left and
    * the move on the right, so the hand takes no more height than its cards.
    */
-  let {
-    active,
-    label,
-    secondsLeft,
-    actions,
-    children,
-  }: {
+  interface Props {
     active: boolean
     label: string
     secondsLeft: number | null
     actions?: Snippet
     /** The cards. */
     children: Snippet
-  } = $props()
+  }
+
+  let { active, label, secondsLeft, actions, children }: Props = $props()
 
   const URGENT_SECONDS = 5
 

@@ -3,7 +3,12 @@
   import { coins } from '#lib/tournament-formats.ts'
 
   /** What you can win (the prize pool) and what it costs to sit down, side by side. */
-  let { prizes, fee }: { prizes: TournamentPrize[]; fee: number } = $props()
+  interface Props {
+    prizes: TournamentPrize[]
+    fee: number
+  }
+
+  let { prizes, fee }: Props = $props()
 
   const pool = $derived(prizes.reduce((sum, prize) => sum + prize.coins, 0))
 

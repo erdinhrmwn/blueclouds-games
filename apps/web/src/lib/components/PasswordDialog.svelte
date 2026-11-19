@@ -2,7 +2,11 @@
   import { PlatformError, updatePassword } from '#lib/platform.ts'
 
   /** Changing an account's password. Other devices are signed out; this one stays signed in. */
-  let { open = $bindable(false) }: { open?: boolean } = $props()
+  interface Props {
+    open?: boolean
+  }
+
+  let { open = $bindable(false) }: Props = $props()
 
   const PASSWORD_MIN = 8
 

@@ -1,18 +1,15 @@
 <script lang="ts">
   import type { Card } from 'contracts/rooms/bust-31'
 
-  let {
-    card,
-    size = 'md',
-    disabled = false,
-    onplay,
-  }: {
+  interface Props {
     card: Card
     /** `pile`: the cards in the middle of the table, smaller than the hand. */
     size?: 'pile' | 'sm' | 'md' | 'lg'
     disabled?: boolean
     onplay?: (id: string) => void
-  } = $props()
+  }
+
+  let { card, size = 'md', disabled = false, onplay }: Props = $props()
 
   /** What a screen reader says for each special card. */
   const SPOKEN: Record<Exclude<Card['kind'], 'number'>, string> = {

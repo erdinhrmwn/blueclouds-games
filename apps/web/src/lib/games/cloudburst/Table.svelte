@@ -26,7 +26,11 @@
   import { SUIT_NAME } from './suits.ts'
   import { stage, unscaled } from '#lib/stage.svelte.ts'
 
-  let { room }: { room: CloudburstConnection } = $props()
+  interface Props {
+    room: CloudburstConnection
+  }
+
+  let { room }: Props = $props()
 
   /** Phones get a smaller pile so the middle of the table stays clear of the seats. */
   const pileSize = 'pile'

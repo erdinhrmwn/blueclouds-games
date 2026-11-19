@@ -7,13 +7,12 @@
    * finished, and lines from every table that sent a winner to the same next table, joining at that table's middle.
    * Phones show one round at a time, with where each winner went written under their table.
    */
-  let {
-    board,
-    myId,
-  }: {
+  interface Props {
     board: TournamentBoard
     myId: string | null
-  } = $props()
+  }
+
+  let { board, myId }: Props = $props()
 
   const finished = $derived(!!board.tournament.endedAt)
   const isKnockout = $derived(

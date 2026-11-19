@@ -4,7 +4,12 @@
    * 32px-and-under drawing: one thick ring and a bolder face, so it still reads in a header or a tab.
    * The head is Nimbus.svelte's, without the bow tie.
    */
-  let { small = false, class: cls = 'size-6' }: { small?: boolean; class?: string } = $props()
+  interface Props {
+    small?: boolean
+    class?: string
+  }
+
+  let { small = false, class: cls = 'size-6' }: Props = $props()
 </script>
 
 <svg viewBox="-50 -50 100 100" class={cls} aria-hidden="true">

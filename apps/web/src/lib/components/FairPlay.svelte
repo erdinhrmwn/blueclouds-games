@@ -13,7 +13,12 @@
    * in play shows its server seed hash and client seed; each closed round, with its seed revealed, is checked in
    * this browser and opens in a dialog of its own (docs/architecture/fairness.md).
    */
-  let { room, game }: { room: RoomConnection<BaseView, unknown>; game: string } = $props()
+  interface Props {
+    room: RoomConnection<BaseView, unknown>
+    game: string
+  }
+
+  let { room, game }: Props = $props()
 
   let dialog = $state<HTMLDialogElement>()
   let rounds = $state<Round[] | null>(null)

@@ -1,3 +1,4 @@
+import { must } from 'contracts/must'
 import dayjs from 'dayjs'
 import durationPlugin from 'dayjs/plugin/duration'
 import type { TournamentFormat } from '#lib/platform.ts'
@@ -101,5 +102,5 @@ export function avatarTone(name: string): string {
     sum += letter.codePointAt(0) ?? 0
   }
 
-  return AVATAR_TONES[sum % AVATAR_TONES.length]!
+  return must(AVATAR_TONES[sum % AVATAR_TONES.length], 'avatar tone')
 }
