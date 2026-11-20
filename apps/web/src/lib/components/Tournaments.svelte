@@ -54,13 +54,18 @@
   const running = $derived(shownLive.filter((tournament) => !tournament.endedAt))
   const finished = $derived(shownLive.filter((tournament) => tournament.endedAt))
   const gameName = $derived(game ? nameOf(game) : '')
+  /**
+   * Any tournament of any game, shown or not, that can still change: one in sign-up (it closes, then gets its
+   * tables) or one being played (its stage starts, then it finishes).
+   */
+  const changing = $derived(open.length > 0 || live.some((tournament) => !tournament.endedAt))
 
-  /** The countdowns on running cards tick while any is waiting for its round. */
+  /** The countdowns, and the sign-up status that turns at its closing time, tick while anything can change. */
   const TICK_MS = 15_000
   let now = $state(Date.now())
 
   $effect(() => {
-    if (running.length === 0) {
+    if (!changing) {
       return
     }
 
@@ -151,7 +156,7 @@
   let detailId = $state<string | null>(null)
   let detailOpen = $state(false)
   const detail = $derived(open.find((tournament) => tournament.id === detailId) ?? null)
-  const detailStatus = $derived(detail ? openStatus(detail) : SIGN_UP_OPEN)
+  const detailStatus = $derived(detail ? openStatus(detail, now) : SIGN_UP_OPEN)
 
   function showDetail(tournament: Tournament) {
     detailId = tournament.id
@@ -172,8 +177,7 @@
   const RELOAD_MS = 30_000
 
   $effect(() => {
-    const waiting = open.length > 0 || running.length > 0
-    if (!waiting || !player.name) {
+    if (!changing || !player.name) {
       return
     }
 
@@ -288,7 +292,7 @@
         />
       {/each}
       {#each shownOpen as tournament (tournament.id)}
-        {@const status = openStatus(tournament)}
+        {@const status = openStatus(tournament, now)}
         <OpenTournamentCard
           {tournament}
           {status}

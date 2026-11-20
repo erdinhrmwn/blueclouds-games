@@ -27,9 +27,9 @@ const isFull = (tournament: Tournament) =>
   tournament.maxPlayers !== null && tournament.registered >= tournament.maxPlayers
 
 /** A tournament open for sign-up until it fills or sign-up closes; after that it is about to start. */
-export function openStatus(tournament: Tournament): Status {
+export function openStatus(tournament: Tournament, now = Date.now()): Status {
   const closesAt = Date.parse(tournament.registrationClosesAt)
-  if (Date.now() >= closesAt) {
+  if (now >= closesAt) {
     return STARTING_SOON
   }
 

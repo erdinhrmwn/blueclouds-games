@@ -1,7 +1,13 @@
 <script lang="ts">
   import type { Tournament } from '#lib/platform.ts'
   import { coins } from '#lib/tournament-formats.ts'
-  import { FULL, type CardAction, type OfGame, type Status } from '#lib/tournament-status.ts'
+  import {
+    FULL,
+    SIGN_UP_OPEN,
+    type CardAction,
+    type OfGame,
+    type Status,
+  } from '#lib/tournament-status.ts'
   import { when } from '#lib/when.ts'
   import PrizeFee from './PrizeFee.svelte'
   import SignUpBar from './SignUpBar.svelte'
@@ -30,10 +36,11 @@
   felt={{ label: status.label, dot: status.dot, startsAt: tournament.startsAt }}
 >
   {#snippet meta()}
+    <!-- Says when sign-up closes only while it is open, so the line never contradicts the status on the felt. -->
     <span
-      >{tournament.playersPerRoom} per table · Sign-up closes {when(
-        tournament.registrationClosesAt,
-      )}</span
+      >{tournament.playersPerRoom} per table · {status === SIGN_UP_OPEN
+        ? `Sign-up closes ${when(tournament.registrationClosesAt)}`
+        : 'Sign-up closed'}</span
     >
   {/snippet}
 
