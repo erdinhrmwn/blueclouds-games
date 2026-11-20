@@ -581,11 +581,10 @@ describe('sign-up', () => {
       players: ['Ann'],
       fee: 0,
     })
-    expect(
-      list.json.data.tournaments.some(
-        (tournament: { id: string }) => tournament.id === early || tournament.id === closed,
-      ),
-    ).toBe(false)
+    // One not open yet is left out; one whose sign-up closed stays listed until its tables are handed out.
+    const listed = list.json.data.tournaments.map((tournament: { id: string }) => tournament.id)
+    expect(listed).not.toContain(early)
+    expect(listed).toContain(closed)
 
     expect(
       (

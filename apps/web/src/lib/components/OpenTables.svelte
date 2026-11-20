@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { gameBySlug } from '#lib/games/catalog.ts'
+  import { countByGame, gameBySlug } from '#lib/games/catalog.ts'
   import { RoomList, type OpenTable } from '#lib/rooms.svelte.ts'
   import { enterTable } from '#lib/tables.ts'
   import { onMount } from 'svelte'
@@ -74,19 +74,11 @@
   const gameName = $derived(game ? (gameBySlug(game)?.name ?? '') : '')
 
   onMount(() => {
-    const rooms = new RoomList(games)
+    const rooms = new RoomList(games, (loaded) => {
+      counts = countByGame(loaded)
+    })
     list = rooms
     return () => rooms.dispose()
-  })
-
-  $effect(() => {
-    const perGame: Record<string, number> = {}
-
-    for (const table of list?.rooms ?? []) {
-      perGame[table.game] = (perGame[table.game] ?? 0) + 1
-    }
-
-    counts = perGame
   })
 </script>
 

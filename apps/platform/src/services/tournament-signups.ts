@@ -125,8 +125,9 @@ export async function listOpen(
 		WHERE t.game_slug = ${game}
 			AND t.cancelled_at IS NULL
 			AND t.distributed_at IS NULL
+			-- Still listed after sign-up closes, until the job hands out its tables (up to a minute later): the lobby
+			-- shows it as starting soon instead of dropping it and bringing it back as running.
 			AND t.registration_opens_at <= now()
-			AND t.registration_closes_at > now()
 		ORDER BY t.starts_at
 		LIMIT ${LIST_LIMIT}`
 

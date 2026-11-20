@@ -1,4 +1,5 @@
 import { must } from 'contracts/must'
+import { z } from 'zod'
 import {
   fairnessText,
   type LogEvent,
@@ -22,49 +23,54 @@ interface ReplayCard {
   effect: 'none' | 'reverse' | 'swap' | 'ten' | 'double'
 }
 
-/** Who made a play or bust: the player, or the server for them. */
-type MoveBy = 'player' | 'bot' | 'timeout' | 'away'
+// The Bust 31 entries a log holds and their data, as apps/server/src/games/bust-31/match.ts writes them. Read with
+// Zod, so an entry that isn't that shape shows as raw data and is flagged, rather than breaking the replay.
+const Card = z.string()
 
-interface DealData {
-  round: number
-  starter: number
+const DealData = z.object({
+  round: z.number(),
+  starter: z.number(),
   /** Cards dealt, by seat; seats already out get none. */
-  hands: Record<number, string[]>
-  deck: string[]
-}
+  hands: z.record(z.string(), z.array(Card)),
+  deck: z.array(Card),
+})
 
-interface PlayData {
-  card: string
-  total: number
-  drew: string | null
+/** Who made a play or bust: the player, or the server for them (`timeout`, `away`). */
+const MoveBy = z.string().optional()
+
+const PlayData = z.object({
+  card: Card,
+  total: z.number(),
+  drew: Card.nullable(),
   /** Swap: the seat that traded hands with the player. */
-  swapped?: number
-  by: MoveBy
-}
+  swapped: z.number().optional(),
+  by: MoveBy,
+})
 
-interface BustData {
-  card: string
-  total: number
-  lives: number
-  eliminated: boolean
-  by: MoveBy
-}
+const BustData = z.object({
+  card: Card,
+  total: z.number(),
+  lives: z.number(),
+  eliminated: z.boolean(),
+  by: MoveBy,
+})
 
-interface KickedData {
-  by: 'host' | 'admin'
-  reason?: string
-}
+const Bust31Entry = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('deal'), data: DealData }),
+  z.object({ type: z.literal('reshuffle'), data: z.object({ deck: z.array(Card) }) }),
+  z.object({ type: z.literal('play'), data: PlayData }),
+  z.object({ type: z.literal('bust'), data: BustData }),
+  z.object({ type: z.literal('away') }),
+  z.object({ type: z.literal('back') }),
+  z.object({ type: z.literal('finished'), data: z.object({ winner: z.number() }) }),
+  z.object({
+    type: z.literal('kicked'),
+    data: z.object({ by: z.enum(['host', 'admin']), reason: z.string().optional() }),
+  }),
+  z.object({ type: z.literal('terminated'), data: z.object({ reason: z.string() }) }),
+])
 
-/** The Bust 31 entries a log holds and their data, as apps/server/src/games/bust-31/match.ts writes them. */
-type Bust31Entry =
-  | { type: 'deal'; data: DealData }
-  | { type: 'reshuffle'; data: { deck: string[] } }
-  | { type: 'play'; data: PlayData }
-  | { type: 'bust'; data: BustData }
-  | { type: 'away' | 'back'; data: undefined }
-  | { type: 'finished'; data: { winner: number } }
-  | { type: 'kicked'; data: KickedData }
-  | { type: 'terminated'; data: { reason: string } }
+const BUST31_TYPES = new Set<string>(Bust31Entry.options.map((option) => option.shape.type.value))
 
 /**
  * Card ids say what the card is: n7-2 is a 7, z-0 a zero, m-1 a minus five, r-3 a reverse,
@@ -100,10 +106,10 @@ function cardOf(id: string): ReplayCard {
   return { value: 0, label: '0', effect: 'none' }
 }
 
-const BY: Partial<Record<MoveBy, string>> = {
-  timeout: ' (time ran out, played for them)',
-  away: ' (away, played for them)',
-}
+const BY = new Map([
+  ['timeout', ' (time ran out, played for them)'],
+  ['away', ' (away, played for them)'],
+])
 
 /**
  * Folds a Bust 31 log into one table state per event. The server's own numbers in the log
@@ -161,8 +167,8 @@ export function replayBust31(log: MatchLog, seats: ReplaySeat[]): Step[] {
   })
 
   return log.events.map((event: LogEvent): Step => {
-    // The server writes each entry's data for its type, so the type says what the data holds.
-    const entry = event as Bust31Entry
+    const parsed = Bust31Entry.safeParse(event)
+    const entry = parsed.success ? parsed.data : null
     const who = name(event.seat)
     const player = event.seat === undefined ? undefined : table.get(event.seat)
 
@@ -173,9 +179,13 @@ export function replayBust31(log: MatchLog, seats: ReplaySeat[]): Step[] {
       }
     }
 
+    if (!entry && BUST31_TYPES.has(event.type)) {
+      mismatches.push(`Unreadable ${event.type} entry`)
+    }
+
     let text: string
 
-    switch (entry.type) {
+    switch (entry?.type) {
       case 'deal': {
         round = entry.data.round
         deck = [...entry.data.deck]
@@ -186,7 +196,7 @@ export function replayBust31(log: MatchLog, seats: ReplaySeat[]): Step[] {
         turn = entry.data.starter
 
         for (const [seat, state] of table) {
-          state.hand = [...(entry.data.hands[seat] ?? [])]
+          state.hand = [...(entry.data.hands[String(seat)] ?? [])]
         }
 
         text = `Round ${round} dealt. ${name(entry.data.starter)} starts.`
@@ -201,7 +211,7 @@ export function replayBust31(log: MatchLog, seats: ReplaySeat[]): Step[] {
       case 'play':
       case 'bust': {
         const card = cardOf(entry.data.card)
-        const playedBy = BY[entry.data.by] ?? ''
+        const playedBy = BY.get(entry.data.by ?? '') ?? ''
 
         if (!player?.hand.includes(entry.data.card)) {
           mismatches.push(`${entry.data.card} was not in ${who}'s hand`)

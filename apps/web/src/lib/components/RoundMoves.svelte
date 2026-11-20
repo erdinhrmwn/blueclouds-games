@@ -1,6 +1,7 @@
 <script lang="ts">
   import { cardFace, type RoundEvent } from '#lib/rounds.ts'
   import { clock } from '#lib/when.ts'
+  import { z } from 'zod'
 
   /**
    * Everything that happened in a closed round, from its move log: the hands dealt and every move after, with
@@ -28,6 +29,10 @@
   const TONE_TEXT = { plain: 'text-paper/80', bad: 'text-ember', good: 'text-brass' } as const
   const NOTE_TEXT = { plain: 'text-paper/55', bad: 'text-ember', good: 'text-brass' } as const
 
+  // Event data is the room's own log, read loosely: a field that isn't the shape expected counts as missing.
+  const Hands = z.record(z.string(), z.array(z.string()))
+  const Deck = z.array(z.unknown())
+
   const name = (seat: unknown) => {
     const index = Number(seat)
     return nameOf(index) ?? `Seat ${index + 1}`
@@ -40,7 +45,7 @@
 
   /** Each seat's hand at the deal, in seat order; the starter is marked. */
   const hands = $derived.by(() => {
-    const dealt = (deal?.data?.hands ?? {}) as Record<string, string[]>
+    const dealt = Hands.safeParse(deal?.data?.hands).data ?? {}
     const starter = Number(deal?.data?.starter)
 
     return Object.entries(dealt)
@@ -109,7 +114,7 @@
         return {
           ...base,
           what: 'Deck reshuffled',
-          note: `${(data.deck as unknown[] | undefined)?.length ?? 0} cards`,
+          note: `${Deck.safeParse(data.deck).data?.length ?? 0} cards`,
         }
       case 'round_end':
         return { ...base, who: name(data.out), what: 'went out', note: 'round over', tone: 'good' }

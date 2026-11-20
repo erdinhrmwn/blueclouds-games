@@ -76,3 +76,13 @@ export const GAMES: GameEntry[] = [
 ]
 
 export const gameBySlug = (slug: string) => GAMES.find((game) => game.slug === slug)
+
+/** How many of the items each game has, for the lobby's game filter. */
+export function countByGame(items: { game: string }[]): Record<string, number> {
+  const counts: Record<string, number> = {}
+  for (const item of items) {
+    counts[item.game] = (counts[item.game] ?? 0) + 1
+  }
+
+  return counts
+}

@@ -1,3 +1,4 @@
+import { z } from 'zod'
 import { replayBust31 } from './games/bust-31.ts'
 
 /** One event of a match's move log, as the room sent it (docs/architecture/match-log.md). */
@@ -51,6 +52,9 @@ const RENDERERS: Record<string, (log: MatchLog, seats: ReplaySeat[]) => Step[]> 
   'bust-31': replayBust31,
 }
 
+/** A shuffle's deck in the log; anything else counts as no cards. */
+const Deck = z.array(z.unknown())
+
 /** The timeline text of a provably fair event (docs/architecture/fairness.md), the same for every game. */
 export function fairnessText(event: LogEvent): string | null {
   const data = event.data ?? {}
@@ -59,7 +63,7 @@ export function fairnessText(event: LogEvent): string | null {
     case 'fairness':
       return `Round ${String(data.round)} seed committed. Server seed hash ${String(data.serverSeedHash)}.`
     case 'shuffle': {
-      const cards = (data.deck as unknown[] | undefined)?.length ?? 0
+      const cards = Deck.safeParse(data.deck).data?.length ?? 0
 
       return `Shuffle #${String(data.nonce)} of round ${String(data.round)}: ${cards} cards.`
     }

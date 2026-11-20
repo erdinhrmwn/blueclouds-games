@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { must } from 'contracts/must'
   import { enhance } from '$app/forms'
   import { utc } from '#lib/format.ts'
   import PageHeader from '#lib/components/PageHeader.svelte'
@@ -43,7 +44,7 @@
 
   const roomState = (room: (typeof data.rooms)[number]) => {
     if (room.closeReason === 'finished') {
-      return `Finished after ${duration(room.startedAt ?? tournament.startsAt, room.closedAt!)}`
+      return `Finished after ${duration(room.startedAt ?? tournament.startsAt, must(room.closedAt, 'closed_at of a finished room'))}`
     }
 
     if (room.closeReason === 'not_enough_players') {
@@ -363,9 +364,9 @@
       <li class="px-5 py-2.5">
         <a class="link" href="/players/{player.playerId}">{player.name}</a>
         {#if player.status === 'withdrawn'}
-          <span class="text-muted">withdrew {utc(player.statusChangedAt!)}</span>
+          <span class="text-muted">withdrew {utc(player.statusChangedAt)}</span>
         {:else}
-          <span class="text-danger">disqualified {utc(player.statusChangedAt!)}</span>
+          <span class="text-danger">disqualified {utc(player.statusChangedAt)}</span>
           <span class="block text-muted">Reason: {player.statusReason}</span>
         {/if}
       </li>
